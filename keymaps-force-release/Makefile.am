@@ -5,5 +5,5 @@ dist_udevkeymapforcere_DATA = \
 	dell-xps \
 	hp-other \
 	samsung-other \
-	samsung-90x3a \
+	samsung-series-9 \
 	common-volume-keys

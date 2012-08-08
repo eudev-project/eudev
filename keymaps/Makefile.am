@@ -54,7 +54,7 @@ KEYMAPS = \
 	onkyo \
 	oqo-model2 \
 	samsung-other \
-	samsung-90x3a \
+	samsung-series-9 \
 	samsung-sq1us \
 	samsung-sx20s \
 	toshiba-satellite_a100 \
