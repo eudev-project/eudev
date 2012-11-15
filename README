@@ -1,0 +1,21 @@
+
+This git repo is a fork of git://anongit.freedesktop.org/systemd/systemd
+with the aim of isolating udev from any particular flavor of system
+initialization.  In this case, the isolation is from systemd.
+
+This is a Gentoo sponsored project and testing is currently being done
+with openrc.  However, we aim to be distro neutral and welcome contribution
+from others using a varieity of system initializations.  We also aim
+towards POSIX compliance.
+
+Contact: You can email us as a group below.
+
+IRC: Freenode/#gentoo-udev
+
+Committers (alphabetical order by last name):
+
+	Anthony G. Basile	(blueness)	<blueness@gentoo.org>
+	Ian Stakenvicius	(axs)		<axs@gentoo.org>
+	Tony Vroon		(chainsaw)	<tony@linx.net>
+	Richar Yao		(ryao)		<ryao@gentoo.org>
+
