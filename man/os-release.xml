@@ -1,0 +1,350 @@
+<?xml version='1.0'?> <!--*-nxml-*-->
+<?xml-stylesheet type="text/xsl" href="http://docbook.sourceforge.net/release/xsl/current/xhtml/docbook.xsl"?>
+<!DOCTYPE refentry PUBLIC "-//OASIS//DTD DocBook XML V4.2//EN"
+        "http://www.oasis-open.org/docbook/xml/4.2/docbookx.dtd">
+
+<!--
+  This file is part of systemd.
+
+  Copyright 2010 Lennart Poettering
+
+  systemd is free software; you can redistribute it and/or modify it
+  under the terms of the GNU Lesser General Public License as published by
+  the Free Software Foundation; either version 2.1 of the License, or
+  (at your option) any later version.
+
+  systemd is distributed in the hope that it will be useful, but
+  WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+  Lesser General Public License for more details.
+
+  You should have received a copy of the GNU Lesser General Public License
+  along with systemd; If not, see <http://www.gnu.org/licenses/>.
+-->
+
+<refentry id="os-release">
+        <refentryinfo>
+                <title>os-release</title>
+                <productname>systemd</productname>
+
+                <authorgroup>
+                        <author>
+                                <contrib>Developer</contrib>
+                                <firstname>Lennart</firstname>
+                                <surname>Poettering</surname>
+                                <email>lennart@poettering.net</email>
+                        </author>
+                </authorgroup>
+        </refentryinfo>
+
+        <refmeta>
+                <refentrytitle>os-release</refentrytitle>
+                <manvolnum>5</manvolnum>
+        </refmeta>
+
+        <refnamediv>
+                <refname>os-release</refname>
+                <refpurpose>Operating system identification</refpurpose>
+        </refnamediv>
+
+        <refsynopsisdiv>
+                <para><filename>/etc/os-release</filename></para>
+        </refsynopsisdiv>
+
+        <refsect1>
+                <title>Description</title>
+
+                <para>The <filename>/etc/os-release</filename> file
+                contains operating system identification data.</para>
+
+                <para>The basic file format of
+                <filename>os-release</filename> is a newline-separated
+                list of environment-like shell-compatible variable
+                assignments. It is possible to source the
+                configuration from shell scripts, however, beyond mere
+                variable assignments no shell features are supported
+                (this means variable expansion is explicitly not
+                supported), allowing applications to read the file
+                without implementing a shell compatible execution
+                engine. Variable assignment values should be enclosed
+                in double or single quotes if they include spaces,
+                semicolons or other special characters outside of A-Z,
+                a-z, 0-9. All strings should be in UTF-8 format, and
+                non-printable characters should not be used. If double
+                or single quotes or backslashes are to be used within
+                variable assignments they should be escaped with
+                backslashes, following shell style. It is not
+                supported to concatenate multiple individually quoted
+                strings. Lines beginning with "#" shall be ignored as
+                comments.</para>
+
+                <para><filename>/etc/os-release</filename> contains
+                data that is defined by the operating system vendor
+                and should not be changed by the administrator.</para>
+
+                <para>As this file only encodes names and identifiers
+                it should not be localized.</para>
+
+                <para>The file <filename>/etc/os-release</filename> might
+                be a symlink to another file, but it is important that
+                the file is available from earliest boot on, and hence
+                must be located on the root file system.</para>
+
+                <para>For a longer rationale for
+                <filename>/etc/os-release</filename> please refer to
+                the <ulink
+                url="http://0pointer.de/blog/projects/os-release">Announcement of <filename>/etc/os-release</filename></ulink>.</para>
+        </refsect1>
+
+        <refsect1>
+                <title>Options</title>
+
+                <para>The following OS identifications parameters may be set using
+                <filename>/etc/os-release</filename>:</para>
+
+                <variablelist>
+
+                        <varlistentry>
+                                <term><varname>NAME=</varname></term>
+
+                                <listitem><para>A string identifying
+                                the operating system, without a
+                                version component, and suitable for
+                                presentation to the user. If not set
+                                defaults to
+                                <literal>NAME=Linux</literal>. Example:
+                                <literal>NAME=Fedora</literal> or
+                                <literal>NAME="Debian
+                                GNU/Linux"</literal>.</para></listitem>
+                        </varlistentry>
+
+                        <varlistentry>
+                                <term><varname>VERSION=</varname></term>
+
+                                <listitem><para>A string identifying
+                                the operating system version,
+                                excluding any OS name information,
+                                possibly including a release code
+                                name, and suitable for presentation to
+                                the user. This field is
+                                optional. Example:
+                                <literal>VERSION=17</literal> or
+                                <literal>VERSION="17 (Beefy
+                                Miracle)"</literal>.</para></listitem>
+                        </varlistentry>
+
+                        <varlistentry>
+                                <term><varname>ID=</varname></term>
+
+                                <listitem><para>A lower-case string
+                                (no spaces or other characters outside
+                                of 0-9, a-z, ".", "_" and "-")
+                                identifying the operating system,
+                                excluding any version information and
+                                suitable for processing by scripts or
+                                usage in generated file names. If not
+                                set defaults to
+                                <literal>ID=linux</literal>. Example:
+                                <literal>ID=fedora</literal> or
+                                <literal>ID=debian</literal>.</para></listitem>
+                        </varlistentry>
+
+                        <varlistentry>
+                                <term><varname>ID_LIKE=</varname></term>
+
+                                <listitem><para>A space-separated list
+                                of operating system identifiers in the
+                                same syntax as the
+                                <varname>ID=</varname> setting. Should
+                                list identifiers of operating systems
+                                that are closely related to the local
+                                operating system in regards to
+                                packaging and programming interfaces,
+                                for example listing one or more
+                                OS identifiers the local
+                                OS is a derivative from. An
+                                OS should generally only list other OS
+                                identifiers it itself is a derivative
+                                from, and not any OSes that
+                                are derived from it, but symmetric
+                                relationships are possible. Build
+                                scripts and similar should check this
+                                variable if they need to identify the
+                                local operating system and the value
+                                of <varname>ID=</varname> is not
+                                recognized. Operating systems should
+                                be listed in order of how closely the
+                                local operating system relates to the
+                                listed ones, starting with the
+                                closest. This field is
+                                optional. Example: for an operating
+                                system with
+                                <literal>ID=centos</literal> an
+                                assignment of <literal>ID_LIKE="rhel
+                                fedora"</literal> would be
+                                appropriate. For an operating system
+                                with <literal>ID=ubuntu</literal> an
+                                assignment of
+                                <literal>ID_LIKE=debian</literal> is
+                                appropriate.</para></listitem>
+                        </varlistentry>
+
+                        <varlistentry>
+                                <term><varname>VERSION_ID=</varname></term>
+
+                                <listitem><para>A lower-case string
+                                (mostly numeric, no spaces or other
+                                characters outside of 0-9, a-z, ".",
+                                "_" and "-") identifying the operating
+                                system version, excluding any OS name
+                                information or release code name, and
+                                suitable for processing by scripts or
+                                usage in generated file names. This
+                                field is optional. Example:
+                                <literal>VERSION_ID=17</literal> or
+                                <literal>VERSION_ID=11.04</literal>.</para></listitem>
+                        </varlistentry>
+
+                        <varlistentry>
+                                <term><varname>PRETTY_NAME=</varname></term>
+
+                                <listitem><para>A pretty operating
+                                system name in a format suitable for
+                                presentation to the user. May or may
+                                not contain a release code name or OS
+                                version of some kind, as suitable. If
+                                not set defaults to
+                                <literal>PRETTY_NAME="Linux"</literal>. Example:
+                                <literal>PRETTY_NAME="Fedora 17 (Beefy
+                                Miracle)"</literal>.</para></listitem>
+                        </varlistentry>
+
+                        <varlistentry>
+                                <term><varname>ANSI_COLOR=</varname></term>
+
+                                <listitem><para>A suggested
+                                presentation color when showing the
+                                OS name on the console. This
+                                should be specified as string suitable
+                                for inclusion in the ESC [ m
+                                ANSI/ECMA-48 escape code for setting
+                                graphical rendition. This field is
+                                optional. Example:
+                                <literal>ANSI_COLOR="0;31"</literal>
+                                for red, or
+                                <literal>ANSI_COLOR="1;34"</literal>
+                                for light blue.</para></listitem>
+                        </varlistentry>
+
+                        <varlistentry>
+                                <term><varname>CPE_NAME=</varname></term>
+
+                                <listitem><para>A CPE name for the
+                                operating system, following the <ulink
+                                url="http://cpe.mitre.org/specification/">Common
+                                Platform Enumeration
+                                Specification</ulink> as proposed by
+                                the MITRE Corporation. This field
+                                is optional. Example:
+                                <literal>CPE_NAME="cpe:/o:fedoraproject:fedora:17"</literal>
+                                </para></listitem>
+                        </varlistentry>
+
+                        <varlistentry>
+                                <term><varname>HOME_URL=</varname></term>
+                                <term><varname>SUPPORT_URL=</varname></term>
+                                <term><varname>BUG_REPORT_URL=</varname></term>
+
+                                <listitem><para>Links to resources on
+                                the Internet related the operating
+                                system. <varname>HOME_URL=</varname>
+                                should refer to the homepage of the
+                                operating system, or alternatively
+                                some homepage of the specific version
+                                of the operating
+                                system. <varname>SUPPORT_URL=</varname>
+                                should refer to the main support page
+                                for the operating system, if there is
+                                any. This is primarily intended for
+                                operating systems which vendors
+                                provide support
+                                for. <varname>BUG_REPORT_URL=</varname>
+                                should refer to the main bug reporting
+                                page for the operating system, if
+                                there is any. This is primarily
+                                intended for operating systems that
+                                rely on community QA. These settings
+                                are optional, and providing only some
+                                of these settings is common. These
+                                URLs are intended to be exposed in
+                                "About this system" UIs behind links
+                                with captions such as "About this
+                                Operating System", "Obtain Support",
+                                and "Report a Bug". The values should
+                                be in <ulink
+                                url="https://tools.ietf.org/html/rfc3986">RFC3986
+                                format</ulink>, and should be
+                                <literal>http:</literal> or
+                                <literal>https:</literal> URLs, and
+                                possibly <literal>mailto:</literal> or
+                                <literal>tel:</literal>. Only one URL
+                                shall be listed in each setting. If
+                                multiple resources need to be
+                                referenced it is recommended to
+                                provide an online landing page linking
+                                all available resources. Examples:
+                                <literal>HOME_URL="https://fedoraproject.org/"</literal>
+                                and
+                                <literal>BUG_REPORT_URL="https://bugzilla.redhat.com/"</literal></para></listitem>
+                        </varlistentry>
+
+
+                </variablelist>
+
+                <para>If you are reading this file from C code or a
+                shell script to determine the OS or a specific version
+                of it, use the ID and VERSION_ID fields, possibly with
+                ID_LIKE as fallback for ID. When looking for an OS
+                identification string for presentation to the user use
+                the PRETTY_NAME field.</para>
+
+                <para>Note that operating system vendors may choose
+                not to provide version information, for example to
+                accommodate for rolling releases. In this case VERSION
+                and VERSION_ID may be unset. Applications should not
+                rely on these fields to be set.</para>
+
+                <para>Operating system vendors may extend the file
+                format and introduce new fields. It is highly
+                recommended to prefix new fields with an OS specific
+                name in order to avoid name clashes. Applications
+                reading this file must ignore unknown fields. Example:
+                <literal>DEBIAN_BTS="debbugs://bugs.debian.org/"</literal></para>
+        </refsect1>
+
+        <refsect1>
+                <title>Example</title>
+
+                <programlisting>NAME=Fedora
+VERSION="17 (Beefy Miracle)"
+ID=fedora
+VERSION_ID=17
+PRETTY_NAME="Fedora 17 (Beefy Miracle)"
+ANSI_COLOR="0;34"
+CPE_NAME="cpe:/o:fedoraproject:fedora:17"
+HOME_URL="https://fedoraproject.org/"
+BUG_REPORT_URL="https://bugzilla.redhat.com/"</programlisting>
+        </refsect1>
+
+        <refsect1>
+                  <title>See Also</title>
+                  <para>
+                          <citerefentry><refentrytitle>systemd</refentrytitle><manvolnum>1</manvolnum></citerefentry>,
+                          <citerefentry><refentrytitle>lsb_release</refentrytitle><manvolnum>1</manvolnum></citerefentry>,
+                          <citerefentry><refentrytitle>hostname</refentrytitle><manvolnum>5</manvolnum></citerefentry>,
+                          <citerefentry><refentrytitle>machine-id</refentrytitle><manvolnum>5</manvolnum></citerefentry>,
+                          <citerefentry><refentrytitle>machine-info</refentrytitle><manvolnum>5</manvolnum></citerefentry>
+                  </para>
+        </refsect1>
+
+</refentry>

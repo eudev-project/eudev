@@ -1,0 +1,23 @@
+#  This file is part of systemd.
+#
+#  systemd is free software; you can redistribute it and/or modify it
+#  under the terms of the GNU Lesser General Public License as published by
+#  the Free Software Foundation; either version 2.1 of the License, or
+#  (at your option) any later version.
+
+[Unit]
+Description=Cleanup of Temporary Directories
+Documentation=man:tmpfiles.d(5)
+DefaultDependencies=no
+Wants=local-fs.target
+After=systemd-readahead-collect.service systemd-readahead-replay.service local-fs.target
+Before=sysinit.target shutdown.target
+ConditionDirectoryNotEmpty=|/usr/lib/tmpfiles.d
+ConditionDirectoryNotEmpty=|/usr/local/lib/tmpfiles.d
+ConditionDirectoryNotEmpty=|/etc/tmpfiles.d
+ConditionDirectoryNotEmpty=|/run/tmpfiles.d
+
+[Service]
+Type=oneshot
+ExecStart=@rootbindir@/systemd-tmpfiles --clean
+IOSchedulingClass=idle

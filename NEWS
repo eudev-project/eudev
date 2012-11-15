@@ -1,0 +1,1149 @@
+systemd System and Service Manager
+
+CHANGES WITH 195:
+
+        * journalctl gained new --since= and --until= switches to
+          filter by time. It also now supports nice filtering for
+          units via --unit=/-u.
+
+        * Type=oneshot services may use ExecReload= and do the
+          right thing.
+
+        * The journal daemon now supports time-based rotation and
+          vacuuming, in addition to the usual disk-space based
+          rotation.
+
+        * The journal will now index the available field values for
+          each field name. This enables clients to show pretty drop
+          downs of available match values when filtering. The bash
+          completion of journalctl has been updated
+          accordingly. journalctl gained a new switch -F to list all
+          values a certain field takes in the journal database.
+
+        * More service events are now written as structured messages
+          to the journal, and made recognizable via message IDs.
+
+        * The timedated, localed and hostnamed mini-services which
+          previously only provided support for changing time, locale
+          and hostname settings from graphical DEs such as GNOME now
+          also have a minimal (but very useful) text-based client
+          utility each. This is probably the nicest way to changing
+          these settings from the command line now, especially since
+          it lists available options and is fully integrated with bash
+          completion.
+
+        * There's now a new tool "systemd-coredumpctl" to list and
+          extract coredumps from the journal.
+
+        * We now install a README each in /var/log/ and
+          /etc/rc.d/init.d explaining where the system logs and init
+          scripts went. This hopefully should help folks who go to
+          that dirs and look into the otherwise now empty void and
+          scratch their heads.
+
+        * When user-services are invoked (by systemd --user) the
+          $MANAGERPID env var is set to the PID of systemd.
+
+        * SIGRTMIN+24 when sent to a --user instance will now result
+          in immediate termination of systemd.
+
+        * gatewayd received numerous feature additions such as a
+          "follow" mode, for live syncing and filtering.
+
+        * browse.html now allows filtering and showing detailed
+          information on specific entries. Keyboard navigation and
+          mouse screen support has been added.
+
+        * gatewayd/journalctl now supports HTML5/JSON
+          Server-Sent-Events as output.
+
+        * The SysV init script compatibility logic will now
+          heuristically determine whether a script supports the
+          "reload" verb, and only then make this available as
+          "systemctl reload".
+
+        * "systemctl status --follow" has been removed, use "journalctl
+          -u" instead.
+
+        * journald.conf's RuntimeMinSize=, PersistentMinSize= settings
+          have been removed since they are hardly useful to be
+          configured.
+
+        * And I'd like to take the opportunity to specifically mention
+          Zbigniew for his great contributions. Zbigniew, you rock!
+
+        Contributions from: Andrew Eikum, Christian Hesse, Colin
+        Guthrie, Daniel J Walsh, Dave Reisner, Eelco Dolstra, Ferenc
+        Wágner, Kay Sievers, Lennart Poettering, Lukas Nykryn, Mantas
+        Mikulėnas, Martin Mikkelsen, Martin Pitt, Michael Olbrich,
+        Michael Stapelberg, Michal Schmidt, Sebastian Ott, Thomas
+        Bächler, Umut Tezduyar, Will Woods, Wulf C. Krueger, Zbigniew
+        Jędrzejewski-Szmek, Сковорода Никита Андреевич
+
+CHANGES WITH 194:
+
+        * If /etc/vconsole.conf is non-existent or empty we will no
+          longer load any console font or key map at boot by
+          default. Instead the kernel defaults will be left
+          intact. This is definitely the right thing to do, as no
+          configuration should mean no configuration, and hard-coding
+          font names that are different on all archs is probably a bad
+          idea. Also, the kernel default key map and font should be
+          good enough for most cases anyway, and mostly identical to
+          the userspace fonts/key maps we previously overloaded them
+          with. If distributions want to continue to default to a
+          non-kernel font or key map they should ship a default
+          /etc/vconsole.conf with the appropriate contents.
+
+        Contributions from: Colin Walters, Daniel J Walsh, Dave
+        Reisner, Kay Sievers, Lennart Poettering, Lukas Nykryn, Tollef
+        Fog Heen, Tom Gundersen, Zbigniew Jędrzejewski-Szmek
+
+CHANGES WITH 193:
+
+        * journalctl gained a new --cursor= switch to show entries
+          starting from the specified location in the journal.
+
+        * We now enforce a size limit on journal entry fields exported
+          with "-o json" in journalctl. Fields larger than 4K will be
+          assigned null. This can be turned off with --all.
+
+        * An (optional) journal gateway daemon is now available as
+          "systemd-journal-gatewayd.service". This service provides
+          access to the journal via HTTP and JSON. This functionality
+          will be used to implement live log synchronization in both
+          pull and push modes, but has various other users too, such
+          as easy log access for debugging of embedded devices. Right
+          now it is already useful to retrieve the journal via HTTP:
+
+          # systemctl start systemd-journal-gatewayd.service
+          # wget http://localhost:19531/entries
+
+          This will download the journal contents in a
+          /var/log/messages compatible format. The same as JSON:
+
+          # curl -H"Accept: application/json" http://localhost:19531/entries
+
+          This service is also accessible via a web browser where a
+          single static HTML5 app is served that uses the JSON logic
+          to enable the user to do some basic browsing of the
+          journal. This will be extended later on. Here's an example
+          screenshot of this app in its current state:
+
+          http://0pointer.de/public/journal-gatewayd
+
+        Contributions from: Kay Sievers, Lennart Poettering, Robert
+        Milasan, Tom Gundersen
+
+CHANGES WITH 192:
+
+        * The bash completion logic is now available for journalctl
+          too.
+
+        * We don't mount the "cpuset" controller anymore together with
+          "cpu" and "cpuacct", as "cpuset" groups generally cannot be
+          started if no parameters are assigned to it. "cpuset" hence
+          broke code that assumed it it could create "cpu" groups and
+          just start them.
+
+        * journalctl -f will now subscribe to terminal size changes,
+          and line break accordingly.
+
+        Contributions from: Dave Reisner, Kay Sievers, Lennart
+        Poettering, Lukas Nykrynm, Mirco Tischler, Václav Pavlín
+
+CHANGES WITH 191:
+
+        * nspawn will now create a symlink /etc/localtime in the
+          container environment, copying the host's timezone
+          setting. Previously this has been done via a bind mount, but
+          since symlinks cannot be bind mounted this has now been
+          changed to create/update the appropriate symlink.
+
+        * journalctl -n's line number argument is now optional, and
+          will default to 10 if omitted.
+
+        * journald will now log the maximum size the journal files may
+          take up on disk. This is particularly useful if the default
+          built-in logic of determining this parameter from the file
+          system size is used. Use "systemctl status
+          systemd-journald.service" to see this information.
+
+        * The multi-seat X wrapper tool has been stripped down. As X
+          is now capable of enumerating graphics devices via udev in a
+          seat-aware way the wrapper is not strictly necessary
+          anymore. A stripped down temporary stop-gap is still shipped
+          until the upstream display managers have been updated to
+          fully support the new X logic. Expect this wrapper to be
+          removed entirely in one of the next releases.
+
+        * HandleSleepKey= in logind.conf has been split up into
+          HandleSuspendKey= and HandleHibernateKey=. The old setting
+          is not available anymore. X11 and the kernel are
+          distuingishing between these keys and we should too. This
+          also means the inhibition lock for these keys has been split
+          into two.
+
+        Contributions from: Dave Airlie, Eelco Dolstra, Lennart
+        Poettering, Lukas Nykryn, Václav Pavlín
+
+CHANGES WITH 190:
+
+        * Whenever a unit changes state we'll now log this to the
+          journal and show along the unit's own log output in
+          "systemctl status".
+
+        * ConditionPathIsMountPoint= can now properly detect bind
+          mount points too. (Previously, a bind mount of one file
+          system to another place in the same file system could not be
+          detected as mount, since they shared struct stat's st_dev
+          field.)
+
+        * We will now mount the cgroup controllers cpu, cpuacct,
+          cpuset and the controllers net_cls, net_prio together by
+          default.
+
+        * nspawn containers will now have a virtualized boot
+          ID. (i.e. /proc/sys/kernel/random/boot_id is now mounted
+          over with a randomized ID at container initialization). This
+          has the effect of making "journalctl -b" do the right thing
+          in a container.
+
+        * The JSON output journal serialization has been updated not
+          to generate "endless" list objects anymore, but rather one
+          JSON object per line. This is more in line how most JSON
+          parsers expect JSON objects. The new output mode
+          "json-pretty" has been added to provide similar output, but
+          neatly aligned for readability by humans.
+
+        * We dropped all explicit sync() invocations in the shutdown
+          code. The kernel does this implicitly anyway in the kernel
+          reboot() syscall. halt(8)'s -n option is now a compatibility
+          no-op.
+
+        * We now support virtualized reboot() in containers, as
+          supported by newer kernels. We will fall back to exit() if
+          CAP_SYS_REBOOT is not available to the container. Also,
+          nspawn makes use of this now and will actually reboot the
+          container if the containerized OS asks for that.
+
+        * journalctl will only show local log output by default
+          now. Use --merge (-m) to show remote log output, too.
+
+        * libsystemd-journal gained the new sd_journal_get_usage()
+          call to determine the current disk usage of all journal
+          files. This is exposed in the new "journalctl --disk-usage"
+          command.
+
+        * journald gained a new configuration setting SplitMode= in
+          journald.conf which may be used to control how user journals
+          are split off. See journald.conf(5) for details.
+
+        * A new condition type ConditionFileNotEmpty= has been added.
+
+        * tmpfiles' "w" lines now support file globbing, to write
+          multiple files at once.
+
+        * We added Python bindings for the journal submission
+          APIs. More Python APIs for a number of selected APIs will
+          likely follow. Note that we intend to add native bindings
+          only for the Python language, as we consider it common
+          enough to deserve bindings shipped within systemd. There are
+          various projects outside of systemd that provide bindings
+          for languages such as PHP or Lua.
+
+        * Many conditions will now resolve specifiers such as %i. In
+          addition, PathChanged= and related directives of .path units
+          now support specifiers as well.
+
+        * There's now a new RPM macro definition for the system preset
+          dir: %_presetdir.
+
+        * journald will now warn if it can't foward a message to the
+          syslog daemon because it's socket is full.
+
+        * timedated will no longer write or process /etc/timezone,
+          except on Debian. As we do not support late mounted /usr
+          anymore /etc/localtime always being a symlink is now safe,
+          and hence the information in /etc/timezone is not necessary
+          anymore.
+
+        * logind will now always reserve one VT for a text getty (VT6
+          by default). Previously if more than 6 X sessions where
+          started they took up all the VTs with auto-spawned gettys,
+          so that no text gettys were available anymore.
+
+        * udev will now automatically inform the btrfs kernel logic
+          about btrfs RAID components showing up. This should make
+          simple hotplug based btrfs RAID assembly work.
+
+        * PID 1 will now increase its RLIMIT_NOFILE to 64K by default
+          (but not for its children which will stay at the kernel
+          default). This should allow setups with a lot more listening
+          sockets.
+
+        * systemd will now always pass the configured timezone to the
+          kernel at boot. timedated will do the same when the timezone
+          is changed.
+
+        * logind's inhibition logic has been updated. By default,
+          logind will now handle the lid switch, the power and sleep
+          keys all the time, even in graphical sessions. If DEs want
+          to handle these events on their own they should take the new
+          handle-power-key, handle-sleep-key and handle-lid-switch
+          inhibitors during their runtime. A simple way to achiveve
+          that is to invoke the DE wrapped in an invocation of:
+
+          systemd-inhibit --what=handle-power-key:handle-sleep-key:handle-lid-switch ...
+
+        * Access to unit operations is now checked via SELinux taking
+          the unit file label and client process label into account.
+
+        * systemd will now notify the administrator in the journal
+          when he over-mounts a non-empty directory.
+
+        * There are new specifiers that are resolved in unit files,
+          for the host name (%H), the machine ID (%m) and the boot ID
+          (%b).
+
+        Contributions from: Allin Cottrell, Auke Kok, Brandon Philips,
+        Colin Guthrie, Colin Walters, Daniel J Walsh, Dave Reisner,
+        Eelco Dolstra, Jan Engelhardt, Kay Sievers, Lennart
+        Poettering, Lucas De Marchi, Lukas Nykryn, Mantas Mikulėnas,
+        Martin Pitt, Matthias Clasen, Michael Olbrich, Pierre Schmitz,
+        Shawn Landden, Thomas Hindoe Paaboel Andersen, Tom Gundersen,
+        Václav Pavlín, Yin Kangkai, Zbigniew Jędrzejewski-Szmek
+
+CHANGES WITH 189:
+
+        * Support for reading structured kernel messages from
+          /dev/kmsg has now been added and is enabled by default.
+
+        * Support for reading kernel messages from /proc/kmsg has now
+          been removed. If you want kernel messages in the journal
+          make sure to run a recent kernel (>= 3.5) that supports
+          reading structured messages from /dev/kmsg (see
+          above). /proc/kmsg is now exclusive property of classic
+          syslog daemons again.
+
+        * The libudev API gained the new
+          udev_device_new_from_device_id() call.
+
+        * The logic for file system namespace (ReadOnlyDirectory=,
+          ReadWriteDirectoy=, PrivateTmp=) has been reworked not to
+          require pivot_root() anymore. This means fewer temporary
+          directories are created below /tmp for this feature.
+
+        * nspawn containers will now see and receive all submounts
+          made on the host OS below the root file system of the
+          container.
+
+        * Forward Secure Sealing is now supported for Journal files,
+          which provide cryptographical sealing of journal files so
+          that attackers cannot alter log history anymore without this
+          being detectable. Lennart will soon post a blog story about
+          this explaining it in more detail.
+
+        * There are two new service settings RestartPreventExitStatus=
+          and SuccessExitStatus= which allow configuration of exit
+          status (exit code or signal) which will be excepted from the
+          restart logic, resp. consider successful.
+
+        * journalctl gained the new --verify switch that can be used
+          to check the integrity of the structure of journal files and
+          (if Forward Secure Sealing is enabled) the contents of
+          journal files.
+
+        * nspawn containers will now be run with /dev/stdin, /dev/fd/
+          and similar symlinks pre-created. This makes running shells
+          as container init process a lot more fun.
+
+        * The fstab support can now handle PARTUUID= and PARTLABEL=
+          entries.
+
+        * A new ConditionHost= condition has been added to match
+          against the hostname (with globs) and machine ID. This is
+          useful for clusters where a single OS image is used to
+          provision a large number of hosts which shall run slightly
+          different sets of services.
+
+        * Services which hit the restart limit will now be placed in a
+          failure state.
+
+        Contributions from: Bertram Poettering, Dave Reisner, Huang
+        Hang, Kay Sievers, Lennart Poettering, Lukas Nykryn, Martin
+        Pitt, Simon Peeters, Zbigniew Jędrzejewski-Szmek
+
+CHANGES WITH 188:
+
+        * When running in --user mode systemd will now become a
+          subreaper (PR_SET_CHILD_SUBREAPER). This should make the ps
+          tree a lot more organized.
+
+        * A new PartOf= unit dependency type has been introduced that
+          may be used to group services in a natural way.
+
+        * "systemctl enable" may now be used to enable instances of
+          services.
+
+        * journalctl now prints error log levels in red, and
+          warning/notice log levels in bright white. It also supports
+          filtering by log level now.
+
+        * cgtop gained a new -n switch (similar to top), to configure
+          the maximum number of iterations to run for. It also gained
+          -b, to run in batch mode (accepting no input).
+
+        * The suffix ".service" may now be ommited on most systemctl
+          command lines involving service unit names.
+
+        * There's a new bus call in logind to lock all sessions, as
+          well as a loginctl verb for it "lock-sessions".
+
+        * libsystemd-logind.so gained a new call sd_journal_perror()
+          that works similar to libc perror() but logs to the journal
+          and encodes structured information about the error number.
+
+        * /etc/crypttab entries now understand the new keyfile-size=
+          option.
+
+        * shutdown(8) now can send a (configurable) wall message when
+          a shutdown is cancelled.
+
+        * The mount propagation mode for the root file system will now
+          default to "shared", which is useful to make containers work
+          nicely out-of-the-box so that they receive new mounts from
+          the host. This can be undone locally by running "mount
+          --make-rprivate /" if needed.
+
+        * The prefdm.service file has been removed. Distributions
+          should maintain this unit downstream if they intend to keep
+          it around. However, we recommend writing normal unit files
+          for display managers instead.
+
+        * Since systemd is a crucial part of the OS we will now
+          default to a number of compiler switches that improve
+          security (hardening) such as read-only relocations, stack
+          protection, and suchlike.
+
+        * The TimeoutSec= setting for services is now split into
+          TimeoutStartSec= and TimeoutStopSec= to allow configuration
+          of individual time outs for the start and the stop phase of
+          the service.
+
+        Contributions from: Artur Zaprzala, Arvydas Sidorenko, Auke
+        Kok, Bryan Kadzban, Dave Reisner, David Strauss, Harald Hoyer,
+        Jim Meyering, Kay Sievers, Lennart Poettering, Mantas
+        Mikulėnas, Martin Pitt, Michal Schmidt, Michal Sekletar, Peter
+        Alfredsen, Shawn Landden, Simon Peeters, Terence Honles, Tom
+        Gundersen, Zbigniew Jędrzejewski-Szmek
+
+CHANGES WITH 187:
+
+        * The journal and id128 C APIs are now fully documented as man
+          pages.
+
+        * Extra safety checks have been added when transitioning from
+          the initial RAM disk to the main system to avoid accidental
+          data loss.
+
+        * /etc/crypttab entries now understand the new keyfile-offset=
+          option.
+
+        * systemctl -t can now be used to filter by unit load state.
+
+        * The journal C API gained the new sd_journal_wait() call to
+          make writing synchronous journal clients easier.
+
+        * journalctl gained the new -D switch to show journals from a
+          specific directory.
+
+        * journalctl now displays a special marker between log
+          messages of two different boots.
+
+        * The journal is now explicitly flushed to /var via a service
+          systemd-journal-flush.service, rather than implicitly simply
+          by seeing /var/log/journal to be writable.
+
+        * journalctl (and the journal C APIs) can now match for much
+          more complex expressions, with alternatives and
+          disjunctions.
+
+        * When transitioning from the initial RAM disk to the main
+          system we will now kill all processes in a killing spree to
+          ensure no processes stay around by accident.
+
+        * Three new specifiers may be used in unit files: %u, %h, %s
+          resolve to the user name, user home directory resp. user
+          shell. This is useful for running systemd user instances.
+
+        * We now automatically rotate journal files if their data
+          object hash table gets a fill level > 75%. We also size the
+          hash table based on the configured maximum file size. This
+          together should lower hash collisions drastically and thus
+          speed things up a bit.
+
+        * journalctl gained the new "--header" switch to introspect
+          header data of journal files.
+
+        * A new setting SystemCallFilters= has been added to services
+          which may be used to apply blacklists or whitelists to
+          system calls. This is based on SECCOMP Mode 2 of Linux 3.5.
+
+        * nspawn gained a new --link-journal= switch (and quicker: -j)
+          to link the container journal with the host. This makes it
+          very easy to centralize log viewing on the host for all
+          guests while still keeping the journal files separated.
+
+        * Many bugfixes and optimizations
+
+        Contributions from: Auke Kok, Eelco Dolstra, Harald Hoyer, Kay
+        Sievers, Lennart Poettering, Malte Starostik, Paul Menzel, Rex
+        Tsai, Shawn Landden, Tom Gundersen, Ville Skyttä, Zbigniew
+        Jędrzejewski-Szmek
+
+CHANGES WITH 186:
+
+        * Several tools now understand kernel command line arguments,
+          which are only read when run in an initial RAM disk. They
+          usually follow closely their normal counterparts, but are
+          prefixed with rd.
+
+        * There's a new tool to analyze the readahead files that are
+          automatically generated at boot. Use:
+
+          /usr/lib/systemd/systemd-readahead analyze /.readahead
+
+        * We now provide an early debug shell on tty9 if this enabled. Use:
+
+          systemctl enable debug-shell.service
+
+        * All plymouth related units have been moved into the Plymouth
+          package. Please make sure to upgrade your Plymouth version
+          as well.
+
+        * systemd-tmpfiles now supports getting passed the basename of
+          a configuration file only, in which case it will look for it
+          in all appropriate directories automatically.
+
+        * udevadm info now takes a /dev or /sys path as argument, and
+          does the right thing. Example:
+
+          udevadm info /dev/sda
+          udevadm info /sys/class/block/sda
+
+        * systemctl now prints a warning if a unit is stopped but a
+          unit that might trigger it continues to run. Example: a
+          service is stopped but the socket that activates it is left
+          running.
+
+        * "systemctl status" will now mention if the log output was
+          shortened due to rotation since a service has been started.
+
+        * The journal API now exposes functions to determine the
+          "cutoff" times due to rotation.
+
+        * journald now understands SIGUSR1 and SIGUSR2 for triggering
+          immediately flushing of runtime logs to /var if possible,
+          resp. for triggering immediate rotation of the journal
+          files.
+
+        * It is now considered an error if a service is attempted to
+          be stopped that is not loaded.
+
+        * XDG_RUNTIME_DIR now uses numeric UIDs instead of usernames.
+
+        * systemd-analyze now supports Python 3
+
+        * tmpfiles now supports cleaning up directories via aging
+          where the first level dirs are always kept around but
+          directories beneath it automatically aged. This is enabled
+          by prefixing the age field with '~'.
+
+        * Seat objects now expose CanGraphical, CanTTY properties
+          which is required to deal with very fast bootups where the
+          display manager might be running before the graphics drivers
+          completed initialization.
+
+        * Seat objects now expose a State property.
+
+        * We now include RPM macros for service enabling/disabling
+          based on the preset logic. We recommend RPM based
+          distributions to make use of these macros if possible. This
+          makes it simpler to reuse RPM spec files across
+          distributions.
+
+        * We now make sure that the collected systemd unit name is
+          always valid when services log to the journal via
+          STDOUT/STDERR.
+
+        * There's a new man page kernel-command-line(7) detailing all
+          command line options we understand.
+
+        * The fstab generator may now be disabled at boot by passing
+          fstab=0 on the kernel command line.
+
+        * A new kernel command line option modules-load= is now understood
+          to load a specific kernel module statically, early at boot.
+
+        * Unit names specified on the systemctl command line are now
+          automatically escaped as needed. Also, if file system or
+          device paths are specified they are automatically turned
+          into the appropriate mount or device unit names. Example:
+
+          systemctl status /home
+          systemctl status /dev/sda
+
+        * The SysVConsole= configuration option has been removed from
+          system.conf parsing.
+
+        * The SysV search path is no longer exported on the D-Bus
+          Manager object.
+
+        * The Names= option is been removed from unit file parsing.
+
+        * There's a new man page bootup(7) detailing the boot process.
+
+        * Every unit and every generator we ship with systemd now
+          comes with full documentation. The self-explanatory boot is
+          complete.
+
+        * A couple of services gained "systemd-" prefixes in their
+          name if they wrap systemd code, rather than only external
+          code. Among them fsck@.service which is now
+          systemd-fsck@.service.
+
+        * The HaveWatchdog property has been removed from the D-Bus
+          Manager object.
+
+        * systemd.confirm_spawn= on the kernel command line should now
+          work sensibly.
+
+        * There's a new man page crypttab(5) which details all options
+          we actually understand.
+
+        * systemd-nspawn gained a new --capability= switch to pass
+          additional capabilities to the container.
+
+        * timedated will now read known NTP implementation unit names
+          from /usr/lib/systemd/ntp-units.d/*.list,
+          systemd-timedated-ntp.target has been removed.
+
+        * journalctl gained a new switch "-b" that lists log data of
+          the current boot only.
+
+        * The notify socket is in the abstract namespace again, in
+          order to support daemons which chroot() at start-up.
+
+        * There is a new Storage= configuration option for journald
+          which allows configuration of where log data should go. This
+          also provides a way to disable journal logging entirely, so
+          that data collected is only forwarded to the console, the
+          kernel log buffer or another syslog implementation.
+
+        * Many bugfixes and optimizations
+
+        Contributions from: Auke Kok, Colin Guthrie, Dave Reisner,
+        David Strauss, Eelco Dolstra, Kay Sievers, Lennart Poettering,
+        Lukas Nykryn, Michal Schmidt, Michal Sekletar, Paul Menzel,
+        Shawn Landden, Tom Gundersen
+
+CHANGES WITH 185:
+
+        * "systemctl help <unit>" now shows the man page if one is
+          available.
+
+        * Several new man pages have been added.
+
+        * MaxLevelStore=, MaxLevelSyslog=, MaxLevelKMsg=,
+          MaxLevelConsole= can now be specified in
+          journald.conf. These options allow reducing the amount of
+          data stored on disk or forwarded by the log level.
+
+        * TimerSlackNSec= can now be specified in system.conf for
+          PID1. This allows system-wide power savings.
+
+        Contributions from: Dave Reisner, Kay Sievers, Lauri Kasanen,
+        Lennart Poettering, Malte Starostik, Marc-Antoine Perennou,
+        Matthias Clasen
+
+CHANGES WITH 184:
+
+        * logind is now capable of (optionally) handling power and
+          sleep keys as well as the lid switch.
+
+        * journalctl now understands the syntax "journalctl
+          /usr/bin/avahi-daemon" to get all log output of a specific
+          daemon.
+
+        * CapabilityBoundingSet= in system.conf now also influences
+          the capability bound set of usermode helpers of the kernel.
+
+        Contributions from: Daniel Drake, Daniel J. Walsh, Gert
+        Michael Kulyk, Harald Hoyer, Jean Delvare, Kay Sievers,
+        Lennart Poettering, Matthew Garrett, Matthias Clasen, Paul
+        Menzel, Shawn Landden, Tero Roponen, Tom Gundersen
+
+CHANGES WITH 183:
+
+        * Note that we skipped 139 releases here in order to set the
+          new version to something that is greater than both udev's
+          and systemd's most recent version number.
+
+        * udev: all udev sources are merged into the systemd source tree now.
+          All future udev development will happen in the systemd tree. It
+          is still fully supported to use the udev daemon and tools without
+          systemd running, like in initramfs or other init systems. Building
+          udev though, will require the *build* of the systemd tree, but
+          udev can be properly *run* without systemd.
+
+        * udev: /lib/udev/devices/ are not read anymore; systemd-tmpfiles
+          should be used to create dead device nodes as workarounds for broken
+          subsystems.
+
+        * udev: RUN+="socket:..."  and udev_monitor_new_from_socket() is
+          no longer supported. udev_monitor_new_from_netlink() needs to be
+          used to subscribe to events.
+
+        * udev: when udevd is started by systemd, processes which are left
+          behind by forking them off of udev rules, are unconditionally cleaned
+          up and killed now after the event handling has finished. Services or
+          daemons must be started as systemd services. Services can be
+          pulled-in by udev to get started, but they can no longer be directly
+          forked by udev rules.
+
+        * udev: the daemon binary is called systemd-udevd now and installed
+          in /usr/lib/systemd/. Standalone builds or non-systemd systems need
+          to adapt to that, create symlink, or rename the binary after building
+          it.
+
+        * libudev no longer provides these symbols:
+            udev_monitor_from_socket()
+            udev_queue_get_failed_list_entry()
+            udev_get_{dev,sys,run}_path()
+          The versions number was bumped and symbol versioning introduced.
+
+        * systemd-loginctl and systemd-journalctl have been renamed
+          to loginctl and journalctl to match systemctl.
+
+        * The config files: /etc/systemd/systemd-logind.conf and
+          /etc/systemd/systemd-journald.conf have been renamed to
+          logind.conf and journald.conf. Package updates should rename
+          the files to the new names on upgrade.
+
+        * For almost all files the license is now LGPL2.1+, changed
+          from the previous GPL2.0+. Exceptions are some minor stuff
+          of udev (which will be changed to LGPL2.1 eventually, too),
+          and the MIT licensed sd-daemon.[ch] library that is suitable
+          to be used as drop-in files.
+
+        * systemd and logind now handle system sleep states, in
+          particular suspending and hibernating.
+
+        * logind now implements a sleep/shutdown/idle inhibiting logic
+          suitable for a variety of uses. Soonishly Lennart will blog
+          about this in more detail.
+
+        * var-run.mount and var-lock.mount are no longer provided
+          (which prevously bind mounted these directories to their new
+          places). Distributions which have not converted these
+          directories to symlinks should consider stealing these files
+          from git history and add them downstream.
+
+        * We introduced the Documentation= field for units and added
+          this to all our shipped units. This is useful to make it
+          easier to explore the boot and the purpose of the various
+          units.
+
+        * All smaller setup units (such as
+          systemd-vconsole-setup.service) now detect properly if they
+          are run in a container and are skipped when
+          appropriate. This guarantees an entirely noise-free boot in
+          Linux container environments such as systemd-nspawn.
+
+        * A framework for implementing offline system updates is now
+          integrated, for details see:
+          http://freedesktop.org/wiki/Software/systemd/SystemUpdates
+
+        * A new service type Type=idle is available now which helps us
+          avoiding ugly interleaving of getty output and boot status
+          messages.
+
+        * There's now a system-wide CapabilityBoundingSet= option to
+          globally reduce the set of capabilities for the
+          system. This is useful to drop CAP_SYS_MKNOD, CAP_SYS_RAWIO,
+          CAP_NET_RAW, CAP_SYS_MODULE, CAP_SYS_TIME, CAP_SYS_PTRACE or
+          even CAP_NET_ADMIN system-wide for secure systems.
+
+        * There are now system-wide DefaultLimitXXX= options to
+          globally change the defaults of the various resource limits
+          for all units started by PID 1.
+
+        * Harald Hoyer's systemd test suite has been integrated into
+          systemd which allows easy testing of systemd builds in qemu
+          and nspawn. (This is really awesome! Ask us for details!)
+
+        * The fstab parser is now implemented as generator, not inside
+          of PID 1 anymore.
+
+        * systemctl will now warn you if .mount units generated from
+          /etc/fstab are out of date due to changes in fstab that
+          haven't been read by systemd yet.
+
+        * systemd is now suitable for usage in initrds. Dracut has
+          already been updated to make use of this. With this in place
+          initrds get a slight bit faster but primarily are much
+          easier to introspect and debug since "systemctl status" in
+          the host system can be used to introspect initrd services,
+          and the journal from the initrd is kept around too.
+
+        * systemd-delta has been added, a tool to explore differences
+          between user/admin configuration and vendor defaults.
+
+        * PrivateTmp= now affects both /tmp and /var/tmp.
+
+        * Boot time status messages are now much prettier and feature
+          proper english language. Booting up systemd has never been
+          so sexy.
+
+        * Read-ahead pack files now include the inode number of all
+          files to pre-cache. When the inode changes the pre-caching
+          is not attempted. This should be nicer to deal with updated
+          packages which might result in changes of read-ahead
+          patterns.
+
+        * We now temporaritly lower the kernel's read_ahead_kb variable
+          when collecting read-ahead data to ensure the kernel's
+          built-in read-ahead does not add noise to our measurements
+          of necessary blocks to pre-cache.
+
+        * There's now RequiresMountsFor= to add automatic dependencies
+          for all mounts necessary for a specific file system path.
+
+        * MountAuto= and SwapAuto= have been removed from
+          system.conf. Mounting file systems at boot has to take place
+          in systemd now.
+
+        * nspawn now learned a new switch --uuid= to set the machine
+          ID on the command line.
+
+        * nspawn now learned the -b switch to automatically search
+          for an init system.
+
+        * vt102 is now the default TERM for serial TTYs, upgraded from
+          vt100.
+
+        * systemd-logind now works on VT-less systems.
+
+        * The build tree has been reorganized. The individual
+          components now have directories of their own.
+
+        * A new condition type ConditionPathIsReadWrite= is now available.
+
+        * nspawn learned the new -C switch to create cgroups for the
+          container in other hierarchies.
+
+        * We now have support for hardware watchdogs, configurable in
+          system.conf.
+
+        * The scheduled shutdown logic now has a public API.
+
+        * We now mount /tmp as tmpfs by default, but this can be
+          masked and /etc/fstab can override it.
+
+        * Since udisks doesn't make use of /media anymore we are not
+          mounting a tmpfs on it anymore.
+
+        * journalctl gained a new --local switch to only interleave
+          locally generated journal files.
+
+        * We can now load the IMA policy at boot automatically.
+
+        * The GTK tools have been split off into a systemd-ui.
+
+        Contributions from: Andreas Schwab, Auke Kok, Ayan George,
+        Colin Guthrie, Daniel Mack, Dave Reisner, David Ward, Elan
+        Ruusamäe, Frederic Crozat, Gergely Nagy, Guillermo Vidal,
+        Hannes Reinecke, Harald Hoyer, Javier Jardón, Kay Sievers,
+        Lennart Poettering, Lucas De Marchi, Léo Gillot-Lamure,
+        Marc-Antoine Perennou, Martin Pitt, Matthew Monaco, Maxim
+        A. Mikityanskiy, Michael Biebl, Michael Olbrich, Michal
+        Schmidt, Nis Martensen, Patrick McCarty, Roberto Sassu, Shawn
+        Landden, Sjoerd Simons, Sven Anders, Tollef Fog Heen, Tom
+        Gundersen
+
+CHANGES WITH 44:
+
+        * This is mostly a bugfix release
+
+        * Support optional initialization of the machine ID from the
+          KVM or container configured UUID.
+
+        * Support immediate reboots with "systemctl reboot -ff"
+
+        * Show /etc/os-release data in systemd-analyze output
+
+        * Many bugfixes for the journal, including endianess fixes and
+          ensuring that disk space enforcement works
+
+        * sd-login.h is C++ comptaible again
+
+        * Extend the /etc/os-release format on request of the Debian
+          folks
+
+        * We now refuse non-UTF8 strings used in various configuration
+          and unit files. This is done to ensure we don't pass invalid
+          data over D-Bus or expose it elsewhere.
+
+        * Register Mimo USB Screens as suitable for automatic seat
+          configuration
+
+        * Read SELinux client context from journal clients in a race
+          free fashion
+
+        * Reorder configuration file lookup order. /etc now always
+          overrides /run in order to allow the administrator to always
+          and unconditionally override vendor supplied or
+          automatically generated data.
+
+        * The various user visible bits of the journal now have man
+          pages. We still lack man pages for the journal API calls
+          however.
+
+        * We now ship all man pages in HTML format again in the
+          tarball.
+
+        Contributions from: Dave Reisner, Dirk Eibach, Frederic
+        Crozat, Harald Hoyer, Kay Sievers, Lennart Poettering, Marti
+        Raudsepp, Michal Schmidt, Shawn Landden, Tero Roponen, Thierry
+        Reding
+
+CHANGES WITH 43:
+
+        * This is mostly a bugfix release
+
+        * systems lacking /etc/os-release  are no longer supported.
+
+        * Various functionality updates to libsystemd-login.so
+
+        * Track class of PAM logins to distuingish greeters from
+          normal user logins.
+
+        Contributions from: Kay Sievers, Lennart Poettering, Michael
+        Biebl
+
+CHANGES WITH 42:
+
+        * This is an important bugfix release for v41.
+
+        * Building man pages is now optional which should be useful
+          for those building systemd from git but unwilling to install
+          xsltproc.
+
+        * Watchdog support for supervising services is now usable. In
+          a future release support for hardware watchdogs
+          (i.e. /dev/watchdog) will be added building on this.
+
+        * Service start rate limiting is now configurable and can be
+          turned off per service. When a start rate limit is hit a
+          reboot can automatically be triggered.
+
+        * New CanReboot(), CanPowerOff() bus calls in systemd-logind.
+
+        Contributions from: Benjamin Franzke, Bill Nottingham,
+        Frederic Crozat, Lennart Poettering, Michael Olbrich, Michal
+        Schmidt, Michał Górny, Piotr Drąg
+
+CHANGES WITH 41:
+
+        * The systemd binary is installed /usr/lib/systemd/systemd now;
+          An existing /sbin/init symlink needs to be adapted with the
+          package update.
+
+        * The code that loads kernel modules has been ported to invoke
+          libkmod directly, instead of modprobe. This means we do not
+          support systems with module-init-tools anymore.
+
+        * Watchdog support is now already useful, but still not
+          complete.
+
+        * A new kernel command line option systemd.setenv= is
+          understood to set system wide environment variables
+          dynamically at boot.
+
+	* We now limit the set of capabilities of systemd-journald.
+
+        * We now set SIGPIPE to ignore by default, since it only is
+          useful in shell pipelines, and has little use in general
+          code. This can be disabled with IgnoreSIPIPE=no in unit
+          files.
+
+        Contributions from: Benjamin Franzke, Kay Sievers, Lennart
+        Poettering, Michael Olbrich, Michal Schmidt, Tom Gundersen,
+        William Douglas
+
+CHANGES WITH 40:
+
+        * This is mostly a bugfix release
+
+        * We now expose the reason why a service failed in the
+          "Result" D-Bus property.
+
+        * Rudimentary service watchdog support (will be completed over
+          the next few releases.)
+
+        * When systemd forks off in order execute some service we will
+          now immediately changes its argv[0] to reflect which process
+          it will execute. This is useful to minimize the time window
+          with a generic argv[0], which makes bootcharts more useful
+
+        Contributions from: Alvaro Soliverez, Chris Paulson-Ellis, Kay
+        Sievers, Lennart Poettering, Michael Olbrich, Michal Schmidt,
+        Mike Kazantsev, Ray Strode
+
+CHANGES WITH 39:
+
+        * This is mostly a test release, but incorporates many
+          bugfixes.
+
+        * New systemd-cgtop tool to show control groups by their
+          resource usage.
+
+        * Linking against libacl for ACLs is optional again. If
+          disabled, support tracking device access for active logins
+          goes becomes unavailable, and so does access to the user
+          journals by the respective users.
+
+        * If a group "adm" exists, journal files are automatically
+          owned by them, thus allow members of this group full access
+          to the system journal as well as all user journals.
+
+        * The journal now stores the SELinux context of the logging
+          client for all entries.
+
+        * Add C++ inclusion guards to all public headers
+
+        * New output mode "cat" in the journal to print only text
+          messages, without any meta data like date or time.
+
+        * Include tiny X server wrapper as a temporary stop-gap to
+          teach XOrg udev display enumeration. This is used by display
+          managers such as gdm, and will go away as soon as XOrg
+          learned native udev hotplugging for display devices.
+
+        * Add new systemd-cat tool for executing arbitrary programs
+          with STDERR/STDOUT connected to the journal. Can also act as
+          BSD logger replacement, and does so by default.
+
+        * Optionally store all locally generated coredumps in the
+          journal along with meta data.
+
+        * systemd-tmpfiles learnt four new commands: n, L, c, b, for
+          writing short strings to files (for usage for /sys), and for
+          creating symlinks, character and block device nodes.
+
+        * New unit file option ControlGroupPersistent= to make cgroups
+          persistent, following the mechanisms outlined in
+          http://www.freedesktop.org/wiki/Software/systemd/PaxControlGroups
+
+        * Support multiple local RTCs in a sane way
+
+        * No longer monopolize IO when replaying readahead data on
+          rotating disks, since we might starve non-file-system IO to
+          death, since fanotify() will not see accesses done by blkid,
+          or fsck.
+
+        * Don't show kernel threads in systemd-cgls anymore, unless
+          requested with new -k switch.
+
+        Contributions from: Dan Horák, Kay Sievers, Lennart
+        Poettering, Michal Schmidt
+
+CHANGES WITH 38:
+
+        * This is mostly a test release, but incorporates many
+          bugfixes.
+
+        * The git repository moved to:
+          git://anongit.freedesktop.org/systemd/systemd
+          ssh://git.freedesktop.org/git/systemd/systemd
+
+        * First release with the journal
+          http://0pointer.de/blog/projects/the-journal.html
+
+        * The journal replaces both systemd-kmsg-syslogd and
+          systemd-stdout-bridge.
+
+        * New sd_pid_get_unit() API call in libsystemd-logind
+
+        * Many systemadm clean-ups
+
+        * Introduce remote-fs-pre.target which is ordered before all
+          remote mounts and may be used to start services before all
+          remote mounts.
+
+        * Added Mageia support
+
+        * Add bash completion for systemd-loginctl
+
+        * Actively monitor PID file creation for daemons which exit in
+          the parent process before having finished writing the PID
+          file in the daemon process. Daemons which do this need to be
+          fixed (i.e. PID file creation must have finished before the
+          parent exits), but we now react a bit more gracefully to them.
+
+        * Add colourful boot output, mimicking the well-known output
+          of existing distributions.
+
+        * New option PassCredentials= for socket units, for
+          compatibility with a recent kernel ABI breakage.
+
+        * /etc/rc.local is now hooked in via a generator binary, and
+          thus will no longer act as synchronization point during
+          boot.
+
+        * systemctl list-unit-files now supports --root=.
+
+        * systemd-tmpfiles now understands two new commands: z, Z for
+          relabelling files according to the SELinux database. This is
+          useful to apply SELinux labels to specific files in /sys,
+          among other things.
+
+        * Output of SysV services is now forwarded to both the console
+          and the journal by default, not only just the console.
+
+        * New man pages for all APIs from libsystemd-login.
+
+        * The build tree got reorganized and a the build system is a
+          lot more modular allowing embedded setups to specifically
+          select the components of systemd they are interested in.
+
+        * Support for Linux systems lacking the kernel VT subsystem is
+          restored.
+
+        * configure's --with-rootdir= got renamed to
+          --with-rootprefix= to follow the naming used by udev and
+          kmod
+
+        * Unless specified otherwise we'll now install to /usr instead
+          of /usr/local by default.
+
+        * Processes with '@' in argv[0][0] are now excluded from the
+          final shut-down killing spree, following the logic explained
+          in:
+          http://www.freedesktop.org/wiki/Software/systemd/RootStorageDaemons
+
+        * All processes remaining in a service cgroup when we enter
+          the START or START_PRE states are now killed with
+          SIGKILL. That means it is no longer possible to spawn
+          background processes from ExecStart= lines (which was never
+          supported anyway, and bad style).
+
+        * New PropagateReloadTo=/PropagateReloadFrom= options to bind
+          reloading of units together.
+
+        Contributions from: Bill Nottingham, Daniel J. Walsh, Dave
+        Reisner, Dexter Morgan, Gregs Gregs, Jonathan Nieder, Kay
+        Sievers, Lennart Poettering, Michael Biebl, Michal Schmidt,
+        Michał Górny, Ran Benita, Thomas Jarosch, Tim Waugh, Tollef
+        Fog Heen, Tom Gundersen, Zbigniew Jędrzejewski-Szmek

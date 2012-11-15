@@ -1,0 +1,6 @@
+[Unit]
+Description=G
+Conflicts=e.service
+
+[Service]
+ExecStart=/bin/true

@@ -1,0 +1,293 @@
+<?xml version='1.0'?> <!--*-nxml-*-->
+<!DOCTYPE refentry PUBLIC "-//OASIS//DTD DocBook XML V4.2//EN"
+        "http://www.oasis-open.org/docbook/xml/4.2/docbookx.dtd">
+
+<!--
+  This file is part of systemd.
+
+  Copyright 2012 Lennart Poettering
+
+  systemd is free software; you can redistribute it and/or modify it
+  under the terms of the GNU Lesser General Public License as published by
+  the Free Software Foundation; either version 2.1 of the License, or
+  (at your option) any later version.
+
+  systemd is distributed in the hope that it will be useful, but
+  WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+  Lesser General Public License for more details.
+
+  You should have received a copy of the GNU Lesser General Public License
+  along with systemd; If not, see <http://www.gnu.org/licenses/>.
+-->
+
+<refentry id="timedatectl">
+
+        <refentryinfo>
+                <title>timedatectl</title>
+                <productname>systemd</productname>
+
+                <authorgroup>
+                        <author>
+                                <contrib>Developer</contrib>
+                                <firstname>Lennart</firstname>
+                                <surname>Poettering</surname>
+                                <email>lennart@poettering.net</email>
+                        </author>
+                </authorgroup>
+        </refentryinfo>
+
+        <refmeta>
+                <refentrytitle>timedatectl</refentrytitle>
+                <manvolnum>1</manvolnum>
+        </refmeta>
+
+        <refnamediv>
+                <refname>timedatectl</refname>
+                <refpurpose>Control the system time and date</refpurpose>
+        </refnamediv>
+
+        <refsynopsisdiv>
+                <cmdsynopsis>
+                        <command>timedatectl <arg choice="opt" rep="repeat">OPTIONS</arg> <arg choice="req">COMMAND</arg></command>
+                </cmdsynopsis>
+        </refsynopsisdiv>
+
+        <refsect1>
+                <title>Description</title>
+
+                <para><command>timedatectl</command> may be used to
+                query and change the system clock and its
+                settings.</para>
+        </refsect1>
+
+        <refsect1>
+                <title>Options</title>
+
+                <para>The following options are understood:</para>
+
+                <variablelist>
+                        <varlistentry>
+                                <term><option>--help</option></term>
+                                <term><option>-h</option></term>
+
+                                <listitem><para>Prints a short help
+                                text and exits.</para></listitem>
+                        </varlistentry>
+
+                        <varlistentry>
+                                <term><option>--version</option></term>
+
+                                <listitem><para>Prints a short version
+                                string and exits.</para></listitem>
+                        </varlistentry>
+
+                        <varlistentry>
+                                <term><option>--no-pager</option></term>
+
+                                <listitem><para>Do not pipe output into a
+                                pager.</para></listitem>
+                        </varlistentry>
+
+                        <varlistentry>
+                                <term><option>--no-ask-password</option></term>
+
+                                <listitem><para>Don't query the user
+                                for authentication for privileged
+                                operations.</para></listitem>
+                        </varlistentry>
+
+                        <varlistentry>
+                                <term><option>-H</option></term>
+                                <term><option>--host</option></term>
+
+                                <listitem><para>Execute the operation
+                                remotely. Specify a hostname, or
+                                username and hostname separated by @,
+                                to connect to. This will use SSH to
+                                talk to a remote
+                                system.</para></listitem>
+                        </varlistentry>
+
+                        <varlistentry>
+                                <term><option>--adjust-system-clock</option></term>
+
+                                <listitem><para>If
+                                <command>set-local-rtc</command> is
+                                invoked and this option is passed the
+                                system clock is synchronized from the
+                                RTC again, taking the new setting into
+                                account. Otherwise the RTC is
+                                synchronized from the system
+                                clock.</para></listitem>
+                        </varlistentry>
+                </variablelist>
+
+                <para>The following commands are understood:</para>
+
+                <variablelist>
+                        <varlistentry>
+                                <term><command>status</command></term>
+
+                                <listitem><para>Show current settings
+                                of the system clock and
+                                RTC.</para></listitem>
+                        </varlistentry>
+
+                        <varlistentry>
+                                <term><command>set-time [TIME]</command></term>
+
+                                <listitem><para>Set the system clock
+                                to the specified time. This will also
+                                update the RTC time accordingly. The time
+                                may be specified in the format
+                                "2012-10-30
+                                18:17:16".</para></listitem>
+                        </varlistentry>
+
+                        <varlistentry>
+                                <term><command>set-timezone [TIMEZONE]</command></term>
+
+                                <listitem><para>Set the system time
+                                zone to the specified value. Available
+                                time zones can be listed with
+                                <command>list-timezones</command>. If
+                                the RTC is configured to be in the
+                                local time this will also update the
+                                RTC time. This call will alter the
+                                <filename>/etc/localtime</filename>
+                                symlink. See
+                                <citerefentry><refentrytitle>localtime</refentrytitle><manvolnum>5</manvolnum></citerefentry>
+                                for more
+                                information.</para></listitem>
+                        </varlistentry>
+
+                        <varlistentry>
+                                <term><command>list-timezones</command></term>
+
+                                <listitem><para>List available time
+                                zones, one per line. Entries from the
+                                list can be set as the system
+                                time zone with
+                                <command>set-timezone</command>.</para></listitem>
+                        </varlistentry>
+
+                        <varlistentry>
+                                <term><command>set-local-rtc [BOOL]</command></term>
+
+                                <listitem><para>Takes a boolean
+                                argument. If <literal>0</literal> the
+                                system is configured to maintain the
+                                RTC in universal time, if
+                                <literal>1</literal> it will maintain
+                                the RTC in local time instead. Note
+                                that maintaining the RTC in the local
+                                time zone is not fully supported and
+                                will create various problems with time
+                                zone changes and daylight saving
+                                adjustments. If at all possible use
+                                RTC in UTC. Note that invoking this
+                                will also synchronize the RTC from the
+                                system clock, unless
+                                <option>--adjust-system-clock</option> is
+                                passed (see above). This command will
+                                change the 3rd line of
+                                <filename>/etc/adjtime</filename>, as
+                                documented in
+                                <citerefentry><refentrytitle>hwclock</refentrytitle><manvolnum>8</manvolnum></citerefentry>.</para></listitem>
+                        </varlistentry>
+
+                        <varlistentry>
+                                <term><command>set-ntp [BOOL]</command></term>
+
+                                <listitem><para>Takes a boolean
+                                argument. Controls whether NTP based
+                                network time synchronization is
+                                enabled (if
+                                available).</para></listitem>
+                        </varlistentry>
+
+                </variablelist>
+
+        </refsect1>
+
+        <refsect1>
+                <title>Exit status</title>
+
+                <para>On success 0 is returned, a non-zero failure
+                code otherwise.</para>
+        </refsect1>
+
+        <refsect1>
+                <title>Environment</title>
+
+                <variablelist>
+                        <varlistentry>
+                                <term><varname>$SYSTEMD_PAGER</varname></term>
+                                <listitem><para>Pager to use when
+                                <option>--no-pager</option> is not given;
+                                overrides <varname>$PAGER</varname>.  Setting
+                                this to an empty string or the value
+                                <literal>cat</literal> is equivalent to passing
+                                <option>--no-pager</option>.</para></listitem>
+                        </varlistentry>
+                </variablelist>
+        </refsect1>
+
+        <refsect1>
+                <title>Examples</title>
+                <para>Show current settings:
+                <programlisting>
+$ timedatectl
+      Local time: Fri, 2012-11-02 09:26:46 CET
+  Universal time: Fri, 2012-11-02 08:26:46 UTC
+        RTC time: Fri, 2012-11-02 08:26:45
+        Timezone: Europe/Warsaw
+      UTC offset: +0100
+     NTP enabled: no
+NTP synchronized: no
+ RTC in local TZ: no
+      DST active: no
+ Last DST change: CEST → CET, DST became inactive
+                  Sun, 2012-10-28 02:59:59 CEST
+                  Sun, 2012-10-28 02:00:00 CET
+ Next DST change: CET → CEST, DST will become active
+                  the clock will jump one hour forward
+                  Sun, 2013-03-31 01:59:59 CET
+                  Sun, 2013-03-31 03:00:00 CEST
+                </programlisting>
+                </para>
+
+                <para>Enable an NTP daemon (chronyd):
+                <programlisting>
+$ timedatectl set-ntp true
+==== AUTHENTICATING FOR org.freedesktop.timedate1.set-ntp ===
+Authentication is required to control whether network time synchronization shall be enabled.
+Authenticating as: user
+Password: ********
+==== AUTHENTICATION COMPLETE ===
+                </programlisting>
+
+                <programlisting>
+$ systemctl status chronyd.service
+chronyd.service - NTP client/server
+          Loaded: loaded (/usr/lib/systemd/system/chronyd.service; enabled)
+          Active: active (running) since Fri, 2012-11-02 09:36:25 CET; 5s ago
+...
+                </programlisting>
+                </para>
+        </refsect1>
+
+        <refsect1>
+                <title>See Also</title>
+                <para>
+                        <citerefentry><refentrytitle>systemd</refentrytitle><manvolnum>1</manvolnum></citerefentry>,
+                        <citerefentry><refentrytitle>hwclock</refentrytitle><manvolnum>8</manvolnum></citerefentry>,
+                        <citerefentry><refentrytitle>date</refentrytitle><manvolnum>1</manvolnum></citerefentry>,
+                        <citerefentry><refentrytitle>localtime</refentrytitle><manvolnum>5</manvolnum></citerefentry>,
+                        <citerefentry><refentrytitle>systemctl</refentrytitle><manvolnum>1</manvolnum></citerefentry>,
+                        <citerefentry><refentrytitle>systemd-timedated.service</refentrytitle><manvolnum>8</manvolnum></citerefentry>
+                </para>
+        </refsect1>
+
+</refentry>

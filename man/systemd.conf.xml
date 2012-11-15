@@ -1,0 +1,284 @@
+<?xml version='1.0'?> <!--*-nxml-*-->
+<?xml-stylesheet type="text/xsl" href="http://docbook.sourceforge.net/release/xsl/current/xhtml/docbook.xsl"?>
+<!DOCTYPE refentry PUBLIC "-//OASIS//DTD DocBook XML V4.2//EN"
+        "http://www.oasis-open.org/docbook/xml/4.2/docbookx.dtd">
+
+<!--
+  This file is part of systemd.
+
+  Copyright 2010 Lennart Poettering
+
+  systemd is free software; you can redistribute it and/or modify it
+  under the terms of the GNU Lesser General Public License as published by
+  the Free Software Foundation; either version 2.1 of the License, or
+  (at your option) any later version.
+
+  systemd is distributed in the hope that it will be useful, but
+  WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+  Lesser General Public License for more details.
+
+  You should have received a copy of the GNU Lesser General Public License
+  along with systemd; If not, see <http://www.gnu.org/licenses/>.
+-->
+
+<refentry id="systemd.conf">
+        <refentryinfo>
+                <title>systemd.conf</title>
+                <productname>systemd</productname>
+
+                <authorgroup>
+                        <author>
+                                <contrib>Developer</contrib>
+                                <firstname>Lennart</firstname>
+                                <surname>Poettering</surname>
+                                <email>lennart@poettering.net</email>
+                        </author>
+                </authorgroup>
+        </refentryinfo>
+
+        <refmeta>
+                <refentrytitle>systemd.conf</refentrytitle>
+                <manvolnum>5</manvolnum>
+        </refmeta>
+
+        <refnamediv>
+                <refname>systemd.conf</refname>
+                <refpurpose>System and service manager configuration file</refpurpose>
+        </refnamediv>
+
+        <refsynopsisdiv>
+                <para><filename>/etc/systemd/system.conf</filename></para>
+                <para><filename>/etc/systemd/user.conf</filename></para>
+        </refsynopsisdiv>
+
+        <refsect1>
+                <title>Description</title>
+
+                <para>When run as system instance systemd reads the
+                configuration file <filename>system.conf</filename>,
+                otherwise <filename>user.conf</filename>. These
+                configuration files contain a few settings controlling
+                basic manager operations.</para>
+
+        </refsect1>
+
+        <refsect1>
+                <title>Options</title>
+
+                <para>All options are configured in the
+                <literal>[Manager]</literal> section:</para>
+
+                <variablelist class='systemd-directives'>
+
+                        <varlistentry>
+                                <term><varname>LogLevel=</varname></term>
+                                <term><varname>LogTarget=</varname></term>
+                                <term><varname>LogColor=</varname></term>
+                                <term><varname>LogLocation=</varname></term>
+                                <term><varname>DumpCore=yes</varname></term>
+                                <term><varname>CrashShell=no</varname></term>
+                                <term><varname>ShowStatus=yes</varname></term>
+                                <term><varname>CrashChVT=1</varname></term>
+                                <term><varname>DefaultStandardOutput=journal</varname></term>
+                                <term><varname>DefaultStandardError=inherit</varname></term>
+
+                                <listitem><para>Configures various
+                                parameters of basic manager
+                                operation. These options may be
+                                overridden by the respective command
+                                line arguments. See
+                                <citerefentry><refentrytitle>systemd</refentrytitle><manvolnum>1</manvolnum></citerefentry>
+                                for details about these command line
+                                arguments.</para></listitem>
+                        </varlistentry>
+
+                        <varlistentry>
+                                <term><varname>CPUAffinity=</varname></term>
+
+                                <listitem><para>Configures the initial
+                                CPU affinity for the init
+                                process. Takes a space-separated list
+                                of CPU indexes.</para></listitem>
+                        </varlistentry>
+
+                        <varlistentry>
+                                <term><varname>DefaultControllers=cpu</varname></term>
+
+                                <listitem><para>Configures in which
+                                cgroup controller hierarchies to
+                                create per-service cgroups
+                                automatically, in addition to the
+                                name=systemd named hierarchy. Defaults
+                                to 'cpu'. Takes a space separated list
+                                of controller names. Pass an empty
+                                string to ensure that systemd does not
+                                touch any hierarchies but its
+                                own.</para></listitem>
+                        </varlistentry>
+
+                        <varlistentry>
+                                <term><varname>JoinControllers=cpu,cpuacct,cpuset net_cls,netprio</varname></term>
+
+                                <listitem><para>Configures controllers
+                                that shall be mounted in a single
+                                hierarchy. By default systemd will
+                                mount all controllers which are
+                                enabled in the kernel in individual
+                                hierarchies, with the exception of
+                                those listed in this setting. Takes a
+                                space separated list of comma
+                                separated controller names, in order
+                                to allow multiple joined
+                                hierarchies. Defaults to
+                                'cpu,cpuacct'. Pass an empty string to
+                                ensure that systemd mounts all
+                                controllers in separate
+                                hierarchies.</para></listitem>
+                        </varlistentry>
+
+                        <varlistentry>
+                                <term><varname>RuntimeWatchdogSec=</varname></term>
+                                <term><varname>ShutdownWatchdogSec=</varname></term>
+
+                                <listitem><para>Configure the hardware
+                                watchdog at runtime and at
+                                reboot. Takes a timeout value in
+                                seconds (or in other time units if
+                                suffixed with <literal>ms</literal>,
+                                <literal>min</literal>,
+                                <literal>h</literal>,
+                                <literal>d</literal>,
+                                <literal>w</literal>). If
+                                <varname>RuntimeWatchdogSec=</varname>
+                                is set to a non-zero value the
+                                watchdog hardware
+                                (<filename>/dev/watchdog</filename>)
+                                will be programmed to automatically
+                                reboot the system if it is not
+                                contacted within the specified timeout
+                                interval. The system manager will
+                                ensure to contact it at least once in
+                                half the specified timeout
+                                interval. This feature requires a
+                                hardware watchdog device to be
+                                present, as it is commonly the case in
+                                embedded and server systems. Not all
+                                hardware watchdogs allow configuration
+                                of the reboot timeout, in which case
+                                the closest available timeout is
+                                picked. <varname>ShutdownWatchdogSec=</varname>
+                                may be used to configure the hardware
+                                watchdog when the system is asked to
+                                reboot. It works as a safety net to
+                                ensure that the reboot takes place
+                                even if a clean reboot attempt times
+                                out. By default
+                                <varname>RuntimeWatchdogSec=</varname>
+                                defaults to 0 (off), and
+                                <varname>ShutdownWatchdogSec=</varname>
+                                to 10min. These settings have no
+                                effect if a hardware watchdog is not
+                                available.</para></listitem>
+                        </varlistentry>
+
+                        <varlistentry>
+                                <term><varname>CapabilityBoundingSet=</varname></term>
+
+                                <listitem><para>Controls which
+                                capabilities to include in the
+                                capability bounding set for PID 1 and
+                                its children. See
+                                <citerefentry><refentrytitle>capabilities</refentrytitle><manvolnum>7</manvolnum></citerefentry>
+                                for details. Takes a whitespace
+                                separated list of capability names as
+                                read by
+                                <citerefentry><refentrytitle>cap_from_name</refentrytitle><manvolnum>3</manvolnum></citerefentry>.
+                                Capabilities listed will be included
+                                in the bounding set, all others are
+                                removed. If the list of capabilities
+                                is prefixed with ~ all but the listed
+                                capabilities will be included, the
+                                effect of the assignment
+                                inverted. Note that this option also
+                                affects the respective capabilities in
+                                the effective, permitted and
+                                inheritable capability sets. The
+                                capability bounding set may also be
+                                individually configured for units
+                                using the
+                                <varname>CapabilityBoundingSet=</varname>
+                                directive for units, but note that
+                                capabilities dropped for PID 1 cannot
+                                be regained in individual units, they
+                                are lost for good.</para></listitem>
+                        </varlistentry>
+
+                        <varlistentry>
+                                <term><varname>TimerSlackNSec=</varname></term>
+
+                                <listitem><para>Sets the timer slack
+                                in nanoseconds for PID 1 which is then
+                                inherited to all executed processes,
+                                unless overridden individually, for
+                                example with the
+                                <varname>TimerSlackNSec=</varname>
+                                setting in service units (for details
+                                see
+                                <citerefentry><refentrytitle>systemd.exec</refentrytitle><manvolnum>5</manvolnum></citerefentry>). The
+                                timer slack controls the accuracy of
+                                wake-ups triggered by timers. See
+                                <citerefentry><refentrytitle>prctl</refentrytitle><manvolnum>2</manvolnum></citerefentry>
+                                for more information. Note that in
+                                contrast to most other time span
+                                definitions this parameter takes an
+                                integer value in nano-seconds if no
+                                unit is specified. The usual time
+                                units are understood
+                                too.</para></listitem>
+                        </varlistentry>
+
+                        <varlistentry>
+                                <term><varname>DefaultLimitCPU=</varname></term>
+                                <term><varname>DefaultLimitFSIZE=</varname></term>
+                                <term><varname>DefaultLimitDATA=</varname></term>
+                                <term><varname>DefaultLimitSTACK=</varname></term>
+                                <term><varname>DefaultLimitCORE=</varname></term>
+                                <term><varname>DefaultLimitRSS=</varname></term>
+                                <term><varname>DefaultLimitNOFILE=</varname></term>
+                                <term><varname>DefaultLimitAS=</varname></term>
+                                <term><varname>DefaultLimitNPROC=</varname></term>
+                                <term><varname>DefaultLimitMEMLOCK=</varname></term>
+                                <term><varname>DefaultLimitLOCKS=</varname></term>
+                                <term><varname>DefaultLimitSIGPENDING=</varname></term>
+                                <term><varname>DefaultLimitMSGQUEUE=</varname></term>
+                                <term><varname>DefaultLimitNICE=</varname></term>
+                                <term><varname>DefaultLimitRTPRIO=</varname></term>
+                                <term><varname>DefaultLimitRTTIME=</varname></term>
+
+                                <listitem><para>These settings control
+                                various default resource limits for
+                                units. See
+                                <citerefentry><refentrytitle>setrlimit</refentrytitle><manvolnum>2</manvolnum></citerefentry>
+                                for details. Use the string
+                                <varname>infinity</varname> to
+                                configure no limit on a specific
+                                resource. These settings may be
+                                overridden in individual units
+                                using the corresponding LimitXXX=
+                                directives. Note that these resource
+                                limits are only defaults for units,
+                                they are not applied to PID 1
+                                itself.</para></listitem>
+                        </varlistentry>
+                </variablelist>
+        </refsect1>
+
+        <refsect1>
+                  <title>See Also</title>
+                  <para>
+                          <citerefentry><refentrytitle>systemd</refentrytitle><manvolnum>1</manvolnum></citerefentry>
+                  </para>
+        </refsect1>
+
+</refentry>

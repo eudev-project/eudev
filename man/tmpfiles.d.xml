@@ -1,0 +1,321 @@
+<?xml version="1.0"?>
+<!--*-nxml-*-->
+<!DOCTYPE refentry PUBLIC "-//OASIS//DTD DocBook XML V4.2//EN" "http://www.oasis-open.org/docbook/xml/4.2/docbookx.dtd">
+<!--
+  This file is part of systemd.
+
+  Copyright 2010 Brandon Philips
+
+  systemd is free software; you can redistribute it and/or modify it
+  under the terms of the GNU Lesser General Public License as published by
+  the Free Software Foundation; either version 2.1 of the License, or
+  (at your option) any later version.
+
+  systemd is distributed in the hope that it will be useful, but
+  WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+  Lesser General Public License for more details.
+
+  You should have received a copy of the GNU Lesser General Public License
+  along with systemd; If not, see <http://www.gnu.org/licenses/>.
+-->
+<refentry id="tmpfiles.d">
+
+        <refentryinfo>
+                <title>tmpfiles.d</title>
+                <productname>systemd</productname>
+
+                <authorgroup>
+                        <author>
+                                <contrib>Documentation</contrib>
+                                <firstname>Brandon</firstname>
+                                <surname>Philips</surname>
+                                <email>brandon@ifup.org</email>
+                        </author>
+                </authorgroup>
+        </refentryinfo>
+
+        <refmeta>
+                <refentrytitle>tmpfiles.d</refentrytitle>
+                <manvolnum>5</manvolnum>
+        </refmeta>
+
+        <refnamediv>
+                <refname>tmpfiles.d</refname>
+                <refpurpose>Configuration for creation, deletion and
+                cleaning of volatile and temporary files</refpurpose>
+        </refnamediv>
+
+        <refsynopsisdiv>
+                <para><filename>/etc/tmpfiles.d/*.conf</filename></para>
+                <para><filename>/run/tmpfiles.d/*.conf</filename></para>
+                <para><filename>/usr/lib/tmpfiles.d/*.conf</filename></para>
+        </refsynopsisdiv>
+
+        <refsect1>
+                <title>Description</title>
+
+                <para><command>systemd-tmpfiles</command> uses the
+                configuration files from the above directories to describe the
+                creation, cleaning and removal of volatile and
+                temporary files and directories which usually reside
+                in directories such as <filename>/run</filename>
+                or <filename>/tmp</filename>.</para>
+        </refsect1>
+
+        <refsect1>
+                <title>Configuration Format</title>
+
+                <para>Each configuration file shall be named in the
+                style of <filename>&lt;program&gt;.conf</filename>.
+                Files in <filename>/etc/</filename> override files
+                with the same name in <filename>/usr/lib/</filename>
+                and <filename>/run/</filename>.  Files in
+                <filename>/run/</filename> override files with the same
+                name in <filename>/usr/lib/</filename>. Packages
+                should install their configuration files in
+                <filename>/usr/lib/</filename>. Files in
+                <filename>/etc/</filename> are reserved for the local
+                administrator, who may use this logic to override the
+                configuration files installed by vendor packages. All
+                configuration files are sorted by their filename in
+                alphabetical order, regardless in which of the
+                directories they reside, to guarantee that a specific
+                configuration file takes precedence over another file
+                with an alphabetically later name.</para>
+
+                <para>If the administrator wants to disable a
+                configuration file supplied by the vendor the
+                recommended way is to place a symlink to
+                <filename>/dev/null</filename> in
+                <filename>/etc/tmpfiles.d/</filename> bearing the
+                same file name.</para>
+
+                <para>The configuration format is one line per path
+                containing action, path, mode, ownership, age and argument
+                fields:</para>
+
+                <programlisting>Type Path        Mode UID  GID  Age Argument
+d    /run/user   0755 root root 10d -
+L    /tmp/foobar -    -    -    -   /dev/null</programlisting>
+
+                <refsect2>
+                        <title>Type</title>
+                        <variablelist>
+                                <varlistentry>
+                                        <term><varname>f</varname></term>
+                                        <listitem><para>Create a file if it doesn't exist yet (optionally writing a short string into it, if the argument parameter is passed)</para></listitem>
+                                </varlistentry>
+
+                                <varlistentry>
+                                        <term><varname>F</varname></term>
+                                        <listitem><para>Create or truncate a file (optionally writing a short string into it, if the argument parameter is passed)</para></listitem>
+                                </varlistentry>
+
+                                <varlistentry>
+                                        <term><varname>w</varname></term>
+                                        <listitem><para>Write the argument parameter to a file, if the file exists.
+                                            Lines of this type accept shell-style globs in place of normal path
+                                            names. The argument parameter will be written without a trailing
+                                            newline. C-style backslash escapes are interpreted.</para></listitem>
+                                </varlistentry>
+
+                                <varlistentry>
+                                        <term><varname>d</varname></term>
+                                        <listitem><para>Create a directory if it doesn't exist yet</para></listitem>
+                                </varlistentry>
+
+                                <varlistentry>
+                                        <term><varname>D</varname></term>
+                                        <listitem><para>Create or empty a directory</para></listitem>
+                                </varlistentry>
+
+                                <varlistentry>
+                                        <term><varname>p</varname></term>
+                                        <listitem><para>Create a named pipe (FIFO) if it doesn't exist yet</para></listitem>
+                                </varlistentry>
+
+                                <varlistentry>
+                                        <term><varname>L</varname></term>
+                                        <listitem><para>Create a symlink if it doesn't exist yet</para></listitem>
+                                </varlistentry>
+
+                                <varlistentry>
+                                        <term><varname>c</varname></term>
+                                        <listitem><para>Create a character device node if it doesn't exist yet</para></listitem>
+                                </varlistentry>
+
+                                <varlistentry>
+                                        <term><varname>b</varname></term>
+                                        <listitem><para>Create a block device node if it doesn't exist yet</para></listitem>
+                                </varlistentry>
+
+                                <varlistentry>
+                                        <term><varname>x</varname></term>
+                                        <listitem><para>Ignore a path
+                                        during cleaning. Use this type
+                                        to exclude paths from clean-up
+                                        as controlled with the Age
+                                        parameter. Note that lines of
+                                        this type do not influence the
+                                        effect of r or R lines. Lines
+                                        of this type accept
+                                        shell-style globs in place of
+                                        normal path
+                                        names.</para></listitem>
+                                </varlistentry>
+
+                                <varlistentry>
+                                        <term><varname>r</varname></term>
+                                        <listitem><para>Remove a file
+                                        or directory if it
+                                        exists. This may not be used
+                                        to remove non-empty
+                                        directories, use R for
+                                        that. Lines of this type
+                                        accept shell-style globs in
+                                        place of normal path
+                                        names.</para></listitem>
+                                </varlistentry>
+
+                                <varlistentry>
+                                        <term><varname>R</varname></term>
+                                        <listitem><para>Recursively
+                                        remove a path and all its
+                                        subdirectories (if it is a
+                                        directory). Lines of this type
+                                        accept shell-style globs in
+                                        place of normal path
+                                        names.</para></listitem>
+                                </varlistentry>
+
+                                <varlistentry>
+                                        <term><varname>z</varname></term>
+                                        <listitem><para>Restore
+                                        SELinux security context label
+                                        and set ownership and access
+                                        mode of a file or directory if
+                                        it exists.  Lines of this type
+                                        accept shell-style globs in
+                                        place of normal path names.
+                                        </para></listitem>
+                                </varlistentry>
+
+                                <varlistentry>
+                                        <term><varname>Z</varname></term>
+                                        <listitem><para>Recursively
+                                        restore SELinux security
+                                        context label and set
+                                        ownership and access mode of a
+                                        path and all its
+                                        subdirectories (if it is a
+                                        directory). Lines of this type
+                                        accept shell-style globs in
+                                        place of normal path
+                                        names.</para></listitem>
+                                </varlistentry>
+                        </variablelist>
+                </refsect2>
+
+                <refsect2>
+                        <title>Mode</title>
+
+                        <para>The file access mode to use when
+                        creating this file or directory. If omitted or
+                        when set to - the default is used: 0755 for
+                        directories, 0644 for all other file
+                        objects. For z, Z lines if omitted or when set
+                        to - the file access mode will not be
+                        modified. This parameter is ignored for x, r,
+                        R, L lines.</para>
+                </refsect2>
+
+                <refsect2>
+                        <title>UID, GID</title>
+
+                        <para>The user and group to use for this file
+                        or directory. This may either be a numeric
+                        user/group ID or a user or group name. If
+                        omitted or when set to - the default 0 (root)
+                        is used. For z, Z lines when omitted or when set to -
+                        the file ownership will not be modified.
+                        These parameters are ignored for x, r, R, L lines.</para>
+                </refsect2>
+
+                <refsect2>
+                        <title>Age</title>
+                        <para>The date field, when set, is used to
+                        decide what files to delete when cleaning. If
+                        a file or directory is older than the current
+                        time minus the age field it is deleted. The
+                        field format is a series of integers each
+                        followed by one of the following
+                        postfixes for the respective time units:</para>
+
+                        <variablelist>
+                                <varlistentry>
+                                <term><varname>s</varname></term>
+                                <term><varname>min</varname></term>
+                                <term><varname>h</varname></term>
+                                <term><varname>d</varname></term>
+                                <term><varname>w</varname></term>
+                                <term><varname>ms</varname></term>
+                                <term><varname>m</varname></term>
+                                <term><varname>us</varname></term></varlistentry>
+                        </variablelist>
+
+                        <para>If multiple integers and units are specified the time
+                        values are summed up. If an integer is given without a unit,
+                        s is assumed.
+                        </para>
+
+                        <para>When the age is set to zero, the files are cleaned
+                        unconditionally.</para>
+
+                        <para>The age field only applies to lines starting with
+                        d, D and x. If omitted or set to - no automatic clean-up
+                        is done.</para>
+
+                        <para>If the age field starts with a tilde
+                        character (~) the clean-up is only applied to
+                        files and directories one level inside the
+                        directory specified, but not the files and
+                        directories immediately inside it.</para>
+                </refsect2>
+
+                <refsect2>
+                        <title>Argument</title>
+
+                        <para>For L lines determines the destination
+                        path of the symlink. For c, b determines the
+                        major/minor of the device node, with major and
+                        minor formatted as integers, separated by :,
+                        e.g. "1:3". For f, F, w may be used to specify
+                        a short string that is written to the file,
+                        suffixed by a newline. Ignored for all other
+                        lines.</para>
+                </refsect2>
+
+        </refsect1>
+
+        <refsect1>
+                <title>Example</title>
+                <example>
+                        <title>/etc/tmpfiles.d/screen.conf example</title>
+                        <para><command>screen</command> needs two directories created at boot with specific modes and ownership.</para>
+
+                        <programlisting>d /var/run/screens  1777 root root 10d
+d /var/run/uscreens 0755 root root 10d12h</programlisting>
+                </example>
+        </refsect1>
+
+        <refsect1>
+                <title>See Also</title>
+                <para>
+                        <citerefentry><refentrytitle>systemd</refentrytitle><manvolnum>1</manvolnum></citerefentry>,
+                        <citerefentry><refentrytitle>systemd-tmpfiles</refentrytitle><manvolnum>8</manvolnum></citerefentry>,
+                        <citerefentry><refentrytitle>systemd-delta</refentrytitle><manvolnum>1</manvolnum></citerefentry>
+                </para>
+        </refsect1>
+
+</refentry>
