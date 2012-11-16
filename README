@@ -1,4 +1,3 @@
-
 This git repo is a fork of git://anongit.freedesktop.org/systemd/systemd
 with the aim of isolating udev from any particular flavor of system
 initialization.  In this case, the isolation is from systemd.
@@ -14,8 +13,9 @@ IRC: Freenode/#gentoo-udev
 
 Committers (alphabetical order by last name):
 
-	Anthony G. Basile	(blueness)	<blueness@gentoo.org>
-	Ian Stakenvicius	(axs)		<axs@gentoo.org>
-	Tony Vroon		(chainsaw)	<tony@linx.net>
-	Richard Yao		(ryao)		<ryao@gentoo.org>
+	Anthony G. Basile	(blueness)		<blueness@gentoo.org>
+	Ian Stakenvicius	(axs)			<axs@gentoo.org>
+	Matthew Thode		(prometheanfire)	<prometheanfire@gentoo.org>
+	Tony Vroon		(chainsaw)		<tony@linx.net>
+	Richard Yao		(ryao)			<ryao@gentoo.org>
 
