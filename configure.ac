@@ -31,6 +31,7 @@ AC_PROG_MAKE_SET
 
 AC_PATH_PROG([M4], [m4])
 AC_PATH_PROG([XSLTPROC], [xsltproc])
+GTK_DOC_CHECK([1.18],[--flavour no-tmpl])
 
 # TODO check this --- we don't want kmod necessarily
 # PKG_CHECK_MODULES(KMOD, [libkmod >= 5])
@@ -107,6 +108,14 @@ AS_IF([test "x$with_python" != "xno"], [
         ])
 ])
 AM_CONDITIONAL([HAVE_PYTHON_DEVEL], [test "$have_python_devel" = "yes"])
+
+# ------------------------------------------------------------------------------
+
+have_introspection=no
+AC_ARG_ENABLE([introspection],
+        [AS_HELP_STRING([--without-introspection], [Disable man page index and systemd-python (default: no)])])
+GOBJECT_INTROSPECTION_CHECK([1.31.1])
+AM_CONDITIONAL([HAVE_INTROSPECTION], [test "$have_introspection" = "yes"])
 
 # ------------------------------------------------------------------------------
 have_selinux=no
@@ -242,6 +251,18 @@ AC_SUBST([rootlibdir], [$with_rootlibdir])
 # ------------------------------------------------------------------------------
 
 AC_CONFIG_FILES([Makefile
+                 docs/Makefile
                  docs/gudev/Makefile
-                 docs/libudev/Makefile])
+                 docs/libudev/Makefile
+                 hwdb/Makefile
+                 keymaps-force-release/Makefile
+                 keymaps/Makefile
+                 man/Makefile
+                 rules/Makefile
+                 src/Makefile
+                 src/gudev/Makefile
+                 src/libudev/Makefile
+                 src/test/Makefile
+                 src/udev/Makefile
+                 test/Makefile])
 AC_OUTPUT
