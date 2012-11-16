@@ -5,7 +5,6 @@ udevlibexecdir=$(rootprefix)/lib/udev
 udevrulesdir = $(udevlibexecdir)/rules.d
 
 dist_udevrules_DATA = \
-	99-systemd.rules \
 	42-usb-hid-pm.rules \
 	50-udev-default.rules \
 	60-cdrom_id.rules \
@@ -26,6 +25,6 @@ dist_udevrules_DATA = \
 
 if ENABLE_KEYMAP
 dist_udevrules_DATA += \
-        95-keymap.rules \
-        95-keyboard-force-release.rules
+	95-keymap.rules \
+	95-keyboard-force-release.rules
 endif

@@ -1,7 +1,7 @@
-if ENABLE_GUDEV
+if ENABLE_GTK_DOC
 SUBDIRS = \
 	libudev
-if ENABLE_GTK_DOC
+if ENABLE_GUDEV
 SUBDIRS += \
 	gudev
 endif

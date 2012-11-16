@@ -29,9 +29,14 @@ AC_PROG_INSTALL
 AC_PROG_LN_S
 AC_PROG_MAKE_SET
 
+GTK_DOC_CHECK([1.18],[--flavour no-tmpl])
+
 AC_PATH_PROG([M4], [m4])
 AC_PATH_PROG([XSLTPROC], [xsltproc])
-GTK_DOC_CHECK([1.18],[--flavour no-tmpl])
+AC_PATH_TOOL(GPERF, gperf)
+if test -z "$GPERF" ; then
+        AC_MSG_ERROR([*** gperf not found])
+fi
 
 # TODO check this --- we don't want kmod necessarily
 # PKG_CHECK_MODULES(KMOD, [libkmod >= 5])
@@ -265,4 +270,5 @@ AC_CONFIG_FILES([Makefile
                  src/test/Makefile
                  src/udev/Makefile
                  test/Makefile])
+
 AC_OUTPUT

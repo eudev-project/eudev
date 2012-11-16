@@ -4,6 +4,9 @@ LIBUDEV_CURRENT=3
 LIBUDEV_REVISION=0
 LIBUDEV_AGE=2
 
+AM_CPPFLAGS = \
+        -I $(top_srcdir)/src/shared 
+
 lib_LTLIBRARIES = \
 	libudev.la
 
@@ -28,17 +31,6 @@ libudev_la_LDFLAGS = \
 	-version-info $(LIBUDEV_CURRENT):$(LIBUDEV_REVISION):$(LIBUDEV_AGE) \
 	-Wl,--version-script=libudev.sym
 
-pkgconfiglibdir=$(libdir)/pkgconfig
-pkgconfiglib_DATA = \
-	libudev.pc
-
-EXTRA_DIST = \
-	libudev.pc.in \
-	libudev.sym
-
-CLEANFILES = \
-	libudev.pc
-
 noinst_LTLIBRARIES = \
 	libudev-private.la
 
@@ -51,3 +43,13 @@ libudev_private_la_CFLAGS = \
 	$(AM_CFLAGS) \
 	-fvisibility=default
 
+pkgconfiglibdir=$(libdir)/pkgconfig
+pkgconfiglib_DATA = \
+	libudev.pc
+
+EXTRA_DIST = \
+	libudev.pc.in \
+	libudev.sym
+
+CLEANFILES = \
+	libudev.pc

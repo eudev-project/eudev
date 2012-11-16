@@ -7,7 +7,7 @@ AM_CPPFLAGS = \
 	-DROOTPREFIX=\"$(rootprefix)\" \
 	-I $(top_srcdir)/src/libudev \
 	-I $(top_srcdir)/src/udev \
-	$(OUR_CPPFLAGS)
+	-I $(top_srcdir)/src/shared
 
 sbin_PROGRAMS = \
 	udevd \

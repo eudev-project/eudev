@@ -1,10 +1,14 @@
 #!/bin/sh
 
 set -e
+
+if type -p gtkdocize > /dev/null; then
+    gtkdocize --docdir docs
+    gtkdocargs=--enable-gtk-doc
+fi
   
 aclocal && \
 autoheader && \
 autoconf && \
 libtoolize --copy && \
-gtkdocize --docdir docs && \
 automake --add-missing --copy

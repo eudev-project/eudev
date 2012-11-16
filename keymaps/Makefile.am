@@ -1,7 +1,10 @@
 ACLOCAL_AMFLAGS = -I m4 ${ACLOCAL_FLAGS}
 
-if ENABLE_KEYMAP
+rootprefix=@rootprefix@
+udevlibexecdir=$(rootprefix)/lib/udev
 udevkeymapdir = $(udevlibexecdir)/keymaps
+
+if ENABLE_KEYMAP
 dist_udevkeymap_DATA = \
 	acer \
 	acer-aspire_5720 \
@@ -63,5 +66,6 @@ dist_udevkeymap_DATA = \
 	toshiba-satellite_a110 \
 	toshiba-satellite_m30x \
 	zepto-znote
+
 endif
 

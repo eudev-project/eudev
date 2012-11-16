@@ -1,7 +1,10 @@
 ACLOCAL_AMFLAGS = -I m4 ${ACLOCAL_FLAGS}
 
-if ENABLE_KEYMAP
+rootprefix=@rootprefix@
+udevlibexecdir=$(rootprefix)/lib/udev
 udevkeymapforcereldir = $(udevlibexecdir)/keymaps/force-release
+
+if ENABLE_KEYMAP
 dist_udevkeymapforcerel_DATA = \
 	dell-touchpad \
 	dell-xps \
