@@ -875,42 +875,6 @@ found:
         return udev_device_new_from_syspath(udev, path);
 }
 
-/**
- * udev_device_new_from_environment
- * @udev: udev library context
- *
- * Create new udev device, and fill in information from the
- * current process environment. This only works reliable if
- * the process is called from a udev rule. It is usually used
- * for tools executed from IMPORT= rules.
- *
- * The initial refcount is 1, and needs to be decremented to
- * release the resources of the udev device.
- *
- * Returns: a new udev device, or #NULL, if it does not exist
- **/
-_public_ struct udev_device *udev_device_new_from_environment(struct udev *udev)
-{
-        int i;
-        struct udev_device *udev_device;
-
-        udev_device = udev_device_new(udev);
-        if (udev_device == NULL)
-                return NULL;
-        udev_device_set_info_loaded(udev_device);
-
-        for (i = 0; environ[i] != NULL; i++)
-                udev_device_add_property_from_string_parse(udev_device, environ[i]);
-
-        if (udev_device_add_property_from_string_parse_finish(udev_device) < 0) {
-                udev_dbg(udev, "missing values, invalid device\n");
-                udev_device_unref(udev_device);
-                udev_device = NULL;
-        }
-
-        return udev_device;
-}
-
 static struct udev_device *device_new_from_parent(struct udev_device *udev_device)
 {
         struct udev_device *udev_device_parent = NULL;

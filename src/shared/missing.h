@@ -242,14 +242,6 @@ static inline int name_to_handle_at(int fd, const char *name, struct file_handle
 }
 #endif
 
-#ifndef HAVE_SECURE_GETENV
-#  ifdef HAVE___SECURE_GETENV
-#    define secure_getenv __secure_getenv
-#  else
-#    error neither secure_getenv nor __secure_getenv are available
-#  endif
-#endif
-
 #ifndef CIFS_MAGIC_NUMBER
 #define CIFS_MAGIC_NUMBER 0xFF534D42
 #endif

@@ -5,6 +5,7 @@ rootprefix=@rootprefix@
 AM_CPPFLAGS = \
 	-include $(top_builddir)/config.h \
 	-DROOTPREFIX=\"$(rootprefix)\" \
+	-DUDEVLIBEXECDIR=\"$(udevlibexecdir)\" \
 	-I $(top_srcdir)/src/libudev \
 	-I $(top_srcdir)/src/udev \
 	-I $(top_srcdir)/src/shared

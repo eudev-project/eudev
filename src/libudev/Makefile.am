@@ -28,8 +28,7 @@ libudev_la_CFLAGS = \
 
 libudev_la_LDFLAGS = \
 	$(AM_LDFLAGS) \
-	-version-info $(LIBUDEV_CURRENT):$(LIBUDEV_REVISION):$(LIBUDEV_AGE) \
-	-Wl,--version-script=libudev.sym
+	-version-info $(LIBUDEV_CURRENT):$(LIBUDEV_REVISION):$(LIBUDEV_AGE)
 
 noinst_LTLIBRARIES = \
 	libudev-private.la
@@ -48,8 +47,7 @@ pkgconfiglib_DATA = \
 	libudev.pc
 
 EXTRA_DIST = \
-	libudev.pc.in \
-	libudev.sym
+	libudev.pc.in
 
 CLEANFILES = \
 	libudev.pc
