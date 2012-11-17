@@ -66,7 +66,7 @@ libudev_core_la_CFLAGS = \
 	$(KMOD_CFLAGS)
 
 libudev_core_la_LIBADD = \
-	libudev-private.la \
+	$(top_srcdir)/src/libudev/libudev-private.la \
 	$(BLKID_LIBS) \
 	$(KMOD_LIBS)
 
