@@ -117,7 +117,6 @@ _public_ void udev_set_userdata(struct udev *udev, void *userdata)
 _public_ struct udev *udev_new(void)
 {
         struct udev *udev;
-        const char *env;
         FILE *f;
 
         udev = calloc(1, sizeof(struct udev));
@@ -198,11 +197,6 @@ _public_ struct udev *udev_new(void)
                 }
                 fclose(f);
         }
-
-        /* environment overrides config */
-        env = secure_getenv("UDEV_LOG");
-        if (env != NULL)
-                udev_set_log_priority(udev, util_log_priority(env));
 
         return udev;
 }

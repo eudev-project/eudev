@@ -1,6 +1,8 @@
 ACLOCAL_AMFLAGS = -I m4 ${ACLOCAL_FLAGS}
 
 rootprefix=@rootprefix@
+udevlibexecdir=$(rootprefix)/lib/udev
+udevhomedir = $(udevlibexecdir)
 
 AM_CPPFLAGS = \
 	-include $(top_builddir)/config.h \
@@ -16,7 +18,19 @@ sbin_PROGRAMS = \
 
 udevd_SOURCES = \
 	udevd.c \
-	log.c
+	conf-files.c \
+	cgroup-util.c \
+	dev-setup.c \
+	exit-status.c \
+	hashmap.c \
+	label.c \
+	log.c \
+	mkdir.c \
+	path-util.c \
+	set.c \
+	strbuf.c \
+	strv.c \
+	util.c
 
 udevd_LDADD = \
 	libudev-core.la
@@ -96,8 +110,6 @@ CLEANFILES = \
 # ------------------------------------------------------------------------------
 # ------------------------------------------------------------------------------
 
-udevlibexecdir=$(rootprefix)/lib/udev
-udevhomedir = $(udevlibexecdir)
 udevlibexec_PROGRAMS =
 
 # ------------------------------------------------------------------------------
