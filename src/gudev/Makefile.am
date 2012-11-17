@@ -1,6 +1,9 @@
 ACLOCAL_AMFLAGS = -I m4 ${ACLOCAL_FLAGS}
 
 if ENABLE_GUDEV
+LIBGUDEV_CURRENT=1
+LIBGUDEV_REVISION=2
+LIBGUDEV_AGE=1
 
 libgudev_includedir = \
 	$(includedir)/gudev-1.0/gudev
@@ -62,7 +65,7 @@ libgudev_1_0_la_CFLAGS = \
 	$(GLIB_CFLAGS)
 
 libgudev_1_0_la_LIBADD = \
-	libudev.la \
+	$(top_srcdir)/src/libudev/libudev.la \
 	$(GLIB_LIBS)
 
 libgudev_1_0_la_LDFLAGS = \

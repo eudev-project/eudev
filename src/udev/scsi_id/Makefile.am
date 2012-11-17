@@ -17,4 +17,4 @@ scsi_id_LDADD = \
 	$(top_srcdir)/src/udev/libudev-core.la
 
 EXTRA_DIST = \
-	scsi_id/README
+	README

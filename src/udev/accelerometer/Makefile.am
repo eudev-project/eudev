@@ -10,6 +10,5 @@ accelerometer_SOURCES = \
 	accelerometer.c
 
 accelerometer_LDADD = \
-	$(top_srcdir)/src/libudev/libudev-private.la \
-	$(top_srcdir)/src/udev-core.la \
+	$(top_srcdir)/src/libudev/libudev.la \
 	-lm
