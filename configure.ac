@@ -39,8 +39,8 @@ if test -z "$GPERF" ; then
 fi
 
 # TODO check this --- we don't want kmod necessarily
-# PKG_CHECK_MODULES(KMOD, [libkmod >= 5])
-# PKG_CHECK_MODULES(BLKID,[blkid >= 2.20])
+PKG_CHECK_MODULES(KMOD, [libkmod >= 5])
+PKG_CHECK_MODULES(BLKID,[blkid >= 2.20])
 
 # Checks for header files.
 AC_CHECK_HEADERS(

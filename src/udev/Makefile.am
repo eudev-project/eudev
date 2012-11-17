@@ -17,20 +17,7 @@ sbin_PROGRAMS = \
 	udevadm
 
 udevd_SOURCES = \
-	udevd.c \
-	conf-files.c \
-	cgroup-util.c \
-	dev-setup.c \
-	exit-status.c \
-	hashmap.c \
-	label.c \
-	log.c \
-	mkdir.c \
-	path-util.c \
-	set.c \
-	strbuf.c \
-	strv.c \
-	util.c
+	udevd.c
 
 udevd_LDADD = \
 	libudev-core.la
@@ -68,12 +55,24 @@ libudev_core_la_SOURCES = \
 	udev-builtin-kmod.c \
 	udev-builtin-net_id.c \
 	udev-builtin-path_id.c \
-	udev-builtin-usb_id.c
-
-if HAVE_ACL
-libudev_core_la_SOURCES += \
-	udev-builtin-uaccess.c
-endif
+	udev-builtin-usb_id.c \
+	acl-util.c \
+	conf-files.c \
+	cgroup-util.c \
+	dev-setup.c \
+	exit-status.c \
+	hashmap.c \
+	label.c \
+	log.c \
+	logind-acl.c \
+	mkdir.c \
+	path-util.c \
+	sd-daemon.c \
+	sd-login.c \
+	set.c \
+	strbuf.c \
+	strv.c \
+	util.c
 
 libudev_core_la_CFLAGS = \
 	$(AM_CFLAGS) \
@@ -84,6 +83,15 @@ libudev_core_la_LIBADD = \
 	$(top_srcdir)/src/libudev/libudev-private.la \
 	$(BLKID_LIBS) \
 	$(KMOD_LIBS)
+
+if HAVE_ACL
+libudev_core_la_SOURCES += \
+	udev-builtin-uaccess.c
+
+libudev_core_la_LIBADD += \
+        $(ACL_LIBS)
+endif
+
 
 libudev_core_la_CPPFLAGS = \
 	$(AM_CPPFLAGS) \
@@ -123,7 +131,8 @@ ata_id_ata_id_SOURCES = \
 	ata_id/ata_id.c
 
 ata_id_ata_id_LDADD = \
-	libudev-private.la
+	$(top_srcdir)/src/libudev/libudev-private.la \
+	libudev-core.la
 
 # ------------------------------------------------------------------------------
 
@@ -134,7 +143,8 @@ cdrom_id_cdrom_id_SOURCES = \
 	cdrom_id/cdrom_id.c
 
 cdrom_id_cdrom_id_LDADD = \
-	libudev.la
+	$(top_srcdir)/src/libudev/libudev-private.la \
+	libudev-core.la
 
 # ------------------------------------------------------------------------------
 
@@ -145,7 +155,8 @@ collect_collect_SOURCES = \
 	collect/collect.c
 
 collect_collect_LDADD = \
-	libudev-private.la
+	$(top_srcdir)/src/libudev/libudev-private.la \
+	libudev-core.la
 
 # ------------------------------------------------------------------------------
 
@@ -159,7 +170,8 @@ scsi_id_scsi_id_SOURCES =\
 	scsi_id/scsi_id.h
 
 scsi_id_scsi_id_LDADD = \
-	libudev-private.la
+	$(top_srcdir)/src/libudev/libudev-private.la \
+	libudev-core.la
 
 EXTRA_DIST += \
 	scsi_id/README
@@ -173,7 +185,8 @@ v4l_id_v4l_id_SOURCES = \
 	v4l_id/v4l_id.c
 
 v4l_id_v4l_id_LDADD = \
-	libudev.la
+	$(top_srcdir)/src/libudev/libudev-private.la \
+	libudev-core.la
 
 # ------------------------------------------------------------------------------
 
@@ -184,7 +197,9 @@ accelerometer_accelerometer_SOURCES = \
 	accelerometer/accelerometer.c
 
 accelerometer_accelerometer_LDADD = \
-	libudev.la -lm
+	$(top_srcdir)/src/libudev/libudev-private.la \
+	libudev-core.la \
+	-lm
 
 # ------------------------------------------------------------------------------
 
