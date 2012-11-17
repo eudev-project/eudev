@@ -19,6 +19,8 @@
   along with systemd; If not, see <http://www.gnu.org/licenses/>.
 ***/
 
+#ifdef HAVE_ACL
+
 #include <assert.h>
 #include <sys/acl.h>
 #include <acl/libacl.h>
@@ -246,3 +248,5 @@ finish:
 
         return r;
 }
+
+#endif
