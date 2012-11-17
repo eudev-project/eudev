@@ -1089,7 +1089,6 @@ int main(int argc, char *argv[])
                 goto exit;
 
         log_set_target(LOG_TARGET_AUTO);
-        log_parse_environment();
         log_open();
         udev_set_log_fn(udev, udev_main_log);
         log_debug("version %s\n", VERSION);

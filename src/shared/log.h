@@ -67,8 +67,6 @@ void log_close_journal(void);
 void log_close_kmsg(void);
 void log_close_console(void);
 
-void log_parse_environment(void);
-
 int log_meta(
                 int level,
                 const char*file,
