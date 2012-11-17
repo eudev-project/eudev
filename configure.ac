@@ -270,9 +270,18 @@ AC_CONFIG_FILES([Makefile
                  rules/Makefile
                  src/Makefile
                  src/gudev/Makefile
+                 src/include/Makefile
                  src/libudev/Makefile
                  src/test/Makefile
                  src/udev/Makefile
+                 src/udev/accelerometer/Makefile
+                 src/udev/ata_id/Makefile
+                 src/udev/cdrom_id/Makefile
+                 src/udev/collect/Makefile
+                 src/udev/keymap/Makefile
+                 src/udev/mtd_probe/Makefile
+                 src/udev/scsi_id/Makefile
+                 src/udev/v4l_id/Makefile
                  test/Makefile
                  src/udev/udev.pc
                  src/gudev/gudev-1.0.pc
@@ -280,4 +289,5 @@ AC_CONFIG_FILES([Makefile
                  docs/gudev/version.xml
                  docs/libudev/version.xml
                  src/udev/keymap/keyboard-force-release.sh])
+
 AC_OUTPUT

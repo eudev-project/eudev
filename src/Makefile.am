@@ -1,7 +1,9 @@
 ACLOCAL_AMFLAGS = -I m4
+
 SUBDIRS = \
 	libudev \
 	udev \
-	gudev
+	gudev \
+	include
 
 # test

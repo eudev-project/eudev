@@ -2,6 +2,7 @@ ACLOCAL_AMFLAGS = -I m4 ${ACLOCAL_FLAGS}
 
 rootprefix=@rootprefix@
 udevlibexecdir=$(rootprefix)/lib/udev
+udevhomedir = $(udevlibexecdir)
 
 udevlibexec_PROGRAMS = \
 	keymap
@@ -29,7 +30,7 @@ dist_udevhome_SCRIPTS = \
 TESTS = \
 	check-keymaps.sh
 
-CLEANFILES += \
+CLEANFILES = \
 	keys.txt \
 	keys-from-name.gperf \
 	keyboard-force-release.sh
@@ -46,8 +47,7 @@ keys-from-name.h: keys-from-name.gperf Makefile
 
 keys-to-name.h: keys.txt Makefile
 	$(AM_V_GEN)$(AWK) 'BEGIN{ print "const char* const key_names[KEY_CNT] = { "} { print "[" $$1 "] = \"" $$1 "\"," } END{print "};"}' < $< > $@
-endif
 
-EXTRA_DIST += \
+EXTRA_DIST = \
 	check-keymaps.sh \
 	keyboard-force-release.sh.in

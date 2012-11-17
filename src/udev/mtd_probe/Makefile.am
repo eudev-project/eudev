@@ -11,7 +11,7 @@ AM_CPPFLAGS = \
 	-I $(top_srcdir)/src/udev \
 	-I $(top_srcdir)/src/include
 
-udevlibexec_PROGRAMS += \
+udevlibexec_PROGRAMS = \
 	mtd_probe
 
 mtd_probe_SOURCES =  \

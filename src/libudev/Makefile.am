@@ -11,7 +11,6 @@ lib_LTLIBRARIES = \
 	libudev.la
 
 libudev_la_SOURCES =\
-	libudev-private.h \
 	libudev.c \
 	libudev-list.c \
 	libudev-util.c \
@@ -19,7 +18,6 @@ libudev_la_SOURCES =\
 	libudev-enumerate.c \
 	libudev-monitor.c \
 	libudev-queue.c \
-	libudev-hwdb-def.h \
 	libudev-hwdb.c
 
 libudev_la_CFLAGS = \
