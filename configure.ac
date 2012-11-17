@@ -44,7 +44,7 @@ fi
 
 # Checks for header files.
 AC_CHECK_HEADERS(
-    [arpa/inet.h fcntl.h inttypes.h limits.h stddef.h stdint.h stdlib.h string.h \
+    [arpa/inet.h fcntl.h inttypes.h limits.h netinet/in.h stddef.h stdint.h stdlib.h string.h \
      sys/ioctl.h sys/mount.h sys/param.h sys/socket.h sys/time.h syslog.h unistd.h],
     [],
     [AC_MSG_ERROR([*** POSIX header not found])]
@@ -54,8 +54,10 @@ AC_CHECK_HEADERS(
 AC_HEADER_STDBOOL
 AC_TYPE_UID_T
 AC_C_INLINE
+AC_TYPE_INT32_T
 AC_TYPE_INT64_T
 AC_TYPE_MODE_T
+AC_TYPE_OFF_T
 AC_TYPE_PID_T
 AC_TYPE_SIZE_T
 AC_TYPE_SSIZE_T
@@ -64,6 +66,11 @@ AC_TYPE_UINT16_T
 AC_TYPE_UINT32_T
 AC_TYPE_UINT64_T
 AC_TYPE_UINT8_T
+AC_CHECK_DECLS([gettid, pivot_root, name_to_handle_at], [], [], [[#include <sys/types.h>
+#include <unistd.h>
+#include <sys/mount.h>
+#include <fcntl.h>]])
+
 
 # Checks for library functions.
 AC_FUNC_ALLOCA

@@ -15,7 +15,8 @@ sbin_PROGRAMS = \
 	udevadm
 
 udevd_SOURCES = \
-	udevd.c
+	udevd.c \
+	log.c
 
 udevd_LDADD = \
 	libudev-core.la
@@ -103,89 +104,108 @@ udevlibexec_PROGRAMS =
 # Helper programs below
 #
 
-ata_id_SOURCES = \
+udevlibexec_PROGRAMS += \
+	ata_id/ata_id
+
+ata_id_ata_id_SOURCES = \
 	ata_id/ata_id.c
 
-ata_id_LDADD = \
+ata_id_ata_id_LDADD = \
 	libudev-private.la
 
-udevlibexec_PROGRAMS += \
-	ata_id
-
 # ------------------------------------------------------------------------------
-cdrom_id_SOURCES = \
+
+udevlibexec_PROGRAMS += \
+	cdrom_id/cdrom_id
+
+cdrom_id_cdrom_id_SOURCES = \
 	cdrom_id/cdrom_id.c
 
-cdrom_id_LDADD = \
+cdrom_id_cdrom_id_LDADD = \
 	libudev.la
 
-udevlibexec_PROGRAMS += \
-	cdrom_id
-
 # ------------------------------------------------------------------------------
-collect_SOURCES = \
+
+udevlibexec_PROGRAMS += \
+	collect/collect
+
+collect_collect_SOURCES = \
 	collect/collect.c
 
-collect_LDADD = \
+collect_collect_LDADD = \
 	libudev-private.la
 
-udevlibexec_PROGRAMS += \
-	collect
-
 # ------------------------------------------------------------------------------
-scsi_id_SOURCES =\
+
+udevlibexec_PROGRAMS += \
+	scsi_id/scsi_id
+
+scsi_id_scsi_id_SOURCES =\
 	scsi_id/scsi_id.c \
 	scsi_id/scsi_serial.c \
 	scsi_id/scsi.h \
 	scsi_id/scsi_id.h
 
-scsi_id_LDADD = \
+scsi_id_scsi_id_LDADD = \
 	libudev-private.la
-
-udevlibexec_PROGRAMS += \
-	scsi_id
 
 EXTRA_DIST += \
 	scsi_id/README
 
 # ------------------------------------------------------------------------------
-v4l_id_SOURCES = \
+
+udevlibexec_PROGRAMS += \
+	v4l_id/v4l_id
+
+v4l_id_v4l_id_SOURCES = \
 	v4l_id/v4l_id.c
 
-v4l_id_LDADD = \
+v4l_id_v4l_id_LDADD = \
 	libudev.la
 
-udevlibexec_PROGRAMS += \
-	v4l_id
-
 # ------------------------------------------------------------------------------
-accelerometer_SOURCES = \
+
+udevlibexec_PROGRAMS += \
+	accelerometer/accelerometer
+
+accelerometer_accelerometer_SOURCES = \
 	accelerometer/accelerometer.c
 
-accelerometer_LDADD = \
+accelerometer_accelerometer_LDADD = \
 	libudev.la -lm
 
+# ------------------------------------------------------------------------------
+
 udevlibexec_PROGRAMS += \
-	accelerometer
+	mtd_probe/mtd_probe
+
+mtd_probe_mtd_probe_SOURCES =  \
+	mtd_probe/mtd_probe.c \
+	mtd_probe/mtd_probe.h \
+	mtd_probe/probe_smartmedia.c
+
+mtd_probe_mtd_probe_CPPFLAGS = \
+	$(AM_CPPFLAGS)
+
 
 # ------------------------------------------------------------------------------
 
 if ENABLE_KEYMAP
-keymap_SOURCES = \
+udevlibexec_PROGRAMS += \
+	keymap/keymap
+
+keymap_keymap_SOURCES = \
 	keymap/keymap.c
 
 keymap_CPPFLAGS = \
 	$(AM_CPPFLAGS) -I keymap
 
-nodist_keymap_SOURCES = \
+nodist_keymap_keymap_SOURCES = \
 	keymap/keys-from-name.h \
 	keymap/keys-to-name.h
 
 BUILT_SOURCES = \
 	$(nodist_keymap_SOURCES)
-
-udevlibexec_PROGRAMS += \
-	keymap
 
 dist_doc_DATA = \
 	keymap/README.keymap.txt
@@ -220,15 +240,4 @@ EXTRA_DIST += \
 	keymap/check-keymaps.sh \
 	keymap/keyboard-force-release.sh.in
 
-# ------------------------------------------------------------------------------
-mtd_probe_SOURCES =  \
-	mtd_probe/mtd_probe.c \
-	mtd_probe/mtd_probe.h \
-	mtd_probe/probe_smartmedia.c
-
-mtd_probe_CPPFLAGS = \
-	$(AM_CPPFLAGS)
-
-udevlibexec_PROGRAMS += \
-	mtd_probe
 
