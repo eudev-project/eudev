@@ -30,6 +30,7 @@ AC_PROG_LN_S
 AC_PROG_MAKE_SET
 
 GTK_DOC_CHECK([1.18],[--flavour no-tmpl])
+DISTCHECK_CONFIGURE_FLAGS=--enable-gtk-doc
 
 AC_PATH_PROG([M4], [m4])
 AC_PATH_PROG([XSLTPROC], [xsltproc])

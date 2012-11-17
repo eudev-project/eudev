@@ -5,7 +5,7 @@ LIBUDEV_REVISION=0
 LIBUDEV_AGE=2
 
 AM_CPPFLAGS = \
-        -I $(top_srcdir)/src/shared 
+        -I $(top_srcdir)/src/include
 
 lib_LTLIBRARIES = \
 	libudev.la

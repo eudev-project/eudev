@@ -9,7 +9,7 @@ AM_CPPFLAGS = \
 	-DUDEVLIBEXECDIR=\"$(udevlibexecdir)\" \
 	-I $(top_srcdir)/src/libudev \
 	-I $(top_srcdir)/src/udev \
-	-I $(top_srcdir)/src/shared
+	-I $(top_srcdir)/src/include
 
 udevlibexec_PROGRAMS += \
 	mtd_probe

@@ -11,13 +11,13 @@ test_libudev_LDADD = \
 	$(top_srcdir)/src/libudev/libudev.la
 
 test_libudev_CPPFLAGS = \
-	-I $(top_srcdir)/src/shared
+	-I $(top_srcdir)/src/include
 
 test_udev_SOURCES = \
 	test-udev.c
 
 test_udev_CPPFLAGS = \
-	-I $(top_srcdir)/src/shared
+	-I $(top_srcdir)/src/include
 
 test_udev_LDADD = \
 	$(top_srcdir)/src/udev/libudev-core.la \
