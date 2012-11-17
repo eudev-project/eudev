@@ -272,6 +272,8 @@ AC_CONFIG_FILES([Makefile
                  test/Makefile
                  src/udev/udev.pc
                  src/gudev/gudev-1.0.pc
-                 src/libudev/libudev.pc])
+                 src/libudev/libudev.pc
+                 docs/gudev/version.xml
+                 docs/libudev/version.xml])
 
 AC_OUTPUT
