@@ -15,6 +15,5 @@ test_udev_SOURCES = \
 
 test_udev_LDADD = \
 	libudev-core.la \
-	$(BLKID_LIBS) \
 	$(SELINUX_LIBS)
 

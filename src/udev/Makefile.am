@@ -47,7 +47,6 @@ libudev_core_la_SOURCES = \
 	udev-rules.c \
 	udev-ctrl.c \
 	udev-builtin.c \
-	udev-builtin-blkid.c \
 	udev-builtin-btrfs.c \
 	udev-builtin-firmware.c \
 	udev-builtin-hwdb.c \
@@ -74,12 +73,10 @@ libudev_core_la_SOURCES = \
 	util.c
 
 libudev_core_la_CFLAGS = \
-	$(AM_CFLAGS) \
-	$(BLKID_CFLAGS)
+	$(AM_CFLAGS)
 
 libudev_core_la_LIBADD = \
-	$(top_srcdir)/src/libudev/libudev-private.la \
-	$(BLKID_LIBS)
+	$(top_srcdir)/src/libudev/libudev-private.la
 
 if HAVE_ACL
 libudev_core_la_SOURCES += \
