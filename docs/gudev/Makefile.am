@@ -94,11 +94,8 @@ GTKDOC_LIBS = \
 	$(GLIB_LIBS) \
 	$(top_builddir)/libgudev-1.0.la
 
-if ENABLE_GTK_DOC
-EXTRA_DIST=
-
 # This includes the standard gtk-doc make rules, copied by gtkdocize.
--include $(top_srcdir)/docs/gtk-doc.make
+include $(top_srcdir)/docs/gtk-doc.make
 
 # Other files to distribute
 # e.g. EXTRA_DIST += version.xml.in
@@ -110,6 +107,7 @@ EXTRA_DIST += version.xml.in
 #DISTCLEANFILES +=
 
 # Comment this out if you want your docs-status tested during 'make check'
+if ENABLE_GTK_DOC
 TESTS_ENVIRONMENT = cd $(top_srcdir)
 TESTS = $(GTKDOC_CHECK)
 endif
