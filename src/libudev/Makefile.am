@@ -5,7 +5,7 @@ LIBUDEV_REVISION=0
 LIBUDEV_AGE=2
 
 AM_CPPFLAGS = \
-        -I $(top_srcdir)/src/include
+	-I $(top_srcdir)/src/udev
 
 lib_LTLIBRARIES = \
 	libudev.la
@@ -20,6 +20,13 @@ libudev_la_SOURCES =\
 	libudev-queue.c \
 	libudev-hwdb.c
 
+noinst_HEADERS = \
+	libudev-hwdb-def.h \
+	libudev-private.h
+
+include_HEADERS = \
+	libudev.h
+
 libudev_la_CFLAGS = \
 	$(AM_CFLAGS) \
 	-fvisibility=hidden
@@ -28,8 +35,6 @@ libudev_la_LDFLAGS = \
 	$(AM_LDFLAGS) \
 	-version-info $(LIBUDEV_CURRENT):$(LIBUDEV_REVISION):$(LIBUDEV_AGE)
 
-noinst_LTLIBRARIES = \
-	libudev-private.la
 
 libudev_private_la_SOURCES =\
 	$(libudev_la_SOURCES) \
@@ -39,6 +44,10 @@ libudev_private_la_SOURCES =\
 libudev_private_la_CFLAGS = \
 	$(AM_CFLAGS) \
 	-fvisibility=default
+
+noinst_LTLIBRARIES = \
+	libudev-private.la
+
 
 pkgconfiglibdir=$(libdir)/pkgconfig
 pkgconfiglib_DATA = \

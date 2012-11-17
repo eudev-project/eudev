@@ -3,6 +3,7 @@ ACLOCAL_AMFLAGS = -I m4 ${ACLOCAL_FLAGS}
 rootprefix=@rootprefix@
 udevlibexecdir=$(rootprefix)/lib/udev
 udevhwdbdir = $(udevlibexecdir)/hwdb.d
+
 dist_udevhwdb_DATA = \
 	20-pci-vendor-product.hwdb \
 	20-pci-classes.hwdb \

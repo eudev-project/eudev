@@ -9,8 +9,7 @@ AM_CPPFLAGS = \
 	-DROOTPREFIX=\"$(rootprefix)\" \
 	-DUDEVLIBEXECDIR=\"$(udevlibexecdir)\" \
 	-I $(top_srcdir)/src/libudev \
-	-I $(top_srcdir)/src/udev \
-	-I $(top_srcdir)/src/include
+	-I $(top_srcdir)/src/udev
 
 sbin_PROGRAMS = \
 	udevd \
@@ -71,6 +70,34 @@ libudev_core_la_SOURCES = \
 	strv.c \
 	util.c
 
+noinst_HEADERS = \
+	acl-util.h \
+	cgroup-util.h \
+	conf-files.h \
+	def.h \
+	dev-setup.h \
+	exit-status.h \
+	hashmap.h \
+	ioprio.h \
+	label.h \
+	log.h \
+	logind-acl.h \
+	macro.h \
+	missing.h \
+	mkdir.h \
+	path-util.h \
+	sd-daemon.h \
+	sd-login.h \
+	set.h \
+	socket-util.h \
+	sparse-endian.h \
+	strbuf.h \
+	strv.h \
+	util.h
+
+include_HEADERS = \
+	udev.h
+
 libudev_core_la_CFLAGS = \
 	$(AM_CFLAGS)
 
@@ -106,22 +133,3 @@ EXTRA_DIST = \
 
 CLEANFILES = \
 	udev.pc
-
-# ------------------------------------------------------------------------------
-# Helper programs below
-#
-
-SUBDIR = \
-	accelerometer \
-	ata_id \
-	cdrom_id \
-	collect \
-	mtd_probe \
-	scsi_id \
-	v4l_id
-
-if ENABLE_KEYMAP
-SUBDIR += \
-	keymap
-endif
-

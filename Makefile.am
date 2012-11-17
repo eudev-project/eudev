@@ -1,9 +1,11 @@
 ACLOCAL_AMFLAGS = -I m4 ${ACLOCAL_FLAGS}
+
 SUBDIRS = \
 	src \
-	docs \
+	rules \
+	hwdb \
 	keymaps \
 	keymaps-force-release \
+	docs \
 	man \
-	rules \
 	test

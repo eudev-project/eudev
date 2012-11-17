@@ -41,8 +41,10 @@ fi
 
 # Checks for header files.
 AC_CHECK_HEADERS(
-    [arpa/inet.h fcntl.h inttypes.h limits.h netinet/in.h stddef.h stdint.h stdlib.h string.h \
-     sys/ioctl.h sys/mount.h sys/param.h sys/socket.h sys/time.h syslog.h unistd.h],
+    [arpa/inet.h fcntl.h inttypes.h langinfo.h limits.h locale.h malloc.h \
+     netinet/in.h stddef.h stdint.h stdlib.h string.h sys/ioctl.h sys/mount.h \
+     sys/param.h sys/socket.h sys/statvfs.h sys/time.h sys/vfs.h syslog.h \
+     termios.h unistd.h],
     [],
     [AC_MSG_ERROR([*** POSIX header not found])]
 )
@@ -74,18 +76,21 @@ AC_FUNC_ALLOCA
 AC_FUNC_CHOWN
 AC_FUNC_FORK
 AC_FUNC_FSEEKO
+AC_FUNC_GETGROUPS
 AC_FUNC_LSTAT_FOLLOWS_SLASHED_SYMLINK
 AC_HEADER_MAJOR
 AC_FUNC_MALLOC
+AC_FUNC_MKTIME
 AC_FUNC_MMAP
 AC_FUNC_REALLOC
 AC_FUNC_STRNLEN
 AC_FUNC_STRTOD
+
 AC_CHECK_FUNCS(
-    [alarm dup2 ftruncate memmove mempcpy memset \
-     mkdir munmap rmdir socket strcasecmp strchr strcspn \
-     strdup strerror strndup strpbrk strrchr strspn strstr \
-     strtol strtoul strtoull uname],
+    [alarm dup2 ftruncate localtime_r memchr memmove mempcpy memset \
+     mkdir munmap nl_langinfo rmdir setlocale socket stpcpy strcasecmp \
+     strchr strcspn strdup strerror strndup strpbrk strrchr strspn \
+     strstr strtol strtoul strtoull uname],
     [],
     [AC_MSG_ERROR([*** POSIX function not found])]
 )
@@ -262,7 +267,9 @@ AC_SUBST([rootlibdir], [$with_rootlibdir])
 AC_CONFIG_FILES([Makefile
                  docs/Makefile
                  docs/gudev/Makefile
+                 docs/gudev/version.xml
                  docs/libudev/Makefile
+                 docs/libudev/version.xml
                  hwdb/Makefile
                  keymaps-force-release/Makefile
                  keymaps/Makefile
@@ -270,24 +277,23 @@ AC_CONFIG_FILES([Makefile
                  rules/Makefile
                  src/Makefile
                  src/gudev/Makefile
-                 src/include/Makefile
-                 src/libudev/Makefile
-                 src/test/Makefile
-                 src/udev/Makefile
-                 src/udev/accelerometer/Makefile
-                 src/udev/ata_id/Makefile
-                 src/udev/cdrom_id/Makefile
-                 src/udev/collect/Makefile
-                 src/udev/keymap/Makefile
-                 src/udev/mtd_probe/Makefile
-                 src/udev/scsi_id/Makefile
-                 src/udev/v4l_id/Makefile
-                 test/Makefile
-                 src/udev/udev.pc
                  src/gudev/gudev-1.0.pc
+                 src/libudev/Makefile
                  src/libudev/libudev.pc
-                 docs/gudev/version.xml
-                 docs/libudev/version.xml
-                 src/udev/keymap/keyboard-force-release.sh])
+                 src/udev/Makefile
+                 src/udev/udev.pc
+                 test/Makefile])
+
+#                 src/accelerometer/Makefile
+#                 src/ata_id/Makefile
+#                 src/cdrom_id/Makefile
+#                 src/collect/Makefile
+#                 src/keymap/Makefile
+#                 src/keymap/keyboard-force-release.sh
+#                 src/mtd_probe/Makefile
+#                 src/scsi_id/Makefile
+#                 src/v4l_id/Makefile
+#
+#                 src/test/Makefile
 
 AC_OUTPUT

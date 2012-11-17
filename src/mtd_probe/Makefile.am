@@ -8,8 +8,7 @@ AM_CPPFLAGS = \
 	-DROOTPREFIX=\"$(rootprefix)\" \
 	-DUDEVLIBEXECDIR=\"$(udevlibexecdir)\" \
 	-I $(top_srcdir)/src/libudev \
-	-I $(top_srcdir)/src/udev \
-	-I $(top_srcdir)/src/include
+	-I $(top_srcdir)/src/udev
 
 udevlibexec_PROGRAMS = \
 	mtd_probe
