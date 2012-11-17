@@ -8,12 +8,17 @@ test_libudev_SOURCES = \
 	test-libudev.c
 
 test_libudev_LDADD = \
-	libudev.la
+	$(top_srcdir)/src/libudev/libudev.la
+
+test_libudev_CPPFLAGS = \
+	-I $(top_srcdir)/src/shared
 
 test_udev_SOURCES = \
-	src/test/test-udev.c
+	test-udev.c
+
+test_udev_CPPFLAGS = \
+	-I $(top_srcdir)/src/shared
 
 test_udev_LDADD = \
-	libudev-core.la \
+	$(top_srcdir)/src/udev/libudev-core.la \
 	$(SELINUX_LIBS)
-

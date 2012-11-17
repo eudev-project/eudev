@@ -277,6 +277,6 @@ AC_CONFIG_FILES([Makefile
                  src/gudev/gudev-1.0.pc
                  src/libudev/libudev.pc
                  docs/gudev/version.xml
-                 docs/libudev/version.xml])
-
+                 docs/libudev/version.xml
+                 src/udev/keymap/keyboard-force-release.sh])
 AC_OUTPUT
