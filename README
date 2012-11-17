@@ -4,7 +4,7 @@ initialization.  In this case, the isolation is from systemd.
 
 This is a Gentoo sponsored project and testing is currently being done
 with openrc.  However, we aim to be distro neutral and welcome contribution
-from others using a varieity of system initializations.  We also aim
+from others using a variety of system initializations.  We also aim
 towards POSIX compliance.
 
 Contact: You can email us as a group below.
