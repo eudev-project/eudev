@@ -114,157 +114,21 @@ EXTRA_DIST = \
 CLEANFILES = \
 	udev.pc
 
-
-# ------------------------------------------------------------------------------
-# ------------------------------------------------------------------------------
-
-udevlibexec_PROGRAMS =
-
 # ------------------------------------------------------------------------------
 # Helper programs below
 #
 
-udevlibexec_PROGRAMS += \
-	ata_id/ata_id
-
-ata_id_ata_id_SOURCES = \
-	ata_id/ata_id.c
-
-ata_id_ata_id_LDADD = \
-	$(top_srcdir)/src/libudev/libudev-private.la \
-	libudev-core.la
-
-# ------------------------------------------------------------------------------
-
-udevlibexec_PROGRAMS += \
-	cdrom_id/cdrom_id
-
-cdrom_id_cdrom_id_SOURCES = \
-	cdrom_id/cdrom_id.c
-
-cdrom_id_cdrom_id_LDADD = \
-	$(top_srcdir)/src/libudev/libudev-private.la \
-	libudev-core.la
-
-# ------------------------------------------------------------------------------
-
-udevlibexec_PROGRAMS += \
-	collect/collect
-
-collect_collect_SOURCES = \
-	collect/collect.c
-
-collect_collect_LDADD = \
-	$(top_srcdir)/src/libudev/libudev-private.la \
-	libudev-core.la
-
-# ------------------------------------------------------------------------------
-
-udevlibexec_PROGRAMS += \
-	scsi_id/scsi_id
-
-scsi_id_scsi_id_SOURCES =\
-	scsi_id/scsi_id.c \
-	scsi_id/scsi_serial.c \
-	scsi_id/scsi.h \
-	scsi_id/scsi_id.h
-
-scsi_id_scsi_id_LDADD = \
-	$(top_srcdir)/src/libudev/libudev-private.la \
-	libudev-core.la
-
-EXTRA_DIST += \
-	scsi_id/README
-
-# ------------------------------------------------------------------------------
-
-udevlibexec_PROGRAMS += \
-	v4l_id/v4l_id
-
-v4l_id_v4l_id_SOURCES = \
-	v4l_id/v4l_id.c
-
-v4l_id_v4l_id_LDADD = \
-	$(top_srcdir)/src/libudev/libudev-private.la \
-	libudev-core.la
-
-# ------------------------------------------------------------------------------
-
-udevlibexec_PROGRAMS += \
-	accelerometer/accelerometer
-
-accelerometer_accelerometer_SOURCES = \
-	accelerometer/accelerometer.c
-
-accelerometer_accelerometer_LDADD = \
-	$(top_srcdir)/src/libudev/libudev-private.la \
-	libudev-core.la \
-	-lm
-
-# ------------------------------------------------------------------------------
-
-udevlibexec_PROGRAMS += \
-	mtd_probe/mtd_probe
-
-mtd_probe_mtd_probe_SOURCES =  \
-	mtd_probe/mtd_probe.c \
-	mtd_probe/mtd_probe.h \
-	mtd_probe/probe_smartmedia.c
-
-mtd_probe_mtd_probe_CPPFLAGS = \
-	$(AM_CPPFLAGS)
-
-
-# ------------------------------------------------------------------------------
+SUBDIR = \
+	accelerometer \
+	ata_id \
+	cdrom_id \
+	collect \
+	mtd_probe \
+	scsi_id \
+	v4l_id
 
 if ENABLE_KEYMAP
-udevlibexec_PROGRAMS += \
-	keymap/keymap
-
-keymap_keymap_SOURCES = \
-	keymap/keymap.c
-
-keymap_CPPFLAGS = \
-	$(AM_CPPFLAGS) -I keymap
-
-nodist_keymap_keymap_SOURCES = \
-	keymap/keys-from-name.h \
-	keymap/keys-to-name.h
-
-BUILT_SOURCES = \
-	$(nodist_keymap_SOURCES)
-
-dist_doc_DATA = \
-	keymap/README.keymap.txt
-
-dist_udevhome_SCRIPTS = \
-	keymap/findkeyboards \
-	keymap/keyboard-force-release.sh
-
-TESTS = \
-	keymap/check-keymaps.sh
-
-CLEANFILES += \
-	keymap/keys.txt \
-	keymap/keys-from-name.gperf \
-	keymap/keyboard-force-release.sh
-
-keymap/keys.txt: Makefile
-	$(AM_V_at)$(MKDIR_P) $(dir $@)
-	$(AM_V_GEN)$(CPP) $(CFLAGS) $(AM_CPPFLAGS) $(CPPFLAGS) -dM -include linux/input.h - < /dev/null | $(AWK) '/^#define[ \t]+KEY_[^ ]+[ \t]+[0-9]/ { if ($$2 != "KEY_MAX") { print $$2 } }' | sed 's/^KEY_COFFEE$$/KEY_SCREENLOCK/' > $@
-
-keymap/keys-from-name.gperf: keymap/keys.txt Makefile
-	$(AM_V_GEN)$(AWK) 'BEGIN{ print "struct key { const char* name; unsigned short id; };"; print "%null-strings"; print "%%";} { print $$1 ", " $$1 }' < $< > $@
-
-keymap/keys-from-name.h: keymap/keys-from-name.gperf Makefile
-	$(AM_V_GEN)$(GPERF) -L ANSI-C -t --ignore-case -N lookup_key -H hash_key_name -p -C < $< > $@
-
-keymap/keys-to-name.h: keymap/keys.txt Makefile
-	$(AM_V_GEN)$(AWK) 'BEGIN{ print "const char* const key_names[KEY_CNT] = { "} { print "[" $$1 "] = \"" $$1 "\"," } END{print "};"}' < $< > $@
+SUBDIR += \
+	keymap
 endif
-
-EXTRA_DIST += \
-	keymap/check-keymaps.sh \
-	keymap/keyboard-force-release.sh.in
-
 
