@@ -282,7 +282,8 @@ static int node_fixup(struct udev_device *dev, mode_t mode, uid_t uid, gid_t gid
         if ((stats.st_mode & 0777) != (mode & 0777) || stats.st_uid != uid || stats.st_gid != gid) {
                 log_debug("set permissions %s, %#o, uid=%u, gid=%u\n", devnode, mode, uid, gid);
                 chmod(devnode, mode);
-                chown(devnode, uid, gid);
+                if (chown(devnode, uid, gid) < 0)
+                        log_debug("Failed to change ownership of %s to uid=%u, gid=%u\n", devnode, uid, gid);
         } else {
                 log_debug("preserve permissions %s, %#o, uid=%u, gid=%u\n", devnode, mode, uid, gid);
         }
