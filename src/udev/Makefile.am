@@ -8,8 +8,7 @@ AM_CPPFLAGS = \
 	-include $(top_builddir)/config.h \
 	-DROOTPREFIX=\"$(rootprefix)\" \
 	-DUDEVLIBEXECDIR=\"$(udevlibexecdir)\" \
-	-I $(top_srcdir)/src/libudev \
-	-I $(top_srcdir)/src/udev
+	-I $(top_srcdir)/src/libudev
 
 sbin_PROGRAMS = \
 	udevd \
@@ -102,7 +101,7 @@ libudev_core_la_CFLAGS = \
 	$(AM_CFLAGS)
 
 libudev_core_la_LIBADD = \
-	$(top_srcdir)/src/libudev/libudev-private.la
+	$(top_builddir)/src/libudev/libudev-private.la
 
 if HAVE_ACL
 libudev_core_la_SOURCES += \
