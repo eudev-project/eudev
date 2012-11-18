@@ -98,7 +98,7 @@ int main(int argc, char *argv[])
         udev = udev_new();
         if (udev == NULL)
                 exit(EXIT_FAILURE);
-        log_debug("version %s\n", VERSION);
+        log_debug("version %i\n", VERSION);
         label_init("/dev");
 
         sigprocmask(SIG_SETMASK, NULL, &sigmask_orig);

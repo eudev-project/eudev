@@ -489,7 +489,7 @@ int main(int argc, char *argv[])
                         printf("--debug --syspath= --subsystem= --help\n");
                         goto out;
                 case 'V':
-                        printf("%s\n", VERSION);
+                        printf("%i\n", VERSION);
                         goto out;
                 default:
                         goto out;

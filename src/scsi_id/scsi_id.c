@@ -405,7 +405,7 @@ static int set_options(struct udev *udev,
                         break;
 
                 case 'V':
-                        printf("%s\n", VERSION);
+                        printf("%i\n", VERSION);
                         exit(0);
                         break;
 
