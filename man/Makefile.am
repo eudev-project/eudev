@@ -1,11 +1,24 @@
 ACLOCAL_AMFLAGS = -I m4 ${ACLOCAL_FLAGS}
 
+XMLPAGES = \
+	udev.xml \
+	udevadm.xml
+
+noinst_DATA = \
+	$(XMLPAGES)
+
+EXTRA_DIST = \
+	$(XMLPAGES)
+
 MANPAGES = \
 	udev.7 \
 	udevadm.8
 
-XML_FILES = \
-	${patsubst %.7,%.xml,${patsubst %.8,%.xml,$(MANPAGES)}}
+man_MANS = \
+	$(MANPAGES)
+
+CLEANFILES = \
+	$(MANPAGES)
 
 XSLTPROC_FLAGS = \
 	--nonet \
@@ -15,21 +28,11 @@ XSLTPROC_FLAGS = \
 	--stringparam man.authors.section.enabled 0 \
 	--stringparam man.copyright.section.enabled 0
 
-man_MANS = \
-	$(MANPAGES)
-
-noinst_DATA = \
-	$(XML_FILES)
-
-CLEANFILES = \
-	$(MANPAGES)
-
 XSLTPROC_PROCESS_MAN = \
-	$(AM_V_GEN)$(MKDIR_P) $(dir $@) && \
 	$(XSLTPROC) -o $@ $(XSLTPROC_FLAGS) http://docbook.sourceforge.net/release/xsl/current/manpages/docbook.xsl $<
 
-%.7: %.xml
+udev.7: udev.xml
 	$(XSLTPROC_PROCESS_MAN)
 
-%.8: %.xml
+udevadm.8: udevadm.xml
 	$(XSLTPROC_PROCESS_MAN)
