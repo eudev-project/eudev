@@ -34,6 +34,14 @@
 
 #include "udev.h"
 
+#ifndef SYS_unshare
+#error "libc fails to set SYS_unshare: please file a bug report with eudev"
+#endif
+
+#ifndef unshare
+#define unshare(__X) syscall(SYS_unshare, __X)
+#endif
+
 void udev_main_log(struct udev *udev, int priority,
                    const char *file, int line, const char *fn,
                    const char *format, va_list args) {}
