@@ -7,5 +7,9 @@ SUBDIRS = \
 	keymaps \
 	keymaps-force-release \
 	docs \
-	man \
 	test
+
+if ENABLE_MANPAGES
+SUBDIRS += \
+	man
+endif
