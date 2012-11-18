@@ -10,6 +10,7 @@
  */
 
 #include <errno.h>
+#include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <stddef.h>
@@ -188,7 +189,28 @@ struct udev_ctrl_connection *udev_ctrl_get_connection(struct udev_ctrl *uctrl)
         conn->refcount = 1;
         conn->uctrl = uctrl;
 
+#if HAVE_DECL_ACCEPT4
         conn->sock = accept4(uctrl->sock, NULL, NULL, SOCK_CLOEXEC|SOCK_NONBLOCK);
+
+        /* Fallback path when accept4() is unavailable */
+        if ( conn->sock < 0 && (errno == ENOSYS || errno == ENOTSUP) )
+        {
+                conn->sock = accept(uctrl->sock, NULL, NULL);
+
+                if (conn->sock >= 0) {
+                        fcntl(conn->sock, F_SETFL, O_NONBLOCK);
+                        fcntl(conn->sock, F_SETFD, FD_CLOEXEC);
+                }
+        }
+#else
+        conn->sock = accept(uctrl->sock, NULL, NULL);
+
+        if (conn->sock >= 0) {
+                fcntl(conn->sock, F_SETFL, O_NONBLOCK);
+                fcntl(conn->sock, F_SETFD, FD_CLOEXEC);
+        }
+#endif
+
         if (conn->sock < 0) {
                 if (errno != EINTR)
                         log_error("unable to receive ctrl connection: %m\n");

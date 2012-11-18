@@ -65,10 +65,11 @@ AC_TYPE_UINT16_T
 AC_TYPE_UINT32_T
 AC_TYPE_UINT64_T
 AC_TYPE_UINT8_T
-AC_CHECK_DECLS([gettid, pivot_root, name_to_handle_at], [], [], [[#include <sys/types.h>
+AC_CHECK_DECLS([gettid, pivot_root, name_to_handle_at, accept4], [], [], [[#include <sys/types.h>
 #include <unistd.h>
 #include <sys/mount.h>
-#include <fcntl.h>]])
+#include <fcntl.h>
+#include <sys/socket.h>]])
 
 
 # Checks for library functions.
