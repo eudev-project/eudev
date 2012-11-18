@@ -313,12 +313,14 @@ static int64_t trie_store_nodes(struct trie_f *trie, struct trie_node *node) {
 
         /* write node */
         node_off = ftello(trie->f);
-        fwrite(&n, sizeof(struct trie_node_f), 1, trie->f);
+        if (fwrite(&n, sizeof(struct trie_node_f), 1, trie->f) != 1)
+                log_error("Failed to write sizeof struct trie_node_f to n in %s\n", "[udevadm-hwdb.c:trie_store_nodes]");
         trie->nodes_count++;
 
         /* append children array */
         if (node->children_count) {
-                fwrite(children, sizeof(struct trie_child_entry_f), node->children_count, trie->f);
+                if (fwrite(children, sizeof(struct trie_child_entry_f), node->children_count, trie->f) != node->children_count)
+                        log_error("Failed to write children_count in %s\n", "[udevadm-hwdb.c:trie_store_nodes]");
                 trie->children_count += node->children_count;
                 free(children);
         }
@@ -330,7 +332,8 @@ static int64_t trie_store_nodes(struct trie_f *trie, struct trie_node *node) {
                         .value_off = htole64(trie->strings_off + node->values[i].value_off),
                 };
 
-                fwrite(&v, sizeof(struct trie_value_entry_f), 1, trie->f);
+                if (fwrite(&v, sizeof(struct trie_value_entry_f), 1, trie->f) != 1)
+                        log_error("Failed to write sizeof trie_value_entry_f to v in %s\n", "[udevadm-hwdb.c:trie_store_nodes]");
                 trie->values_count++;
         }
 
@@ -372,14 +375,16 @@ static int trie_store(struct trie *trie, const char *filename) {
         h.nodes_len = htole64(pos - sizeof(struct trie_header_f));
 
         /* write string buffer */
-        fwrite(trie->strings->buf, trie->strings->len, 1, t.f);
+        if (fwrite(trie->strings->buf, trie->strings->len, 1, t.f) != 1)
+                log_error("Failed to write into trie->strings->buf in %s\n", "[udevadm-hwdb.c:trie_store]");
         h.strings_len = htole64(trie->strings->len);
 
         /* write header */
         size = ftello(t.f);
         h.file_size = htole64(size);
         fseeko(t.f, 0, SEEK_SET);
-        fwrite(&h, sizeof(struct trie_header_f), 1, t.f);
+        if (fwrite(&h, sizeof(struct trie_header_f), 1, t.f) != 1)
+                log_error("Failed to write into h in %s\n", "[udevadm-hwdb.c:trie_store]");
         err = ferror(t.f);
         if (err)
                 err = -errno;

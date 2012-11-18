@@ -104,7 +104,8 @@ static int prepare(char *dir, char *filename)
                         fprintf(stderr, "Lock taken, wait for %d seconds\n", UDEV_ALARM_TIMEOUT);
                 if (errno == EAGAIN || errno == EACCES) {
                         alarm(UDEV_ALARM_TIMEOUT);
-                        lockf(fd, F_LOCK, 0);
+                        if (lockf(fd, F_LOCK, 0) == -1)
+                                fprintf(stderr, "Failed to acquire lock on %s\n", buf);
                         if (debug)
                                 fprintf(stderr, "Acquired lock on %s\n", buf);
                 } else {
@@ -476,10 +477,12 @@ int main(int argc, char **argv)
         kickout();
 
         lseek(fd, 0, SEEK_SET);
-        ftruncate(fd, 0);
+        if (ftruncate(fd, 0) == -1)
+                fprintf(stderr, "Failed to truncate '%s'\n", checkpoint);
         ret = missing(fd);
 
-        lockf(fd, F_ULOCK, 0);
+        if (lockf(fd, F_ULOCK, 0) == -1)
+                fprintf(stderr, "Failed to release lock from '%s'\n", checkpoint);
         close(fd);
 out:
         if (debug)

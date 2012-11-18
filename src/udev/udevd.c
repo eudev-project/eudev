@@ -1157,7 +1157,11 @@ int main(int argc, char *argv[])
         }
 
         /* set umask before creating any file/directory */
-        chdir("/");
+        if (chdir("/") == -1) {
+                fprintf(stderr, "Cannot chdir to /\n");
+                log_error("Cannot chdir to /\n");
+                goto exit;
+        }
         umask(022);
 
         mkdir("/run/udev", 0755);

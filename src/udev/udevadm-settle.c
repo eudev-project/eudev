@@ -192,7 +192,8 @@ static int adm_settle(struct udev *udev, int argc, char *argv[])
                         if (poll(pfd, 1, delay) > 0 && pfd[0].revents & POLLIN) {
                                 char buf[sizeof(struct inotify_event) + PATH_MAX];
 
-                                read(pfd[0].fd, buf, sizeof(buf));
+                                if (read(pfd[0].fd, buf, sizeof(buf)) == -1)
+                                        log_error("Failed to read buf in %s\n", "[udevadm-settle:adm_settle]");
                         }
                 } else {
                         sleep(1);

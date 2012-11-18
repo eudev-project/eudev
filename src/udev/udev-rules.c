@@ -2552,7 +2552,8 @@ void udev_rules_apply_static_dev_perms(struct udev_rules *rules)
                         }
 
                         if ((uid != 0 && uid != stats.st_uid) || (gid != 0 && gid != stats.st_gid)) {
-                                chown(filename, uid, gid);
+                                if (chown(filename, uid, gid) < 0)
+                                        log_debug("Following chown failed!");
                                 log_debug("chown '%s' %u %u\n", filename, uid, gid);
                         }
 
