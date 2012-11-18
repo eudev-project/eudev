@@ -65,7 +65,7 @@ libgudev_1_0_la_CFLAGS = \
 	$(GLIB_CFLAGS)
 
 libgudev_1_0_la_LIBADD = \
-	$(top_srcdir)/src/libudev/libudev.la \
+	$(top_builddir)/src/libudev/libudev.la \
 	$(GLIB_LIBS)
 
 libgudev_1_0_la_LDFLAGS = \
