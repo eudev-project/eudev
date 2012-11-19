@@ -27,6 +27,7 @@ test_udev_SOURCES = \
 test_udev_LDADD = \
 	$(top_builddir)/src/libudev/libudev-private.la \
 	$(top_builddir)/src/udev/libudev-core.la \
+	$(BLKID_LIBS) \
 	$(SELINUX_LIBS)
 
 test_udev_CPPFLAGS = \

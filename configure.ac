@@ -39,6 +39,8 @@ if test -z "$GPERF" ; then
         AC_MSG_ERROR([*** gperf not found])
 fi
 
+PKG_CHECK_MODULES(BLKID,[blkid >= 2.20])
+
 # Checks for header files.
 AC_CHECK_HEADERS(
     [arpa/inet.h fcntl.h inttypes.h langinfo.h limits.h locale.h malloc.h \
