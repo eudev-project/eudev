@@ -39,6 +39,7 @@ if test -z "$GPERF" ; then
         AC_MSG_ERROR([*** gperf not found])
 fi
 
+PKG_CHECK_MODULES(KMOD, [libkmod >= 5])
 PKG_CHECK_MODULES(BLKID,[blkid >= 2.20])
 
 # Checks for header files.
