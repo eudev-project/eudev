@@ -453,6 +453,7 @@ bool tty_is_console(const char *tty);
 int vtnr_from_tty(const char *tty);
 const char *default_term_for_tty(const char *tty);
 
+int execute_command(const char *command, char *const argv[]);
 void execute_directory(const char *directory, DIR *_d, char *argv[]);
 
 int kill_and_sigcont(pid_t pid, int sig);

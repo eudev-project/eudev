@@ -4296,6 +4296,46 @@ bool dirent_is_file_with_suffix(const struct dirent *de, const char *suffix) {
         return endswith(de->d_name, suffix);
 }
 
+int execute_command(const char *command, char *const argv[])
+{
+
+        pid_t pid;
+	int status;
+
+	if ((status = access(command, X_OK)) != 0)
+		return status;
+
+        if ((pid = fork()) < 0) {
+                log_error("Failed to fork: %m");
+                return pid;
+        }
+
+        if (pid == 0) {
+
+                execv(command, argv);
+
+                log_error("Failed to execute %s: %m", command);
+                _exit(EXIT_FAILURE);
+        }
+        else while (1)
+        {
+                siginfo_t si;
+
+                int r = waitid(P_PID, pid, &si, WEXITED);
+
+                if (!is_clean_exit(si.si_code, si.si_status, NULL)) {
+                        if (si.si_code == CLD_EXITED)
+                                log_error("%s exited with exit status %i.", command, si.si_status);
+                        else
+                                log_error("%s terminated by signal %s.", command, signal_to_string(si.si_status));
+                } else
+                        log_debug("%s exited successfully.", command);
+
+                return si.si_status; 
+
+        }
+}
+
 void execute_directory(const char *directory, DIR *d, char *argv[]) {
         DIR *_d = NULL;
         struct dirent *de;
