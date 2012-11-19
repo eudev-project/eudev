@@ -2,10 +2,10 @@ This git repo is a fork of git://anongit.freedesktop.org/systemd/systemd
 with the aim of isolating udev from any particular flavor of system
 initialization.  In this case, the isolation is from systemd.
 
-This is a Gentoo sponsored project and testing is currently being done
-with openrc.  However, we aim to be distro neutral and welcome contribution
-from others using a variety of system initializations.  We also aim
-towards POSIX compliance.
+This is a project started by Gentoo developers and testing is currently being
+done mostly on OpenRC.  We welcome contribution from others using a variety of
+system initializations to ensure eudev remains system initialization and
+distribution neutral.
 
 Contact: You can email us as a group below.
 
