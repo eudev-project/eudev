@@ -28,8 +28,11 @@ test_udev_LDADD = \
 	$(top_builddir)/src/libudev/libudev-private.la \
 	$(top_builddir)/src/udev/libudev-core.la \
 	$(BLKID_LIBS) \
-	$(KMOD_LIBS) \
 	$(SELINUX_LIBS)
+
+if HAVE_LIBKMOD
+test_udev_LDADD += $(KMOD_LIBS)
+endif
 
 test_udev_CPPFLAGS = \
 	-I $(top_srcdir)/src/udev \

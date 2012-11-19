@@ -27,14 +27,19 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
+
+#ifdef HAVE_LIBKMOD
 #include <libkmod.h>
+#endif
 
 #include "udev.h"
+#include "util.h"
 
 static struct kmod_ctx *ctx;
 
-static int load_module(struct udev *udev, const char *alias)
+static int load_module(struct udev *udev, char *const alias)
 {
+#ifdef HAVE_LIBKMOD
         struct kmod_list *list = NULL;
         struct kmod_list *l;
         int err;
@@ -62,6 +67,10 @@ static int load_module(struct udev *udev, const char *alias)
 
         kmod_module_unref_list(list);
         return err;
+#else
+	char * const argv[] = { "-bq", alias, 0 };
+	return execute_command(MODPROBE, argv);
+#endif
 }
 
 static void udev_kmod_log(void *data, int priority, const char *file, int line,
@@ -75,8 +84,10 @@ static int builtin_kmod(struct udev_device *dev, int argc, char *argv[], bool te
         struct udev *udev = udev_device_get_udev(dev);
         int i;
 
+#ifdef HAVE_LIBKMOD
         if (!ctx)
                 return 0;
+#endif
 
         if (argc < 3 || strcmp(argv[1], "load")) {
                 log_error("expect: %s load <module>\n", argv[0]);
@@ -94,6 +105,7 @@ static int builtin_kmod(struct udev_device *dev, int argc, char *argv[], bool te
 /* called at udev startup and reload */
 static int builtin_kmod_init(struct udev *udev)
 {
+#ifdef HAVE_LIBKMOD
         if (ctx)
                 return 0;
 
@@ -104,16 +116,20 @@ static int builtin_kmod_init(struct udev *udev)
         log_debug("load module index\n");
         kmod_set_log_fn(ctx, udev_kmod_log, udev);
         kmod_load_resources(ctx);
+#endif
         return 0;
 }
 
 /* called on udev shutdown and reload request */
 static void builtin_kmod_exit(struct udev *udev)
 {
+#ifdef HAVE_LIBKMOD
         log_debug("unload module index\n");
         ctx = kmod_unref(ctx);
+#endif
 }
 
+#ifdef HAVE_LIBKMOD
 /* called every couple of seconds during event activity; 'true' if config has changed */
 static bool builtin_kmod_validate(struct udev *udev)
 {
@@ -122,13 +138,16 @@ static bool builtin_kmod_validate(struct udev *udev)
                 return false;
         return (kmod_validate_resources(ctx) != KMOD_RESOURCES_OK);
 }
+#endif
 
 const struct udev_builtin udev_builtin_kmod = {
         .name = "kmod",
         .cmd = builtin_kmod,
         .init = builtin_kmod_init,
         .exit = builtin_kmod_exit,
+#ifdef HAVE_LIBKMOD
         .validate = builtin_kmod_validate,
+#endif
         .help = "kernel module loader",
         .run_once = false,
 };

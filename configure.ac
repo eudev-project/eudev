@@ -39,7 +39,6 @@ if test -z "$GPERF" ; then
         AC_MSG_ERROR([*** gperf not found])
 fi
 
-PKG_CHECK_MODULES(KMOD, [libkmod >= 5])
 PKG_CHECK_MODULES(BLKID,[blkid >= 2.20])
 
 # Checks for header files.
@@ -275,6 +274,34 @@ AS_IF([test "x${enable_split_usr}" = "xyes"], [
 AC_SUBST([rootprefix], [$with_rootprefix])
 AC_SUBST([rootlibdir], [$with_rootlibdir])
 AC_SUBST([udevlibexecdir], [${with_rootlibdir}/udev])
+
+# ------------------------------------------------------------------------------
+
+AC_ARG_ENABLE([libkmod], [AS_HELP_STRING([--enable-libkmod], [Enable module loading through kmod @<:@default=disabled@:>@])], [], [with_libkmod=no])
+
+LIBKMOD=
+AS_IF([test "x$with_libkmod" != xno],
+  [AC_CHECK_LIB([kmod], [main],
+    [PKG_CHECK_MODULES(KMOD, [libkmod >= 5])
+     AC_SUBST([LIBKMOD], ["-lkmod"])
+     AC_DEFINE([HAVE_LIBKMOD], [1],
+               [Define if you have libkmod])
+    ],
+    [AC_MSG_FAILURE(
+       [--with-libkmod was given, but test for kmod failed])],
+    [-lkmod])])
+
+AM_CONDITIONAL([HAVE_LIBKMOD], [test "$with_kmod" = "yes"])
+
+# ------------------------------------------------------------------------------
+
+AC_ARG_WITH([modprobe],
+            [AS_HELP_STRING([--with-modprobe=modprobe],
+              [specify location of modprobe when -- @<:@default=$sbindir/modprobe@:>@])],
+            [],
+            [with_modprobe="${sbindir}/modprobe"])
+
+AC_SUBST([MODPROBE], ["${with_modprobe}"])
 
 # ------------------------------------------------------------------------------
 

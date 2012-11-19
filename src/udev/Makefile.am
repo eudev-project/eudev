@@ -6,6 +6,7 @@ udevhomedir = $(udevlibexecdir)
 
 AM_CPPFLAGS = \
 	-include $(top_builddir)/config.h \
+	-DMODPROBE=\"$(MODPROBE)\" \
 	-DROOTPREFIX=\"$(rootprefix)\" \
 	-DUDEVLIBEXECDIR=\"$(udevlibexecdir)\" \
 	-I $(top_srcdir)/src/libudev
@@ -101,13 +102,19 @@ include_HEADERS = \
 
 libudev_core_la_CFLAGS = \
 	$(AM_CFLAGS) \
-	$(BLKID_CFLAGS) \
-	$(KMOD_CFLAGS)
+	$(BLKID_CFLAGS)
+
+if HAVE_LIBKMOD
+libudev_core_la_CFLAGS += $(KMOD_CFLAGS)
+endif
 
 libudev_core_la_LIBADD = \
 	$(top_builddir)/src/libudev/libudev-private.la \
-	$(BLKID_LIBS) \
-	$(KMOD_LIBS)
+	$(BLKID_LIBS)
+
+if HAVE_LIBKMOD
+libudev_core_la_LIBADD += $(KMOD_LIBS)
+endif
 
 if HAVE_ACL
 libudev_core_la_SOURCES += \
