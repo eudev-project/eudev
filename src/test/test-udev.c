@@ -31,16 +31,13 @@
 #include <sched.h>
 #include <sys/mount.h>
 #include <sys/signalfd.h>
-#include <sys/syscall.h>
 
 #include "udev.h"
 
-#ifndef SYS_unshare
-#error "libc fails to set SYS_unshare: please file a bug report with eudev"
-#endif
-
-#ifndef unshare
-#define unshare(__X) syscall(SYS_unshare, __X)
+#ifndef HAVE_UNSHARE
+#include <sys/syscall.h>
+/* Provide our own replacement with local reach*/
+static inline int unshare (int x) { return syscall(SYS_unshare, x); }
 #endif
 
 void udev_main_log(struct udev *udev, int priority,

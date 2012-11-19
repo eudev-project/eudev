@@ -188,6 +188,16 @@ AC_SUBST(ACL_LIBS)
 AM_CONDITIONAL([HAVE_ACL], [test "x$have_acl" != xno])
 
 # ------------------------------------------------------------------------------
+
+AC_CHECK_DECL([unshare],
+        [AC_DEFINE(HAVE_UNSHARE, 1, [Define if unshare is declared])],
+        [AC_CHECK_DECL([SYS_unshare],
+                [ ] ,
+                [AC_MSG_ERROR([*** unshare nor SYS_unshare found.])],
+                [#include <syscall.h>])],
+        [#include <sched.h>])
+
+# ------------------------------------------------------------------------------
 AC_ARG_WITH(firmware-path,
        AS_HELP_STRING([--with-firmware-path=DIR[[[:DIR[...]]]]],
           [Firmware search path (default=ROOTPREFIX/lib/firmware/updates:ROOTPREFIX/lib/firmware)]),
