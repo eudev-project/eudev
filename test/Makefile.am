@@ -9,10 +9,10 @@ check_DATA = \
 
 test/sys:
 	$(AM_V_at)$(MKDIR_P) $(dir $@)
-	$(AM_V_GEN)tar -C test/ -xJf $(top_srcdir)/test/sys.tar.xz
+	$(AM_V_GEN)tar -C $(top_builddir)/test/ -xJf $(top_srcdir)/test/sys.tar.xz
 
 test-sys-distclean:
-	-rm -rf test/sys
+	-rm -rf $(top_builddir)/test/sys
 
 DISTCLEAN_LOCAL_HOOKS = \
 	test-sys-distclean

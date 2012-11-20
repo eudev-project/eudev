@@ -4,7 +4,7 @@
 # (C) 2010 Canonical Ltd.
 # Author: Martin Pitt <martin.pitt@ubuntu.com>
 
-[ -n "$srcdir" ] || srcdir=`dirname $0`/..
+[ -n "$builddir" ] || builddir=`dirname $0`/..
 
 # skip if we don't have python
 type python >/dev/null 2>&1 || {
@@ -12,4 +12,4 @@ type python >/dev/null 2>&1 || {
         exit 0
 }
 
-$srcdir/test/rule-syntax-check.py `find $srcdir/rules -name '*.rules'`
+$builddir/test/rule-syntax-check.py `find $builddir/rules -name '*.rules'`
