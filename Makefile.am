@@ -4,10 +4,14 @@ SUBDIRS = \
 	src \
 	rules \
 	hwdb \
-	keymaps \
-	keymaps-force-release \
 	docs \
 	test
+
+if ENABLE_KEYMAP
+SUBDIRS += \
+	keymaps \
+	keymaps-force-release
+endif
 
 if ENABLE_MANPAGES
 SUBDIRS += \

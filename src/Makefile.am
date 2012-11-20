@@ -16,7 +16,7 @@ SUBDIRS += \
 	scsi_id \
 	v4l_id
 
-#if ENABLE_KEYMAP
-#SUBDIRS += \
-#        keymap
-#endif
+if ENABLE_KEYMAP
+SUBDIRS += \
+        keymap
+endif

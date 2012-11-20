@@ -4,7 +4,6 @@ rootprefix=@rootprefix@
 udevlibexecdir=$(rootprefix)/lib/udev
 udevkeymapforcereldir = $(udevlibexecdir)/keymaps/force-release
 
-if ENABLE_KEYMAP
 dist_udevkeymapforcerel_DATA = \
 	dell-touchpad \
 	dell-xps \
@@ -12,4 +11,3 @@ dist_udevkeymapforcerel_DATA = \
 	samsung-other \
 	samsung-90x3a \
 	common-volume-keys
-endif

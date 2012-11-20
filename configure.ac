@@ -297,15 +297,13 @@ AC_CONFIG_FILES([Makefile
                  src/v4l_id/Makefile
                  src/gudev/Makefile
                  src/gudev/gudev-1.0.pc
+                 src/keymap/Makefile
+                 src/keymap/keyboard-force-release.sh
                  src/libudev/Makefile
                  src/libudev/libudev.pc
                  src/udev/Makefile
                  src/udev/udev.pc
                  src/test/Makefile
                  test/Makefile])
-
-#                 src/keymap/Makefile
-#                 src/keymap/keyboard-force-release.sh
-#
 
 AC_OUTPUT
