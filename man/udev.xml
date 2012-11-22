@@ -5,8 +5,8 @@
 
 <refentry id="udev">
   <refentryinfo>
-    <title>udev</title>
-    <productname>systemd</productname>
+    <title>systemd</title>
+    <productname>eudev</productname>
     <authorgroup>
       <author>
         <contrib>Developer</contrib>
@@ -41,7 +41,7 @@
     names provide a way to reliably identify devices based on their properties or
     current configuration.</para>
 
-    <para>The udev daemon, <citerefentry><refentrytitle>systemd-udevd.service</refentrytitle>
+    <para>The udev daemon, <citerefentry><refentrytitle>udevd</refentrytitle>
     <manvolnum>8</manvolnum></citerefentry>, receives device uevents directly from
     the kernel whenever a device is added or removed from the system, or it changes its
     state. When udev receives a device event, it matches its configured set of rules
@@ -517,7 +517,7 @@
                 <listitem>
                   <para>Apply the permissions specified in this rule to the static device node with
                   the specified name. Static device node creation can be requested by kernel modules.
-                  These nodes might not have a corresponding kernel device at the time systemd-udevd is
+                  These nodes might not have a corresponding kernel device at the time udevd is
                   started; they can trigger automatic kernel module loading.</para>
                 </listitem>
               </varlistentry>
@@ -696,7 +696,7 @@
   <refsect1>
     <title>See Also</title>
     <para><citerefentry>
-        <refentrytitle>systemd-udevd.service</refentrytitle><manvolnum>8</manvolnum>
+        <refentrytitle>udevd</refentrytitle><manvolnum>8</manvolnum>
       </citerefentry>,
       <citerefentry>
         <refentrytitle>udevadm</refentrytitle><manvolnum>8</manvolnum>
