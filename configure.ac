@@ -273,6 +273,7 @@ AS_IF([test "x${enable_split_usr}" = "xyes"], [
 
 AC_SUBST([rootprefix], [$with_rootprefix])
 AC_SUBST([rootlibdir], [$with_rootlibdir])
+AC_SUBST([udevlibexecdir], [${with_rootlibdir}/udev])
 
 # ------------------------------------------------------------------------------
 

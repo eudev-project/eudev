@@ -1,7 +1,7 @@
 ACLOCAL_AMFLAGS = -I m4 ${ACLOCAL_FLAGS}
 
 rootprefix=@rootprefix@
-udevlibexecdir=$(rootprefix)/lib/udev
+udevlibexecdir=@udevlibexecdir@
 udevrulesdir = $(udevlibexecdir)/rules.d
 
 dist_udevrules_DATA = \
