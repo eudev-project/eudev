@@ -1,5 +1,7 @@
 #!/bin/sh
 
+mkdir -p m4
+
 if type -p gtkdocize > /dev/null; then
 	gtkdocize --docdir docs
 else
