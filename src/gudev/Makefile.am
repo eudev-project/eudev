@@ -55,6 +55,8 @@ libgudev_1_0_la_CPPFLAGS = \
 	-I$(top_srcdir)/src\
 	-I$(top_builddir)/src/gudev \
 	-I$(top_srcdir)/src/gudev \
+	-I$(top_builddir)/src/libudev \
+	-I$(top_srcdir)/src/libudev \
 	-D_POSIX_PTHREAD_SEMANTICS -D_REENTRANT \
 	-D_GUDEV_COMPILATION \
 	-DG_LOG_DOMAIN=\"GUdev\"
