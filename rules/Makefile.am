@@ -20,8 +20,12 @@ dist_udevrules_DATA = \
 	75-probe_mtd.rules \
 	75-tty-description.rules \
 	78-sound-card.rules \
-	80-drivers.rules \
 	95-udev-late.rules
+
+if HAVE_MODULES
+dist_udevrules_DATA += \
+	80-drivers.rules
+endif
 
 if ENABLE_KEYMAP
 dist_udevrules_DATA += \

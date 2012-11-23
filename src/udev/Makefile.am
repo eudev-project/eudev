@@ -50,7 +50,6 @@ libudev_core_la_SOURCES = \
 	udev-builtin-firmware.c \
 	udev-builtin-hwdb.c \
 	udev-builtin-input_id.c \
-	udev-builtin-kmod.c \
 	udev-builtin-net_id.c \
 	udev-builtin-path_id.c \
 	udev-builtin-usb_id.c \
@@ -104,16 +103,18 @@ libudev_core_la_CFLAGS = \
 	$(AM_CFLAGS) \
 	$(BLKID_CFLAGS)
 
-if HAVE_LIBKMOD
-libudev_core_la_CFLAGS += $(KMOD_CFLAGS)
-endif
-
 libudev_core_la_LIBADD = \
 	$(top_builddir)/src/libudev/libudev-private.la \
 	$(BLKID_LIBS)
 
+if HAVE_MODULES
+libudev_core_la_SOURCES += \
+	udev-builtin-kmod.c
+
 if HAVE_LIBKMOD
+libudev_core_la_CFLAGS += $(KMOD_CFLAGS)
 libudev_core_la_LIBADD += $(KMOD_LIBS)
+endif
 endif
 
 if HAVE_ACL

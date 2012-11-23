@@ -275,23 +275,33 @@ AC_SUBST([rootprefix], [$with_rootprefix])
 AC_SUBST([rootlibdir], [$with_rootlibdir])
 AC_SUBST([udevlibexecdir], [${with_rootlibdir}/udev])
 
+
 # ------------------------------------------------------------------------------
 
-AC_ARG_ENABLE([libkmod], [AS_HELP_STRING([--enable-libkmod], [Enable module loading through kmod @<:@default=disabled@:>@])], [], [with_libkmod=no])
-
 LIBKMOD=
-AS_IF([test "x$with_libkmod" != xno],
-  [AC_CHECK_LIB([kmod], [main],
-    [PKG_CHECK_MODULES(KMOD, [libkmod >= 5])
-     AC_SUBST([LIBKMOD], ["-lkmod"])
-     AC_DEFINE([HAVE_LIBKMOD], [1],
-               [Define if you have libkmod])
-    ],
-    [AC_MSG_FAILURE(
-       [--with-libkmod was given, but test for kmod failed])],
-    [-lkmod])])
+AC_ARG_ENABLE([modules], [AS_HELP_STRING([--disable-modules], [Disable loadable module support @<:@default=enabled@:>@])], [have_modules=no], [have_modules=yes])
+AC_ARG_ENABLE([libkmod], [AS_HELP_STRING([--enable-libkmod], [Enable module loading through kmod @<:@default=disabled@:>@])], [have_libkmod=yes], [have_libkmod=no])
 
-AM_CONDITIONAL([HAVE_LIBKMOD], [test "$with_kmod" = "yes"])
+if test "x$have_modules" == "xyes"; then
+
+	AC_DEFINE([HAVE_MODULES], [1], [Define if we support loading modules])
+
+	AS_IF([test "x$have_libkmod" != xno],
+	  [AC_CHECK_LIB([kmod], [main],
+	    [PKG_CHECK_MODULES(KMOD, [libkmod >= 5])
+	     AC_SUBST([LIBKMOD], ["-lkmod"])
+	     AC_DEFINE([HAVE_LIBKMOD], [1],
+		       [Define if you have libkmod])
+	    ],
+	    [AC_MSG_FAILURE(
+	       [--with-libkmod was given, but test for kmod failed])],
+	    [-lkmod])])
+
+fi
+
+AM_CONDITIONAL([HAVE_MODULES], [test "x$have_modules" == "xyes"])
+AM_CONDITIONAL([HAVE_LIBKMOD], [test "x$have_libkmod" == "xyes"])
+
 
 # ------------------------------------------------------------------------------
 
