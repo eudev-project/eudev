@@ -1,8 +1,6 @@
 ACLOCAL_AMFLAGS = -I m4 ${ACLOCAL_FLAGS}
 
-rootprefix=@rootprefix@
-udevlibexecdir=@udevlibexecdir@
-udevkeymapdir = $(udevlibexecdir)/keymaps
+udevkeymapdir = @udevkeymapdir@
 
 KEYMAPS = \
 	acer \

@@ -96,8 +96,64 @@ AC_CHECK_FUNCS(
 AC_SEARCH_LIBS([clock_gettime], [rt], [], [AC_MSG_ERROR([*** POSIX librt not found])])
 AC_SEARCH_LIBS([sqrt], [m], [], [AC_MSG_ERROR([*** POSIX libm not found])])
 
+# ------------------------------------------------------------------------------
 
 # TODO: the old python checks are irrelevant, but we do need python and perl for tests
+
+# ------------------------------------------------------------------------------
+# Set paths here
+
+AC_ARG_WITH(
+	[rootprefix],
+	[AS_HELP_STRING(
+		[--with-rootprefix=DIR],
+		[rootfs directory prefix for config files and kernel modules])],
+	[],
+	[with_rootprefix=${ac_default_prefix}]
+)
+
+AC_ARG_WITH(
+	[rootlibdir],
+	[AS_HELP_STRING(
+		[--with-rootlibdir=DIR],
+		[Root directory for libraries necessary for boot])],
+	[],
+	[with_rootlibdir=${libdir}]
+)
+
+AC_ARG_ENABLE(
+	[split-usr],
+	[AS_HELP_STRING(
+		[--enable-split-usr],
+		[Assume that /bin, /sbin are not symlinks into /usr])],
+	[],
+	[AS_IF(
+		[test "x${ac_default_prefix}" != "x${with_rootprefix}"],
+		[enable_split_usr=yes],
+		[enable_split_usr=no])]
+)
+
+AS_IF(
+	[test "x${enable_split_usr}" = "xyes"],
+	[AC_DEFINE(HAVE_SPLIT_USR, 1, [Define if /bin, /sbin are not symlinks into /usr])]
+)
+
+# Configured paths
+AC_SUBST([rootprefix], [$with_rootprefix])
+AC_SUBST([rootlibdir], [$with_rootlibdir])
+AC_SUBST([udevlibexecdir], [${with_rootlibdir}/udev])
+
+# sysconfdir paths
+AC_SUBST([udevconfdir],[${sysconfdir}/udev])
+AC_SUBST([udevhwdbdir],[${sysconfdir}/hwdb.d])
+AC_SUBST([udevkeymapdir],[${sysconfdir}/keymaps])
+AC_SUBST([udevkeymapforcereldir],[${sysconfdir}/keymaps/force-release])
+
+# libexecdir paths
+AC_SUBST([udevrulesdir],[${udevlibexecdir}/rules.d])
+
+# pkgconfigdir paths
+AC_SUBST([sharepkgconfigdir],[${datadir}/pkgconfig])
 
 # ------------------------------------------------------------------------------
 
@@ -224,35 +280,6 @@ AS_IF([test "x$enable_manpages" != xno], [
         AS_IF([test "x$XSLTPROC" != x], [have_manpages=yes])
 ])
 AM_CONDITIONAL(ENABLE_MANPAGES, [test "x$have_manpages" = "xyes"])
-
-# ------------------------------------------------------------------------------
-
-AC_ARG_WITH([rootprefix],
-        AS_HELP_STRING([--with-rootprefix=DIR], [rootfs directory prefix for config files and kernel modules]),
-        [], [with_rootprefix=${ac_default_prefix}])
-
-AC_ARG_WITH([rootlibdir],
-        AS_HELP_STRING([--with-rootlibdir=DIR], [Root directory for libraries necessary for boot]),
-        [],
-        [with_rootlibdir=${libdir}])
-
-AC_ARG_ENABLE([split-usr],
-        AS_HELP_STRING([--enable-split-usr], [Assume that /bin, /sbin aren\'t symlinks into /usr]),
-        [],
-        [AS_IF([test "x${ac_default_prefix}" != "x${with_rootprefix}"], [
-                enable_split_usr=yes
-        ], [
-                enable_split_usr=no
-        ])])
-
-AS_IF([test "x${enable_split_usr}" = "xyes"], [
-        AC_DEFINE(HAVE_SPLIT_USR, 1, [Define if /bin, /sbin aren't symlinks into /usr])
-])
-
-AC_SUBST([rootprefix], [$with_rootprefix])
-AC_SUBST([rootlibdir], [$with_rootlibdir])
-AC_SUBST([udevlibexecdir], [${with_rootlibdir}/udev])
-
 
 # ------------------------------------------------------------------------------
 

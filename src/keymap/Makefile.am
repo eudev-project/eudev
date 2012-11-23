@@ -1,8 +1,6 @@
 ACLOCAL_AMFLAGS = -I m4 ${ACLOCAL_FLAGS}
 
-rootprefix=@rootprefix@
 udevlibexecdir=@udevlibexecdir@
-udevhomedir = $(udevlibexecdir)
 
 AM_CPPFLAGS = \
 	-I $(top_srcdir)/src/libudev \
@@ -31,7 +29,7 @@ BUILT_SOURCES = \
 dist_doc_DATA = \
 	README.keymap.txt
 
-dist_udevhome_SCRIPTS = \
+dist_udevlibexec_SCRIPTS = \
 	findkeyboards \
 	keyboard-force-release.sh
 
