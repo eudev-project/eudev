@@ -29,9 +29,6 @@ AC_PROG_INSTALL
 AC_PROG_LN_S
 AC_PROG_MAKE_SET
 
-GTK_DOC_CHECK([1.18],[--flavour no-tmpl])
-DISTCHECK_CONFIGURE_FLAGS=--enable-gtk-doc
-
 AC_PATH_PROG([M4], [m4])
 AC_PATH_PROG([XSLTPROC], [xsltproc])
 AC_PATH_TOOL(GPERF, gperf)
@@ -230,11 +227,15 @@ AC_ARG_ENABLE([keymap],
 AM_CONDITIONAL([ENABLE_KEYMAP], [test "x$enable_keymap" = "xyes"])
 
 # ------------------------------------------------------------------------------
-AC_ARG_ENABLE(gtk-doc, AS_HELP_STRING([--disable-gtk-doc], [disable gtk-doc]))
-AS_IF(
-        [test "x$enable_gtk_doc" = "xyes" -a "x$XSLTPROC" = x],
-        [AC_MSG_ERROR([*** GTK doc requested but xsltproc not found])]
-)
+
+GTK_DOC_CHECK([1.18],[--flavour no-tmpl])
+AM_CONDITIONAL([ENABLE_GTK_DOC],[test "x$enable_gtk_doc" = "xyes"])
+
+AS_IF([test "x$enable_gtk_doc" = "xyes" -a "x$XSLTPROC" = x], [
+	AC_MSG_ERROR([*** GTK doc requested but xsltproc not found])
+])
+
+DISTCHECK_CONFIGURE_FLAGS=--enable-gtk-doc
 
 # ------------------------------------------------------------------------------
 have_manpages=no
