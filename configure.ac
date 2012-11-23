@@ -145,12 +145,12 @@ AC_SUBST([udevlibexecdir], [${with_rootlibdir}/udev])
 
 # sysconfdir paths
 AC_SUBST([udevconfdir],[${sysconfdir}/udev])
-AC_SUBST([udevhwdbdir],[${sysconfdir}/hwdb.d])
-AC_SUBST([udevkeymapdir],[${sysconfdir}/keymaps])
-AC_SUBST([udevkeymapforcereldir],[${sysconfdir}/keymaps/force-release])
-
-# libexecdir paths
-AC_SUBST([udevrulesdir],[${udevlibexecdir}/rules.d])
+AC_SUBST([udevconffile],[${udevconfdir}/udev.conf])
+AC_SUBST([udevhwdbdir],[${udevconfdir}/hwdb.d])
+AC_SUBST([udevhwdbbin],[${udevconfdir}/hwdb.bin])
+AC_SUBST([udevkeymapdir],[${udevconfdir}/keymaps])
+AC_SUBST([udevkeymapforceredir],[${udevkeymapdir}/force-release])
+AC_SUBST([udevrulesdir],[${udevconfdir}/rules.d])
 
 # pkgconfigdir paths
 AC_SUBST([sharepkgconfigdir],[${datadir}/pkgconfig])

@@ -7,7 +7,10 @@ AM_CPPFLAGS = \
 	-include $(top_builddir)/config.h \
 	-DMODPROBE=\"$(MODPROBE)\" \
 	-DROOTPREFIX=\"$(rootprefix)\" \
-	-DUDEVLIBEXECDIR=\"$(udevlibexecdir)\" \
+	-DUDEV_HWDB_DIR=\"$(udevhwdbdir)\" \
+	-DUDEV_HWDB_BIN=\"$(udevhwdbbin)\" \
+	-DUDEV_RULES_DIR=\"$(udevrulesdir)\" \
+	-DUDEV_LIBEXEC_DIR=\"$(udevlibexecdir)\" \
 	-I $(top_srcdir)/src/libudev
 
 sbin_PROGRAMS = \

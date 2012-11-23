@@ -5,7 +5,7 @@ udevlibexecdir=@udevlibexecdir@
 AM_CPPFLAGS = \
 	-I $(top_srcdir)/src/libudev \
 	-I $(top_srcdir)/src/udev \
-	-DUDEVLIBEXECDIR=\"$(udevlibexecdir)\"
+	-DUDEV_LIBEXEC_DIR=\"$(udevlibexecdir)\"
 
 udevlibexec_PROGRAMS = \
 	keymap
