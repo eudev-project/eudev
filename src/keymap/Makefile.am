@@ -41,7 +41,8 @@ TESTS = \
 CLEANFILES = \
 	keys.txt \
 	keys-from-name.gperf \
-	keyboard-force-release.sh
+	keyboard-force-release.sh \
+	$(nodist_keymap_SOURCES)
 
 EXTRA_DIST = \
 	check-keymaps.sh \
