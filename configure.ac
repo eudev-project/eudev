@@ -97,30 +97,7 @@ AC_SEARCH_LIBS([clock_gettime], [rt], [], [AC_MSG_ERROR([*** POSIX librt not fou
 AC_SEARCH_LIBS([sqrt], [m], [], [AC_MSG_ERROR([*** POSIX libm not found])])
 
 
-# we use python to build the man page index, and for systemd-python
-have_python=no
-have_python_devel=no
-
-AC_ARG_WITH([python],
-        [AS_HELP_STRING([--without-python], [Disable building the man page index and systemd-python (default: test)])])
-
-AS_IF([test "x$with_python" != "xno"], [
-        AM_PATH_PYTHON(,, [:])
-        AS_IF([test "$PYTHON" != :], [have_python=yes])
-])
-AM_CONDITIONAL([HAVE_PYTHON], [test "$have_python" = "yes"])
-
-AS_IF([test "x$with_python" != "xno"], [
-        AC_PATH_PROG(PYTHON_CONFIG, python${PYTHON_VERSION}-config)
-        AS_IF([test -n "$PYTHON_CONFIG"], [
-              have_python_devel=yes
-              PYTHON_CFLAGS="`$PYTHON_CONFIG --cflags`"
-              PYTHON_LIBS="`$PYTHON_CONFIG --ldflags`"
-              AC_SUBST(PYTHON_CFLAGS)
-              AC_SUBST(PYTHON_LIBS)
-        ])
-])
-AM_CONDITIONAL([HAVE_PYTHON_DEVEL], [test "$have_python_devel" = "yes"])
+# TODO: the old python checks are irrelevant, but we do need python and perl for tests
 
 # ------------------------------------------------------------------------------
 
