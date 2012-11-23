@@ -299,6 +299,7 @@ AC_CONFIG_FILES([Makefile
                  src/gudev/Makefile
                  src/gudev/gudev-1.0.pc
                  src/keymap/Makefile
+                 src/keymap/check-keymaps.sh
                  src/keymap/keyboard-force-release.sh
                  src/libudev/Makefile
                  src/libudev/libudev.pc
@@ -307,4 +308,14 @@ AC_CONFIG_FILES([Makefile
                  src/test/Makefile
                  test/Makefile])
 
+
 AC_OUTPUT
+
+dnl Set configured scripts executable
+if test -f  src/keymap/check-keymaps.sh; then
+	chmod +x src/keymap/check-keymaps.sh
+fi
+
+if test -f src/keymap/keyboard-force-release.sh; then
+	chmod +x src/keymap/keyboard-force-release.sh
+fi

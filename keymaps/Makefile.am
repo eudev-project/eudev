@@ -4,7 +4,7 @@ rootprefix=@rootprefix@
 udevlibexecdir=@udevlibexecdir@
 udevkeymapdir = $(udevlibexecdir)/keymaps
 
-dist_udevkeymap_DATA = \
+KEYMAPS = \
 	acer \
 	acer-aspire_5720 \
 	acer-aspire_8930 \
@@ -65,3 +65,9 @@ dist_udevkeymap_DATA = \
 	toshiba-satellite_a110 \
 	toshiba-satellite_m30x \
 	zepto-znote
+
+dist_udevkeymap_DATA = \
+	$(KEYMAPS)
+
+EXTRA_DIST = \
+	$(KEYMAPS)
