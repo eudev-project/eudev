@@ -1,6 +1,6 @@
 
 AC_PREREQ([2.68])
-AC_INIT([udev-ng], [0.1], [http://bugzilla.gentoo.org])
+AC_INIT([eudev], [0.1], [http://bugzilla.gentoo.org])
 AC_CONFIG_SRCDIR([src/udev/udevd.c])
 
 AC_USE_SYSTEM_EXTENSIONS
