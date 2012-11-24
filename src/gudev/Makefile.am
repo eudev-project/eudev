@@ -46,6 +46,11 @@ nodist_libgudev_1_0_la_SOURCES = \
 	gudevenumtypes.h \
 	gudevenumtypes.c
 
+CLEANFILES += \
+	gudevmarshal.h \
+	gudevmarshal.c \
+	gudevenumtypes.c
+
 BUILT_SOURCES = \
 	$(nodist_libgudev_1_0_la_SOURCES)
 

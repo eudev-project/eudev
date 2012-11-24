@@ -40,6 +40,11 @@
 static inline int unshare (int x) { return syscall(SYS_unshare, x); }
 #endif
 
+#ifndef _USE_GNU
+/* Make sure CLONE_NEWNS macro is available */
+#include <linux/sched.h>
+#endif
+
 void udev_main_log(struct udev *udev, int priority,
                    const char *file, int line, const char *fn,
                    const char *format, va_list args) {}
@@ -50,11 +55,11 @@ static int fake_filesystems(void) {
                 const char *target;
                 const char *error;
         } fakefss[] = {
-                { "test/sys", "/sys",                   "failed to mount test /sys" },
-                { "test/dev", "/dev",                   "failed to mount test /dev" },
-                { "test/run", "/run",                   "failed to mount test /run" },
-                { "test/run", "/etc/udev/rules.d",      "failed to mount empty /etc/udev/rules.d" },
-                { "test/run", "/usr/lib/udev/rules.d",  "failed to mount empty /usr/lib/udev/rules.d" },
+                { "../test/sys", "/sys",                   "failed to mount test /sys" },
+                { "../test/dev", "/dev",                   "failed to mount test /dev" },
+                { "../test/run", "/run",                   "failed to mount test /run" },
+                { "../test/run", "/etc/udev/rules.d",      "failed to mount empty /etc/udev/rules.d" },
+                { "../test/run", "/usr/lib/udev/rules.d",  "failed to mount empty /usr/lib/udev/rules.d" },
         };
         unsigned int i;
         int err;
@@ -62,13 +67,13 @@ static int fake_filesystems(void) {
         err = unshare(CLONE_NEWNS);
         if (err < 0) {
                 err = -errno;
-                fprintf(stderr, "failed to call unshare(): %m\n");
+                perror("failed to call unshare()");
                 goto out;
         }
 
         if (mount(NULL, "/", NULL, MS_PRIVATE|MS_REC, NULL) < 0) {
                 err = -errno;
-                fprintf(stderr, "failed to mount / as private: %m\n");
+                perror("failed to mount / as private");
                 goto out;
         }
 
@@ -76,7 +81,7 @@ static int fake_filesystems(void) {
                 err = mount(fakefss[i].src, fakefss[i].target, NULL, MS_BIND, NULL);
                 if (err < 0) {
                         err = -errno;
-                        fprintf(stderr, "%s %m", fakefss[i].error);
+                        perror(fakefss[i].error);
                         return err;
                 }
         }
@@ -104,7 +109,7 @@ int main(int argc, char *argv[])
         udev = udev_new();
         if (udev == NULL)
                 exit(EXIT_FAILURE);
-        log_debug("version %i\n", VERSION);
+        log_debug("version %s\n", VERSION);
         label_init("/dev");
 
         sigprocmask(SIG_SETMASK, NULL, &sigmask_orig);

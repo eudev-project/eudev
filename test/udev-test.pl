@@ -20,11 +20,12 @@
 use warnings;
 use strict;
 
-my $udev_bin            = "./test-udev";
+my $udev_bin            = "../src/test/test-udev";
 my $valgrind            = 0;
 my $udev_bin_valgrind   = "valgrind --tool=memcheck --leak-check=yes --quiet $udev_bin";
-my $udev_dev            = "test/dev";
-my $udev_run            = "test/run";
+my $udev_sys            = "../test/sys";
+my $udev_dev            = "../test/dev";
+my $udev_run            = "../test/run";
 my $udev_rules_dir      = "$udev_run/udev/rules.d";
 my $udev_rules          = "$udev_rules_dir/udev-test.rules";
 
@@ -1521,6 +1522,7 @@ if ($list[0]) {
 print "$error errors occured\n\n";
 
 # cleanup
+system("rm", "-rf", "$udev_sys");
 system("rm", "-rf", "$udev_dev");
 system("rm", "-rf", "$udev_run");
 
