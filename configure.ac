@@ -1,6 +1,6 @@
 
 AC_PREREQ([2.68])
-AC_INIT([eudev], [0.1], [http://bugzilla.gentoo.org])
+AC_INIT([eudev],[0.1],[https://github.com/gentoo/eudev/issues])
 AC_CONFIG_SRCDIR([src/udev/udevd.c])
 
 AC_USE_SYSTEM_EXTENSIONS
@@ -153,6 +153,7 @@ AC_SUBST([udevkeymapforceredir],[${udevkeymapdir}/force-release])
 AC_SUBST([udevrulesdir],[${udevconfdir}/rules.d])
 
 # pkgconfigdir paths
+AC_SUBST([pkgconfiglibdir], [${libdir}/pkgconfig])
 AC_SUBST([sharepkgconfigdir],[${datadir}/pkgconfig])
 
 # ------------------------------------------------------------------------------
@@ -374,7 +375,8 @@ AC_MSG_RESULT([
         udevkeymapforceredir:    ${udevkeymapforceredir}
         udevrulesdir:            ${udevrulesdir}
 
-        sharepkgconfigdir:       ${sharepkgconfigdir}
+        pkgconfiglibdir:         ${libdir}/pkgconfig
+        sharepkgconfigdir        ${datadir}/pkgconfig
 ])
 
 # ------------------------------------------------------------------------------

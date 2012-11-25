@@ -50,8 +50,6 @@ libudev_private_la_CFLAGS = \
 noinst_LTLIBRARIES = \
 	libudev-private.la
 
-
-pkgconfiglibdir=$(libdir)/pkgconfig
 pkgconfiglib_DATA = \
 	libudev.pc
 

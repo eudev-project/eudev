@@ -1,5 +1,7 @@
-Name: udev
-Description: udev
-Version: @VERSION@
-
+prefix=@prefix@
+exec_prefix=@exec_prefix@
 udevdir=@udevlibexecdir@
+
+Name: udev
+Description: Part of eudev
+Version: @VERSION@

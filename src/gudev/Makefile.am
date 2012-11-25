@@ -20,7 +20,6 @@ libgudev_include_HEADERS = \
 lib_LTLIBRARIES = \
 	libgudev-1.0.la
 
-pkgconfiglibdir=$(libdir)/pkgconfig
 pkgconfiglib_DATA = \
 	gudev-1.0.pc
 
