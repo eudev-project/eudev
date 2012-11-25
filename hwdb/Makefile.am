@@ -1,7 +1,5 @@
 ACLOCAL_AMFLAGS = -I m4 ${ACLOCAL_FLAGS}
 
-udevhwdbdir = @udevhwdbdir@
-
 dist_udevhwdb_DATA = \
 	20-pci-vendor-product.hwdb \
 	20-pci-classes.hwdb \

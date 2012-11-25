@@ -1,5 +1,44 @@
 ACLOCAL_AMFLAGS = -I m4 ${ACLOCAL_FLAGS}
 
+
+AM_CPPFLAGS = \
+	-DVERSION=\"@VERSION@\" \
+	-I $(top_srcdir)/src/libudev \
+	-I $(top_srcdir)/src/udev
+
+noinst_PROGRAMS = \
+	test-libudev \
+	test-udev
+
+test_libudev_SOURCES = \
+	test-libudev.c
+
+test_libudev_LDADD = \
+	$(top_builddir)/src/libudev/libudev-private.la \
+	$(top_builddir)/src/udev/libudev-core.la
+
+test_libudev_CPPFLAGS = \
+	-I $(top_srcdir)/src/libudev \
+	$(AM_CPPFLAGS)
+
+test_udev_SOURCES = \
+	test-udev.c
+
+test_udev_LDADD = \
+	$(top_builddir)/src/libudev/libudev-private.la \
+	$(top_builddir)/src/udev/libudev-core.la \
+	$(BLKID_LIBS) \
+	$(SELINUX_LIBS)
+
+if HAVE_LIBKMOD
+test_udev_LDADD += $(KMOD_LIBS)
+endif
+
+test_udev_CPPFLAGS = \
+	-I $(top_srcdir)/src/udev \
+	$(AM_CPPFLAGS)
+
+
 TESTS = \
 	udev-test.pl \
 	rules-test.sh
@@ -9,7 +48,7 @@ check_DATA = \
 
 test/sys:
 	$(AM_V_at)$(MKDIR_P) $(dir $@)
-	$(AM_V_GEN)tar -C $(top_builddir)/test/ -xJf $(top_srcdir)/test/sys.tar.xz
+	$(AM_V_GEN)tar -C $(top_builddir)/test/test -xJf $(top_srcdir)/test/sys.tar.xz
 
 test-sys-distclean:
 	-rm -rf $(top_builddir)/test/sys

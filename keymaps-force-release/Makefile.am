@@ -1,7 +1,5 @@
 ACLOCAL_AMFLAGS = -I m4 ${ACLOCAL_FLAGS}
 
-udevkeymapforceredir = @udevkeymapforceredir@
-
 dist_udevkeymapforcere_DATA = \
 	dell-touchpad \
 	dell-xps \

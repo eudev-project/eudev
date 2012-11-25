@@ -1,7 +1,5 @@
 ACLOCAL_AMFLAGS = -I m4 ${ACLOCAL_FLAGS}
 
-udevrulesdir = @udevrulesdir@
-
 dist_udevrules_DATA = \
 	42-usb-hid-pm.rules \
 	50-udev-default.rules \

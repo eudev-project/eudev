@@ -1,7 +1,5 @@
 ACLOCAL_AMFLAGS = -I m4 ${ACLOCAL_FLAGS}
 
-udevlibexecdir=@udevlibexecdir@
-
 AM_CPPFLAGS = \
 	-I $(top_srcdir)/src/libudev \
 	-I $(top_srcdir)/src/udev \

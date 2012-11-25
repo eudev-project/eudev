@@ -1,8 +1,5 @@
 ACLOCAL_AMFLAGS = -I m4 ${ACLOCAL_FLAGS}
 
-rootprefix = @rootprefix@
-udevlibexecdir = @udevlibexecdir@
-
 AM_CPPFLAGS = \
 	-include $(top_builddir)/config.h \
 	-DMODPROBE=\"$(MODPROBE)\" \
@@ -135,11 +132,9 @@ libudev_core_la_CPPFLAGS = \
 #
 # Extras
 #
-udevconfdir = @udevconfdir@
 dist_udevconf_DATA = \
 	udev.conf
 
-sharepkgconfigdir = @sharepkgconfigdir@
 sharepkgconfig_DATA = \
 	udev.pc
 

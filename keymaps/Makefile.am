@@ -1,7 +1,5 @@
 ACLOCAL_AMFLAGS = -I m4 ${ACLOCAL_FLAGS}
 
-udevkeymapdir = @udevkeymapdir@
-
 KEYMAPS = \
 	acer \
 	acer-aspire_5720 \

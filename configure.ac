@@ -348,11 +348,36 @@ AC_CONFIG_FILES([Makefile
                  src/libudev/libudev.pc
                  src/udev/Makefile
                  src/udev/udev.pc
-                 src/test/Makefile
                  test/Makefile])
 
-
 AC_OUTPUT
+
+# ------------------------------------------------------------------------------
+
+AC_MSG_RESULT([
+        prefix:                  ${prefix}
+        exec_prefix:             ${exec_prefix}
+        sysconf dir:             ${sysconfdir}
+        datarootdir:             ${datarootdir}
+        includedir:              ${includedir}
+        libdir:                  ${libdir}
+
+        rootprefix:              ${rootprefix}
+        rootlibdir:              ${rootlibdir}
+        udevlibexecdir:          ${udevlibexecdir}
+
+        udevconfdir:             ${udevconfdir}
+        udevconffile:            ${udevconffile}
+        udevhwdbdir:             ${udevhwdbdir}
+        udevhwdbbin:             ${udevhwdbbin}
+        udevkeymapdir:           ${udevkeymapdir}
+        udevkeymapforceredir:    ${udevkeymapforceredir}
+        udevrulesdir:            ${udevrulesdir}
+
+        sharepkgconfigdir:       ${sharepkgconfigdir}
+])
+
+# ------------------------------------------------------------------------------
 
 dnl Set configured scripts executable
 if test -f  src/keymap/check-keymaps.sh; then
@@ -362,3 +387,4 @@ fi
 if test -f src/keymap/keyboard-force-release.sh; then
 	chmod +x src/keymap/keyboard-force-release.sh
 fi
+
