@@ -22,12 +22,12 @@
 #define __G_UDEV_H__
 
 #define _GUDEV_INSIDE_GUDEV_H
-#include <gudev/gudevenums.h>
-#include <gudev/gudevenumtypes.h>
-#include <gudev/gudevtypes.h>
-#include <gudev/gudevclient.h>
-#include <gudev/gudevdevice.h>
-#include <gudev/gudevenumerator.h>
+#include <gudevenums.h>
+#include <gudevenumtypes.h>
+#include <gudevtypes.h>
+#include <gudevclient.h>
+#include <gudevdevice.h>
+#include <gudevenumerator.h>
 #undef _GUDEV_INSIDE_GUDEV_H
 
 #endif /* __G_UDEV_H__ */

@@ -27,23 +27,15 @@ CLEANFILES = \
 	gudev-1.0.pc
 
 libgudev_1_0_la_SOURCES = \
-	gudevenums.h \
-	gudevenumtypes.h \
 	gudevenumtypes.h\
-	gudevtypes.h \
-	gudevclient.h \
+	gudevenumtypes.c\
 	gudevclient.c \
-	gudevdevice.h \
 	gudevdevice.c \
-	gudevenumerator.h \
-	gudevenumerator.c \
-	gudevprivate.h
+	gudevenumerator.c
 
 nodist_libgudev_1_0_la_SOURCES = \
 	gudevmarshal.h \
-	gudevmarshal.c \
-	gudevenumtypes.h \
-	gudevenumtypes.c
+	gudevmarshal.c
 
 BUILT_SOURCES = \
 	$(nodist_libgudev_1_0_la_SOURCES)
@@ -88,12 +80,20 @@ gudevenumtypes.%: gudevenumtypes.%.template gudevenums.h
 	$(AM_V_at)$(MKDIR_P) $(dir $@)
 	$(AM_V_GEN)glib-mkenums --template $^ > $@
 
+CLEANFILES += \
+	gudevmarshal.h \
+	gudevmarshal.c \
+	gudevenumtypes.h \
+	gudevenumtypes.c
+
 if HAVE_INTROSPECTION
 -include $(INTROSPECTION_MAKEFILE)
 
-GUdev-1.0.gir: libgudev-1.0.la
+GUdev-1.0.gir: \
+	libgudev-1.0.la
 
-GUdev_1_0_gir_INCLUDES = GObject-2.0
+GUdev_1_0_gir_INCLUDES = \
+	GObject-2.0
 
 GUdev_1_0_gir_CFLAGS = \
 	$(INCLUDES) \
@@ -105,7 +105,8 @@ GUdev_1_0_gir_CFLAGS = \
 	-I$(top_builddir)/src/gdev
 
 GUdev_1_0_gir_LIBS = \
-	libgudev-1.0.la
+	$(top_builddir)/src/gudev/libgudev-1.0.la \
+	$(top_builddir)/src/udev/libudev-core.la
 
 GUdev_1_0_gir_SCANNERFLAGS = \
 	--pkg-export=gudev-1.0 \
@@ -123,8 +124,11 @@ GUdev_1_0_gir_FILES = \
 	gudevdevice.c \
 	gudevenumerator.c
 
-INTROSPECTION_GIRS = GUdev-1.0.gir
-INTROSPECTION_SCANNER_ARGS = --c-include=gudev.h
+INTROSPECTION_GIRS = \
+	GUdev-1.0.gir
+
+INTROSPECTION_SCANNER_ARGS = \
+	--c-include=gudev.h
 
 girdir = $(datadir)/gir-1.0
 gir_DATA = \

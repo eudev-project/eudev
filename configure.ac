@@ -158,11 +158,8 @@ AC_SUBST([sharepkgconfigdir],[${datadir}/pkgconfig])
 
 # ------------------------------------------------------------------------------
 
-have_introspection=no
-AC_ARG_ENABLE([introspection],
-        [AS_HELP_STRING([--without-introspection], [Disable man page index and systemd-python (default: no)])])
 GOBJECT_INTROSPECTION_CHECK([1.31.1])
-AM_CONDITIONAL([HAVE_INTROSPECTION], [test "$have_introspection" = "yes"])
+AM_CONDITIONAL([HAVE_INTROSPECTION], [test "$enable_introspection" = "yes"])
 
 # ------------------------------------------------------------------------------
 have_selinux=no
