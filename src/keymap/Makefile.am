@@ -37,7 +37,8 @@ TESTS = \
 CLEANFILES = \
 	keys.txt \
 	keys-from-name.gperf \
-	keyboard-force-release.sh
+	keyboard-force-release.sh \
+	$(BUILT_SOURCES)
 
 EXTRA_DIST = \
 	check-keymaps.sh \
