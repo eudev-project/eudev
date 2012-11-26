@@ -51,9 +51,9 @@ test/sys:
 	$(AM_V_GEN)tar -C $(top_builddir)/test/test -xJf $(top_srcdir)/test/sys.tar.xz
 
 test-sys-distclean:
-	-rm -rf $(top_builddir)/test/sys
+	-rm -rf $(top_builddir)/test/test/sys
 
-DISTCLEAN_LOCAL_HOOKS = \
+clean-local: \
 	test-sys-distclean
 
 EXTRA_DIST = \
