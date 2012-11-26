@@ -1,12 +1,8 @@
 ACLOCAL_AMFLAGS = -I m4 ${ACLOCAL_FLAGS}
 
-if ENABLE_GUDEV
 LIBGUDEV_CURRENT=1
 LIBGUDEV_REVISION=2
 LIBGUDEV_AGE=1
-
-libgudev_includedir = \
-	$(includedir)/gudev-1.0/gudev
 
 libgudev_include_HEADERS = \
 	gudev.h \
@@ -16,6 +12,16 @@ libgudev_include_HEADERS = \
 	gudevclient.h \
 	gudevdevice.h \
 	gudevenumerator.h
+
+EXTRA_DIST = \
+	gudev-1.0.pc.in \
+	gudevmarshal.list \
+	gudevprivate.h \
+	gudevenumtypes.h.template \
+	gudevenumtypes.c.template \
+	gjs-example.js \
+	seed-example-enum.js \
+	seed-example.js
 
 lib_LTLIBRARIES = \
 	libgudev-1.0.la
@@ -27,27 +33,25 @@ CLEANFILES = \
 	gudev-1.0.pc
 
 libgudev_1_0_la_SOURCES = \
-	gudevenumtypes.h\
 	gudevenumtypes.c\
 	gudevclient.c \
 	gudevdevice.c \
 	gudevenumerator.c
 
 nodist_libgudev_1_0_la_SOURCES = \
-	gudevmarshal.h \
 	gudevmarshal.c
 
 BUILT_SOURCES = \
+	gudevenumtypes.h\
+	gudevmarshal.h \
 	$(nodist_libgudev_1_0_la_SOURCES)
 
 libgudev_1_0_la_CPPFLAGS = \
 	$(AM_CPPFLAGS) \
-	-I$(top_builddir)/src\
 	-I$(top_srcdir)/src\
+	-I$(top_srcdir)/src/libudev \
 	-I$(top_builddir)/src/gudev \
 	-I$(top_srcdir)/src/gudev \
-	-I$(top_builddir)/src/libudev \
-	-I$(top_srcdir)/src/libudev \
 	-D_POSIX_PTHREAD_SEMANTICS -D_REENTRANT \
 	-D_GUDEV_COMPILATION \
 	-DG_LOG_DOMAIN=\"GUdev\"
@@ -100,7 +104,6 @@ GUdev_1_0_gir_CFLAGS = \
 	-D_GUDEV_COMPILATION \
 	-D_GUDEV_WORK_AROUND_DEV_T_BUG \
 	-I$(top_srcdir)/src \
-	-I$(top_builddir)/src \
 	-I$(top_srcdir)/src/gdev \
 	-I$(top_builddir)/src/gdev
 
@@ -130,11 +133,9 @@ INTROSPECTION_GIRS = \
 INTROSPECTION_SCANNER_ARGS = \
 	--c-include=gudev.h
 
-girdir = $(datadir)/gir-1.0
 gir_DATA = \
 	GUdev-1.0.gir
 
-typelibsdir = $(libdir)/girepository-1.0
 typelibs_DATA = \
 	GUdev-1.0.typelib
 
@@ -161,15 +162,4 @@ INSTALL_EXEC_HOOKS = \
 
 UNINSTALL_EXEC_HOOKS = \
 	libgudev-uninstall-move-hook
-
-endif
-
-EXTRA_DIST = \
-	gudev-1.0.pc.in \
-	gudevmarshal.list \
-	gudevenumtypes.h.template \
-	gudevenumtypes.c.template \
-	gjs-example.js \
-	seed-example-enum.js \
-	seed-example.js
 

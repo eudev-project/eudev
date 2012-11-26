@@ -2,8 +2,7 @@ ACLOCAL_AMFLAGS = -I m4
 
 SUBDIRS = \
 	libudev \
-	udev \
-	gudev
+	udev
 
 # Helper programs
 SUBDIRS += \
@@ -14,6 +13,11 @@ SUBDIRS += \
 	mtd_probe \
 	scsi_id \
 	v4l_id
+
+if ENABLE_GUDEV
+SUBDIRS += \
+	gudev
+endif
 
 if ENABLE_KEYMAP
 SUBDIRS += \

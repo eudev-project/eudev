@@ -156,6 +156,13 @@ AC_SUBST([udevrulesdir],[${udevconfdir}/rules.d])
 AC_SUBST([pkgconfiglibdir], [${libdir}/pkgconfig])
 AC_SUBST([sharepkgconfigdir],[${datadir}/pkgconfig])
 
+# gudev paths
+AC_SUBST([libgudev_includedir],[${includedir}/gudev-1.0/gudev])
+
+# introspection paths
+AC_SUBST([girdir], [${datadir}/gir-1.0])
+AC_SUBST([typelibsdir], [${libdir}/girepository-1.0])
+
 # ------------------------------------------------------------------------------
 
 GOBJECT_INTROSPECTION_CHECK([1.31.1])
@@ -355,14 +362,15 @@ AC_OUTPUT
 AC_MSG_RESULT([
         prefix:                  ${prefix}
         exec_prefix:             ${exec_prefix}
-        sysconf dir:             ${sysconfdir}
-        datarootdir:             ${datarootdir}
+        sysconfdir:              ${sysconfdir}
+        datadir:                 ${datadir}
         includedir:              ${includedir}
         libdir:                  ${libdir}
 
         rootprefix:              ${rootprefix}
         rootlibdir:              ${rootlibdir}
         udevlibexecdir:          ${udevlibexecdir}
+        datarootdir:             ${datarootdir}
 
         udevconfdir:             ${udevconfdir}
         udevconffile:            ${udevconffile}
@@ -374,6 +382,11 @@ AC_MSG_RESULT([
 
         pkgconfiglibdir:         ${libdir}/pkgconfig
         sharepkgconfigdir        ${datadir}/pkgconfig
+
+	libgudev_includedir	${includedir}/gudev-1.0/gudev
+
+	girdir			${datadir}/gir-1.0
+	typelibsdir		${libdir}/girepository-1.0
 ])
 
 # ------------------------------------------------------------------------------
