@@ -150,7 +150,7 @@ AC_SUBST([udevhwdbdir],[${udevconfdir}/hwdb.d])
 AC_SUBST([udevhwdbbin],[${udevconfdir}/hwdb.bin])
 AC_SUBST([udevkeymapdir],[${udevconfdir}/keymaps])
 AC_SUBST([udevkeymapforceredir],[${udevkeymapdir}/force-release])
-AC_SUBST([udevrulesdir],[${udevconfdir}/rules.d])
+AC_SUBST([udevrulesdir],[${udevlibexecdir}/rules.d])
 
 # pkgconfigdir paths
 AC_SUBST([pkgconfiglibdir], [${libdir}/pkgconfig])
