@@ -63,7 +63,8 @@ libudev_la_CFLAGS = \
 
 libudev_la_LDFLAGS = \
 	$(AM_LDFLAGS) \
-	-version-info $(LIBUDEV_CURRENT):$(LIBUDEV_REVISION):$(LIBUDEV_AGE)
+	-version-info $(LIBUDEV_CURRENT):$(LIBUDEV_REVISION):$(LIBUDEV_AGE) \
+	-Wl,--version-script=$(top_srcdir)/src/libudev/libudev.sym
 
 
 libudev_private_la_SOURCES =\
@@ -82,7 +83,8 @@ pkgconfiglib_DATA = \
 	libudev.pc
 
 EXTRA_DIST = \
-	libudev.pc.in
+	libudev.pc.in \
+	libudev.sym
 
 CLEANFILES = \
 	libudev.pc
