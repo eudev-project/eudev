@@ -187,44 +187,6 @@ fi
 AC_SUBST(sushell)
 
 # ------------------------------------------------------------------------------
-AC_ARG_ENABLE([acl],
-        AS_HELP_STRING([--disable-acl],[Disable optional ACL support]),
-                [case "${enableval}" in
-                        yes) have_acl=yes ;;
-                        no) have_acl=no ;;
-                        *) AC_MSG_ERROR(bad value ${enableval} for --disable-acl) ;;
-                esac],
-                [have_acl=auto])
-
-if test "x${have_acl}" != xno ; then
-        AC_CHECK_HEADERS(
-                [sys/acl.h acl/libacl.h],
-                [have_acl=yes],
-                [if test "x$have_acl" = xyes ; then
-                        AC_MSG_ERROR([*** ACL headers not found.])
-                fi])
-
-        AC_CHECK_LIB(
-                [acl],
-                [acl_get_file],
-                [have_acl=yes],
-                [if test "x$have_acl" = xyes ; then
-                        AC_MSG_ERROR([*** libacl not found.])
-                fi])
-
-        if test "x$have_acl" = xyes ; then
-                ACL_LIBS="-lacl"
-                AC_DEFINE(HAVE_ACL, 1, [ACL available])
-        else
-                have_acl=no
-        fi
-else
-        ACL_LIBS=
-fi
-AC_SUBST(ACL_LIBS)
-AM_CONDITIONAL([HAVE_ACL], [test "x$have_acl" != xno])
-
-# ------------------------------------------------------------------------------
 
 AC_CHECK_DECL([unshare],
         [AC_DEFINE(HAVE_UNSHARE, 1, [Define if unshare is declared])],

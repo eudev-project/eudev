@@ -52,7 +52,6 @@ libudev_core_la_SOURCES = \
 	udev-builtin-net_id.c \
 	udev-builtin-path_id.c \
 	udev-builtin-usb_id.c \
-	acl-util.c \
 	conf-files.c \
 	cgroup-util.c \
 	dev-setup.c \
@@ -60,7 +59,6 @@ libudev_core_la_SOURCES = \
 	hashmap.c \
 	label.c \
 	log.c \
-	logind-acl.c \
 	mkdir.c \
 	path-util.c \
 	sd-daemon.c \
@@ -71,7 +69,6 @@ libudev_core_la_SOURCES = \
 	util.c
 
 noinst_HEADERS = \
-	acl-util.h \
 	cgroup-util.h \
 	conf-files.h \
 	def.h \
@@ -81,7 +78,6 @@ noinst_HEADERS = \
 	ioprio.h \
 	label.h \
 	log.h \
-	logind-acl.h \
 	macro.h \
 	missing.h \
 	mkdir.h \
@@ -116,13 +112,6 @@ libudev_core_la_LIBADD += $(KMOD_LIBS)
 endif
 endif
 
-if HAVE_ACL
-libudev_core_la_SOURCES += \
-	udev-builtin-uaccess.c
-
-libudev_core_la_LIBADD += \
-        $(ACL_LIBS)
-endif
 
 
 libudev_core_la_CPPFLAGS = \
