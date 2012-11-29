@@ -52,44 +52,18 @@ libudev_core_la_SOURCES = \
 	udev-builtin-net_id.c \
 	udev-builtin-path_id.c \
 	udev-builtin-usb_id.c \
-	conf-files.c \
-	cgroup-util.c \
 	dev-setup.c \
-	exit-status.c \
-	hashmap.c \
 	label.c \
-	log.c \
 	mkdir.c \
-	path-util.c \
 	sd-daemon.c \
-	sd-login.c \
-	set.c \
-	strbuf.c \
-	strv.c \
-	util.c
+	sd-login.c
 
 noinst_HEADERS = \
-	cgroup-util.h \
-	conf-files.h \
-	def.h \
 	dev-setup.h \
-	exit-status.h \
-	hashmap.h \
-	ioprio.h \
 	label.h \
-	log.h \
-	macro.h \
-	missing.h \
 	mkdir.h \
-	path-util.h \
 	sd-daemon.h \
-	sd-login.h \
-	set.h \
-	socket-util.h \
-	sparse-endian.h \
-	strbuf.h \
-	strv.h \
-	util.h
+	sd-login.h
 
 include_HEADERS = \
 	udev.h

@@ -22,11 +22,37 @@ libudev_la_SOURCES =\
 	libudev-enumerate.c \
 	libudev-monitor.c \
 	libudev-queue.c \
-	libudev-hwdb.c
+	libudev-hwdb.c \
+	cgroup-util.c \
+	conf-files.c \
+	exit-status.c \
+	hashmap.c \
+	log.c \
+	path-util.c \
+	set.c \
+	strbuf.c \
+	strv.c \
+	util.c
 
 noinst_HEADERS = \
 	libudev-hwdb-def.h \
-	libudev-private.h
+	libudev-private.h \
+	cgroup-util.h \
+	conf-files.h \
+	def.h \
+	exit-status.h \
+	hashmap.h \
+	ioprio.h \
+	log.h \
+	macro.h \
+	missing.h \
+	path-util.h \
+	set.h \
+	socket-util.h \
+	sparse-endian.h \
+	strbuf.h \
+	strv.h \
+	util.h
 
 include_HEADERS = \
 	libudev.h
