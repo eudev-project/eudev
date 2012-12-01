@@ -5,6 +5,7 @@ LIBUDEV_REVISION=0
 LIBUDEV_AGE=2
 
 AM_CPPFLAGS = \
+	-include $(top_builddir)/config.h \
 	-DUDEV_CONF_FILE=\"$(udevconffile)\" \
 	-DUDEV_HWDB_BIN=\"$(udevhwdbbin)\" \
 	-I $(top_srcdir)/src/udev
