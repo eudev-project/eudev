@@ -49,6 +49,7 @@ BUILT_SOURCES = \
 libgudev_1_0_la_CPPFLAGS = \
 	$(AM_CPPFLAGS) \
 	-I$(top_srcdir)/src\
+	-I$(top_builddir)/src\
 	-I$(top_srcdir)/src/libudev \
 	-I$(top_builddir)/src/gudev \
 	-I$(top_srcdir)/src/gudev \
@@ -104,8 +105,9 @@ GUdev_1_0_gir_CFLAGS = \
 	-D_GUDEV_COMPILATION \
 	-D_GUDEV_WORK_AROUND_DEV_T_BUG \
 	-I$(top_srcdir)/src \
-	-I$(top_srcdir)/src/gdev \
-	-I$(top_builddir)/src/gdev
+	-I$(top_builddir)/src \
+	-I$(top_srcdir)/src/gudev \
+	-I$(top_builddir)/src/gudev
 
 GUdev_1_0_gir_LIBS = \
 	$(top_builddir)/src/gudev/libgudev-1.0.la \
