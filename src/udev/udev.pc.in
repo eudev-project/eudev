@@ -4,4 +4,4 @@ udevdir=@udevlibexecdir@
 
 Name: udev
 Description: Part of eudev
-Version: @VERSION@
+Version: @UDEV_VERSION@

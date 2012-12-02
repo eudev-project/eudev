@@ -5,7 +5,7 @@ includedir=@includedir@
 
 Name: gudev-1.0
 Description: GObject bindings for libudev
-Version: @VERSION@
+Version: @UDEV_VERSION@
 Requires: glib-2.0, gobject-2.0
 Libs: -L${libdir} -lgudev-1.0
 Cflags: -I${includedir}/gudev-1.0
