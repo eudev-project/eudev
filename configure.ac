@@ -237,8 +237,6 @@ AS_IF([test "x$enable_gtk_doc" = "xyes" -a "x$XSLTPROC" = x], [
 	AC_MSG_ERROR([*** GTK doc requested but xsltproc not found])
 ])
 
-DISTCHECK_CONFIGURE_FLAGS=--enable-gtk-doc
-
 # ------------------------------------------------------------------------------
 have_manpages=no
 AC_ARG_ENABLE(manpages, AS_HELP_STRING([--disable-manpages], [disable manpages]))
