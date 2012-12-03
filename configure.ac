@@ -251,15 +251,14 @@ AM_CONDITIONAL(ENABLE_MANPAGES, [test "x$have_manpages" = "xyes"])
 
 # ------------------------------------------------------------------------------
 
-LIBKMOD=
-AC_ARG_ENABLE([modules], [AS_HELP_STRING([--disable-modules], [Disable loadable module support @<:@default=enabled@:>@])], [have_modules=no], [have_modules=yes])
-AC_ARG_ENABLE([libkmod], [AS_HELP_STRING([--enable-libkmod], [Enable module loading through kmod @<:@default=disabled@:>@])], [have_libkmod=yes], [have_libkmod=no])
+AC_ARG_ENABLE(modules, [AS_HELP_STRING([--disable-modules], [Disable loadable module support @<:@default=enabled@:>@])])
+AC_ARG_ENABLE(libkmod, [AS_HELP_STRING([--enable-libkmod], [Enable module loading through kmod @<:@default=disabled@:>@])], [], [enable_libkmod=no])
 
-if test "x$have_modules" == "xyes"; then
+if test "x${enable_modules}" = xyes; then
 
 	AC_DEFINE([HAVE_MODULES], [1], [Define if we support loading modules])
 
-	AS_IF([test "x$have_libkmod" != xno],
+	AS_IF([test "x${enable_libkmod}" = xyes],
 	  [AC_CHECK_LIB([kmod], [main],
 	    [PKG_CHECK_MODULES(KMOD, [libkmod >= 5])
 	     AC_SUBST([LIBKMOD], ["-lkmod"])
@@ -267,13 +266,13 @@ if test "x$have_modules" == "xyes"; then
 		       [Define if you have libkmod])
 	    ],
 	    [AC_MSG_FAILURE(
-	       [--with-libkmod was given, but test for kmod failed])],
+	       [--enable-libkmod was given, but test for kmod failed])],
 	    [-lkmod])])
 
 fi
 
-AM_CONDITIONAL([HAVE_MODULES], [test "x$have_modules" == "xyes"])
-AM_CONDITIONAL([HAVE_LIBKMOD], [test "x$have_libkmod" == "xyes"])
+AM_CONDITIONAL([HAVE_MODULES], [test "x${enable_modules}" = xyes])
+AM_CONDITIONAL([HAVE_LIBKMOD], [test "x${enable_libkmod}" = xyes])
 
 
 # ------------------------------------------------------------------------------
