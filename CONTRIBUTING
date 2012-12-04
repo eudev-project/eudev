@@ -1,0 +1,165 @@
+
+CONTRIBUTING.
+
+Please read the following guidelines before contributing.
+
+1. The basic unit of contribution is a "git commit".  This will be merged into
+master by one of the team members who will review it and sign-off/commit or
+reject it.  If the commit is in another branch, it will added to HEAD/master
+using
+
+	git cherry-pick -s <tree-ish>
+
+Or if the commit is submitted as a stand alone file produce by
+
+	git format-patch <tree-ish>
+
+Then it will be committed by
+
+	git am -s 0001-foo-bar.patch
+
+Or if the commit is submitted as a github merge request, then the github web
+interface can be used.
+
+
+
+2. Work in a branch immediately off of master, do not work directly in master,
+and do not be afraid of creating a local branch for every experimental thing you
+want to try:
+
+	git checkout master		# make sure your on master
+	git branch idea1		# I've got an idea, let me work on it
+	git checkout idea1
+	<hack ... hack ... hack>
+	git commit -m "step1"		# I like what I've done so far, but I'm not finished
+	<hack ... hack ... hack>
+	git commit -m "step2"
+	<hack ... hack ... hack>
+	git commit -m "step3"
+	<hack ... hack ... hack>
+	git revert <tree-ish for step2>		# Wow step 2 was dumb
+	<hack ... hack ... hack>
+	git commit -m "step4"			# Its good now, but those
+						# commits are messy
+
+	git rebase -i <tree-ish step1>^		# start a rebase on the parent of step1
+	(drop into editor and squash commits)	# note the ^ at the end!
+	(exit editor and fix commit message)
+
+Alternatively, you can cherry-pick those commits into another prestine branch:
+
+	... its good to go! ....
+
+	git checkout master
+	git branch idea1-clean
+	git checkout idea1-clean
+	git cherry-pick <sha1-of-good-commit1>
+	git cherry-pick <sha1-of-good-commit2>
+	(pick them in any order that stacks)
+	(you can skip commits, but do them in the correct order to avoid conflits)
+	git rebase -i <tree-ish of sha1-of-good-commit1>^	# squash many commits into one
+								# note the ^ at the end!
+
+Once you are done with a local branch you can delete it using
+
+	git branch -D idea1
+
+You can delete a remote branch by doing
+
+	git push origin :idea1
+
+
+
+3. Your commit message should conform to the following standard:
+
+	file/changed: Concice and complete statement of the purpose
+
+	This is the body of the commit message.  The line above is the
+	summary.  The summary should be no more than 72 chars long.  The
+	body can be more freely formatted, but make it look nice.  Make
+	sure to reference any bug reports and other contributors.  Make
+	sure the correct authorship appears.  Reference any early commits
+	by their full shaw:
+
+		b52c6402b5b42620571c36c74a12dcb45ec1e0d6
+
+	which you can put on its own line and indent.
+
+	X-Gentoo-Bug: 400837
+	X-Gentoo-Bug-URL: https://bugs.gentoo.org/400837
+
+	Reported-by: Snoopy Coderdog <charlie@brown.org>
+	Signed-off-by: Anthony G. Basile <blueness@gentoo.org>
+
+If you commit using
+
+	git commit -s
+
+your sign-off will be automatically added.  If the authorship is wrong
+fix it by
+
+	git commit -s --author="Richard Feynmann <quantum@electrodynamics.edu>"
+
+If the message doesn't look right after you commit locally, you can fix it by
+doing
+
+	git commit --amend.
+
+Then push it to your public repo.
+
+
+4. Open an issue at
+
+	https://github.com/gentoo/eudev/issues?state=open
+
+And request a pull of your clean commit.  A team member will review it,
+discuss it and commit it to master or reject it.
+
+
+5. eudev is a peer-reviewed project.  So even team members must ask another
+team member to sign-off and commit your work.  The only exception are trivial
+commits
+
+
+6. HEAD/master must always build and must always be considered stable.
+
+
+7. Releases should be tagged and signed using
+
+	git tag -s -u <gpg name> -m "Release X"
+
+where X is the full release number.  Make sure that before you release,
+you change the value in AC_INIT of configure.ac to match the release
+number.
+
+
+8. Tarball releases should be made from HEAD/master at signed tagged points
+by doing
+
+	autogen.sh
+	./configure --enable-gtk-doc
+	make
+	make dist
+
+TODO: The build system needs to be tweaked so that --enable-gtk-doc is not needed
+and one can directly run "make dist" instead of "make; make dist".  Make sure
+the tarball is correctly named to match the tag.  If it isn't you need to
+fix configure.ac and retag.
+
+
+9. TODO: coding style for C, python, perl and autotool stuff.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	
