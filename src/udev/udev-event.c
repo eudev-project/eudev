@@ -687,9 +687,12 @@ int udev_event_spawn(struct udev_event *event,
         }
 
         /* allow programs in /usr/lib/udev/ to be called without the path */
+	/* NOTE - paths need reworking, see note in udev-rules.c */
         if (argv[0][0] != '/') {
                 util_strscpyl(program, sizeof(program), UDEV_LIBEXEC_DIR "/", argv[0], NULL);
 #ifdef HAVE_SPLIT_USR
+                if(access(program, X_OK))
+                        util_strscpyl(program, sizeof(program), "/usr/lib/udev/", argv[0], NULL);
                 if(access(program, X_OK))
                         util_strscpyl(program, sizeof(program), "/lib/udev/", argv[0], NULL);
 #endif

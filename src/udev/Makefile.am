@@ -6,6 +6,7 @@ AM_CPPFLAGS = \
 	-DROOTPREFIX=\"$(rootprefix)\" \
 	-DUDEV_HWDB_DIR=\"$(udevhwdbdir)\" \
 	-DUDEV_HWDB_BIN=\"$(udevhwdbbin)\" \
+	-DUDEV_CONF_DIR=\"$(udevconfdir)\" \
 	-DUDEV_RULES_DIR=\"$(udevrulesdir)\" \
 	-DUDEV_LIBEXEC_DIR=\"$(udevlibexecdir)\" \
 	-I $(top_srcdir)/src/libudev

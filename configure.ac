@@ -127,7 +127,7 @@ AC_ARG_ENABLE(
 	[split-usr],
 	[AS_HELP_STRING(
 		[--enable-split-usr],
-		[Assume that /bin, /sbin are not symlinks into /usr])],
+		[Include hard-coded default search paths in / and /usr])],
 	[],
 	[AS_IF(
 		[test "x${ac_default_prefix}" != "x${with_rootprefix}"],
@@ -137,7 +137,7 @@ AC_ARG_ENABLE(
 
 AS_IF(
 	[test "x${enable_split_usr}" = "xyes"],
-	[AC_DEFINE(HAVE_SPLIT_USR, 1, [Define if /bin, /sbin are not symlinks into /usr])]
+	[AC_DEFINE(HAVE_SPLIT_USR, 1, [Define to include hard-coded default search paths in / and /usr])]
 )
 
 # Configured paths
