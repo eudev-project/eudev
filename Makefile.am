@@ -18,3 +18,8 @@ if ENABLE_MANPAGES
 SUBDIRS += \
 	man
 endif
+
+if ENABLE_RULE_GENERATOR
+SUBDIRS += \
+	rule_generator
+endif

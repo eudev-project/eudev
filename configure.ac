@@ -296,6 +296,15 @@ AC_ARG_WITH([modprobe],
 AC_SUBST([MODPROBE], ["${with_modprobe}"])
 
 # ------------------------------------------------------------------------------
+# rule_generator - persistent network and optical device rule generator
+# ------------------------------------------------------------------------------
+AC_ARG_ENABLE([rule_generator],
+        AS_HELP_STRING([--enable-rule_generator], [enable persistent network, cdrom support]),
+        [], [enable_rule_generator=no])
+
+AM_CONDITIONAL([ENABLE_RULE_GENERATOR], [test "x$enable_rule_generator" = xyes])
+
+# ------------------------------------------------------------------------------
 
 AC_CONFIG_FILES([Makefile
                  docs/Makefile
@@ -308,6 +317,7 @@ AC_CONFIG_FILES([Makefile
                  keymaps/Makefile
                  man/Makefile
                  rules/Makefile
+                 rule_generator/Makefile
                  src/Makefile
                  src/accelerometer/Makefile
                  src/ata_id/Makefile
