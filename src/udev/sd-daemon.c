@@ -386,6 +386,7 @@ _sd_export_ int sd_is_socket_unix(int fd, int type, int listening, const char *p
         return 1;
 }
 
+#if OBSOLETE
 _sd_export_ int sd_is_mq(int fd, const char *path) {
 #if !defined(__linux__)
         return 0;
@@ -422,6 +423,7 @@ _sd_export_ int sd_is_mq(int fd, const char *path) {
         return 1;
 #endif
 }
+#endif
 
 _sd_export_ int sd_notify(int unset_environment, const char *state) {
 #if defined(DISABLE_SYSTEMD) || !defined(__linux__) || !defined(SOCK_CLOEXEC)
