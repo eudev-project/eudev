@@ -714,7 +714,7 @@ ssize_t print_kmsg(const char *fmt, ...)
         if (fd < 0)
                 return -errno;
 
-        len = snprintf(text, sizeof(text), "<30>systemd-udevd[%u]: ", getpid());
+        len = snprintf(text, sizeof(text), "<30>udevd[%u]: ", getpid());
 
         va_start(ap, fmt);
         len += vsnprintf(text + len, sizeof(text) - len, fmt, ap);

@@ -1273,7 +1273,7 @@ int main(int argc, char *argv[])
                 sd_notify(1, "READY=1");
         }
 
-        print_kmsg("starting version " VERSION "\n");
+        print_kmsg("starting eudev version " VERSION "\n");
 
         if (!debug) {
                 int fd;
