@@ -37,6 +37,8 @@
 #include "path-util.h"
 #include "strv.h"
 
+static const char cgroup_path[] = "/sys/fs/cgroup/";
+
 int cg_enumerate_processes(const char *controller, const char *path, FILE **_f) {
         char *fs;
         int r;
@@ -522,13 +524,13 @@ static int join_path(const char *controller, const char *path, const char *suffi
 
         if (controller) {
                 if (path && suffix)
-                        t = strjoin("/sys/fs/cgroup/", controller, "/", path, "/", suffix, NULL);
+                        t = strjoin(cgroup_path, controller, "/", path, "/", suffix, NULL);
                 else if (path)
-                        t = strjoin("/sys/fs/cgroup/", controller, "/", path, NULL);
+                        t = strjoin(cgroup_path, controller, "/", path, NULL);
                 else if (suffix)
-                        t = strjoin("/sys/fs/cgroup/", controller, "/", suffix, NULL);
+                        t = strjoin(cgroup_path, controller, "/", suffix, NULL);
                 else
-                        t = strjoin("/sys/fs/cgroup/", controller, NULL);
+                        t = strjoin(cgroup_path, controller, NULL);
         } else {
                 if (path && suffix)
                         t = strjoin(path, "/", suffix, NULL);
@@ -572,8 +574,8 @@ static int check(const char *p) {
         assert(p);
 
         /* Check if this controller actually really exists */
-        cc = alloca(sizeof("/sys/fs/cgroup/") + strlen(p));
-        strcpy(stpcpy(cc, "/sys/fs/cgroup/"), p);
+        cc = alloca(sizeof(cgroup_path) + strlen(p));
+        strcpy(stpcpy(cc, cgroup_path), p);
         if (access(cc, F_OK) < 0)
                 return -errno;
 
