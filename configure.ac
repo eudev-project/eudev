@@ -23,7 +23,11 @@ AC_PROG_SED
 AC_PROG_GREP
 AC_PROG_AWK
 
-AC_PROG_CC
+AC_PROG_CC_C99
+AS_IF([test "x$ac_cv_prog_cc_c99" = "xno"], [
+  AC_MSG_ERROR([no C99 compiler found, $PACKAGE requires a C99 compiler.])
+])
+
 AC_PROG_CXX
 AC_PROG_CPP
 AC_PROG_INSTALL
@@ -41,8 +45,8 @@ PKG_CHECK_MODULES(BLKID,[blkid >= 2.20])
 
 # Checks for header files.
 AC_CHECK_HEADERS(
-    [arpa/inet.h fcntl.h inttypes.h langinfo.h limits.h locale.h malloc.h \
-     netinet/in.h stddef.h stdint.h stdlib.h string.h sys/ioctl.h sys/mount.h \
+    [arpa/inet.h fcntl.h inttypes.h langinfo.h limits.h locale.h \
+     netinet/in.h sys/ioctl.h sys/mount.h \
      sys/param.h sys/socket.h sys/statvfs.h sys/time.h sys/vfs.h syslog.h \
      termios.h unistd.h],
     [],
@@ -50,21 +54,11 @@ AC_CHECK_HEADERS(
 )
 
 # Checks for typedefs, structures, and compiler characteristics.
-AC_HEADER_STDBOOL
 AC_TYPE_UID_T
 AC_C_INLINE
-AC_TYPE_INT32_T
-AC_TYPE_INT64_T
 AC_TYPE_MODE_T
-AC_TYPE_OFF_T
 AC_TYPE_PID_T
-AC_TYPE_SIZE_T
-AC_TYPE_SSIZE_T
 AC_CHECK_MEMBERS([struct stat.st_rdev])
-AC_TYPE_UINT16_T
-AC_TYPE_UINT32_T
-AC_TYPE_UINT64_T
-AC_TYPE_UINT8_T
 AC_CHECK_DECLS([gettid, pivot_root, name_to_handle_at, accept4], [], [], [[#include <sys/types.h>
 #include <unistd.h>
 #include <sys/mount.h>
@@ -73,25 +67,19 @@ AC_CHECK_DECLS([gettid, pivot_root, name_to_handle_at, accept4], [], [], [[#incl
 
 
 # Checks for library functions.
-AC_FUNC_ALLOCA
 AC_FUNC_CHOWN
 AC_FUNC_FORK
 AC_FUNC_FSEEKO
 AC_FUNC_GETGROUPS
 AC_FUNC_LSTAT_FOLLOWS_SLASHED_SYMLINK
 AC_HEADER_MAJOR
-AC_FUNC_MALLOC
 AC_FUNC_MKTIME
 AC_FUNC_MMAP
-AC_FUNC_REALLOC
-AC_FUNC_STRNLEN
-AC_FUNC_STRTOD
 
 AC_CHECK_FUNCS(
-    [alarm dup2 ftruncate localtime_r memchr memmove mempcpy memset \
-     mkdir munmap nl_langinfo rmdir setlocale socket stpcpy strcasecmp \
-     strchr strcspn strdup strerror strndup strpbrk strrchr strspn \
-     strstr strtol strtoul strtoull uname],
+    [alarm dup2 ftruncate localtime_r mempcpy \
+     mkdir munmap nl_langinfo rmdir setlocale socket stpcpy \
+     uname],
     [],
     [AC_MSG_ERROR([*** POSIX function not found])]
 )
