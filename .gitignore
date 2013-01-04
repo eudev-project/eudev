@@ -45,6 +45,8 @@ src/gudev/gudevenumtypes.c
 src/gudev/gudevenumtypes.h
 src/gudev/gudevmarshal.c
 src/gudev/gudevmarshal.h
+src/gudev/GUdev-1.0.gir
+src/gudev/GUdev-1.0.typelib
 
 src/keymap/check-keymaps.sh
 src/keymap/keyboard-force-release.sh

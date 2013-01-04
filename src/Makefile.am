@@ -23,3 +23,8 @@ if ENABLE_KEYMAP
 SUBDIRS += \
         keymap
 endif
+
+if ENABLE_LEGACYLIB
+SUBDIRS += \
+	libudev-legacy
+endif

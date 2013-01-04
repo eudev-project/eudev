@@ -219,6 +219,12 @@ AC_ARG_ENABLE([keymap],
 AM_CONDITIONAL([ENABLE_KEYMAP], [test "x$enable_keymap" = "xyes"])
 
 # ------------------------------------------------------------------------------
+AC_ARG_ENABLE([legacylib],
+       AS_HELP_STRING([--enable-legacylib], [enable building of libudev.so.0 for legacy support @<:@default=disabled@:>@]),
+       [], [enable_legacylib=no])
+AM_CONDITIONAL([ENABLE_LEGACYLIB], [test "x$enable_legacylib" = "xyes"])
+
+# ------------------------------------------------------------------------------
 
 GTK_DOC_CHECK([1.18],[--flavour no-tmpl])
 AM_CONDITIONAL([ENABLE_GTK_DOC],[test "x$enable_gtk_doc" = "xyes"])
@@ -302,6 +308,7 @@ AC_CONFIG_FILES([Makefile
                  src/keymap/keyboard-force-release.sh
                  src/libudev/Makefile
                  src/libudev/libudev.pc
+                 src/libudev-legacy/Makefile
                  src/udev/Makefile
                  src/udev/udev.pc
                  test/Makefile])
