@@ -138,6 +138,8 @@ AC_SUBST([udevconfdir],[${sysconfdir}/udev])
 AC_SUBST([udevconffile],[${udevconfdir}/udev.conf])
 AC_SUBST([udevhwdbdir],[${udevconfdir}/hwdb.d])
 AC_SUBST([udevhwdbbin],[${udevconfdir}/hwdb.bin])
+
+# udevlibexecdir paths
 AC_SUBST([udevkeymapdir],[${udevlibexecdir}/keymaps])
 AC_SUBST([udevkeymapforceredir],[${udevkeymapdir}/force-release])
 AC_SUBST([udevrulesdir],[${udevlibexecdir}/rules.d])
