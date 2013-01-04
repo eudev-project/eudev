@@ -4312,7 +4312,7 @@ int execute_command(const char *command, char *const argv[])
 
         if (pid == 0) {
 
-                execv(command, argv);
+                execvp(command, argv);
 
                 log_error("Failed to execute %s: %m", command);
                 _exit(EXIT_FAILURE);
