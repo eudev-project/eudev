@@ -92,8 +92,6 @@ global:
         udev_set_userdata;
         udev_unref;
         udev_util_encode_string;
-local:
-        *;
 };
 
 LIBUDEV_189 {
@@ -108,3 +106,8 @@ global:
         udev_hwdb_unref;
         udev_hwdb_get_properties_list_entry;
 } LIBUDEV_189;
+
+LIBUDEV_internal {
+global:
+        *;
+} LIBUDEV_196;

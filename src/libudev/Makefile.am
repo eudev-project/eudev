@@ -4,6 +4,16 @@ LIBUDEV_CURRENT=3
 LIBUDEV_REVISION=0
 LIBUDEV_AGE=2
 
+define move-to-rootlibdir
+        if test "$(libdir)" != "$(rootlibdir)"; then \
+                $(MKDIR_P) $(DESTDIR)$(rootlibdir) && \
+                so_img_name=$$(readlink $(DESTDIR)$(libdir)/$$libname) && \
+                so_img_rel_target_prefix=$$(echo $(libdir) | sed 's,\(^/\|\)[^/][^/]*,..,g') && \
+                ln -sf $$so_img_rel_target_prefix$(rootlibdir)/$$so_img_name $(DESTDIR)$(libdir)/$$libname && \
+                mv $(DESTDIR)$(libdir)/$$libname.* $(DESTDIR)$(rootlibdir); \
+        fi
+endef
+
 AM_CPPFLAGS = \
 	-include $(top_builddir)/config.h \
 	-DUDEV_CONF_FILE=\"$(udevconffile)\" \
@@ -56,10 +66,6 @@ noinst_HEADERS = \
 include_HEADERS = \
 	libudev.h
 
-libudev_la_CFLAGS = \
-	$(AM_CFLAGS) \
-	-fvisibility=hidden
-
 libudev_la_LDFLAGS = \
 	$(AM_LDFLAGS) \
 	-version-info $(LIBUDEV_CURRENT):$(LIBUDEV_REVISION):$(LIBUDEV_AGE) \
@@ -67,13 +73,11 @@ libudev_la_LDFLAGS = \
 
 
 libudev_private_la_SOURCES =\
-	$(libudev_la_SOURCES) \
 	libudev-device-private.c \
 	libudev-queue-private.c
 
-libudev_private_la_CFLAGS = \
-	$(AM_CFLAGS) \
-	-fvisibility=default
+libudev_private_la_LIBADD =\
+	libudev.la
 
 noinst_LTLIBRARIES = \
 	libudev-private.la
@@ -87,3 +91,9 @@ EXTRA_DIST = \
 
 CLEANFILES = \
 	libudev.pc
+
+install-exec-hook:
+	libname=libudev.so && $(move-to-rootlibdir)
+
+uninstall-hook:
+	rm -f $(DESTDIR)$(rootlibdir)/libudev.so*
