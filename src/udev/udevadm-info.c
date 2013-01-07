@@ -432,7 +432,7 @@ static int uinfo(struct udev *udev, int argc, char *argv[])
                         export_prefix = optarg;
                         break;
                 case 'V':
-                        printf("%s\n", VERSION);
+                        printf("%s\n", UDEV_VERSION);
                         goto exit;
                 case 'h':
                         printf("%s\n", usage);

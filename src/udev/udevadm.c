@@ -34,7 +34,7 @@ void udev_main_log(struct udev *udev, int priority,
 
 static int adm_version(struct udev *udev, int argc, char *argv[])
 {
-        printf("%s\n", VERSION);
+        printf("%s\n", UDEV_VERSION);
         return 0;
 }
 

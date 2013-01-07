@@ -1141,7 +1141,7 @@ int main(int argc, char *argv[])
                                "\n");
                         goto exit;
                 case 'V':
-                        printf("%s\n", VERSION);
+                        printf("%s\n", UDEV_VERSION);
                         goto exit;
                 default:
                         goto exit;
