@@ -41,9 +41,6 @@ static const struct udev_builtin *builtins[] = {
         [UDEV_BUILTIN_NET_ID] = &udev_builtin_net_id,
         [UDEV_BUILTIN_PATH_ID] = &udev_builtin_path_id,
         [UDEV_BUILTIN_USB_ID] = &udev_builtin_usb_id,
-#ifdef HAVE_ACL
-        [UDEV_BUILTIN_UACCESS] = &udev_builtin_uaccess,
-#endif
 };
 
 void udev_builtin_init(struct udev *udev)

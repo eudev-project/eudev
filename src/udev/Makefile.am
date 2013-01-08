@@ -56,16 +56,12 @@ libudev_core_la_SOURCES = \
 	udev-builtin-usb_id.c \
 	dev-setup.c \
 	label.c \
-	mkdir.c \
-	sd-daemon.c \
-	sd-login.c
+	mkdir.c
 
 noinst_HEADERS = \
 	dev-setup.h \
 	label.h \
-	mkdir.h \
-	sd-daemon.h \
-	sd-login.h
+	mkdir.h
 
 include_HEADERS = \
 	udev.h
