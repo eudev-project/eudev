@@ -46,7 +46,6 @@
 
 #include "udev.h"
 #include "def.h"
-#include "sd-daemon.h"
 #include "cgroup-util.h"
 #include "dev-setup.h"
 
@@ -980,42 +979,6 @@ static int convert_db(struct udev *udev)
         return 0;
 }
 
-static int systemd_fds(struct udev *udev, int *rctrl, int *rnetlink)
-{
-        int ctrl = -1, netlink = -1;
-        int fd, n;
-
-        n = sd_listen_fds(true);
-        if (n <= 0)
-                return -1;
-
-        for (fd = SD_LISTEN_FDS_START; fd < n + SD_LISTEN_FDS_START; fd++) {
-                if (sd_is_socket(fd, AF_LOCAL, SOCK_SEQPACKET, -1)) {
-                        if (ctrl >= 0)
-                                return -1;
-                        ctrl = fd;
-                        continue;
-                }
-
-                if (sd_is_socket(fd, AF_NETLINK, SOCK_RAW, -1)) {
-                        if (netlink >= 0)
-                                return -1;
-                        netlink = fd;
-                        continue;
-                }
-
-                return -1;
-        }
-
-        if (ctrl < 0 || netlink < 0)
-                return -1;
-
-        log_debug("ctrl=%i netlink=%i\n", ctrl, netlink);
-        *rctrl = ctrl;
-        *rnetlink = netlink;
-        return 0;
-}
-
 /*
  * read the kernel commandline, in case we need to get into debug mode
  *   udev.log-priority=<level>              syslog priority
@@ -1187,45 +1150,24 @@ int main(int argc, char *argv[])
                 }
         }
 
-        if (systemd_fds(udev, &fd_ctrl, &fd_netlink) >= 0) {
-                /* get control and netlink socket from systemd */
-                udev_ctrl = udev_ctrl_new_from_fd(udev, fd_ctrl);
-                if (udev_ctrl == NULL) {
-                        log_error("error taking over udev control socket");
-                        rc = 1;
-                        goto exit;
-                }
-
-                monitor = udev_monitor_new_from_netlink_fd(udev, "kernel", fd_netlink);
-                if (monitor == NULL) {
-                        log_error("error taking over netlink socket\n");
-                        rc = 3;
-                        goto exit;
-                }
-
-                /* get our own cgroup, we regularly kill everything udev has left behind */
-                if (cg_get_by_pid(SYSTEMD_CGROUP_CONTROLLER, 0, &udev_cgroup) < 0)
-                        udev_cgroup = NULL;
-        } else {
-                /* open control and netlink socket */
-                udev_ctrl = udev_ctrl_new(udev);
-                if (udev_ctrl == NULL) {
-                        fprintf(stderr, "error initializing udev control socket");
-                        log_error("error initializing udev control socket");
-                        rc = 1;
-                        goto exit;
-                }
-                fd_ctrl = udev_ctrl_get_fd(udev_ctrl);
-
-                monitor = udev_monitor_new_from_netlink(udev, "kernel");
-                if (monitor == NULL) {
-                        fprintf(stderr, "error initializing netlink socket\n");
-                        log_error("error initializing netlink socket\n");
-                        rc = 3;
-                        goto exit;
-                }
-                fd_netlink = udev_monitor_get_fd(monitor);
+        /* open control and netlink socket */
+        udev_ctrl = udev_ctrl_new(udev);
+        if (udev_ctrl == NULL) {
+                fprintf(stderr, "error initializing udev control socket");
+                log_error("error initializing udev control socket");
+                rc = 1;
+                goto exit;
         }
+        fd_ctrl = udev_ctrl_get_fd(udev_ctrl);
+
+        monitor = udev_monitor_new_from_netlink(udev, "kernel");
+        if (monitor == NULL) {
+                fprintf(stderr, "error initializing netlink socket\n");
+                log_error("error initializing netlink socket\n");
+                rc = 3;
+                goto exit;
+        }
+        fd_netlink = udev_monitor_get_fd(monitor);
 
         if (udev_monitor_enable_receiving(monitor) < 0) {
                 fprintf(stderr, "error binding netlink socket\n");
@@ -1269,8 +1211,10 @@ int main(int argc, char *argv[])
                 setsid();
 
                 write_one_line_file("/proc/self/oom_score_adj", "-1000");
+#if OBSOLETE_REMOVE
         } else {
                 sd_notify(1, "READY=1");
+#endif
         }
 
         print_kmsg("starting eudev version " VERSION "\n");
