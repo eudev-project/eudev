@@ -38,9 +38,9 @@ if [ -n "$UDEV_LOG" ]; then
 	fi
 fi
 
-RULES_FILE='/etc/udev/rules.d/70-persistent-net.rules'
+RULES_FILE='@udevconfdir@/rules.d/70-persistent-net.rules'
 
-. /lib/udev/rule_generator.functions
+. @udevlibexecdir@/rule_generator.functions
 
 interface_name_taken() {
 	local value="$(find_all_rules 'NAME=' $INTERFACE)"
