@@ -9,6 +9,7 @@ AM_CPPFLAGS = \
 	-DUDEV_CONF_DIR=\"$(udevconfdir)\" \
 	-DUDEV_RULES_DIR=\"$(udevrulesdir)\" \
 	-DUDEV_LIBEXEC_DIR=\"$(udevlibexecdir)\" \
+	-DUDEV_VERSION=\"$(UDEV_VERSION)\" \
 	-I $(top_srcdir)/src/libudev
 
 sbin_PROGRAMS = \
