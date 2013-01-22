@@ -246,7 +246,7 @@ AM_CONDITIONAL(ENABLE_MANPAGES, [test "x$have_manpages" = "xyes"])
 
 # ------------------------------------------------------------------------------
 
-AC_ARG_ENABLE(modules, [AS_HELP_STRING([--disable-modules], [Disable loadable module support @<:@default=enabled@:>@])])
+AC_ARG_ENABLE(modules, [AS_HELP_STRING([--disable-modules], [Disable loadable module support @<:@default=enabled@:>@])], [], [enable_modules=yes])
 AC_ARG_ENABLE(libkmod, [AS_HELP_STRING([--enable-libkmod], [Enable module loading through kmod @<:@default=disabled@:>@])], [], [enable_libkmod=no])
 
 if test "x${enable_modules}" = xyes; then
