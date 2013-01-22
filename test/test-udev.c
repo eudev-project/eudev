@@ -31,6 +31,7 @@
 #include <sched.h>
 #include <sys/mount.h>
 #include <sys/signalfd.h>
+#include <linux/fs.h>
 
 #include "udev.h"
 
