@@ -4300,10 +4300,10 @@ int execute_command(const char *command, char *const argv[])
 {
 
         pid_t pid;
-	int status;
+        int status;
 
-	if ((status = access(command, X_OK)) != 0)
-		return status;
+        if ((status = access(command, X_OK)) != 0)
+                return status;
 
         if ((pid = fork()) < 0) {
                 log_error("Failed to fork: %m");
@@ -4582,7 +4582,12 @@ int fopen_temporary(const char *path, FILE **_f, char **_temp_path) {
         t[k] = '.';
         stpcpy(stpcpy(t+k+1, fn), "XXXXXX");
 
+#if HAVE_DECL_MKOSTEMP
         fd = mkostemp(t, O_WRONLY|O_CLOEXEC);
+#else
+        fd = mkstemp(t);
+        fcntl(t, F_SETFD, FD_CLOEXEC);
+#endif
         if (fd < 0) {
                 free(t);
                 return -errno;
