@@ -4586,7 +4586,7 @@ int fopen_temporary(const char *path, FILE **_f, char **_temp_path) {
         fd = mkostemp(t, O_WRONLY|O_CLOEXEC);
 #else
         fd = mkstemp(t);
-        fcntl(t, F_SETFD, FD_CLOEXEC);
+        fcntl(fd, F_SETFD, FD_CLOEXEC);
 #endif
         if (fd < 0) {
                 free(t);
