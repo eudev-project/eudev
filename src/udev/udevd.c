@@ -1137,6 +1137,18 @@ int main(int argc, char *argv[])
                 rc = 4;
                 goto exit;
         }
+        /* watch rules.d paths for changes */
+        inotify_add_watch(fd_inotify, UDEV_RULES_DIR,
+                          IN_DELETE | IN_MOVE | IN_CLOSE_WRITE);
+        inotify_add_watch(fd_inotify, UDEV_CONF_DIR "/rules.d",
+                          IN_DELETE | IN_MOVE | IN_CLOSE_WRITE);
+
+        if (access("/run/udev/rules.d", F_OK) < 0) {
+                mkdir_p("/run/udev/rules.d", 0755);
+        }
+        inotify_add_watch(fd_inotify, "/run/udev/rules.d",
+                          IN_DELETE | IN_MOVE | IN_CLOSE_WRITE);
+
         udev_watch_restore(udev);
 
         /* block and listen to all signals on signalfd */
