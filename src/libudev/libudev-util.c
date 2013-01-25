@@ -324,14 +324,13 @@ size_t util_strpcpy(char **dest, size_t size, const char *src)
                 if (size > 1)
                         *dest = mempcpy(*dest, src, size-1);
                 size = 0;
-                *dest[0] = '\0';
         } else {
                 if (len > 0) {
                         *dest = mempcpy(*dest, src, len);
                         size -= len;
                 }
-                *dest[0] = '\0';
         }
+        *dest[0] = '\0';
         return size;
 }
 
