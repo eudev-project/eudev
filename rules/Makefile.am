@@ -8,7 +8,6 @@ dist_udevrules_DATA = \
 	60-persistent-serial.rules \
 	60-persistent-input.rules \
 	60-persistent-alsa.rules \
-	60-persistent-storage.rules \
 	60-persistent-v4l.rules \
 	61-accelerometer.rules \
 	64-btrfs.rules \
@@ -18,6 +17,11 @@ dist_udevrules_DATA = \
 	78-sound-card.rules \
 	80-net-name-slot.rules \
 	95-udev-late.rules
+
+if HAVE_BLKID
+dist_udevrules_DATA += \
+	60-persistent-storage.rules
+endif
 
 if HAVE_MODULES
 dist_udevrules_DATA += \

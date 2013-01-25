@@ -41,8 +41,6 @@ if test -z "$GPERF" ; then
         AC_MSG_ERROR([*** gperf not found])
 fi
 
-PKG_CHECK_MODULES(BLKID,[blkid >= 2.20])
-
 # Checks for header files.
 AC_CHECK_HEADERS(
     [arpa/inet.h fcntl.h inttypes.h langinfo.h limits.h locale.h \
@@ -159,6 +157,18 @@ AC_SUBST([typelibsdir], [${libdir}/girepository-1.0])
 
 GOBJECT_INTROSPECTION_CHECK([1.31.1])
 AM_CONDITIONAL([HAVE_INTROSPECTION], [test "$enable_introspection" = "yes"])
+
+# ------------------------------------------------------------------------------
+have_blkid=no
+AC_ARG_ENABLE(blkid, AS_HELP_STRING([--disable-blkid], [Disable optional blkid support]))
+if test "x$enable_blkid" != "xno"; then
+        PKG_CHECK_MODULES([BLKID], [blkid >= 2.20],
+                [AC_DEFINE(HAVE_BLKID, 1, [Define if blkid is available]) have_blkid=yes], have_blkid=no)
+        if test "x$have_blkid" = xno -a "x$enable_blkd" = xyes; then
+                AC_MSG_ERROR([*** blkid support requested but not found])
+        fi
+fi
+AM_CONDITIONAL(HAVE_SELINUX, [test "x$have_blkid" = "xyes"])
 
 # ------------------------------------------------------------------------------
 have_selinux=no
