@@ -72,7 +72,8 @@ libudev_core_la_CFLAGS = \
 
 libudev_core_la_LIBADD = \
 	$(top_builddir)/src/libudev/libudev-private.la \
-	$(BLKID_LIBS)
+	$(BLKID_LIBS) \
+	$(SELINUX_LIBS)
 
 if HAVE_MODULES
 libudev_core_la_SOURCES += \
