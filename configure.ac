@@ -168,7 +168,7 @@ if test "x$enable_blkid" != "xno"; then
                 AC_MSG_ERROR([*** blkid support requested but not found])
         fi
 fi
-AM_CONDITIONAL(HAVE_SELINUX, [test "x$have_blkid" = "xyes"])
+AM_CONDITIONAL(HAVE_BLKID, [test "x$have_blkid" = "xyes"])
 
 # ------------------------------------------------------------------------------
 have_selinux=no
