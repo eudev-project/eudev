@@ -474,7 +474,7 @@ static int import_file(struct trie *trie, const char *filename) {
 }
 
 static void help(void) {
-        printf("Usage: udevadm hwdb [--create] [--help]\n"
+        printf("Usage: udevadm hwdb [--create] [--help] [--root <root_path>]\n"
                "  --update            update the hardware database\n"
                "  --test <modalias>   query database and print result\n"
                "  --help\n\n");
@@ -483,11 +483,13 @@ static void help(void) {
 static int adm_hwdb(struct udev *udev, int argc, char *argv[]) {
         static const struct option options[] = {
                 { "update", no_argument, NULL, 'u' },
+                { "root", required_argument, NULL, 'r' },
                 { "test", required_argument, NULL, 't' },
                 { "help", no_argument, NULL, 'h' },
                 {}
         };
-        const char *test = NULL;
+        const char *test = NULL, *root_path = NULL;
+        char *udev_hwdb_path = UDEV_HWDB_BIN;
         bool update = false;
         struct trie *trie = NULL;
         int err;
@@ -496,7 +498,7 @@ static int adm_hwdb(struct udev *udev, int argc, char *argv[]) {
         for (;;) {
                 int option;
 
-                option = getopt_long(argc, argv, "ut:h", options, NULL);
+                option = getopt_long(argc, argv, "ut:r:h", options, NULL);
                 if (option == -1)
                         break;
 
@@ -506,6 +508,9 @@ static int adm_hwdb(struct udev *udev, int argc, char *argv[]) {
                         break;
                 case 't':
                         test = optarg;
+                        break;
+                case 'r':
+                        root_path = optarg;
                         break;
                 case 'h':
                         help();
@@ -542,7 +547,7 @@ static int adm_hwdb(struct udev *udev, int argc, char *argv[]) {
                 }
                 trie->nodes_count++;
 
-                err = conf_files_list_strv(&files, ".hwdb", (const char **)conf_file_dirs);
+                err = conf_files_list_strv(&files, root_path, ".hwdb", (const char **)conf_file_dirs);
                 if (err < 0) {
                         log_error("failed to enumerate hwdb files: %s\n", strerror(-err));
                         rc = EXIT_FAILURE;
@@ -570,11 +575,24 @@ static int adm_hwdb(struct udev *udev, int argc, char *argv[]) {
                 log_debug("strings dedup'ed: %8zu bytes (%8zu)\n",
                           trie->strings->dedup_len, trie->strings->dedup_count);
 
-                mkdir_parents(UDEV_HWDB_BIN, 0755);
-                err = trie_store(trie, UDEV_HWDB_BIN);
+                if (root_path) {
+                    if (asprintf(&udev_hwdb_path,
+                                 "%s/%s", root_path, udev_hwdb_path) < 0) {
+                        rc = EXIT_FAILURE;
+                        goto out;
+                    }
+                }
+
+                mkdir_parents(udev_hwdb_path, 0755);
+                err = trie_store(trie, udev_hwdb_path);
+
+                if (root_path) {
+                    free(udev_hwdb_path);
+                }
+
                 if (err < 0) {
                         log_error("Failure writing hardware database '%s': %s",
-                        UDEV_HWDB_BIN, strerror(-err));
+                        udev_hwdb_path, strerror(-err));
                         rc = EXIT_FAILURE;
                 }
         }

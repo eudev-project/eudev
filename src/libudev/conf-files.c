@@ -37,11 +37,27 @@
 #include "hashmap.h"
 #include "conf-files.h"
 
-static int files_add(Hashmap *h, const char *path, const char *suffix) {
+static int files_add(Hashmap *h,
+                     const char *prefix,
+                     const char *path,
+                     const char *suffix) {
         DIR *dir;
         int r = 0;
 
-        dir = opendir(path);
+        if (prefix) {
+            char *p = NULL;
+
+            if (asprintf(&p, "%s/%s", prefix, path) < 0) {
+                r = -ENOMEM;
+                goto finish;
+            }
+
+            dir = opendir(p);
+            free(p);
+        } else {
+            dir = opendir(path);
+        }
+
         if (!dir) {
                 if (errno == ENOENT)
                         return 0;
@@ -90,7 +106,10 @@ static int base_cmp(const void *a, const void *b) {
         return strcmp(path_get_file_name(s1), path_get_file_name(s2));
 }
 
-int conf_files_list_strv(char ***strv, const char *suffix, const char **dirs) {
+int conf_files_list_strv(char ***strv,
+                         const char *prefix,
+                         const char *suffix,
+                         const char **dirs) {
         Hashmap *fh = NULL;
         char **files = NULL;
         const char **p;
@@ -105,7 +124,7 @@ int conf_files_list_strv(char ***strv, const char *suffix, const char **dirs) {
         }
 
         STRV_FOREACH(p, dirs) {
-                r = files_add(fh, *p, suffix);
+                r = files_add(fh, prefix, *p, suffix);
                 if (r < 0)
                         log_warning("Failed to search for files in %s: %s",
                                     *p, strerror(-r));
@@ -126,7 +145,10 @@ finish:
         return r;
 }
 
-int conf_files_list(char ***strv, const char *suffix, const char *dir, ...) {
+int conf_files_list(char ***strv,
+                    const char *prefix,
+                    const char *suffix,
+                    const char *dir, ...) {
         char **dirs = NULL;
         va_list ap;
         int r;
@@ -145,7 +167,7 @@ int conf_files_list(char ***strv, const char *suffix, const char *dir, ...) {
         }
         strv_uniq(dirs);
 
-        r = conf_files_list_strv(strv, suffix, (const char **)dirs);
+        r = conf_files_list_strv(strv, prefix, suffix, (const char **)dirs);
 
 finish:
         strv_free(dirs);
