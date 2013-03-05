@@ -1638,12 +1638,8 @@ _public_ int udev_device_has_tag(struct udev_device *udev_device, const char *ta
 
         if (udev_device == NULL)
                 return false;
-        if (!udev_device->info_loaded)
-                udev_device_read_db(udev_device, NULL);
         list_entry = udev_device_get_tags_list_entry(udev_device);
-        if (udev_list_entry_get_by_name(list_entry, tag) != NULL)
-                return true;
-        return false;
+        return (udev_list_entry_get_by_name(list_entry, tag) != NULL) ? true : false;
 }
 
 #define ENVP_SIZE                        128
