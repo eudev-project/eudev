@@ -242,14 +242,12 @@ char* startswith_no_case(const char *s, const char *prefix) {
         assert(prefix);
 
         a = s, b = prefix;
-        for (;;) {
-                if (*b == 0)
-                        return (char*) a;
-                if (tolower(*a) != tolower(*b))
-                        return NULL;
-
-                a++, b++;
-        }
+	
+	for (; *b; a++, b++){
+		if (tolower(*a) != tolower(*b))
+			return NULL;
+	}
+	return (char*) a;
 }
 
 bool first_word(const char *s, const char *word) {
