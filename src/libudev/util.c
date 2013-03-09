@@ -229,20 +229,10 @@ char* endswith(const char *s, const char *postfix) {
 }
 
 char* startswith(const char *s, const char *prefix) {
-        const char *a, *b;
-
         assert(s);
         assert(prefix);
 
-        a = s, b = prefix;
-        for (;;) {
-                if (*b == 0)
-                        return (char*) a;
-                if (*a != *b)
-                        return NULL;
-
-                a++, b++;
-        }
+	return !memcmp(s, prefix, strlen(prefix)) ? (char*) s : NULL;
 }
 
 char* startswith_no_case(const char *s, const char *prefix) {
