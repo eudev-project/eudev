@@ -36,10 +36,6 @@ AC_PROG_MAKE_SET
 
 AC_PATH_PROG([M4], [m4])
 AC_PATH_PROG([XSLTPROC], [xsltproc])
-AC_PATH_TOOL(GPERF, gperf)
-if test -z "$GPERF" ; then
-        AC_MSG_ERROR([*** gperf not found])
-fi
 
 # Checks for header files.
 AC_CHECK_HEADERS(
@@ -224,8 +220,16 @@ AM_CONDITIONAL([ENABLE_GUDEV], [test "x$enable_gudev" = "xyes"])
 
 # ------------------------------------------------------------------------------
 AC_ARG_ENABLE([keymap],
-       AS_HELP_STRING([--disable-keymap], [disable keymap fixup support @<:@default=enabled@:>@]),
-       [], [enable_keymap=yes])
+        AS_HELP_STRING([--disable-keymap], [disable keymap fixup support @<:@default=enabled@:>@]),
+        [], [enable_keymap=yes])
+
+if test "x$enable_keymap" = "xyes"; then
+        AC_PATH_TOOL(GPERF, gperf)
+        if test -z "$GPERF" ; then
+                AC_MSG_ERROR([*** gperf not found])
+        fi
+fi
+
 AM_CONDITIONAL([ENABLE_KEYMAP], [test "x$enable_keymap" = "xyes"])
 
 # ------------------------------------------------------------------------------
