@@ -25,7 +25,7 @@ AC_PROG_AWK
 
 AC_PROG_CC_C99
 AS_IF([test "x$ac_cv_prog_cc_c99" = "xno"], [
-  AC_MSG_ERROR([no C99 compiler found, $PACKAGE requires a C99 compiler.])
+        AC_MSG_ERROR([no C99 compiler found, $PACKAGE requires a C99 compiler.])
 ])
 
 AC_PROG_CXX
@@ -39,12 +39,12 @@ AC_PATH_PROG([XSLTPROC], [xsltproc])
 
 # Checks for header files.
 AC_CHECK_HEADERS(
-    [arpa/inet.h fcntl.h inttypes.h langinfo.h limits.h locale.h \
-     netinet/in.h sys/ioctl.h sys/mount.h \
-     sys/param.h sys/socket.h sys/statvfs.h sys/time.h sys/vfs.h syslog.h \
-     termios.h unistd.h],
-    [],
-    [AC_MSG_ERROR([*** POSIX header not found])]
+        [arpa/inet.h fcntl.h inttypes.h langinfo.h limits.h locale.h \
+         netinet/in.h sys/ioctl.h sys/mount.h \
+         sys/param.h sys/socket.h sys/statvfs.h sys/time.h sys/vfs.h syslog.h \
+         termios.h unistd.h],
+        [],
+        [AC_MSG_ERROR([*** POSIX header not found])]
 )
 
 # Checks for typedefs, structures, and compiler characteristics.
@@ -71,11 +71,11 @@ AC_FUNC_MKTIME
 AC_FUNC_MMAP
 
 AC_CHECK_FUNCS(
-    [alarm dup2 ftruncate localtime_r mempcpy \
-     mkdir munmap nl_langinfo rmdir setlocale socket stpcpy \
-     uname],
-    [],
-    [AC_MSG_ERROR([*** POSIX function not found])]
+        [alarm dup2 ftruncate localtime_r mempcpy \
+         mkdir munmap nl_langinfo rmdir setlocale socket stpcpy \
+         uname],
+        [],
+        [AC_MSG_ERROR([*** POSIX function not found])]
 )
 AC_SEARCH_LIBS([clock_gettime], [rt], [], [AC_MSG_ERROR([*** POSIX librt not found])])
 AC_SEARCH_LIBS([sqrt], [m], [], [AC_MSG_ERROR([*** POSIX libm not found])])
@@ -88,38 +88,38 @@ AC_SEARCH_LIBS([sqrt], [m], [], [AC_MSG_ERROR([*** POSIX libm not found])])
 # Set paths here
 
 AC_ARG_WITH(
-	[rootprefix],
-	[AS_HELP_STRING(
-		[--with-rootprefix=DIR],
-		[rootfs directory prefix for config files and kernel modules])],
-	[],
-	[with_rootprefix=${ac_default_prefix}]
+        [rootprefix],
+        [AS_HELP_STRING(
+                [--with-rootprefix=DIR],
+                [rootfs directory prefix for config files and kernel modules])],
+        [],
+        [with_rootprefix=${ac_default_prefix}]
 )
 
 AC_ARG_WITH(
-	[rootlibdir],
-	[AS_HELP_STRING(
-		[--with-rootlibdir=DIR],
-		[Root directory for libraries necessary for boot])],
-	[],
-	[with_rootlibdir=${libdir}]
+        [rootlibdir],
+        [AS_HELP_STRING(
+                [--with-rootlibdir=DIR],
+                [Root directory for libraries necessary for boot])],
+        [],
+        [with_rootlibdir=${libdir}]
 )
 
 AC_ARG_ENABLE(
-	[split-usr],
-	[AS_HELP_STRING(
-		[--enable-split-usr],
-		[Include hard-coded default search paths in / and /usr])],
-	[],
-	[AS_IF(
-		[test "x${ac_default_prefix}" != "x${with_rootprefix}"],
-		[enable_split_usr=yes],
-		[enable_split_usr=no])]
+        [split-usr],
+        [AS_HELP_STRING(
+                [--enable-split-usr],
+                [Include hard-coded default search paths in / and /usr])],
+        [],
+        [AS_IF(
+                [test "x${ac_default_prefix}" != "x${with_rootprefix}"],
+                [enable_split_usr=yes],
+                [enable_split_usr=no])]
 )
 
 AS_IF(
-	[test "x${enable_split_usr}" = "xyes"],
-	[AC_DEFINE(HAVE_SPLIT_USR, 1, [Define to include hard-coded default search paths in / and /usr])]
+        [test "x${enable_split_usr}" = "xyes"],
+        [AC_DEFINE(HAVE_SPLIT_USR, 1, [Define to include hard-coded default search paths in / and /usr])]
 )
 
 # Configured paths
@@ -244,7 +244,7 @@ GTK_DOC_CHECK([1.18],[--flavour no-tmpl])
 AM_CONDITIONAL([ENABLE_GTK_DOC],[test "x$enable_gtk_doc" = "xyes"])
 
 AS_IF([test "x$enable_gtk_doc" = "xyes" -a "x$XSLTPROC" = x], [
-	AC_MSG_ERROR([*** GTK doc requested but xsltproc not found])
+        AC_MSG_ERROR([*** GTK doc requested but xsltproc not found])
 ])
 
 # ------------------------------------------------------------------------------
@@ -265,18 +265,18 @@ AC_ARG_ENABLE(libkmod, [AS_HELP_STRING([--enable-libkmod], [Enable module loadin
 
 if test "x${enable_modules}" = xyes; then
 
-	AC_DEFINE([HAVE_MODULES], [1], [Define if we support loading modules])
+        AC_DEFINE([HAVE_MODULES], [1], [Define if we support loading modules])
 
-	AS_IF([test "x${enable_libkmod}" = xyes],
-	  [AC_CHECK_LIB([kmod], [main],
-	    [PKG_CHECK_MODULES(KMOD, [libkmod >= 5])
-	     AC_SUBST([LIBKMOD], ["-lkmod"])
-	     AC_DEFINE([HAVE_LIBKMOD], [1],
-		       [Define if you have libkmod])
-	    ],
-	    [AC_MSG_FAILURE(
-	       [--enable-libkmod was given, but test for kmod failed])],
-	    [-lkmod])])
+        AS_IF([test "x${enable_libkmod}" = xyes],
+          [AC_CHECK_LIB([kmod], [main],
+            [PKG_CHECK_MODULES(KMOD, [libkmod >= 5])
+             AC_SUBST([LIBKMOD], ["-lkmod"])
+             AC_DEFINE([HAVE_LIBKMOD], [1],
+                       [Define if you have libkmod])
+            ],
+            [AC_MSG_FAILURE(
+               [--enable-libkmod was given, but test for kmod failed])],
+            [-lkmod])])
 
 fi
 
@@ -355,20 +355,20 @@ AC_MSG_RESULT([
         pkgconfiglibdir:         ${libdir}/pkgconfig
         sharepkgconfigdir        ${datadir}/pkgconfig
 
-	libgudev_includedir	${includedir}/gudev-1.0/gudev
+        libgudev_includedir      ${includedir}/gudev-1.0/gudev
 
-	girdir			${datadir}/gir-1.0
-	typelibsdir		${libdir}/girepository-1.0
+        girdir                   ${datadir}/gir-1.0
+        typelibsdir              ${libdir}/girepository-1.0
 ])
 
 # ------------------------------------------------------------------------------
 
 dnl Set configured scripts executable
 if test -f  src/keymap/check-keymaps.sh; then
-	chmod +x src/keymap/check-keymaps.sh
+        chmod +x src/keymap/check-keymaps.sh
 fi
 
 if test -f src/keymap/keyboard-force-release.sh; then
-	chmod +x src/keymap/keyboard-force-release.sh
+        chmod +x src/keymap/keyboard-force-release.sh
 fi
 
