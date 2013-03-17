@@ -5,13 +5,13 @@ LIBUDEV_REVISION=0
 LIBUDEV_AGE=2
 
 define move-to-rootlibdir
-        if test "$(libdir)" != "$(rootlibdir)"; then \
-                $(MKDIR_P) $(DESTDIR)$(rootlibdir) && \
-                so_img_name=$$(readlink $(DESTDIR)$(libdir)/$$libname) && \
-                so_img_rel_target_prefix=$$(echo $(libdir) | sed 's,\(^/\|\)[^/][^/]*,..,g') && \
-                ln -sf $$so_img_rel_target_prefix$(rootlibdir)/$$so_img_name $(DESTDIR)$(libdir)/$$libname && \
-                mv $(DESTDIR)$(libdir)/$$libname.* $(DESTDIR)$(rootlibdir); \
-        fi
+	if test "$(libdir)" != "$(rootlibdir)"; then \
+		$(MKDIR_P) $(DESTDIR)$(rootlibdir) && \
+		so_img_name=$$(readlink $(DESTDIR)$(libdir)/$$libname) && \
+		so_img_rel_target_prefix=$$(echo $(libdir) | sed 's,\(^/\|\)[^/][^/]*,..,g') && \
+		ln -sf $$so_img_rel_target_prefix$(rootlibdir)/$$so_img_name $(DESTDIR)$(libdir)/$$libname && \
+		mv $(DESTDIR)$(libdir)/$$libname.* $(DESTDIR)$(rootlibdir); \
+	fi
 endef
 
 AM_CPPFLAGS = \

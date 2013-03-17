@@ -189,7 +189,7 @@ static int dev_if_packed_info(struct udev_device *dev, char *ifs_str, size_t len
         pos = 0;
         strpos = 0;
         ifs_str[0] = '\0';
-        while (pos < sizeof(buf) && strpos+7 < len-2) {
+        while (pos < size && strpos+7 < len-2) {
                 struct usb_interface_descriptor *desc;
                 char if_str[8];
 
@@ -431,6 +431,17 @@ fallback:
                 const char *usb_serial;
 
                 usb_serial = udev_device_get_sysattr_value(dev_usb, "serial");
+                if (usb_serial) {
+                        const unsigned char *p;
+
+                        /* http://msdn.microsoft.com/en-us/library/windows/hardware/gg487321.aspx */
+                        for (p = (unsigned char *)usb_serial; *p != '\0'; p++)
+                                if (*p < 0x20 || *p > 0x7f || *p == ',') {
+                                        usb_serial = NULL;
+                                        break;
+                                }
+                }
+
                 if (usb_serial) {
                         util_replace_whitespace(usb_serial, serial_str, sizeof(serial_str)-1);
                         util_replace_chars(serial_str, NULL);

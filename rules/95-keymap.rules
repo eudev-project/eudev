@@ -100,8 +100,9 @@ ENV{DMI_VENDOR}=="Hewlett-Packard*", ATTR{[dmi/id]product_name}=="*2510p*|*2530p
 ENV{DMI_VENDOR}=="Hewlett-Packard*", ATTR{[dmi/id]product_name}=="*[tT][xX]2*", RUN+="keymap $name hewlett-packard-tx2"
 ENV{DMI_VENDOR}=="Hewlett-Packard", ATTR{[dmi/id]product_name}=="Presario 2100*", RUN+="keymap $name hewlett-packard-presario-2100"
 ENV{DMI_VENDOR}=="Hewlett-Packard", ATTR{[dmi/id]product_name}=="HP G62 Notebook PC", RUN+="keymap $name 0xB2 www"
-ENV{DMI_VENDOR}=="Hewlett-Packard", ATTR{[dmi/id]product_name}=="HP ProBook*", RUN+="keymap $name 0xF8 rfkill"
+ENV{DMI_VENDOR}=="Hewlett-Packard", ATTR{[dmi/id]product_name}=="HP ProBook*", RUN+="keymap $name 0xF8 rfkill 0xB2 www"
 ENV{DMI_VENDOR}=="Hewlett-Packard", ATTR{[dmi/id]product_name}=="HP EliteBook 8440p", RUN+="keymap $name hewlett-packard_elitebook-8440p"
+ENV{DMI_VENDOR}=="Hewlett-Packard", ATTR{[dmi/id]product_name}=="HDX9494NR", RUN+="keymap $name hewlett-packard-hdx9494nr"
 # HP Pavillion dv6315ea has empty DMI_VENDOR
 # quick play
 ATTR{[dmi/id]board_vendor}=="Quanta", ATTR{[dmi/id]board_name}=="30B7", ATTR{[dmi/id]board_version}=="65.2B", RUN+="keymap $name 0x88 media"
@@ -153,7 +154,8 @@ ENV{DMI_VENDOR}=="[sS][aA][mM][sS][uU][nN][gG]*", RUN+="keymap $name samsung-oth
 ENV{DMI_VENDOR}=="[sS][aA][mM][sS][uU][nN][gG]*", ATTR{[dmi/id]product_name}=="*SX20S*", RUN+="keymap $name samsung-sx20s"
 ENV{DMI_VENDOR}=="[sS][aA][mM][sS][uU][nN][gG]*", ATTR{[dmi/id]product_name}=="SQ1US", RUN+="keymap $name samsung-sq1us"
 ENV{DMI_VENDOR}=="[sS][aA][mM][sS][uU][nN][gG]*", ATTR{[dmi/id]product_name}=="*700Z*", RUN+="keymap $name 0xBA ejectcd 0x96 keyboardbrightnessup 0x97 keyboardbrightnessdown"
-ENV{DMI_VENDOR}=="[sS][aA][mM][sS][uU][nN][gG]*", ATTR{[dmi/id]product_name}=="*90X3A*", RUN+="keymap $name samsung-90x3a"
+ENV{DMI_VENDOR}=="[sS][aA][mM][sS][uU][nN][gG]*", ATTR{[dmi/id]product_name}=="*700T*", RUN+="keymap $name 0xAD leftmeta"
+ENV{DMI_VENDOR}=="[sS][aA][mM][sS][uU][nN][gG]*", ATTR{[dmi/id]product_name}=="*90X3A*|*900X3*|*900X4*", RUN+="keymap $name samsung-series-9"
 
 ENV{DMI_VENDOR}=="TOSHIBA", ATTR{[dmi/id]product_name}=="SATELLITE A100", RUN+="keymap $name toshiba-satellite_a100"
 ENV{DMI_VENDOR}=="TOSHIBA", ATTR{[dmi/id]product_name}=="Satellite A110", RUN+="keymap $name toshiba-satellite_a110"

@@ -21,7 +21,7 @@ endif
 
 if ENABLE_KEYMAP
 SUBDIRS += \
-        keymap
+	keymap
 endif
 
 if ENABLE_LEGACYLIB

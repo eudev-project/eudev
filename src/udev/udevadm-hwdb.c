@@ -474,9 +474,10 @@ static int import_file(struct trie *trie, const char *filename) {
 }
 
 static void help(void) {
-        printf("Usage: udevadm hwdb [--create] [--help] [--root <root_path>]\n"
+        printf("Usage: udevadm hwdb OPTIONS\n"
                "  --update            update the hardware database\n"
-               "  --test <modalias>   query database and print result\n"
+               "  --test=<modalias>   query database and print result\n"
+               "  --root=<path>       alternative root path in the filesystem\n"
                "  --help\n\n");
 }
 
@@ -488,7 +489,8 @@ static int adm_hwdb(struct udev *udev, int argc, char *argv[]) {
                 { "help", no_argument, NULL, 'h' },
                 {}
         };
-        const char *test = NULL, *root_path = NULL;
+        const char *test = NULL;
+        const char *root_path = NULL;
         char *udev_hwdb_path = UDEV_HWDB_BIN;
         bool update = false;
         struct trie *trie = NULL;

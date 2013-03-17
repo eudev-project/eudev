@@ -28,6 +28,7 @@ KEYMAPS = \
 	hewlett-packard-tablet \
 	hewlett-packard-tx2 \
 	hewlett-packard_elitebook-8440p \
+	hewlett-packard-hdx9494nr \
 	ibm-thinkpad-usb-keyboard-trackpoint \
 	inventec-symphony_6.0_7.0 \
 	lenovo-3000 \
@@ -54,7 +55,7 @@ KEYMAPS = \
 	onkyo \
 	oqo-model2 \
 	samsung-other \
-	samsung-90x3a \
+	samsung-series-9 \
 	samsung-sq1us \
 	samsung-sx20s \
 	toshiba-satellite_a100 \
