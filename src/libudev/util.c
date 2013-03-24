@@ -232,7 +232,7 @@ char* startswith(const char *s, const char *prefix) {
         assert(s);
         assert(prefix);
 
-	return !memcmp(s, prefix, strlen(prefix)) ? (char*) s : NULL;
+	return !strncmp(s, prefix, strlen(prefix)) ? (char*) s : NULL;
 }
 
 char* startswith_no_case(const char *s, const char *prefix) {
