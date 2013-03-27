@@ -2,7 +2,6 @@ ACLOCAL_AMFLAGS = -I m4 ${ACLOCAL_FLAGS}
 
 dist_udevrules_DATA = \
 	42-usb-hid-pm.rules \
-	50-firmware.rules \
 	50-udev-default.rules \
 	60-cdrom_id.rules \
 	60-persistent-alsa.rules \
@@ -19,6 +18,11 @@ dist_udevrules_DATA = \
 	78-sound-card.rules \
 	80-net-name-slot.rules \
 	95-udev-late.rules
+
+if ENABLE_FIRMWARE
+dist_udevrules_DATA += \
+	50-firmware.rules
+endif
 
 if HAVE_BLKID
 dist_udevrules_DATA += \

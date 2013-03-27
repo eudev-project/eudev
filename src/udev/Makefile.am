@@ -57,6 +57,11 @@ libudev_core_la_SOURCES = \
 	label.c \
 	mkdir.c
 
+if ENABLE_FIRMWARE
+libudev_core_la_SOURCES += \
+	udev-builtin-firmware.c
+endif
+
 noinst_HEADERS = \
 	dev-setup.h \
 	label.h \
