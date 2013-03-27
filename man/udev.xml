@@ -5,8 +5,8 @@
 
 <refentry id="udev">
   <refentryinfo>
-    <title>systemd</title>
-    <productname>eudev</productname>
+    <title>udev</title>
+    <productname>udev</productname>
     <authorgroup>
       <author>
         <contrib>Developer</contrib>
@@ -54,30 +54,9 @@
     sources is provided by the library libudev.</para>
   </refsect1>
 
-  <refsect1><title>Configuration</title>
-    <para>udev configuration files are placed in <filename>/etc/udev</filename>
-    and <filename>/usr/lib/udev</filename>. All empty lines or lines beginning with
-    '#' are ignored.</para>
-
-    <refsect2><title>Configuration file</title>
-      <para>udev expects its main configuration file at <filename>/etc/udev/udev.conf</filename>.
-      It consists of a set of variables allowing the user to override default udev values.
-      The following variables can be set:</para>
-      <variablelist>
-        <varlistentry>
-          <term><option>udev_log</option></term>
-          <listitem>
-            <para>The logging priority. Valid values are the numerical syslog priorities
-            or their textual representations: <option>err</option>, <option>info</option>
-            and <option>debug</option>.</para>
-          </listitem>
-        </varlistentry>
-      </variablelist>
-    </refsect2>
-
-    <refsect2><title>Rules files</title>
+  <refsect1><title>Rules files</title>
       <para>The udev rules are read from the files located in the
-      system rules directory <filename>/usr/lib/udev/rules.d</filename>,
+      system rules directory <filename>/lib/udev/rules.d</filename>,
       the volatile runtime directory <filename>/run/udev/rules.d</filename>
       and the local administration directory <filename>/etc/udev/rules.d</filename>.
       All rules files are collectively sorted and processed in lexical order,
@@ -94,9 +73,10 @@
       extensions are ignored.</para>
 
       <para>Every line in the rules file contains at least one key-value pair.
+      Except for empty lines or lines beginning with '#', which are ignored.
       There are two kinds of keys: match and assignment.
-      If all match keys are matching against its value, the rule gets applied and the
-      assignment keys get the specified value assigned.</para>
+      If all match keys match against their values, the rule gets applied and the
+      assignment keys get the specified values assigned.</para>
 
       <para>A matching rule may rename a network interface, add symlinks
       pointing to the device node, or run a specified program as part of
@@ -107,21 +87,21 @@
       operators are:</para>
       <variablelist>
         <varlistentry>
-          <term><option>==</option></term>
+          <term><literal>==</literal></term>
           <listitem>
             <para>Compare for equality.</para>
           </listitem>
         </varlistentry>
 
         <varlistentry>
-          <term><option>!=</option></term>
+          <term><literal>!=</literal></term>
           <listitem>
             <para>Compare for inequality.</para>
           </listitem>
         </varlistentry>
 
         <varlistentry>
-          <term><option>=</option></term>
+          <term><literal>=</literal></term>
           <listitem>
             <para>Assign a value to a key. Keys that represent a list are reset
             and only this single value is assigned.</para>
@@ -129,14 +109,14 @@
         </varlistentry>
 
         <varlistentry>
-          <term><option>+=</option></term>
+          <term><literal>+=</literal></term>
           <listitem>
             <para>Add the value to a key that holds a list of entries.</para>
           </listitem>
         </varlistentry>
 
         <varlistentry>
-          <term><option>:=</option></term>
+          <term><literal>:=</literal></term>
           <listitem>
             <para>Assign  a  value  to  a key finally; disallow any later changes.</para>
           </listitem>
@@ -148,7 +128,7 @@
       not only the device that has generated the event. If multiple keys that match
       a parent device are specified in a single rule, all these keys must match at
       one and the same parent device.</para>
-      <variablelist>
+      <variablelist class='udev-directives'>
         <varlistentry>
           <term><option>ACTION</option></term>
           <listitem>
@@ -297,19 +277,19 @@
       pattern characters are supported:</para>
       <variablelist>
         <varlistentry>
-          <term><option>*</option></term>
+          <term><literal>*</literal></term>
           <listitem>
             <para>Matches zero or more characters.</para>
           </listitem>
         </varlistentry>
         <varlistentry>
-          <term><option>?</option></term>
+          <term><literal>?</literal></term>
           <listitem>
             <para>Matches any single character.</para>
           </listitem>
         </varlistentry>
         <varlistentry>
-          <term><option>[]</option></term>
+          <term><literal>[]</literal></term>
           <listitem>
             <para>Matches any single character specified within the brackets. For
             example, the pattern string 'tty[SR]' would match either 'ttyS' or 'ttyR'.
@@ -322,7 +302,7 @@
       </variablelist>
 
       <para>The following keys can get values assigned:</para>
-      <variablelist>
+      <variablelist class='udev-directives'>
         <varlistentry>
           <term><option>NAME</option></term>
           <listitem>
@@ -354,7 +334,7 @@
         </varlistentry>
 
         <varlistentry>
-          <term><option>OWNER, GROUP, MODE</option></term>
+          <term><option>OWNER</option>, <option>GROUP</option>, <option>MODE</option></term>
           <listitem>
             <para>The permissions for the device node. Every specified value overrides
             the compiled-in default value.</para>
@@ -392,14 +372,31 @@
         </varlistentry>
 
         <varlistentry>
-          <term><option>RUN</option></term>
+          <term><option>RUN{<replaceable>type</replaceable>}</option></term>
           <listitem>
-            <para>Add a program to the list of programs to be executed for a specific
-            device.</para>
-            <para>If no absolute path is given, the program is expected to live in
-            /usr/lib/udev, otherwise the absolute path must be specified. The program
-            name and following arguments are separated by spaces. Single quotes can
-            be used to specify arguments with spaces.</para>
+            <para>Add a program to the list of programs to be executed after processing all the
+            rules for a specific event, depending on <literal>type</literal>:</para>
+            <variablelist>
+              <varlistentry>
+                <term><literal>program</literal></term>
+                <listitem>
+                  <para>Execute an external program specified as the assigned
+                  value. If no absolute path is given, the program is expected to live in
+                  /lib/udev, otherwise the absolute path must be specified.</para>
+                  <para>This is the default if no <replaceable>type</replaceable> is
+                  specified.</para>
+                </listitem>
+              </varlistentry>
+              <varlistentry>
+                <term><literal>builtin</literal></term>
+                <listitem>
+                  <para>As <option>program</option>, but use one of the built-in programs rather
+                  than an external one.</para>
+                </listitem>
+              </varlistentry>
+            </variablelist>
+            <para>The program name and following arguments are separated by spaces.
+            Single quotes can be used to specify arguments with spaces.</para>
             <para>This can only be used for very short-running foreground tasks. Running an
             event process for a long period of time may block all further events for
             this or a dependent device.</para>
@@ -427,10 +424,10 @@
           <term><option>IMPORT{<replaceable>type</replaceable>}</option></term>
           <listitem>
             <para>Import a set of variables as device properties,
-            depending on <replaceable>type</replaceable>:</para>
+            depending on <literal>type</literal>:</para>
             <variablelist>
               <varlistentry>
-                <term><option>program</option></term>
+                <term><literal>program</literal></term>
                 <listitem>
                   <para>Execute an external program specified as the assigned value and
                   import its output, which must be in environment key
@@ -439,14 +436,21 @@
                 </listitem>
               </varlistentry>
               <varlistentry>
-                <term><option>file</option></term>
+                <term><literal>builtin</literal></term>
+                <listitem>
+                  <para>As <option>program</option>, but use one of the built-in programs rather
+                  than an external one.</para>
+                </listitem>
+              </varlistentry>
+             <varlistentry>
+                <term><literal>file</literal></term>
                 <listitem>
                   <para>Import a text file specified as the assigned value, the content
                   of which must be in environment key format.</para>
                 </listitem>
               </varlistentry>
               <varlistentry>
-                <term><option>db</option></term>
+                <term><literal>db</literal></term>
                 <listitem>
                   <para>Import a single property specified as the assigned value from the
                   current device database. This works only if the database is already populated
@@ -454,14 +458,14 @@
                 </listitem>
               </varlistentry>
               <varlistentry>
-                <term><option>cmdline</option></term>
+                <term><literal>cmdline</literal></term>
                 <listitem>
                   <para>Import a single property from the kernel command line. For simple flags
                   the value of the property is set to '1'.</para>
                 </listitem>
               </varlistentry>
               <varlistentry>
-                <term><option>parent</option></term>
+                <term><literal>parent</literal></term>
                 <listitem>
                   <para>Import the stored keys from the parent device by reading
                   the database entry of the parent device. The value assigned to
@@ -489,7 +493,7 @@
           <term><option>OPTIONS</option></term>
           <listitem>
             <para>Rule and device options:</para>
-            <variablelist>
+            <variablelist class='udev-directives'>
               <varlistentry>
                 <term><option>link_priority=<replaceable>value</replaceable></option></term>
                 <listitem>
@@ -546,7 +550,7 @@
       is executed, allowing for the use of device properties set by earlier matching
       rules. For all other fields, substitutions are performed while the individual rule is
       being processed. The available substitutions are:</para>
-      <variablelist>
+      <variablelist class='udev-directives'>
         <varlistentry>
           <term><option>$kernel</option>, <option>%k</option></term>
           <listitem>
@@ -677,20 +681,19 @@
         </varlistentry>
 
         <varlistentry>
-          <term><option>%%</option></term>
+          <term><literal>%%</literal></term>
           <listitem>
           <para>The '%' character itself.</para>
           </listitem>
         </varlistentry>
 
         <varlistentry>
-          <term><option>$$</option></term>
+          <term><literal>$$</literal></term>
           <listitem>
           <para>The '$' character itself.</para>
           </listitem>
         </varlistentry>
       </variablelist>
-    </refsect2>
   </refsect1>
 
   <refsect1>

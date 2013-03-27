@@ -2,6 +2,7 @@ ACLOCAL_AMFLAGS = -I m4 ${ACLOCAL_FLAGS}
 
 XMLPAGES = \
 	udev.xml \
+	udevd.xml \
 	udevadm.xml
 
 noinst_DATA = \
@@ -12,6 +13,7 @@ EXTRA_DIST = \
 
 MANPAGES = \
 	udev.7 \
+	udevd.8 \
 	udevadm.8
 
 man_MANS = \
@@ -32,6 +34,9 @@ XSLTPROC_PROCESS_MAN = \
 	$(XSLTPROC) -o $@ $(XSLTPROC_FLAGS) http://docbook.sourceforge.net/release/xsl/current/manpages/docbook.xsl $<
 
 udev.7: udev.xml
+	$(XSLTPROC_PROCESS_MAN)
+
+udevd.8: udevd.xml
 	$(XSLTPROC_PROCESS_MAN)
 
 udevadm.8: udevadm.xml

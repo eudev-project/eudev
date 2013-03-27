@@ -424,14 +424,14 @@
     </refsect2>
 
     <refsect2><title>udevadm hwdb <optional>options</optional></title>
-      <para>Maintain the hardware database index in /etc/udev/hwdb.bin.</para>
+      <para>Maintain the hardware database index in <filename>/etc/udev/hwdb.bin</filename>.</para>
       <variablelist>
         <varlistentry>
           <term><option>--update</option></term>
           <listitem>
-            <para>Compile the hardware dabase information located in /usr/lib/udev/hwdb.d/,
-            /etc/udev/hwdb.d/ and store it in /etc/udev/hwdb.bin. This should be done with
-            any update to the source files, it will not be called automatically. The running
+            <para>Compile the hardware database information located in /usr/lib/udev/hwdb.d/,
+            /etc/udev/hwdb.d/ and store it in <filename>/etc/udev/hwdb.bin</filename>. This should be done after
+            any update to the source files; it will not be called automatically. The running
             udev daemon will detect a new database on its own and does not need to be
             notified about it.</para>
           </listitem>
@@ -441,6 +441,12 @@
           <listitem>
             <para>Query the database with a modalias string, and print the
             retrieved properties.</para>
+          </listitem>
+        </varlistentry>
+        <varlistentry>
+          <term><option>--root=<replaceable>string</replaceable></option></term>
+          <listitem>
+            <para>Alternative root path in the filesystem for reading and writing files.</para>
           </listitem>
         </varlistentry>
       </variablelist>
