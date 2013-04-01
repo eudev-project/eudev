@@ -317,22 +317,18 @@ void util_remove_trailing_chars(char *path, char c)
  */
 size_t util_strpcpy(char **dest, size_t size, const char *src)
 {
-        size_t nsize;
-        char *end;
+        char *dstend = *dest+(size-1);
         
         if (!size) return 0; /*Nothing to do if size is 0*/
         
-        end=memccpy(*dest,src,'\0',size);
+        *dest=memccpy(*dest,src,'\0',size);
         
-        if (end) {/*Terminator character found*/
-                end--; /*memccpy points to the element after the one with '\0'*/
-                nsize = size - (end - *dest);
-                *dest = end;
-                return nsize;
+        if (*dest) {/*Terminator character found*/
+                (*dest)--; /*memccpy points to the element after the one with '\0'*/
+                return (dstend - *dest)+1;/*For some odd reason they are not taking into account the \0 in the capacity...*/
         } else {
-                *dest=*dest+(size-1);
-                **dest='\0';
-                return 0;
+                *(*dest=dstend)='\0'; /*Restore dest and add terminator*/
+                return 0; /*But here they do*/
         }
 }
 
