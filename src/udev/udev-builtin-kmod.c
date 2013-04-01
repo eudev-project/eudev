@@ -37,7 +37,7 @@
 
 static struct kmod_ctx *ctx;
 
-static int load_module(struct udev *udev, char *const alias)
+static int load_module(struct udev *udev, const char *alias)
 {
 #ifdef HAVE_LIBKMOD
         struct kmod_list *list = NULL;

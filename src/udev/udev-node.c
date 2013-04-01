@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2003-2010 Kay Sievers <kay@vrfy.org>
+ * Copyright (C) 2003-2013 Kay Sievers <kay@vrfy.org>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -31,15 +31,13 @@
 
 #include "udev.h"
 
-#define TMP_FILE_EXT                ".udev-tmp"
-
-static int node_symlink(struct udev *udev, const char *node, const char *slink)
+static int node_symlink(struct udev_device *dev, const char *node, const char *slink)
 {
         struct stat stats;
         char target[UTIL_PATH_SIZE];
         char *s;
         size_t l;
-        char slink_tmp[UTIL_PATH_SIZE + sizeof(TMP_FILE_EXT)];
+        char slink_tmp[UTIL_PATH_SIZE + 32];
         int i = 0;
         int tail = 0;
         int err = 0;
@@ -101,7 +99,7 @@ static int node_symlink(struct udev *udev, const char *node, const char *slink)
         }
 
         log_debug("atomically replace '%s'\n", slink);
-        util_strscpyl(slink_tmp, sizeof(slink_tmp), slink, TMP_FILE_EXT, NULL);
+        util_strscpyl(slink_tmp, sizeof(slink_tmp), slink, ".tmp-", udev_device_get_id_filename(dev), NULL);
         unlink(slink_tmp);
         do {
                 err = mkdir_parents_label(slink_tmp, 0755);
@@ -204,7 +202,7 @@ static void link_update(struct udev_device *dev, const char *slink, bool add)
                         util_delete_path(udev, slink);
         } else {
                 log_debug("creating link '%s' to '%s'\n", slink, target);
-                node_symlink(udev, target, slink);
+                node_symlink(dev, target, slink);
         }
 
         if (add) {
@@ -254,7 +252,7 @@ void udev_node_update_old_links(struct udev_device *dev, struct udev_device *dev
         }
 }
 
-static int node_fixup(struct udev_device *dev, mode_t mode, uid_t uid, gid_t gid)
+static int node_permissions_apply(struct udev_device *dev, bool apply, mode_t mode, uid_t uid, gid_t gid)
 {
         const char *devnode = udev_device_get_devnode(dev);
         dev_t devnum = udev_device_get_devnum(dev);
@@ -279,13 +277,7 @@ static int node_fixup(struct udev_device *dev, mode_t mode, uid_t uid, gid_t gid
                 goto out;
         }
 
-        /*
-         * Set permissions and selinux file context only on add events. We always
-         * set it on bootup (coldplug) with "trigger --action=add" for all devices
-         * and for any newly added devices (hotplug). We don't want to change it
-         * later, in case something else has applied custom settings in the meantime.
-         */
-        if (strcmp(udev_device_get_action(dev), "add") == 0) {
+        if (apply) {
                 if ((stats.st_mode & 0777) != (mode & 0777) || stats.st_uid != uid || stats.st_gid != gid) {
                         log_debug("set permissions %s, %#o, uid=%u, gid=%u\n", devnode, mode, uid, gid);
                         chmod(devnode, mode);
@@ -294,7 +286,6 @@ static int node_fixup(struct udev_device *dev, mode_t mode, uid_t uid, gid_t gid
                 } else {
                         log_debug("preserve permissions %s, %#o, uid=%u, gid=%u\n", devnode, mode, uid, gid);
                 }
-
                 label_fix(devnode, true, false);
         }
 
@@ -304,23 +295,22 @@ out:
         return err;
 }
 
-void udev_node_add(struct udev_device *dev, mode_t mode, uid_t uid, gid_t gid)
+void udev_node_add(struct udev_device *dev, bool apply, mode_t mode, uid_t uid, gid_t gid)
 {
-        struct udev *udev = udev_device_get_udev(dev);
         char filename[UTIL_PATH_SIZE];
         struct udev_list_entry *list_entry;
 
         log_debug("handling device node '%s', devnum=%s, mode=%#o, uid=%d, gid=%d\n",
                   udev_device_get_devnode(dev), udev_device_get_id_filename(dev), mode, uid, gid);
 
-        if (node_fixup(dev, mode, uid, gid) < 0)
+        if (node_permissions_apply(dev, apply, mode, uid, gid) < 0)
                 return;
 
         /* always add /dev/{block,char}/$major:$minor */
         snprintf(filename, sizeof(filename), "/dev/%s/%u:%u",
                  strcmp(udev_device_get_subsystem(dev), "block") == 0 ? "block" : "char",
                  major(udev_device_get_devnum(dev)), minor(udev_device_get_devnum(dev)));
-        node_symlink(udev, udev_device_get_devnode(dev), filename);
+        node_symlink(dev, udev_device_get_devnode(dev), filename);
 
         /* create/update symlinks, add symlinks to name index */
         udev_list_entry_foreach(list_entry, udev_device_get_devlinks_list_entry(dev))

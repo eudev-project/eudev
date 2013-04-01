@@ -1600,21 +1600,6 @@ struct udev_rules *udev_rules_new(struct udev *udev, int resolve_names)
         if (!rules->strbuf)
                 return udev_rules_unref(rules);
 
-	/* Note - need a better way to manage these paths:
-	 * ie, should have a list of paths we always support, and
-	 * do not include the #define vars if they are duplicates
-	 *
-	 * original - UDEV_RULES_DIR should be /etc/udev/rules.d
-	 * ..but we have it set to UDEV_LIBEXEC_DIR "/rules.d" so that
-	 * ..the default rules are installed there instead of in /etc
-	 * 
-	 * original2 - UDEV_LIBEXEC_DIR used to be forced to /usr/lib/udev
-	 * ..by default, we have it as /lib/udev (or whatever rootlibdir is)
-	 * ..therefore we did not include /usr/lib/udev/rules.d.
-	 * 
-	 * Reworked code; there are duplicate paths here but at least
-	 * everyting is listed.
-	 */
         rules->dirs = strv_new(UDEV_CONF_DIR "/rules.d",
                                UDEV_RULES_DIR,
                                "/run/udev/rules.d",
@@ -1639,7 +1624,7 @@ struct udev_rules *udev_rules_new(struct udev *udev, int resolve_names)
                 return udev_rules_unref(rules);
         udev_rules_check_timestamp(rules);
 
-        r = conf_files_list_strv(&files, NULL, ".rules", (const char **)rules->dirs);
+        r = conf_files_list_strv(&files, ".rules", NULL, (const char **)rules->dirs);
         if (r < 0) {
                 log_error("failed to enumerate rules files: %s\n", strerror(-r));
                 return udev_rules_unref(rules);

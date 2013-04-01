@@ -818,7 +818,11 @@ static void static_dev_create_from_modules(struct udev *udev)
         char buf[4096];
         FILE *f;
 
-        uname(&kernel);
+        if (uname(&kernel) < 0) {
+                log_error("uname failed: %m");
+                return;
+        }
+
         util_strscpyl(modules, sizeof(modules), ROOTPREFIX "/lib/modules/", kernel.release, "/modules.devname", NULL);
         f = fopen(modules, "re");
         if (f == NULL)
@@ -876,113 +880,6 @@ static void static_dev_create_from_modules(struct udev *udev)
         }
 
         fclose(f);
-}
-
-static int mem_size_mb(void)
-{
-        FILE *f;
-        char buf[4096];
-        long int memsize = -1;
-
-        f = fopen("/proc/meminfo", "re");
-        if (f == NULL)
-                return -1;
-
-        while (fgets(buf, sizeof(buf), f) != NULL) {
-                long int value;
-
-                if (sscanf(buf, "MemTotal: %ld kB", &value) == 1) {
-                        memsize = value / 1024;
-                        break;
-                }
-        }
-
-        fclose(f);
-        return memsize;
-}
-
-static int convert_db(struct udev *udev)
-{
-        char filename[UTIL_PATH_SIZE];
-        struct udev_enumerate *udev_enumerate;
-        struct udev_list_entry *list_entry;
-
-        /* current database */
-        if (access("/run/udev/data", F_OK) >= 0)
-                return 0;
-
-        /* make sure we do not get here again */
-        mkdir_p("/run/udev/data", 0755);
-
-        /* old database */
-        util_strscpyl(filename, sizeof(filename), "/dev/.udev/db", NULL);
-        if (access(filename, F_OK) < 0)
-                return 0;
-
-        print_kmsg("converting old udev database\n");
-
-        udev_enumerate = udev_enumerate_new(udev);
-        if (udev_enumerate == NULL)
-                return -1;
-        udev_enumerate_scan_devices(udev_enumerate);
-        udev_list_entry_foreach(list_entry, udev_enumerate_get_list_entry(udev_enumerate)) {
-                struct udev_device *device;
-
-                device = udev_device_new_from_syspath(udev, udev_list_entry_get_name(list_entry));
-                if (device == NULL)
-                        continue;
-
-                /* try to find the old database for devices without a current one */
-                if (udev_device_read_db(device, NULL) < 0) {
-                        bool have_db;
-                        const char *id;
-                        struct stat stats;
-                        char devpath[UTIL_PATH_SIZE];
-                        char from[UTIL_PATH_SIZE];
-
-                        have_db = false;
-
-                        /* find database in old location */
-                        id = udev_device_get_id_filename(device);
-                        util_strscpyl(from, sizeof(from), "/dev/.udev/db/", id, NULL);
-                        if (lstat(from, &stats) == 0) {
-                                if (!have_db) {
-                                        udev_device_read_db(device, from);
-                                        have_db = true;
-                                }
-                                unlink(from);
-                        }
-
-                        /* find old database with $subsys:$sysname name */
-                        util_strscpyl(from, sizeof(from), "/dev/.udev/db/",
-                                      udev_device_get_subsystem(device), ":", udev_device_get_sysname(device), NULL);
-                        if (lstat(from, &stats) == 0) {
-                                if (!have_db) {
-                                        udev_device_read_db(device, from);
-                                        have_db = true;
-                                }
-                                unlink(from);
-                        }
-
-                        /* find old database with the encoded devpath name */
-                        util_path_encode(udev_device_get_devpath(device), devpath, sizeof(devpath));
-                        util_strscpyl(from, sizeof(from), "/dev/.udev/db/", devpath, NULL);
-                        if (lstat(from, &stats) == 0) {
-                                if (!have_db) {
-                                        udev_device_read_db(device, from);
-                                        have_db = true;
-                                }
-                                unlink(from);
-                        }
-
-                        /* write out new database */
-                        if (have_db)
-                                udev_device_update_db(device);
-                }
-                udev_device_unref(device);
-        }
-        udev_enumerate_unref(udev_enumerate);
-        return 0;
 }
 
 /*
@@ -1304,17 +1201,14 @@ int main(int argc, char *argv[])
                 goto exit;
         }
 
-        /* if needed, convert old database from earlier udev version */
-        convert_db(udev);
-
         if (children_max <= 0) {
-                int memsize = mem_size_mb();
+                cpu_set_t cpu_set;
 
-                /* set value depending on the amount of RAM */
-                if (memsize > 0)
-                        children_max = 16 + (memsize / 8);
-                else
-                        children_max = 16;
+                children_max = 8;
+
+                if (sched_getaffinity(0, sizeof (cpu_set), &cpu_set) == 0) {
+                        children_max +=  CPU_COUNT(&cpu_set) * 2;
+                }
         }
         log_debug("set children_max to %u\n", children_max);
 

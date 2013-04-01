@@ -33,7 +33,7 @@
 
 static bool skip_attribute(const char *name)
 {
-        static const char const *skip[] = {
+        static const char* const skip[] = {
                 "uevent",
                 "dev",
                 "modalias",
@@ -252,12 +252,6 @@ static void cleanup_db(struct udev *udev)
         }
 
         dir = opendir("/run/udev/watch");
-        if (dir != NULL) {
-                cleanup_dir(dir, 0, 1);
-                closedir(dir);
-        }
-
-        dir = opendir("/run/udev/firmware-missing");
         if (dir != NULL) {
                 cleanup_dir(dir, 0, 1);
                 closedir(dir);
