@@ -649,7 +649,8 @@ err:
 
 /*
  * http://sites.google.com/site/murmurhash/
- *
+ * (C) Austin Appleby (aappleby (AT) gmail) 2010
+ * 
  * All code is released to the public domain. For business purposes,
  * Murmurhash is under the MIT license.
  *
