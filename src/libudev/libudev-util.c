@@ -317,21 +317,23 @@ void util_remove_trailing_chars(char *path, char c)
  */
 size_t util_strpcpy(char **dest, size_t size, const char *src)
 {
-        size_t len;
-
-        len = strlen(src);
-        if (len >= size) {
-                if (size > 1)
-                        *dest = mempcpy(*dest, src, size-1);
-                size = 0;
+        size_t nsize;
+        char *end;
+        
+        if (size == 0 ) return 0; /*Nothing to do if size is 0*/
+        
+        end=memccpy(*dest,src,'\0',size);
+        
+        if (end != NULL) {/*Terminator character found*/
+                end--; /*memccpy points to the element after the one with '\0'*/
+                nsize = size - (end - *dest);
+                *dest = end;
+                return nsize;
         } else {
-                if (len > 0) {
-                        *dest = mempcpy(*dest, src, len);
-                        size -= len;
-                }
+                *dest=*dest+(size-1);
+                **dest='\0';
+                return 0;
         }
-        *dest[0] = '\0';
-        return size;
 }
 
 size_t util_strpcpyf(char **dest, size_t size, const char *src, ...)
@@ -354,15 +356,23 @@ size_t util_strpcpyf(char **dest, size_t size, const char *src, ...)
 }
 
 /* concatenates list of strings, moves dest forward */
+/* Uses a va_list */
+size_t util_strpcpyv(char **dest, size_t size, const char *src, va_list va)
+{
+        do {
+                size = util_strpcpy(dest, size, src);
+                src = va_arg(va, char *);
+        } while (src != NULL);
+        return size;
+}
+
+/* concatenates list of strings, moves dest forward */
 size_t util_strpcpyl(char **dest, size_t size, const char *src, ...)
 {
         va_list va;
 
         va_start(va, src);
-        do {
-                size = util_strpcpy(dest, size, src);
-                src = va_arg(va, char *);
-        } while (src != NULL);
+        size=util_strpcpyv(dest, size, src, va);
         va_end(va);
 
         return size;
@@ -371,24 +381,16 @@ size_t util_strpcpyl(char **dest, size_t size, const char *src, ...)
 /* copies string */
 size_t util_strscpy(char *dest, size_t size, const char *src)
 {
-        char *s;
-
-        s = dest;
-        return util_strpcpy(&s, size, src);
+        return util_strpcpy(&dest, size, src);
 }
 
 /* concatenates list of strings */
 size_t util_strscpyl(char *dest, size_t size, const char *src, ...)
 {
         va_list va;
-        char *s;
 
         va_start(va, src);
-        s = dest;
-        do {
-                size = util_strpcpy(&s, size, src);
-                src = va_arg(va, char *);
-        } while (src != NULL);
+        size=util_strpcpyv(&dest, size, src, va);
         va_end(va);
 
         return size;
