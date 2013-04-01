@@ -320,11 +320,11 @@ size_t util_strpcpy(char **dest, size_t size, const char *src)
         size_t nsize;
         char *end;
         
-        if (size == 0 ) return 0; /*Nothing to do if size is 0*/
+        if (!size) return 0; /*Nothing to do if size is 0*/
         
         end=memccpy(*dest,src,'\0',size);
         
-        if (end != NULL) {/*Terminator character found*/
+        if (end) {/*Terminator character found*/
                 end--; /*memccpy points to the element after the one with '\0'*/
                 nsize = size - (end - *dest);
                 *dest = end;
@@ -361,8 +361,7 @@ size_t util_strpcpyv(char **dest, size_t size, const char *src, va_list va)
 {
         do {
                 size = util_strpcpy(dest, size, src);
-                src = va_arg(va, char *);
-        } while (src != NULL);
+        } while (size && (src = va_arg(va, char *)));
         return size;
 }
 
