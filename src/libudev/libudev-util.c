@@ -337,13 +337,15 @@ size_t util_strpcpyf(char **dest, size_t size, const char *src, ...)
         va_list va;
         int i;
 
+        if (!size) return 0; /*Nothing to do if size is 0*/
+
         va_start(va, src);
         i = vsnprintf(*dest, size, src, va);
         if (i < (int)size) {
                 *dest += i;
                 size -= i;
         } else {
-                *dest += size;
+                *dest += size - 1;
                 size = 0;
         }
         va_end(va);
