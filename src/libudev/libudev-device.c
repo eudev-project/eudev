@@ -1381,7 +1381,9 @@ _public_ const char *udev_device_get_sysattr_value(struct udev_device *udev_devi
         }
 
         if (S_ISLNK(statbuf.st_mode)) {
+#if LIBUDEV_LEGACY_VERSION < 199
                 struct udev_device *dev;
+#endif
 
                 /*
                  * Some core links return only the last element of the target path,
@@ -1398,6 +1400,11 @@ _public_ const char *udev_device_get_sysattr_value(struct udev_device *udev_devi
                         goto out;
                 }
 
+#if LIBUDEV_LEGACY_VERSION < 199
+#if LIBUDEV_LEGACY_VERSION >= 196
+            /* resolve only custom link to a device */
+            if (!streq(sysattr, "device")) {
+#endif
                 /* resolve link to a device and return its syspath */
                 util_strscpyl(path, sizeof(path), udev_device->syspath, "/", sysattr, NULL);
                 dev = udev_device_new_from_syspath(udev_device->udev, path);
@@ -1407,6 +1414,10 @@ _public_ const char *udev_device_get_sysattr_value(struct udev_device *udev_devi
                         val = udev_list_entry_get_value(list_entry);
                         udev_device_unref(dev);
                 }
+#if LIBUDEV_LEGACY_VERSION >= 196
+            }
+#endif
+#endif
 
                 goto out;
         }
