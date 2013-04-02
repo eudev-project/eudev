@@ -12,9 +12,11 @@ AM_CPPFLAGS = \
 	-DUDEV_VERSION=\"$(UDEV_VERSION)\" \
 	-I $(top_srcdir)/src/libudev
 
-sbin_PROGRAMS = \
-	udevd \
+bin_PROGRAMS = \
 	udevadm
+
+sbin_PROGRAMS = \
+	udevd
 
 udevd_SOURCES = \
 	udevd.c
@@ -114,3 +116,10 @@ EXTRA_DIST = \
 
 CLEANFILES = \
 	udev.pc
+
+# install udevadm symlink in sbindir
+install-exec-hook:
+	ln -sf ../bin/udevadm $(DESTDIR)$(sbindir)/udevadm
+
+uninstall-hook:
+	rm -Rf $(DESTDIR)$(sbindir)/udevadm
