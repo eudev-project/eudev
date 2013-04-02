@@ -915,6 +915,42 @@ found:
         return udev_device_new_from_syspath(udev, path);
 }
 
+/**
+ * udev_device_new_from_environment
+ * @udev: udev library context
+ *
+ * Create new udev device, and fill in information from the
+ * current process environment. This only works reliable if
+ * the process is called from a udev rule. It is usually used
+ * for tools executed from IMPORT= rules.
+ *
+ * The initial refcount is 1, and needs to be decremented to
+ * release the resources of the udev device.
+ *
+ * Returns: a new udev device, or #NULL, if it does not exist
+ **/
+_public_ struct udev_device *udev_device_new_from_environment(struct udev *udev)
+{
+        int i;
+        struct udev_device *udev_device;
+
+        udev_device = udev_device_new(udev);
+        if (udev_device == NULL)
+                return NULL;
+        udev_device_set_info_loaded(udev_device);
+
+        for (i = 0; environ[i] != NULL; i++)
+                udev_device_add_property_from_string_parse(udev_device, environ[i]);
+
+        if (udev_device_add_property_from_string_parse_finish(udev_device) < 0) {
+                udev_dbg(udev, "missing values, invalid device\n");
+                udev_device_unref(udev_device);
+                udev_device = NULL;
+        }
+
+        return udev_device;
+}
+
 static struct udev_device *device_new_from_parent(struct udev_device *udev_device)
 {
         struct udev_device *udev_device_parent = NULL;
@@ -1401,6 +1437,91 @@ _public_ const char *udev_device_get_sysattr_value(struct udev_device *udev_devi
         val = udev_list_entry_get_value(list_entry);
 out:
         return val;
+}
+
+/**
+ * udev_device_set_sysattr_value:
+ * @udev_device: udev device
+ * @sysattr: attribute name
+ * @value: new value to be set
+ *
+ * Update the contents of the sys attribute and the cached value of the device.
+ *
+ * Returns: Negative error code on failure or 0 on success.
+ **/
+_public_ int udev_device_set_sysattr_value(struct udev_device *udev_device, const char *sysattr, char *value)
+{
+        struct udev_device *dev;
+        char path[UTIL_PATH_SIZE];
+        struct stat statbuf;
+        int fd;
+        ssize_t size, value_len;
+        int ret = 0;
+
+        if (udev_device == NULL)
+                return -EINVAL;
+        dev = udev_device;
+        if (sysattr == NULL)
+                return -EINVAL;
+        if (value == NULL)
+                value_len = 0;
+        else
+                value_len = strlen(value);
+
+        util_strscpyl(path, sizeof(path), udev_device_get_syspath(dev), "/", sysattr, NULL);
+        if (lstat(path, &statbuf) != 0) {
+                udev_list_entry_add(&dev->sysattr_value_list, sysattr, NULL);
+                ret = -ENXIO;
+                goto out;
+        }
+
+        if (S_ISLNK(statbuf.st_mode)) {
+                ret = -EINVAL;
+                goto out;
+        }
+
+        /* skip directories */
+        if (S_ISDIR(statbuf.st_mode)) {
+                ret = -EISDIR;
+                goto out;
+        }
+
+        /* skip non-readable files */
+        if ((statbuf.st_mode & S_IRUSR) == 0) {
+                ret = -EACCES;
+                goto out;
+        }
+
+        /* Value is limited to 4k */
+        if (value_len > 4096) {
+                ret = -EINVAL;
+                goto out;
+        }
+        util_remove_trailing_chars(value, '\n');
+
+        /* write attribute value */
+        fd = open(path, O_WRONLY|O_CLOEXEC);
+        if (fd < 0) {
+                ret = -errno;
+                goto out;
+        }
+        size = write(fd, value, value_len);
+        close(fd);
+        if (size < 0) {
+                ret = -errno;
+                goto out;
+        }
+        if (size < value_len) {
+                ret = -EIO;
+                goto out;
+        }
+
+        /* wrote a valid value, store it in cache and return it */
+        udev_list_entry_add(&dev->sysattr_value_list, sysattr, value);
+out:
+        if (dev != udev_device)
+                udev_device_unref(dev);
+        return ret;
 }
 
 static int udev_device_sysattr_list_read(struct udev_device *udev_device)
