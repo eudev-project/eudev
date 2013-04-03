@@ -13,7 +13,6 @@ dist_udevrules_DATA = \
 	61-accelerometer.rules \
 	64-btrfs.rules \
 	75-net-description.rules \
-	75-persistent-net-generator.rules \
 	75-probe_mtd.rules \
 	75-tty-description.rules \
 	78-sound-card.rules \
