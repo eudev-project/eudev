@@ -94,7 +94,7 @@ AC_ARG_WITH(
                 [--with-rootprefix=DIR],
                 [rootfs directory prefix for config files and kernel modules])],
         [],
-        [with_rootprefix=${ac_default_prefix}]
+        [with_rootprefix="\${prefix}"]
 )
 
 AC_ARG_WITH(
@@ -113,7 +113,7 @@ AC_ARG_ENABLE(
                 [Include hard-coded default search paths in / and /usr])],
         [],
         [AS_IF(
-                [test "x${ac_default_prefix}" != "x${with_rootprefix}"],
+                [test "x${ac_default_prefix}" != "x${with_rootprefix}" && test "x${with_rootprefix}" != "x\${prefix}"],
                 [enable_split_usr=yes],
                 [enable_split_usr=no])]
 )
@@ -126,7 +126,7 @@ AS_IF(
 # Configured paths
 AC_SUBST([rootprefix], [$with_rootprefix])
 AC_SUBST([rootlibdir], [$with_rootlibdir])
-AC_SUBST([udevlibexecdir], [${with_rootprefix}/lib/udev])
+AC_SUBST([udevlibexecdir], [${rootprefix}/lib/udev])
 
 # sysconfdir paths
 AC_SUBST([udevconfdir],[${sysconfdir}/udev])
