@@ -303,6 +303,10 @@ AC_ARG_ENABLE([rule-generator],
         AS_HELP_STRING([--enable-rule-generator], [enable legacy persistent network, cdrom support]),
         [], [enable_rule_generator=no])
 
+if test "x${enable_rule_generator}" != xno; then
+        AC_DEFINE([ENABLE_RULE_GENERATOR], [1], [Define if we are enabling rule generator])
+fi
+
 AM_CONDITIONAL([ENABLE_RULE_GENERATOR], [test "x$enable_rule_generator" = xyes])
 
 # ------------------------------------------------------------------------------
