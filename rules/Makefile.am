@@ -15,8 +15,12 @@ dist_udevrules_DATA = \
 	75-probe_mtd.rules \
 	75-tty-description.rules \
 	78-sound-card.rules \
-	80-net-name-slot.rules \
 	95-udev-late.rules
+
+if !ENABLE_RULE_GENERATOR
+dist_udevrules_DATA += \
+	80-net-name-slot.rules
+endif
 
 if ENABLE_FIRMWARE
 dist_udevrules_DATA += \
