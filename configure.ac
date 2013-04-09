@@ -211,6 +211,7 @@ for i in $with_firmware_path; do
 done
 IFS=$OLD_IFS
 AC_SUBST(FIRMWARE_PATH)
+AS_IF([test "x${FIRMWARE_PATH}" != "x"], [ AC_DEFINE(HAVE_FIRMWARE, 1, [Define if FIRMWARE is available]) ])
 AM_CONDITIONAL(ENABLE_FIRMWARE, [test "x${FIRMWARE_PATH}" != "x"])
 
 # ------------------------------------------------------------------------------
