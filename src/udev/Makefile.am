@@ -120,7 +120,7 @@ CLEANFILES = \
 # install udevadm symlink in sbindir
 install-exec-hook:
 	if test "$(bindir)" != "$(sbindir)"; then \
-		$(LN_S) -r $(DESTDIR)$(bindir)/udevadm $(DESTDIR)$(sbindir)/udevadm; \
+		$(LN_S) -n -f $(DESTDIR)$(bindir)/udevadm $(DESTDIR)$(sbindir)/udevadm; \
 	fi
 
 uninstall-hook:
