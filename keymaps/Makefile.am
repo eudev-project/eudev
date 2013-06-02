@@ -28,6 +28,7 @@ KEYMAPS = \
 	hewlett-packard-tablet \
 	hewlett-packard-tx2 \
 	hewlett-packard_elitebook-8440p \
+	hewlett-packard_elitebook-8460p \
 	hewlett-packard-hdx9494nr \
 	ibm-thinkpad-usb-keyboard-trackpoint \
 	inventec-symphony_6.0_7.0 \
