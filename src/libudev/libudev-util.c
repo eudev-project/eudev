@@ -244,8 +244,7 @@ int util_resolve_sys_link(struct udev *udev, char *syspath, size_t size)
                         return -EINVAL;
                 base[0] = '\0';
         }
-        if (base == NULL)
-                return -EINVAL;
+
         util_strscpyl(base, size - (base - syspath), "/", &link_target[back * 3], NULL);
         return 0;
 }
@@ -649,13 +648,12 @@ err:
 
 /*
  * http://sites.google.com/site/murmurhash/
- * (C) Austin Appleby (aappleby (AT) gmail) 2010
- * 
+ *
  * All code is released to the public domain. For business purposes,
  * Murmurhash is under the MIT license.
  *
  */
-static unsigned int murmur_hash2(const char *key, int len, unsigned int seed)
+static unsigned int murmur_hash2(const char *key, size_t len, unsigned int seed)
 {
         /*
          *  'm' and 'r' are mixing constants generated offline.
