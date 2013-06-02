@@ -1381,10 +1381,6 @@ _public_ const char *udev_device_get_sysattr_value(struct udev_device *udev_devi
         }
 
         if (S_ISLNK(statbuf.st_mode)) {
-#if LIBUDEV_LEGACY_VERSION < 199
-                struct udev_device *dev;
-#endif
-
                 /*
                  * Some core links return only the last element of the target path,
                  * these are just values, the paths should not be exposed.
@@ -1399,25 +1395,6 @@ _public_ const char *udev_device_get_sysattr_value(struct udev_device *udev_devi
                         val = udev_list_entry_get_value(list_entry);
                         goto out;
                 }
-
-#if LIBUDEV_LEGACY_VERSION < 199
-#if LIBUDEV_LEGACY_VERSION >= 196
-            /* resolve only custom link to a device */
-            if (!streq(sysattr, "device")) {
-#endif
-                /* resolve link to a device and return its syspath */
-                util_strscpyl(path, sizeof(path), udev_device->syspath, "/", sysattr, NULL);
-                dev = udev_device_new_from_syspath(udev_device->udev, path);
-                if (dev != NULL) {
-                        list_entry = udev_list_entry_add(&udev_device->sysattr_value_list, sysattr,
-                                                         udev_device_get_syspath(dev));
-                        val = udev_list_entry_get_value(list_entry);
-                        udev_device_unref(dev);
-                }
-#if LIBUDEV_LEGACY_VERSION >= 196
-            }
-#endif
-#endif
 
                 goto out;
         }
@@ -1479,91 +1456,6 @@ _public_ int udev_device_set_sysattr_value(struct udev_device *udev_device, cons
         else
                 value_len = strlen(value);
 
-        util_strscpyl(path, sizeof(path), udev_device_get_syspath(dev), "/", sysattr, NULL);
-        if (lstat(path, &statbuf) != 0) {
-                udev_list_entry_add(&dev->sysattr_value_list, sysattr, NULL);
-                ret = -ENXIO;
-                goto out;
-        }
-
-        if (S_ISLNK(statbuf.st_mode)) {
-                ret = -EINVAL;
-                goto out;
-        }
-
-        /* skip directories */
-        if (S_ISDIR(statbuf.st_mode)) {
-                ret = -EISDIR;
-                goto out;
-        }
-
-        /* skip non-readable files */
-        if ((statbuf.st_mode & S_IRUSR) == 0) {
-                ret = -EACCES;
-                goto out;
-        }
-
-        /* Value is limited to 4k */
-        if (value_len > 4096) {
-                ret = -EINVAL;
-                goto out;
-        }
-        util_remove_trailing_chars(value, '\n');
-
-        /* write attribute value */
-        fd = open(path, O_WRONLY|O_CLOEXEC);
-        if (fd < 0) {
-                ret = -errno;
-                goto out;
-        }
-        size = write(fd, value, value_len);
-        close(fd);
-        if (size < 0) {
-                ret = -errno;
-                goto out;
-        }
-        if (size < value_len) {
-                ret = -EIO;
-                goto out;
-        }
-
-        /* wrote a valid value, store it in cache and return it */
-        udev_list_entry_add(&dev->sysattr_value_list, sysattr, value);
-out:
-        if (dev != udev_device)
-                udev_device_unref(dev);
-        return ret;
-}
-
-/**
- * udev_device_set_sysattr_value:
- * @udev_device: udev device
- * @sysattr: attribute name
- * @value: new value to be set
- *
- * Update the contents of the sys attribute and the cached value of the device.
- *
- * Returns: Negative error code on failure or 0 on success.
- **/
-_public_ int udev_device_set_sysattr_value(struct udev_device *udev_device, const char *sysattr, char *value)
-{
-        struct udev_device *dev;
-        char path[UTIL_PATH_SIZE];
-        struct stat statbuf;
-        int fd;
-        ssize_t size, value_len;
-        int ret = 0;
-
-        if (udev_device == NULL)
-                return -EINVAL;
-        dev = udev_device;
-        if (sysattr == NULL)
-                return -EINVAL;
-        if (value == NULL)
-                value_len = 0;
-        else
-                value_len = strlen(value);
-restart:
         strscpyl(path, sizeof(path), udev_device_get_syspath(dev), "/", sysattr, NULL);
         if (lstat(path, &statbuf) != 0) {
                 udev_list_entry_add(&dev->sysattr_value_list, sysattr, NULL);
@@ -1572,24 +1464,7 @@ restart:
         }
 
         if (S_ISLNK(statbuf.st_mode)) {
-                /*
-                 * Cannot modify core link values
-                 */
-                if (streq(sysattr, "driver") ||
-                    streq(sysattr, "subsystem") ||
-                    streq(sysattr, "module")) {
-                        ret = -EPERM;
-                } else if (!streq(sysattr, "device")) {
-                        /* resolve custom link to a device */
-                        strscpyl(path, sizeof(path), udev_device->syspath, "/", sysattr, NULL);
-                        dev = udev_device_new_from_syspath(udev_device->udev, path);
-                        if (dev != NULL)
-                                goto restart;
-                        ret = -ENXIO;
-                } else {
-                        /* Unhandled, to not try to modify anything */
-                        ret = -EINVAL;
-                }
+                ret = -EINVAL;
                 goto out;
         }
 

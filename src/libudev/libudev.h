@@ -20,10 +20,6 @@
 #ifndef _LIBUDEV_H_
 #define _LIBUDEV_H_
 
-#ifndef LIBUDEV_LEGACY_VERSION
-#define LIBUDEV_LEGACY_VERSION UDEV_VERSION
-#endif
-
 #include <stdarg.h>
 #include <sys/types.h>
 #include <sys/stat.h>
