@@ -38,6 +38,7 @@ KEYMAPS = \
 	lenovo-thinkpad_x6_tablet \
 	lenovo-thinkpad_x200_tablet \
 	lg-x110 \
+	logitech-usb \
 	logitech-wave \
 	logitech-wave-cordless \
 	logitech-wave-pro-cordless \
