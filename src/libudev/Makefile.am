@@ -1,8 +1,8 @@
 ACLOCAL_AMFLAGS = -I m4 ${ACLOCAL_FLAGS}
 
-LIBUDEV_CURRENT=3
+LIBUDEV_CURRENT=4
 LIBUDEV_REVISION=0
-LIBUDEV_AGE=2
+LIBUDEV_AGE=3
 
 define move-to-rootlibdir
 	if test "$(libdir)" != "$(rootlibdir)"; then \
