@@ -1456,7 +1456,7 @@ _public_ int udev_device_set_sysattr_value(struct udev_device *udev_device, cons
         else
                 value_len = strlen(value);
 
-        strscpyl(path, sizeof(path), udev_device_get_syspath(dev), "/", sysattr, NULL);
+        util_strscpyl(path, sizeof(path), udev_device_get_syspath(dev), "/", sysattr, NULL);
         if (lstat(path, &statbuf) != 0) {
                 udev_list_entry_add(&dev->sysattr_value_list, sysattr, NULL);
                 ret = -ENXIO;
