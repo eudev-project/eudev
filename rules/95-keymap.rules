@@ -4,10 +4,6 @@
 # directly as keymap arguments (if there are just one or two to change), or as
 # a file name (in ${rootlibdir}/udev/keymaps), which has to contain scancode/keyname
 # pairs.
-#
-# Note also that system-specific keymaps and rules can be added
-# into /etc/udev/keymaps/ instead of modifying or adding to the system-installed
-# files.
 
 ACTION=="remove", GOTO="keyboard_end"
 KERNEL!="event*", GOTO="keyboard_end"
@@ -107,9 +103,8 @@ ENV{DMI_VENDOR}=="Hewlett-Packard", ATTR{[dmi/id]product_name}=="HP ProBook*", R
 ENV{DMI_VENDOR}=="Hewlett-Packard", ATTR{[dmi/id]product_name}=="HP EliteBook 8440p", RUN+="keymap $name hewlett-packard_elitebook-8440p"
 ENV{DMI_VENDOR}=="Hewlett-Packard", ATTR{[dmi/id]product_name}=="HP EliteBook 8460p", RUN+="keymap $name hewlett-packard_elitebook-8460p"
 ENV{DMI_VENDOR}=="Hewlett-Packard", ATTR{[dmi/id]product_name}=="HDX9494NR", RUN+="keymap $name hewlett-packard-hdx9494nr"
-# HP Pavillion dv6315ea has empty DMI_VENDOR
-# quick play
-ATTR{[dmi/id]board_vendor}=="Quanta", ATTR{[dmi/id]board_name}=="30B7", ATTR{[dmi/id]board_version}=="65.2B", RUN+="keymap $name 0x88 media"
+# HP Pavilion dv6315ea has empty DMI_VENDOR
+ATTR{[dmi/id]board_vendor}=="Quanta", ATTR{[dmi/id]board_name}=="30B7", ATTR{[dmi/id]board_version}=="65.2B", RUN+="keymap $name 0x88 media" # "quick play
 
 # Gateway clone of Acer Aspire One AOA110/AOA150
 ENV{DMI_VENDOR}=="Gateway*", ATTR{[dmi/id]product_name}=="*AOA1*", RUN+="keymap $name acer"
@@ -150,6 +145,9 @@ ENV{DMI_VENDOR}=="MICRO-STAR*|Micro-Star*", ATTR{[dmi/id]product_name}=="GE60*|G
 # plus some extra synthesized ones on atkbd as an echo of actually changing the
 # brightness; so ignore those atkbd ones, to avoid loops
 ENV{DMI_VENDOR}=="MICRO-STAR*", ATTR{[dmi/id]product_name}=="*U-100*|*U100*|*N033", RUN+="keymap $name 0xF7 reserved 0xF8 reserved"
+
+# MSI Wind U90/U100 generates separate touchpad on/off keycodes so ignore touchpad toggle keycode
+ENV{DMI_VENDOR}=="MICRO-STAR*", ATTR{[dmi/id]product_name}=="U90/U100", RUN+="keymap $name 0xE4 reserved"
 
 ENV{DMI_VENDOR}=="INVENTEC", ATTR{[dmi/id]product_name}=="SYMPHONY 6.0/7.0", RUN+="keymap $name inventec-symphony_6.0_7.0"
 
