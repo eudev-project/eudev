@@ -151,7 +151,7 @@ static void set_scsi_type(char *to, const char *from, size_t len)
 
 static int dev_if_packed_info(struct udev_device *dev, char *ifs_str, size_t len)
 {
-        char _cleanup_free_ *filename = NULL;
+        _cleanup_free_ char *filename = NULL;
         int _cleanup_close_ fd = -1;
         ssize_t size;
         unsigned char buf[18 + 65535];
