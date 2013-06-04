@@ -55,8 +55,8 @@ void log_show_location(bool b);
 int log_show_color_from_string(const char *e);
 int log_show_location_from_string(const char *e);
 
-LogTarget log_get_target(void);
-int log_get_max_level(void);
+LogTarget log_get_target(void) _pure_;
+int log_get_max_level(void) _pure_;
 
 int log_open(void);
 void log_close(void);
@@ -80,14 +80,33 @@ int log_metav(
                 int line,
                 const char *func,
                 const char *format,
-                va_list ap);
+                va_list ap) _printf_attr_(5,0);
+
+int log_meta_object(
+                int level,
+                const char*file,
+                int line,
+                const char *func,
+                const char *object_name,
+                const char *object,
+                const char *format, ...) _printf_attr_(7,8);
+
+int log_metav_object(
+                int level,
+                const char*file,
+                int line,
+                const char *func,
+                const char *object_name,
+                const char *object,
+                const char *format,
+                va_list ap) _printf_attr_(7,0);
 
 int log_struct_internal(
                 int level,
                 const char *file,
                 int line,
                 const char *func,
-                const char *format, ...) _sentinel_;
+                const char *format, ...) _printf_attr_(5,0) _sentinel_;
 
 int log_oom_internal(
                 const char *file,
@@ -129,9 +148,9 @@ _noreturn_ void log_assert_failed_unreachable(
 /* This modifies the buffer passed! */
 #define log_dump(level, buffer) log_dump_internal(level, __FILE__, __LINE__, __func__, buffer)
 
-bool log_on_console(void);
+bool log_on_console(void) _pure_;
 
-const char *log_target_to_string(LogTarget target);
-LogTarget log_target_from_string(const char *s);
+const char *log_target_to_string(LogTarget target) _const_;
+LogTarget log_target_from_string(const char *s) _pure_;
 
 #define MESSAGE_ID(x) "MESSAGE_ID=" SD_ID128_FORMAT_STR, SD_ID128_FORMAT_VAL(x)

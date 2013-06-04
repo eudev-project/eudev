@@ -129,15 +129,14 @@ static int create_log_socket(int type) {
 }
 
 static int log_open_syslog(void) {
-        union sockaddr_union sa;
         int r;
+        union sockaddr_union sa = {
+                .un.sun_family = AF_UNIX,
+                .un.sun_path = "/dev/log",
+        };
 
         if (syslog_fd >= 0)
                 return 0;
-
-        zero(sa);
-        sa.un.sun_family = AF_UNIX;
-        strncpy(sa.un.sun_path, "/dev/log", sizeof(sa.un.sun_path));
 
         syslog_fd = create_log_socket(SOCK_DGRAM);
         if (syslog_fd < 0) {
@@ -183,7 +182,10 @@ void log_close_journal(void) {
 }
 
 static int log_open_journal(void) {
-        union sockaddr_union sa;
+        union sockaddr_union sa = {
+                .un.sun_family = AF_UNIX,
+                .un.sun_path = "/run/systemd/journal/socket",
+        };
         int r;
 
         if (journal_fd >= 0)
@@ -194,10 +196,6 @@ static int log_open_journal(void) {
                 r = journal_fd;
                 goto fail;
         }
-
-        zero(sa);
-        sa.un.sun_family = AF_UNIX;
-        strncpy(sa.un.sun_path, "/run/systemd/journal/socket", sizeof(sa.un.sun_path));
 
         if (connect(journal_fd, &sa.sa, offsetof(struct sockaddr_un, sun_path) + strlen(sa.un.sun_path)) < 0) {
                 r = -errno;
@@ -308,10 +306,12 @@ static int write_to_console(
                 const char*file,
                 int line,
                 const char *func,
+                const char *object_name,
+                const char *object,
                 const char *buffer) {
 
         char location[64];
-        struct iovec iovec[5];
+        struct iovec iovec[5] = {};
         unsigned n = 0;
         bool highlight;
 
@@ -319,8 +319,6 @@ static int write_to_console(
                 return 0;
 
         highlight = LOG_PRI(level) <= LOG_ERR && show_color;
-
-        zero(iovec);
 
         if (show_location) {
                 snprintf(location, sizeof(location), "(%s:%u) ", file, line);
@@ -346,11 +344,16 @@ static int write_to_syslog(
         const char*file,
         int line,
         const char *func,
+        const char *object_name,
+        const char *object,
         const char *buffer) {
 
         char header_priority[16], header_time[64], header_pid[16];
-        struct iovec iovec[5];
-        struct msghdr msghdr;
+        struct iovec iovec[5] = {};
+        struct msghdr msghdr = {
+                .msg_iov = iovec,
+                .msg_iovlen = ELEMENTSOF(iovec),
+        };
         time_t t;
         struct tm *tm;
 
@@ -361,7 +364,8 @@ static int write_to_syslog(
         char_array_0(header_priority);
 
         t = (time_t) (now(CLOCK_REALTIME) / USEC_PER_SEC);
-        if (!(tm = localtime(&t)))
+        tm = localtime(&t);
+        if (!tm)
                 return -EINVAL;
 
         if (strftime(header_time, sizeof(header_time), "%h %e %T ", tm) <= 0)
@@ -370,7 +374,6 @@ static int write_to_syslog(
         snprintf(header_pid, sizeof(header_pid), "[%lu]: ", (unsigned long) getpid());
         char_array_0(header_pid);
 
-        zero(iovec);
         IOVEC_SET_STRING(iovec[0], header_priority);
         IOVEC_SET_STRING(iovec[1], header_time);
         IOVEC_SET_STRING(iovec[2], program_invocation_short_name);
@@ -380,10 +383,6 @@ static int write_to_syslog(
         /* When using syslog via SOCK_STREAM separate the messages by NUL chars */
         if (syslog_is_stream)
                 iovec[4].iov_len++;
-
-        zero(msghdr);
-        msghdr.msg_iov = iovec;
-        msghdr.msg_iovlen = ELEMENTSOF(iovec);
 
         for (;;) {
                 ssize_t n;
@@ -407,10 +406,12 @@ static int write_to_kmsg(
         const char*file,
         int line,
         const char *func,
+        const char *object_name,
+        const char *object,
         const char *buffer) {
 
         char header_priority[16], header_pid[16];
-        struct iovec iovec[5];
+        struct iovec iovec[5] = {};
 
         if (kmsg_fd < 0)
                 return 0;
@@ -421,7 +422,6 @@ static int write_to_kmsg(
         snprintf(header_pid, sizeof(header_pid), "[%lu]: ", (unsigned long) getpid());
         char_array_0(header_pid);
 
-        zero(iovec);
         IOVEC_SET_STRING(iovec[0], header_priority);
         IOVEC_SET_STRING(iovec[1], program_invocation_short_name);
         IOVEC_SET_STRING(iovec[2], header_pid);
@@ -434,43 +434,61 @@ static int write_to_kmsg(
         return 1;
 }
 
+static int log_do_header(char *header, size_t size,
+                         int level,
+                         const char *file, int line, const char *func,
+                         const char *object_name, const char *object) {
+        snprintf(header, size,
+                 "PRIORITY=%i\n"
+                 "SYSLOG_FACILITY=%i\n"
+                 "%s%.*s%s"
+                 "%s%.*i%s"
+                 "%s%.*s%s"
+                 "%s%.*s%s"
+                 "SYSLOG_IDENTIFIER=%s\n",
+                 LOG_PRI(level),
+                 LOG_FAC(level),
+                 file ? "CODE_FILE=" : "",
+                 file ? LINE_MAX : 0, file, /* %.0s means no output */
+                 file ? "\n" : "",
+                 line ? "CODE_LINE=" : "",
+                 line ? 1 : 0, line, /* %.0d means no output too, special case for 0 */
+                 line ? "\n" : "",
+                 func ? "CODE_FUNCTION=" : "",
+                 func ? LINE_MAX : 0, func,
+                 func ? "\n" : "",
+                 object ? object_name : "",
+                 object ? LINE_MAX : 0, object, /* %.0s means no output */
+                 object ? "\n" : "",
+                 program_invocation_short_name);
+        header[size - 1] = '\0';
+        return 0;
+}
+
 static int write_to_journal(
         int level,
         const char*file,
         int line,
         const char *func,
+        const char *object_name,
+        const char *object,
         const char *buffer) {
 
         char header[LINE_MAX];
-        struct iovec iovec[3];
-        struct msghdr mh;
+        struct iovec iovec[4] = {};
+        struct msghdr mh = {};
 
         if (journal_fd < 0)
                 return 0;
 
-        snprintf(header, sizeof(header),
-                 "PRIORITY=%i\n"
-                 "SYSLOG_FACILITY=%i\n"
-                 "CODE_FILE=%s\n"
-                 "CODE_LINE=%i\n"
-                 "CODE_FUNCTION=%s\n"
-                 "SYSLOG_IDENTIFIER=%s\n"
-                 "MESSAGE=",
-                 LOG_PRI(level),
-                 LOG_FAC(level),
-                 file,
-                 line,
-                 func,
-                 program_invocation_short_name);
+        log_do_header(header, sizeof(header), level,
+                      file, line, func, object_name, object);
 
-        char_array_0(header);
-
-        zero(iovec);
         IOVEC_SET_STRING(iovec[0], header);
-        IOVEC_SET_STRING(iovec[1], buffer);
-        IOVEC_SET_STRING(iovec[2], "\n");
+        IOVEC_SET_STRING(iovec[1], "MESSAGE=");
+        IOVEC_SET_STRING(iovec[2], buffer);
+        IOVEC_SET_STRING(iovec[3], "\n");
 
-        zero(mh);
         mh.msg_iov = iovec;
         mh.msg_iovlen = ELEMENTSOF(iovec);
 
@@ -485,6 +503,8 @@ static int log_dispatch(
         const char*file,
         int line,
         const char *func,
+        const char *object_name,
+        const char *object,
         char *buffer) {
 
         int r = 0;
@@ -512,7 +532,8 @@ static int log_dispatch(
                     log_target == LOG_TARGET_JOURNAL_OR_KMSG ||
                     log_target == LOG_TARGET_JOURNAL) {
 
-                        k = write_to_journal(level, file, line, func, buffer);
+                        k = write_to_journal(level, file, line, func,
+                                             object_name, object, buffer);
                         if (k < 0) {
                                 if (k != -EAGAIN)
                                         log_close_journal();
@@ -524,7 +545,8 @@ static int log_dispatch(
                 if (log_target == LOG_TARGET_SYSLOG_OR_KMSG ||
                     log_target == LOG_TARGET_SYSLOG) {
 
-                        k = write_to_syslog(level, file, line, func, buffer);
+                        k = write_to_syslog(level, file, line, func,
+                                            object_name, object, buffer);
                         if (k < 0) {
                                 if (k != -EAGAIN)
                                         log_close_syslog();
@@ -540,7 +562,8 @@ static int log_dispatch(
                      log_target == LOG_TARGET_JOURNAL_OR_KMSG ||
                      log_target == LOG_TARGET_KMSG)) {
 
-                        k = write_to_kmsg(level, file, line, func, buffer);
+                        k = write_to_kmsg(level, file, line, func,
+                                          object_name, object, buffer);
                         if (k < 0) {
                                 log_close_kmsg();
                                 log_open_console();
@@ -549,7 +572,8 @@ static int log_dispatch(
                 }
 
                 if (k <= 0) {
-                        k = write_to_console(level, file, line, func, buffer);
+                        k = write_to_console(level, file, line, func,
+                                             object_name, object, buffer);
                         if (k < 0)
                                 return k;
                 }
@@ -567,18 +591,14 @@ int log_dump_internal(
         const char *func,
         char *buffer) {
 
-        int saved_errno, r;
+        PROTECT_ERRNO;
 
         /* This modifies the buffer... */
 
         if (_likely_(LOG_PRI(level) > log_max_level))
                 return 0;
 
-        saved_errno = errno;
-        r = log_dispatch(level, file, line, func, buffer);
-        errno = saved_errno;
-
-        return r;
+        return log_dispatch(level, file, line, func, NULL, NULL, buffer);
 }
 
 int log_metav(
@@ -589,20 +609,16 @@ int log_metav(
         const char *format,
         va_list ap) {
 
+        PROTECT_ERRNO;
         char buffer[LINE_MAX];
-        int saved_errno, r;
 
         if (_likely_(LOG_PRI(level) > log_max_level))
                 return 0;
 
-        saved_errno = errno;
         vsnprintf(buffer, sizeof(buffer), format, ap);
         char_array_0(buffer);
 
-        r = log_dispatch(level, file, line, func, buffer);
-        errno = saved_errno;
-
-        return r;
+        return log_dispatch(level, file, line, func, NULL, NULL, buffer);
 }
 
 int log_meta(
@@ -622,6 +638,49 @@ int log_meta(
         return r;
 }
 
+int log_metav_object(
+        int level,
+        const char*file,
+        int line,
+        const char *func,
+        const char *object_name,
+        const char *object,
+        const char *format,
+        va_list ap) {
+
+        PROTECT_ERRNO;
+        char buffer[LINE_MAX];
+
+        if (_likely_(LOG_PRI(level) > log_max_level))
+                return 0;
+
+        vsnprintf(buffer, sizeof(buffer), format, ap);
+        char_array_0(buffer);
+
+        return log_dispatch(level, file, line, func,
+                            object_name, object, buffer);
+}
+
+int log_meta_object(
+        int level,
+        const char*file,
+        int line,
+        const char *func,
+        const char *object_name,
+        const char *object,
+        const char *format, ...) {
+
+        int r;
+        va_list ap;
+
+        va_start(ap, format);
+        r = log_metav_object(level, file, line, func,
+                             object_name, object, format, ap);
+        va_end(ap);
+
+        return r;
+}
+
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wformat-nonliteral"
 _noreturn_ static void log_assert(const char *text, const char *file, int line, const char *func, const char *format) {
@@ -632,7 +691,7 @@ _noreturn_ static void log_assert(const char *text, const char *file, int line, 
         char_array_0(buffer);
         log_abort_msg = buffer;
 
-        log_dispatch(LOG_CRIT, file, line, func, buffer);
+        log_dispatch(LOG_CRIT, file, line, func, NULL, NULL, buffer);
         abort();
 }
 #pragma GCC diagnostic pop
@@ -657,7 +716,7 @@ int log_struct_internal(
                 const char *func,
                 const char *format, ...) {
 
-        int saved_errno;
+        PROTECT_ERRNO;
         va_list ap;
         int r;
 
@@ -670,37 +729,22 @@ int log_struct_internal(
         if ((level & LOG_FACMASK) == 0)
                 level = log_facility | LOG_PRI(level);
 
-        saved_errno = errno;
-
         if ((log_target == LOG_TARGET_AUTO ||
              log_target == LOG_TARGET_JOURNAL_OR_KMSG ||
              log_target == LOG_TARGET_JOURNAL) &&
             journal_fd >= 0) {
 
                 char header[LINE_MAX];
-                struct iovec iovec[17];
+                struct iovec iovec[17] = {};
                 unsigned n = 0, i;
-                struct msghdr mh;
-                const char nl = '\n';
+                struct msghdr mh = {
+                        .msg_iov = iovec,
+                };
+                static const char nl = '\n';
 
                 /* If the journal is available do structured logging */
-
-                snprintf(header, sizeof(header),
-                        "PRIORITY=%i\n"
-                        "SYSLOG_FACILITY=%i\n"
-                        "CODE_FILE=%s\n"
-                        "CODE_LINE=%i\n"
-                        "CODE_FUNCTION=%s\n"
-                        "SYSLOG_IDENTIFIER=%s\n",
-                        LOG_PRI(level),
-                        LOG_FAC(level),
-                        file,
-                        line,
-                        func,
-                        program_invocation_short_name);
-                char_array_0(header);
-
-                zero(iovec);
+                log_do_header(header, sizeof(header), level,
+                              file, line, func, NULL, NULL);
                 IOVEC_SET_STRING(iovec[n++], header);
 
                 va_start(ap, format);
@@ -733,8 +777,6 @@ int log_struct_internal(
                         format = va_arg(ap, char *);
                 }
 
-                zero(mh);
-                mh.msg_iov = iovec;
                 mh.msg_iovlen = n;
 
                 if (sendmsg(journal_fd, &mh, MSG_NOSIGNAL) < 0)
@@ -774,12 +816,12 @@ int log_struct_internal(
                 va_end(ap);
 
                 if (found)
-                        r = log_dispatch(level, file, line, func, buf + 8);
+                        r = log_dispatch(level, file, line, func,
+                                         NULL, NULL, buf + 8);
                 else
                         r = -EINVAL;
         }
 
-        errno = saved_errno;
         return r;
 }
 
