@@ -138,7 +138,8 @@ static inline int fanotify_init(unsigned int flags, unsigned int event_f_flags) 
 #ifndef HAVE_FANOTIFY_MARK
 static inline int fanotify_mark(int fanotify_fd, unsigned int flags, uint64_t mask,
                                 int dfd, const char *pathname) {
-#if defined _MIPS_SIM && _MIPS_SIM == _MIPS_SIM_ABI32 || defined __powerpc__ && !defined __powerpc64__
+#if defined _MIPS_SIM && _MIPS_SIM == _MIPS_SIM_ABI32 || defined __powerpc__ && !defined __powerpc64__ \
+	|| defined __arm__ && !defined __aarch64__
         union {
                 uint64_t _64;
                 uint32_t _32[2];
@@ -196,6 +197,14 @@ static inline pid_t gettid(void) {
 #define MS_STRICTATIME (1<<24)
 #endif
 
+#ifndef MS_REC
+#define MS_REC 16384
+#endif
+
+#ifndef MS_SHARED
+#define MS_SHARED (1<<20)
+#endif
+
 #ifndef PR_SET_NO_NEW_PRIVS
 #define PR_SET_NO_NEW_PRIVS 38
 #endif
@@ -244,4 +253,8 @@ static inline int name_to_handle_at(int fd, const char *name, struct file_handle
 
 #ifndef CIFS_MAGIC_NUMBER
 #define CIFS_MAGIC_NUMBER 0xFF534D42
+#endif
+
+#ifndef TFD_TIMER_CANCEL_ON_SET
+#define TFD_TIMER_CANCEL_ON_SET (1 << 1)
 #endif
