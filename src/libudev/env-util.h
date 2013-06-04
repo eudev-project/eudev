@@ -22,3 +22,4 @@
 ***/
 
 char *strv_env_get_n(char **l, const char *name, size_t k) _pure_;
+char *strv_env_get(char **x, const char *n) _pure_;

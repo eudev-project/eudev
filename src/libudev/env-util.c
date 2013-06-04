@@ -42,3 +42,8 @@ char *strv_env_get_n(char **l, const char *name, size_t k) {
         return NULL;
 }
 
+char *strv_env_get(char **l, const char *name) {
+        assert(name);
+
+        return strv_env_get_n(l, name, strlen(name));
+}

@@ -553,7 +553,7 @@ char *format_bytes(char *buf, size_t l, off_t t);
 
 int fd_wait_for_event(int fd, int event, usec_t timeout);
 
-void* memdup(const void *p, size_t l) _malloc_;
+void* memdup(const void *p, size_t l) _alloc_(2);
 
 int is_kernel_thread(pid_t pid);
 
@@ -575,14 +575,35 @@ bool in_initrd(void);
 
 void warn_melody(void);
 
-int get_shell(char **ret);
 int get_home_dir(char **ret);
 
-void freep(void *p);
-void fclosep(FILE **f);
-void closep(int *fd);
-void closedirp(DIR **d);
-void umaskp(mode_t *u);
+static inline void freep(void *p) {
+        free(*(void**) p);
+}
+
+static inline void fclosep(FILE **f) {
+        if (*f)
+                fclose(*f);
+}
+
+static inline void pclosep(FILE **f) {
+        if (*f)
+                pclose(*f);
+}
+
+static inline void closep(int *fd) {
+        if (*fd >= 0)
+                close_nointr_nofail(*fd);
+}
+
+static inline void closedirp(DIR **d) {
+        if (*d)
+                closedir(*d);
+}
+
+static inline void umaskp(mode_t *u) {
+        umask(*u);
+}
 
 #define _cleanup_free_ _cleanup_(freep)
 #define _cleanup_fclose_ _cleanup_(fclosep)
