@@ -21,6 +21,7 @@
   along with systemd; If not, see <http://www.gnu.org/licenses/>.
 ***/
 
+#include <alloca.h>
 #include <inttypes.h>
 #include <time.h>
 #include <sys/time.h>
@@ -36,6 +37,7 @@
 #include <dirent.h>
 #include <sys/resource.h>
 #include <stddef.h>
+#include <unistd.h>
 
 #include "macro.h"
 
@@ -77,7 +79,7 @@ union dirent_storage {
 #define WHITESPACE " \t\n\r"
 #define NEWLINE "\n\r"
 #define QUOTES "\"\'"
-#define COMMENTS "#;\n"
+#define COMMENTS "#;"
 
 #define FORMAT_TIMESTAMP_MAX (5+11+9+4+1)
 #define FORMAT_TIMESTAMP_PRETTY_MAX 256
@@ -85,12 +87,13 @@ union dirent_storage {
 #define FORMAT_BYTES_MAX 8
 
 #define ANSI_HIGHLIGHT_ON "\x1B[1;39m"
+#define ANSI_RED_ON "\x1B[31m"
 #define ANSI_HIGHLIGHT_RED_ON "\x1B[1;31m"
+#define ANSI_GREEN_ON "\x1B[32m"
 #define ANSI_HIGHLIGHT_GREEN_ON "\x1B[1;32m"
 #define ANSI_HIGHLIGHT_YELLOW_ON "\x1B[1;33m"
 #define ANSI_HIGHLIGHT_OFF "\x1B[0m"
-
-bool is_efiboot(void);
+#define ANSI_ERASE_TO_END_OF_LINE "\x1B[K"
 
 usec_t now(clockid_t clock);
 
@@ -111,7 +114,7 @@ size_t page_size(void);
 #define streq(a,b) (strcmp((a),(b)) == 0)
 #define strneq(a, b, n) (strncmp((a), (b), (n)) == 0)
 
-bool streq_ptr(const char *a, const char *b);
+bool streq_ptr(const char *a, const char *b) _pure_;
 
 #define new(t, n) ((t*) malloc_multiply(sizeof(t), (n)))
 
@@ -143,17 +146,17 @@ static inline bool isempty(const char *p) {
         return !p || !p[0];
 }
 
-char *endswith(const char *s, const char *postfix);
-char *startswith(const char *s, const char *prefix);
-char *startswith_no_case(const char *s, const char *prefix);
+char *endswith(const char *s, const char *postfix) _pure_;
+char *startswith(const char *s, const char *prefix) _pure_;
+char *startswith_no_case(const char *s, const char *prefix) _pure_;
 
-bool first_word(const char *s, const char *word);
+bool first_word(const char *s, const char *word) _pure_;
 
 int close_nointr(int fd);
 void close_nointr_nofail(int fd);
 void close_many(const int fds[], unsigned n_fd);
 
-int parse_boolean(const char *v);
+int parse_boolean(const char *v) _pure_;
 int parse_usec(const char *t, usec_t *usec);
 int parse_nsec(const char *t, nsec_t *nsec);
 int parse_bytes(const char *t, off_t *bytes);
@@ -257,12 +260,12 @@ int get_process_exe(pid_t pid, char **name);
 int get_process_uid(pid_t pid, uid_t *uid);
 int get_process_gid(pid_t pid, gid_t *gid);
 
-char hexchar(int x);
-int unhexchar(char c);
-char octchar(int x);
-int unoctchar(char c);
-char decchar(int x);
-int undecchar(char c);
+char hexchar(int x) _const_;
+int unhexchar(char c) _const_;
+char octchar(int x) _const_;
+int unoctchar(char c) _const_;
+char decchar(int x) _const_;
+int undecchar(char c) _const_;
 
 char *cescape(const char *s);
 char *cunescape(const char *s);
@@ -276,12 +279,12 @@ char *bus_path_unescape(const char *s);
 
 char *ascii_strlower(char *path);
 
-bool dirent_is_file(const struct dirent *de);
-bool dirent_is_file_with_suffix(const struct dirent *de, const char *suffix);
+bool dirent_is_file(const struct dirent *de) _pure_;
+bool dirent_is_file_with_suffix(const struct dirent *de, const char *suffix) _pure_;
 
-bool ignore_file(const char *filename);
+bool ignore_file(const char *filename) _pure_;
 
-bool chars_intersect(const char *a, const char *b);
+bool chars_intersect(const char *a, const char *b) _pure_;
 
 char *format_timestamp(char *buf, size_t l, usec_t t);
 char *format_timestamp_pretty(char *buf, size_t l, usec_t t);
@@ -357,7 +360,7 @@ bool fstype_is_network(const char *fstype);
 int chvt(int vt);
 
 int read_one_char(FILE *f, char *ret, usec_t timeout, bool *need_nl);
-int ask(char *ret, const char *replies, const char *text, ...);
+int ask(char *ret, const char *replies, const char *text, ...) _printf_attr_(3, 4);
 
 int reset_terminal_fd(int fd, bool switch_to_text);
 int reset_terminal(const char *name);
@@ -410,8 +413,8 @@ int pipe_eof(int fd);
 
 cpu_set_t* cpu_set_malloc(unsigned *ncpus);
 
-int status_vprintf(const char *status, bool ellipse, const char *format, va_list ap);
-int status_printf(const char *status, bool ellipse, const char *format, ...);
+int status_vprintf(const char *status, bool ellipse, bool ephemeral, const char *format, va_list ap) _printf_attr_(4,0);
+int status_printf(const char *status, bool ellipse, bool ephemeral, const char *format, ...) _printf_attr_(4,5);
 int status_welcome(void);
 
 int fd_columns(int fd);
@@ -437,7 +440,7 @@ int wait_for_terminate_and_warn(const char *name, pid_t pid);
 
 _noreturn_ void freeze(void);
 
-bool null_or_empty(struct stat *st);
+bool null_or_empty(struct stat *st) _pure_;
 int null_or_empty_path(const char *fn);
 
 DIR *xopendirat(int dirfd, const char *name, int flags);
@@ -447,9 +450,10 @@ void dual_timestamp_deserialize(const char *value, dual_timestamp *t);
 
 char *fstab_node_to_udev_node(const char *p);
 
+char *resolve_dev_console(char **active);
 bool tty_is_vc(const char *tty);
 bool tty_is_vc_resolve(const char *tty);
-bool tty_is_console(const char *tty);
+bool tty_is_console(const char *tty) _pure_;
 int vtnr_from_tty(const char *tty);
 const char *default_term_for_tty(const char *tty);
 
@@ -462,8 +466,8 @@ bool nulstr_contains(const char*nulstr, const char *needle);
 
 bool plymouth_running(void);
 
-bool hostname_is_valid(const char *s);
-char* hostname_cleanup(char *s);
+bool hostname_is_valid(const char *s) _pure_;
+char* hostname_cleanup(char *s, bool lowercase);
 
 char* strshorten(char *s, size_t l);
 
@@ -478,12 +482,13 @@ int symlink_atomic(const char *from, const char *to);
 
 int fchmod_umask(int fd, mode_t mode);
 
-bool display_is_local(const char *display);
+bool display_is_local(const char *display) _pure_;
 int socket_from_display(const char *display, char **path);
 
 int get_user_creds(const char **username, uid_t *uid, gid_t *gid, const char **home, const char **shell);
 int get_group_creds(const char **groupname, gid_t *gid);
 
+int in_gid(gid_t gid);
 int in_group(const char *name);
 
 int glob_exists(const char *path);
@@ -497,7 +502,7 @@ char *strjoin(const char *x, ...) _sentinel_;
 
 bool is_main_thread(void);
 
-bool in_charset(const char *s, const char* charset);
+bool in_charset(const char *s, const char* charset) _pure_;
 
 int block_get_whole_disk(dev_t d, dev_t *ret);
 
@@ -514,8 +519,8 @@ int strdup_or_null(const char *a, char **b);
 int ioprio_class_to_string_alloc(int i, char **s);
 int ioprio_class_from_string(const char *s);
 
-const char *sigchld_code_to_string(int i);
-int sigchld_code_from_string(const char *s);
+const char *sigchld_code_to_string(int i) _const_;
+int sigchld_code_from_string(const char *s) _pure_;
 
 int log_facility_unshifted_to_string_alloc(int i, char **s);
 int log_facility_unshifted_from_string(const char *s);
@@ -526,14 +531,14 @@ int log_level_from_string(const char *s);
 int sched_policy_to_string_alloc(int i, char **s);
 int sched_policy_from_string(const char *s);
 
-const char *rlimit_to_string(int i);
-int rlimit_from_string(const char *s);
+const char *rlimit_to_string(int i) _const_;
+int rlimit_from_string(const char *s) _pure_;
 
 int ip_tos_to_string_alloc(int i, char **s);
 int ip_tos_from_string(const char *s);
 
-const char *signal_to_string(int i);
-int signal_from_string(const char *s);
+const char *signal_to_string(int i) _const_;
+int signal_from_string(const char *s) _pure_;
 
 int signal_from_string_try_harder(const char *s);
 
@@ -542,7 +547,7 @@ extern char **saved_argv;
 
 bool kexec_loaded(void);
 
-int prot_from_flags(int flags);
+int prot_from_flags(int flags) _const_;
 
 char *format_bytes(char *buf, size_t l, off_t t);
 
@@ -579,22 +584,30 @@ void closep(int *fd);
 void closedirp(DIR **d);
 void umaskp(mode_t *u);
 
-_malloc_  static inline void *malloc_multiply(size_t a, size_t b) {
+#define _cleanup_free_ _cleanup_(freep)
+#define _cleanup_fclose_ _cleanup_(fclosep)
+#define _cleanup_pclose_ _cleanup_(pclosep)
+#define _cleanup_close_ _cleanup_(closep)
+#define _cleanup_closedir_ _cleanup_(closedirp)
+#define _cleanup_umask_ _cleanup_(umaskp)
+#define _cleanup_globfree_ _cleanup_(globfree)
+
+_malloc_  _alloc_(1, 2) static inline void *malloc_multiply(size_t a, size_t b) {
         if (_unlikely_(b == 0 || a > ((size_t) -1) / b))
                 return NULL;
 
         return malloc(a * b);
 }
 
-_malloc_ static inline void *memdup_multiply(const void *p, size_t a, size_t b) {
+_alloc_(2, 3) static inline void *memdup_multiply(const void *p, size_t a, size_t b) {
         if (_unlikely_(b == 0 || a > ((size_t) -1) / b))
                 return NULL;
 
         return memdup(p, a * b);
 }
 
-bool filename_is_safe(const char *p);
-bool string_is_safe(const char *p);
+bool filename_is_safe(const char *p) _pure_;
+bool string_is_safe(const char *p) _pure_;
 
 int parse_timestamp(const char *t, usec_t *usec);
 
@@ -608,9 +621,37 @@ typedef enum DrawSpecialChar {
         DRAW_TREE_VERT,
         DRAW_TREE_BRANCH,
         DRAW_TREE_RIGHT,
+        DRAW_TREE_SPACE,
         DRAW_TRIANGULAR_BULLET,
         _DRAW_SPECIAL_CHAR_MAX
 } DrawSpecialChar;
 const char *draw_special_char(DrawSpecialChar ch);
 
 char *strreplace(const char *text, const char *old_string, const char *new_string);
+
+
+#define FOREACH_LINE(line, f, on_error)                         \
+        for (;;)                                                \
+                if (!fgets(line, sizeof(line), f)) {            \
+                        if (ferror(f)) {                        \
+                                on_error;                       \
+                        }                                       \
+                        break;                                  \
+                } else
+
+
+static inline void _reset_errno_(int *saved_errno) {
+        errno = *saved_errno;
+}
+
+#define PROTECT_ERRNO _cleanup_(_reset_errno_) __attribute__((unused)) int _saved_errno_ = errno
+
+#define procfs_file_alloca(pid, field)                                  \
+        ({                                                              \
+                pid_t _pid_ = (pid);                                    \
+                char *_r_;                                              \
+                _r_ = alloca(sizeof("/proc/") -1 + DECIMAL_STR_MAX(pid_t) + 1 + sizeof(field)); \
+                sprintf(_r_, "/proc/%lu/" field, (unsigned long) _pid_); \
+                _r_;                                                    \
+        })
+

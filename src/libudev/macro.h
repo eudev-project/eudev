@@ -28,6 +28,7 @@
 #include <inttypes.h>
 
 #define _printf_attr_(a,b) __attribute__ ((format (printf, a, b)))
+#define _alloc_(...) __attribute__ ((alloc_size(__VA_ARGS__)))
 #define _sentinel_ __attribute__ ((sentinel))
 #define _noreturn_ __attribute__((noreturn))
 #define _unused_ __attribute__ ((unused))
@@ -45,15 +46,36 @@
 #define _weakref_(x) __attribute__((weakref(#x)))
 #define _introspect_(x) __attribute__((section("introspect." x)))
 #define _alignas_(x) __attribute__((aligned(__alignof(x))))
+#define _cleanup_(x) __attribute__((cleanup(x)))
+
+/* automake test harness */
+#define EXIT_TEST_SKIP 77
 
 #define XSTRINGIFY(x) #x
 #define STRINGIFY(x) XSTRINGIFY(x)
 
 /* Rounds up */
-#define ALIGN(l) ALIGN_TO((l), sizeof(void*))
+
+#define ALIGN4(l) (((l) + 3) & ~3)
+#define ALIGN8(l) (((l) + 7) & ~7)
+
+#if __SIZEOF_POINTER__ == 8
+#define ALIGN(l) ALIGN8(l)
+#elif __SIZEOF_POINTER__ == 4
+#define ALIGN(l) ALIGN4(l)
+#else
+#error "Wut? Pointers are neither 4 nor 8 bytes long?"
+#endif
+
+#define ALIGN_PTR(p) ((void*) ALIGN((unsigned long) p))
+#define ALIGN4_PTR(p) ((void*) ALIGN4((unsigned long) p))
+#define ALIGN8_PTR(p) ((void*) ALIGN8((unsigned long) p))
+
 static inline size_t ALIGN_TO(size_t l, size_t ali) {
         return ((l + ali - 1) & ~(ali - 1));
 }
+
+#define ALIGN_TO_PTR(p, ali) ((void*) ALIGN_TO((unsigned long) p))
 
 #define ELEMENTSOF(x) (sizeof(x)/sizeof((x)[0]))
 
@@ -64,33 +86,33 @@ static inline size_t ALIGN_TO(size_t l, size_t ali) {
  * @member: the name of the member within the struct.
  *
  */
-#define container_of(ptr, type, member) ({ \
-        const typeof( ((type *)0)->member ) *__mptr = (ptr); \
-        (type *)( (char *)__mptr - offsetof(type,member) );})
-
-#ifndef MAX
-#define MAX(a,b)                                \
-        __extension__ ({                        \
-                        typeof(a) _a = (a);     \
-                        typeof(b) _b = (b);     \
-                        _a > _b ? _a : _b;      \
+#define container_of(ptr, type, member)                                 \
+        __extension__ ({                                                \
+                        const typeof( ((type *)0)->member ) *__mptr = (ptr); \
+                        (type *)( (char *)__mptr - offsetof(type,member) ); \
                 })
-#endif
 
-#define MAX3(a,b,c)                             \
-        MAX(MAX(a,b),c)
+#undef MAX
+#define MAX(a,b)                                 \
+        __extension__ ({                         \
+                        typeof(a) _a = (a);      \
+                        typeof(b) _b = (b);      \
+                        _a > _b ? _a : _b;       \
+                })
 
-#ifndef MIN
+#define MAX3(x,y,z)                              \
+        __extension__ ({                         \
+                        typeof(x) _c = MAX(x,y); \
+                        MAX(_c, z);              \
+                })
+
+#undef MIN
 #define MIN(a,b)                                \
         __extension__ ({                        \
                         typeof(a) _a = (a);     \
                         typeof(b) _b = (b);     \
                         _a < _b ? _a : _b;      \
                 })
-#endif
-
-#define MIN3(a,b,c)                             \
-        MIN(MIN(a,b),c)
 
 #define CLAMP(x, low, high)                                             \
         __extension__ ({                                                \
@@ -119,35 +141,46 @@ static inline size_t ALIGN_TO(size_t l, size_t ali) {
                 log_assert_failed_unreachable(t, __FILE__, __LINE__, __PRETTY_FUNCTION__); \
         } while (false)
 
-#define assert_cc(expr)                            \
-        do {                                       \
-                switch (0) {                       \
-                        case 0:                    \
-                        case !!(expr):             \
-                                ;                  \
-                }                                  \
+#if defined(static_assert)
+#define assert_cc(expr)                         \
+        do {                                    \
+                static_assert(expr, #expr);     \
         } while (false)
-
-#define PTR_TO_UINT(p) ((unsigned int) ((uintptr_t) (p)))
-#define UINT_TO_PTR(u) ((void*) ((uintptr_t) (u)))
-
-#define PTR_TO_UINT32(p) ((uint32_t) ((uintptr_t) (p)))
-#define UINT32_TO_PTR(u) ((void*) ((uintptr_t) (u)))
-
-#define PTR_TO_ULONG(p) ((unsigned long) ((uintptr_t) (p)))
-#define ULONG_TO_PTR(u) ((void*) ((uintptr_t) (u)))
+#else
+#define assert_cc(expr)                         \
+        do {                                    \
+                switch (0) {                    \
+                case 0:                         \
+                case !!(expr):                  \
+                        ;                       \
+                }                               \
+        } while (false)
+#endif
 
 #define PTR_TO_INT(p) ((int) ((intptr_t) (p)))
-#define INT_TO_PTR(u) ((void*) ((intptr_t) (u)))
-
-#define TO_INT32(p) ((int32_t) ((intptr_t) (p)))
-#define INT32_TO_PTR(u) ((void*) ((intptr_t) (u)))
+#define INT_TO_PTR(u) ((void *) ((intptr_t) (u)))
+#define PTR_TO_UINT(p) ((unsigned int) ((uintptr_t) (p)))
+#define UINT_TO_PTR(u) ((void *) ((uintptr_t) (u)))
 
 #define PTR_TO_LONG(p) ((long) ((intptr_t) (p)))
-#define LONG_TO_PTR(u) ((void*) ((intptr_t) (u)))
+#define LONG_TO_PTR(u) ((void *) ((intptr_t) (u)))
+#define PTR_TO_ULONG(p) ((unsigned long) ((uintptr_t) (p)))
+#define ULONG_TO_PTR(u) ((void *) ((uintptr_t) (u)))
+
+#define PTR_TO_INT32(p) ((int32_t) ((intptr_t) (p)))
+#define INT32_TO_PTR(u) ((void *) ((intptr_t) (u)))
+#define PTR_TO_UINT32(p) ((uint32_t) ((uintptr_t) (p)))
+#define UINT32_TO_PTR(u) ((void *) ((uintptr_t) (u)))
+
+#define PTR_TO_INT64(p) ((int64_t) ((intptr_t) (p)))
+#define INT64_TO_PTR(u) ((void *) ((intptr_t) (u)))
+#define PTR_TO_UINT64(p) ((uint64_t) ((uintptr_t) (p)))
+#define UINT64_TO_PTR(u) ((void *) ((uintptr_t) (u)))
 
 #define memzero(x,l) (memset((x), 0, (l)))
 #define zero(x) (memzero(&(x), sizeof(x)))
+
+#define CHAR_TO_STR(x) ((char[2]) { x, 0 })
 
 #define char_array_0(x) x[sizeof(x)-1] = 0;
 
@@ -186,13 +219,6 @@ static inline size_t IOVEC_INCREMENT(struct iovec *i, unsigned n, size_t k) {
 
         return k;
 }
-
-#define _cleanup_free_ __attribute__((cleanup(freep)))
-#define _cleanup_fclose_ __attribute__((cleanup(fclosep)))
-#define _cleanup_close_ __attribute__((cleanup(closep)))
-#define _cleanup_closedir_ __attribute__((cleanup(closedirp)))
-#define _cleanup_umask_ __attribute__((cleanup(umaskp)))
-#define _cleanup_strv_free_ __attribute__((cleanup(strv_freep)))
 
 #define VA_FORMAT_ADVANCE(format, ap)                                   \
 do {                                                                    \
@@ -238,5 +264,25 @@ do {                                                                    \
                 }                                                       \
         }                                                               \
 } while(false)
+
+ /* Because statfs.t_type can be int on some architecures, we have to cast
+  * the const magic to the type, otherwise the compiler warns about
+  * signed/unsigned comparison, because the magic can be 32 bit unsigned.
+ */
+#define F_TYPE_CMP(a, b) (a == (typeof(a)) b)
+
+
+/* Returns the number of chars needed to format variables of the
+ * specified type as a decimal string. Adds in extra space for a
+ * negative '-' prefix. */
+
+#define DECIMAL_STR_MAX(type)                                           \
+        (1+(sizeof(type) <= 1 ? 3 :                                     \
+            sizeof(type) <= 2 ? 5 :                                     \
+            sizeof(type) <= 4 ? 10 :                                    \
+            sizeof(type) <= 8 ? 20 : sizeof(int[-2*(sizeof(type) > 8)])))
+
+#define SET_FLAG(v, flag, b) \
+        (v) = (b) ? ((v) | (flag)) : ((v) & ~(flag))
 
 #include "log.h"
