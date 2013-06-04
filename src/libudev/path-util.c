@@ -50,7 +50,8 @@ char *path_get_file_name(const char *p) {
 
         assert(p);
 
-        if ((r = strrchr(p, '/')))
+        r = strrchr(p, '/');
+        if (r)
                 return r + 1;
 
         return (char*) p;
@@ -135,7 +136,8 @@ char *path_make_absolute_cwd(const char *p) {
         if (path_is_absolute(p))
                 return strdup(p);
 
-        if (!(cwd = get_current_dir_name()))
+        cwd = get_current_dir_name();
+        if (!cwd)
                 return NULL;
 
         r = path_make_absolute(p, cwd);
@@ -181,6 +183,7 @@ char **path_strv_canonicalize(char **l) {
 
                 t = path_make_absolute_cwd(*s);
                 free(*s);
+                *s = NULL;
 
                 if (!t) {
                         enomem = true;
@@ -189,14 +192,18 @@ char **path_strv_canonicalize(char **l) {
 
                 errno = 0;
                 u = canonicalize_file_name(t);
-                free(t);
-
                 if (!u) {
-                        if (errno == ENOMEM || !errno)
-                                enomem = true;
+                        if (errno == ENOENT)
+                                u = t;
+                        else {
+                                free(t);
+                                if (errno == ENOMEM || !errno)
+                                        enomem = true;
 
-                        continue;
-                }
+                                continue;
+                        }
+                } else
+                        free(t);
 
                 l[k++] = u;
         }
@@ -209,24 +216,14 @@ char **path_strv_canonicalize(char **l) {
         return l;
 }
 
-char **path_strv_remove_empty(char **l) {
-        char **f, **t;
+char **path_strv_canonicalize_uniq(char **l) {
+        if (strv_isempty(l))
+                return l;
 
-        if (!l)
+        if (!path_strv_canonicalize(l))
                 return NULL;
 
-        for (f = t = l; *f; f++) {
-
-                if (dir_is_empty(*f) > 0) {
-                        free(*f);
-                        continue;
-                }
-
-                *(t++) = *f;
-        }
-
-        *t = NULL;
-        return l;
+        return strv_uniq(l);
 }
 
 char *path_kill_slashes(char *path) {
