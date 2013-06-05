@@ -33,7 +33,15 @@ typedef struct Set Set;
 
 Set *set_new(hash_func_t hash_func, compare_func_t compare_func);
 void set_free(Set* s);
+static inline void set_freep(Set **s) {
+        set_free(*s);
+}
+
 void set_free_free(Set *s);
+static inline void set_free_freep(Set **s) {
+        set_free_free(*s);
+}
+
 Set* set_copy(Set *s);
 int set_ensure_allocated(Set **s, hash_func_t hash_func, compare_func_t compare_func);
 
@@ -69,3 +77,6 @@ char **set_get_strv(Set *s);
 
 #define SET_FOREACH_BACKWARDS(e, s, i) \
         for ((i) = ITERATOR_LAST, (e) = set_iterate_backwards((s), &(i)); (e); (e) = set_iterate_backwards((s), &(i)))
+
+#define _cleanup_set_free_ _cleanup_(set_freep)
+#define _cleanup_set_free_free_ _cleanup_(set_free_freep)
