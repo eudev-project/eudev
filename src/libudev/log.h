@@ -44,23 +44,12 @@ typedef enum LogTarget{
 
 void log_set_target(LogTarget target);
 void log_set_max_level(int level);
-void log_set_facility(int facility);
-
-int log_set_target_from_string(const char *e);
-int log_set_max_level_from_string(const char *e);
 
 void log_show_color(bool b);
 void log_show_location(bool b);
 
-int log_show_color_from_string(const char *e);
-int log_show_location_from_string(const char *e);
-
-LogTarget log_get_target(void) _pure_;
-int log_get_max_level(void) _pure_;
-
 int log_open(void);
 void log_close(void);
-void log_forget_fds(void);
 
 void log_close_syslog(void);
 void log_close_journal(void);
@@ -82,15 +71,6 @@ int log_metav(
                 const char *format,
                 va_list ap) _printf_attr_(5,0);
 
-int log_meta_object(
-                int level,
-                const char*file,
-                int line,
-                const char *func,
-                const char *object_name,
-                const char *object,
-                const char *format, ...) _printf_attr_(7,8);
-
 int log_metav_object(
                 int level,
                 const char*file,
@@ -100,13 +80,6 @@ int log_metav_object(
                 const char *object,
                 const char *format,
                 va_list ap) _printf_attr_(7,0);
-
-int log_struct_internal(
-                int level,
-                const char *file,
-                int line,
-                const char *func,
-                const char *format, ...) _printf_attr_(5,0) _sentinel_;
 
 int log_oom_internal(
                 const char *file,
@@ -141,14 +114,10 @@ _noreturn_ void log_assert_failed_unreachable(
 #define log_warning(...) log_meta(LOG_WARNING, __FILE__, __LINE__, __func__, __VA_ARGS__)
 #define log_error(...)   log_meta(LOG_ERR,     __FILE__, __LINE__, __func__, __VA_ARGS__)
 
-#define log_struct(level, ...) log_struct_internal(level, __FILE__, __LINE__, __func__, __VA_ARGS__)
-
 #define log_oom() log_oom_internal(__FILE__, __LINE__, __func__)
 
 /* This modifies the buffer passed! */
 #define log_dump(level, buffer) log_dump_internal(level, __FILE__, __LINE__, __func__, buffer)
-
-bool log_on_console(void) _pure_;
 
 const char *log_target_to_string(LogTarget target) _const_;
 LogTarget log_target_from_string(const char *s) _pure_;

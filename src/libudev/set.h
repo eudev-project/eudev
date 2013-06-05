@@ -42,35 +42,17 @@ static inline void set_free_freep(Set **s) {
         set_free_free(*s);
 }
 
-Set* set_copy(Set *s);
-int set_ensure_allocated(Set **s, hash_func_t hash_func, compare_func_t compare_func);
-
 int set_put(Set *s, void *value);
-int set_replace(Set *s, void *value);
 void *set_get(Set *s, void *value);
 bool set_contains(Set *s, void *value);
 void *set_remove(Set *s, void *value);
-int set_remove_and_put(Set *s, void *old_value, void *new_value);
 
-int set_merge(Set *s, Set *other);
 void set_move(Set *s, Set *other);
-int set_move_one(Set *s, Set *other, void *value);
-
-unsigned set_size(Set *s);
-bool set_isempty(Set *s);
 
 void *set_iterate(Set *s, Iterator *i);
 void *set_iterate_backwards(Set *s, Iterator *i);
-void *set_iterate_skip(Set *s, void *value, Iterator *i);
 
 void set_clear(Set *s);
-void set_clear_free(Set *s);
-
-void *set_steal_first(Set *s);
-void* set_first(Set *s);
-void* set_last(Set *s);
-
-char **set_get_strv(Set *s);
 
 #define SET_FOREACH(e, s, i) \
         for ((i) = ITERATOR_FIRST, (e) = set_iterate((s), &(i)); (e); (e) = set_iterate((s), &(i)))

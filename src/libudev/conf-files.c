@@ -163,16 +163,3 @@ int conf_files_list(char ***strv, const char *suffix, const char *root, const ch
 
         return conf_files_list_strv_internal(strv, suffix, root, dirs);
 }
-
-int conf_files_list_nulstr(char ***strv, const char *suffix, const char *root, const char *d) {
-        _cleanup_strv_free_ char **dirs = NULL;
-
-        assert(strv);
-        assert(suffix);
-
-        dirs = strv_split_nulstr(d);
-        if (!dirs)
-                return -ENOMEM;
-
-        return conf_files_list_strv_internal(strv, suffix, root, dirs);
-}

@@ -287,18 +287,10 @@ void log_close(void) {
         log_close_console();
 }
 
-void log_forget_fds(void) {
-        console_fd = kmsg_fd = syslog_fd = journal_fd = -1;
-}
-
 void log_set_max_level(int level) {
         assert((level & LOG_PRIMASK) == level);
 
         log_max_level = level;
-}
-
-void log_set_facility(int facility) {
-        log_facility = facility;
 }
 
 static int write_to_console(
@@ -661,26 +653,6 @@ int log_metav_object(
                             object_name, object, buffer);
 }
 
-int log_meta_object(
-        int level,
-        const char*file,
-        int line,
-        const char *func,
-        const char *object_name,
-        const char *object,
-        const char *format, ...) {
-
-        int r;
-        va_list ap;
-
-        va_start(ap, format);
-        r = log_metav_object(level, file, line, func,
-                             object_name, object, format, ap);
-        va_end(ap);
-
-        return r;
-}
-
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wformat-nonliteral"
 _noreturn_ static void log_assert(const char *text, const char *file, int line, const char *func, const char *format) {
@@ -709,187 +681,12 @@ int log_oom_internal(const char *file, int line, const char *func) {
         return -ENOMEM;
 }
 
-int log_struct_internal(
-                int level,
-                const char *file,
-                int line,
-                const char *func,
-                const char *format, ...) {
-
-        PROTECT_ERRNO;
-        va_list ap;
-        int r;
-
-        if (_likely_(LOG_PRI(level) > log_max_level))
-                return 0;
-
-        if (log_target == LOG_TARGET_NULL)
-                return 0;
-
-        if ((level & LOG_FACMASK) == 0)
-                level = log_facility | LOG_PRI(level);
-
-        if ((log_target == LOG_TARGET_AUTO ||
-             log_target == LOG_TARGET_JOURNAL_OR_KMSG ||
-             log_target == LOG_TARGET_JOURNAL) &&
-            journal_fd >= 0) {
-
-                char header[LINE_MAX];
-                struct iovec iovec[17] = {};
-                unsigned n = 0, i;
-                struct msghdr mh = {
-                        .msg_iov = iovec,
-                };
-                static const char nl = '\n';
-
-                /* If the journal is available do structured logging */
-                log_do_header(header, sizeof(header), level,
-                              file, line, func, NULL, NULL);
-                IOVEC_SET_STRING(iovec[n++], header);
-
-                va_start(ap, format);
-                while (format && n + 1 < ELEMENTSOF(iovec)) {
-                        char *buf;
-                        va_list aq;
-
-                        /* We need to copy the va_list structure,
-                         * since vasprintf() leaves it afterwards at
-                         * an undefined location */
-
-                        va_copy(aq, ap);
-                        if (vasprintf(&buf, format, aq) < 0) {
-                                va_end(aq);
-                                r = -ENOMEM;
-                                goto finish;
-                        }
-                        va_end(aq);
-
-                        /* Now, jump enough ahead, so that we point to
-                         * the next format string */
-                        VA_FORMAT_ADVANCE(format, ap);
-
-                        IOVEC_SET_STRING(iovec[n++], buf);
-
-                        iovec[n].iov_base = (char*) &nl;
-                        iovec[n].iov_len = 1;
-                        n++;
-
-                        format = va_arg(ap, char *);
-                }
-
-                mh.msg_iovlen = n;
-
-                if (sendmsg(journal_fd, &mh, MSG_NOSIGNAL) < 0)
-                        r = -errno;
-                else
-                        r = 1;
-
-        finish:
-                va_end(ap);
-                for (i = 1; i < n; i += 2)
-                        free(iovec[i].iov_base);
-
-        } else {
-                char buf[LINE_MAX];
-                bool found = false;
-
-                /* Fallback if journal logging is not available */
-
-                va_start(ap, format);
-                while (format) {
-                        va_list aq;
-
-                        va_copy(aq, ap);
-                        vsnprintf(buf, sizeof(buf), format, aq);
-                        va_end(aq);
-                        char_array_0(buf);
-
-                        if (startswith(buf, "MESSAGE=")) {
-                                found = true;
-                                break;
-                        }
-
-                        VA_FORMAT_ADVANCE(format, ap);
-
-                        format = va_arg(ap, char *);
-                }
-                va_end(ap);
-
-                if (found)
-                        r = log_dispatch(level, file, line, func,
-                                         NULL, NULL, buf + 8);
-                else
-                        r = -EINVAL;
-        }
-
-        return r;
-}
-
-int log_set_target_from_string(const char *e) {
-        LogTarget t;
-
-        t = log_target_from_string(e);
-        if (t < 0)
-                return -EINVAL;
-
-        log_set_target(t);
-        return 0;
-}
-
-int log_set_max_level_from_string(const char *e) {
-        int t;
-
-        t = log_level_from_string(e);
-        if (t < 0)
-                return t;
-
-        log_set_max_level(t);
-        return 0;
-}
-
-LogTarget log_get_target(void) {
-        return log_target;
-}
-
-int log_get_max_level(void) {
-        return log_max_level;
-}
-
 void log_show_color(bool b) {
         show_color = b;
 }
 
 void log_show_location(bool b) {
         show_location = b;
-}
-
-int log_show_color_from_string(const char *e) {
-        int t;
-
-        t = parse_boolean(e);
-        if (t < 0)
-                return t;
-
-        log_show_color(t);
-        return 0;
-}
-
-int log_show_location_from_string(const char *e) {
-        int t;
-
-        t = parse_boolean(e);
-        if (t < 0)
-                return t;
-
-        log_show_location(t);
-        return 0;
-}
-
-bool log_on_console(void) {
-        if (log_target == LOG_TARGET_CONSOLE)
-                return true;
-
-        return syslog_fd < 0 && kmsg_fd < 0 && journal_fd < 0;
 }
 
 static const char *const log_target_table[] = {

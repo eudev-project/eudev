@@ -41,10 +41,6 @@ bool path_is_absolute(const char *p) {
         return p[0] == '/';
 }
 
-bool is_path(const char *p) {
-        return !!strchr(p, '/');
-}
-
 char *path_get_file_name(const char *p) {
         char *r;
 
@@ -96,21 +92,6 @@ int path_get_parent(const char *path, char **_r) {
 
         *_r = r;
         return 0;
-}
-
-char **path_split_and_make_absolute(const char *p) {
-        char **l;
-        assert(p);
-
-        if (!(l = strv_split(p, ":")))
-                return NULL;
-
-        if (!path_strv_make_absolute_cwd(l)) {
-                strv_free(l);
-                return NULL;
-        }
-
-        return l;
 }
 
 char *path_make_absolute(const char *p, const char *prefix) {

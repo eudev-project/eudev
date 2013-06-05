@@ -157,15 +157,6 @@ unsigned uint64_hash_func(const void *p) {
         return (unsigned) ((u >> 32) ^ u);
 }
 
-int uint64_compare_func(const void *_a, const void *_b) {
-        uint64_t a, b;
-
-        a = *(const uint64_t*) _a;
-        b = *(const uint64_t*) _b;
-
-        return a < b ? -1 : (a > b ? 1 : 0);
-}
-
 Hashmap *hashmap_new(hash_func_t hash_func, compare_func_t compare_func) {
         bool b;
         Hashmap *h;
@@ -309,17 +300,6 @@ void hashmap_free_free(Hashmap *h) {
         hashmap_free(h);
 }
 
-void hashmap_free_free_free(Hashmap *h) {
-
-        /* Free the hashmap and all data and key objects in it */
-
-        if (!h)
-                return;
-
-        hashmap_clear_free_free(h);
-        hashmap_free(h);
-}
-
 void hashmap_clear(Hashmap *h) {
         if (!h)
                 return;
@@ -416,21 +396,6 @@ int hashmap_replace(Hashmap *h, const void *key, void *value) {
         return hashmap_put(h, key, value);
 }
 
-int hashmap_update(Hashmap *h, const void *key, void *value) {
-        struct hashmap_entry *e;
-        unsigned hash;
-
-        assert(h);
-
-        hash = h->hash_func(key) % NBUCKETS;
-        e = hash_scan(h, hash, key);
-        if (!e)
-                return -ENOENT;
-
-        e->value = value;
-        return 0;
-}
-
 void* hashmap_get(Hashmap *h, const void *key) {
         unsigned hash;
         struct hashmap_entry *e;
@@ -442,24 +407,6 @@ void* hashmap_get(Hashmap *h, const void *key) {
         e = hash_scan(h, hash, key);
         if (!e)
                 return NULL;
-
-        return e->value;
-}
-
-void* hashmap_get2(Hashmap *h, const void *key, void **key2) {
-        unsigned hash;
-        struct hashmap_entry *e;
-
-        if (!h)
-                return NULL;
-
-        hash = h->hash_func(key) % NBUCKETS;
-        e = hash_scan(h, hash, key);
-        if (!e)
-                return NULL;
-
-        if (key2)
-                *key2 = (void*) e->key;
 
         return e->value;
 }
@@ -520,53 +467,6 @@ int hashmap_remove_and_put(Hashmap *h, const void *old_key, const void *new_key,
         link_entry(h, e, new_hash);
 
         return 0;
-}
-
-int hashmap_remove_and_replace(Hashmap *h, const void *old_key, const void *new_key, void *value) {
-        struct hashmap_entry *e, *k;
-        unsigned old_hash, new_hash;
-
-        if (!h)
-                return -ENOENT;
-
-        old_hash = h->hash_func(old_key) % NBUCKETS;
-        if (!(e = hash_scan(h, old_hash, old_key)))
-                return -ENOENT;
-
-        new_hash = h->hash_func(new_key) % NBUCKETS;
-
-        if ((k = hash_scan(h, new_hash, new_key)))
-                if (e != k)
-                        remove_entry(h, k);
-
-        unlink_entry(h, e, old_hash);
-
-        e->key = new_key;
-        e->value = value;
-
-        link_entry(h, e, new_hash);
-
-        return 0;
-}
-
-void* hashmap_remove_value(Hashmap *h, const void *key, void *value) {
-        struct hashmap_entry *e;
-        unsigned hash;
-
-        if (!h)
-                return NULL;
-
-        hash = h->hash_func(key) % NBUCKETS;
-
-        if (!(e = hash_scan(h, hash, key)))
-                return NULL;
-
-        if (e->value != value)
-                return NULL;
-
-        remove_entry(h, e);
-
-        return value;
 }
 
 void *hashmap_iterate(Hashmap *h, Iterator *i, const void **key) {
@@ -704,21 +604,6 @@ void* hashmap_steal_first(Hashmap *h) {
         return data;
 }
 
-void* hashmap_steal_first_key(Hashmap *h) {
-        void *key;
-
-        if (!h)
-                return NULL;
-
-        if (!h->iterate_list_head)
-                return NULL;
-
-        key = (void*) h->iterate_list_head->key;
-        remove_entry(h, h->iterate_list_head);
-
-        return key;
-}
-
 unsigned hashmap_size(Hashmap *h) {
 
         if (!h)
@@ -837,26 +722,4 @@ char **hashmap_get_strv(Hashmap *h) {
         sv[n] = NULL;
 
         return sv;
-}
-
-void *hashmap_next(Hashmap *h, const void *key) {
-        unsigned hash;
-        struct hashmap_entry *e;
-
-        assert(h);
-        assert(key);
-
-        if (!h)
-                return NULL;
-
-        hash = h->hash_func(key) % NBUCKETS;
-        e = hash_scan(h, hash, key);
-        if (!e)
-                return NULL;
-
-        e = e->iterate_next;
-        if (!e)
-                return NULL;
-
-        return e->value;
 }

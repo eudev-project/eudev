@@ -41,16 +41,8 @@ void set_free_free(Set *s) {
         hashmap_free_free(MAKE_HASHMAP(s));
 }
 
-int set_ensure_allocated(Set **s, hash_func_t hash_func, compare_func_t compare_func) {
-        return hashmap_ensure_allocated((Hashmap**) s, hash_func, compare_func);
-}
-
 int set_put(Set *s, void *value) {
         return hashmap_put(MAKE_HASHMAP(s), value, value);
-}
-
-int set_replace(Set *s, void *value) {
-        return hashmap_replace(MAKE_HASHMAP(s), value, value);
 }
 
 void *set_get(Set *s, void *value) {
@@ -65,18 +57,6 @@ void *set_remove(Set *s, void *value) {
         return hashmap_remove(MAKE_HASHMAP(s), value);
 }
 
-int set_remove_and_put(Set *s, void *old_value, void *new_value) {
-        return hashmap_remove_and_put(MAKE_HASHMAP(s), old_value, new_value, new_value);
-}
-
-unsigned set_size(Set *s) {
-        return hashmap_size(MAKE_HASHMAP(s));
-}
-
-bool set_isempty(Set *s) {
-        return hashmap_isempty(MAKE_HASHMAP(s));
-}
-
 void *set_iterate(Set *s, Iterator *i) {
         return hashmap_iterate(MAKE_HASHMAP(s), i, NULL);
 }
@@ -85,46 +65,10 @@ void *set_iterate_backwards(Set *s, Iterator *i) {
         return hashmap_iterate_backwards(MAKE_HASHMAP(s), i, NULL);
 }
 
-void *set_iterate_skip(Set *s, void *value, Iterator *i) {
-        return hashmap_iterate_skip(MAKE_HASHMAP(s), value, i);
-}
-
-void *set_steal_first(Set *s) {
-        return hashmap_steal_first(MAKE_HASHMAP(s));
-}
-
-void* set_first(Set *s) {
-        return hashmap_first(MAKE_HASHMAP(s));
-}
-
-void* set_last(Set *s) {
-        return hashmap_last(MAKE_HASHMAP(s));
-}
-
-int set_merge(Set *s, Set *other) {
-        return hashmap_merge(MAKE_HASHMAP(s), MAKE_HASHMAP(other));
-}
-
 void set_move(Set *s, Set *other) {
         return hashmap_move(MAKE_HASHMAP(s), MAKE_HASHMAP(other));
 }
 
-int set_move_one(Set *s, Set *other, void *value) {
-        return hashmap_move_one(MAKE_HASHMAP(s), MAKE_HASHMAP(other), value);
-}
-
-Set* set_copy(Set *s) {
-        return MAKE_SET(hashmap_copy(MAKE_HASHMAP(s)));
-}
-
 void set_clear(Set *s) {
         hashmap_clear(MAKE_HASHMAP(s));
-}
-
-void set_clear_free(Set *s) {
-        hashmap_clear_free(MAKE_HASHMAP(s));
-}
-
-char **set_get_strv(Set *s) {
-        return hashmap_get_strv(MAKE_HASHMAP(s));
 }
