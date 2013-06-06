@@ -30,10 +30,6 @@
 #include "label.h"
 #include "util.h"
 
-int mkdir_label(const char *path, mode_t mode) {
-        return label_mkdir(path, mode, true);
-}
-
 static int makedir_safe(const char *path, mode_t mode, uid_t uid, gid_t gid, bool apply) {
         struct stat st;
 
@@ -53,14 +49,6 @@ static int makedir_safe(const char *path, mode_t mode, uid_t uid, gid_t gid, boo
         }
 
         return 0;
-}
-
-int mkdir_safe(const char *path, mode_t mode, uid_t uid, gid_t gid) {
-        return makedir_safe(path, mode, uid, gid, false);
-}
-
-int mkdir_safe_label(const char *path, mode_t mode, uid_t uid, gid_t gid) {
-        return makedir_safe(path, mode, uid, gid, true);
 }
 
 static int makedir_parents(const char *path, mode_t mode, bool apply) {
@@ -140,8 +128,4 @@ static int makedir_p(const char *path, mode_t mode, bool apply) {
 
 int mkdir_p(const char *path, mode_t mode) {
         return makedir_p(path, mode, false);
-}
-
-int mkdir_p_label(const char *path, mode_t mode) {
-        return makedir_p(path, mode, true);
 }
