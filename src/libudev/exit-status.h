@@ -21,63 +21,7 @@
   along with systemd; If not, see <http://www.gnu.org/licenses/>.
 ***/
 
-#include <stdbool.h>
-#include "macro.h"
 #include "set.h"
-
-typedef enum ExitStatus {
-        /* EXIT_SUCCESS defined by libc */
-        /* EXIT_FAILURE defined by libc */
-        EXIT_INVALIDARGUMENT = 2,
-        EXIT_NOTIMPLEMENTED = 3,
-        EXIT_NOPERMISSION = 4,
-        EXIT_NOTINSTALLED = 5,
-        EXIT_NOTCONFIGURED = 6,
-        EXIT_NOTRUNNING = 7,
-
-        /* The LSB suggests that error codes >= 200 are "reserved". We
-         * use them here under the assumption that they hence are
-         * unused by init scripts.
-         *
-         * http://refspecs.freestandards.org/LSB_3.1.0/LSB-Core-generic/LSB-Core-generic/iniscrptact.html */
-
-        EXIT_CHDIR = 200,
-        EXIT_NICE,
-        EXIT_FDS,
-        EXIT_EXEC,
-        EXIT_MEMORY,
-        EXIT_LIMITS,
-        EXIT_OOM_ADJUST,
-        EXIT_SIGNAL_MASK,
-        EXIT_STDIN,
-        EXIT_STDOUT,
-        EXIT_CHROOT,   /* 210 */
-        EXIT_IOPRIO,
-        EXIT_TIMERSLACK,
-        EXIT_SECUREBITS,
-        EXIT_SETSCHEDULER,
-        EXIT_CPUAFFINITY,
-        EXIT_GROUP,
-        EXIT_USER,
-        EXIT_CAPABILITIES,
-        EXIT_CGROUP,
-        EXIT_SETSID,   /* 220 */
-        EXIT_CONFIRM,
-        EXIT_STDERR,
-        EXIT_TCPWRAP,
-        EXIT_PAM,
-        EXIT_NETWORK,
-        EXIT_NAMESPACE,
-        EXIT_NO_NEW_PRIVILEGES,
-        EXIT_SECCOMP
-} ExitStatus;
-
-typedef enum ExitStatusLevel {
-        EXIT_STATUS_MINIMAL,
-        EXIT_STATUS_SYSTEMD,
-        EXIT_STATUS_LSB,
-        EXIT_STATUS_FULL = EXIT_STATUS_LSB
-} ExitStatusLevel;
 
 typedef struct ExitStatusSet {
         Set *code;

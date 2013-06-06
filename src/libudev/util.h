@@ -21,21 +21,13 @@
   along with systemd; If not, see <http://www.gnu.org/licenses/>.
 ***/
 
-#include <alloca.h>
-#include <inttypes.h>
 #include <time.h>
-#include <sys/time.h>
-#include <stdarg.h>
-#include <stdbool.h>
 #include <stdlib.h>
 #include <stdio.h>
-#include <signal.h>
 #include <sched.h>
-#include <limits.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <dirent.h>
-#include <sys/resource.h>
 #include <stddef.h>
 #include <unistd.h>
 
@@ -81,11 +73,6 @@ union dirent_storage {
 #define QUOTES "\"\'"
 #define COMMENTS "#;"
 
-#define FORMAT_TIMESTAMP_MAX (5+11+9+4+1)
-#define FORMAT_TIMESTAMP_PRETTY_MAX 256
-#define FORMAT_TIMESPAN_MAX 64
-#define FORMAT_BYTES_MAX 8
-
 #define ANSI_HIGHLIGHT_ON "\x1B[1;39m"
 #define ANSI_RED_ON "\x1B[31m"
 #define ANSI_HIGHLIGHT_RED_ON "\x1B[1;31m"
@@ -96,9 +83,6 @@ union dirent_storage {
 #define ANSI_ERASE_TO_END_OF_LINE "\x1B[K"
 
 usec_t now(clockid_t clock);
-
-#define dual_timestamp_is_set(ts) ((ts)->realtime > 0)
-
 usec_t timespec_load(const struct timespec *ts);
 
 size_t page_size(void);
@@ -110,30 +94,8 @@ size_t page_size(void);
 bool streq_ptr(const char *a, const char *b) _pure_;
 
 #define new(t, n) ((t*) malloc_multiply(sizeof(t), (n)))
-
 #define new0(t, n) ((t*) calloc((n), sizeof(t)))
-
-#define newa(t, n) ((t*) alloca(sizeof(t)*(n)))
-
-#define newdup(t, p, n) ((t*) memdup_multiply(p, sizeof(t), (n)))
-
 #define malloc0(n) (calloc((n), 1))
-
-static inline const char* yes_no(bool b) {
-        return b ? "yes" : "no";
-}
-
-static inline const char* strempty(const char *s) {
-        return s ? s : "";
-}
-
-static inline const char* strnull(const char *s) {
-        return s ? s : "(null)";
-}
-
-static inline const char *strna(const char *s) {
-        return s ? s : "n/a";
-}
 
 static inline bool isempty(const char *p) {
         return !p || !p[0];
@@ -151,54 +113,8 @@ int safe_atoi(const char *s, int *ret_i);
 int safe_atollu(const char *s, unsigned long long *ret_u);
 int safe_atolli(const char *s, long long int *ret_i);
 
-#if __WORDSIZE == 32
-static inline int safe_atolu(const char *s, unsigned long *ret_u) {
-        assert_cc(sizeof(unsigned long) == sizeof(unsigned));
-        return safe_atou(s, (unsigned*) ret_u);
-}
-static inline int safe_atoli(const char *s, long int *ret_u) {
-        assert_cc(sizeof(long int) == sizeof(int));
-        return safe_atoi(s, (int*) ret_u);
-}
-#else
-static inline int safe_atolu(const char *s, unsigned long *ret_u) {
-        assert_cc(sizeof(unsigned long) == sizeof(unsigned long long));
-        return safe_atollu(s, (unsigned long long*) ret_u);
-}
-static inline int safe_atoli(const char *s, long int *ret_u) {
-        assert_cc(sizeof(long int) == sizeof(long long int));
-        return safe_atolli(s, (long long int*) ret_u);
-}
-#endif
-
-static inline int safe_atou32(const char *s, uint32_t *ret_u) {
-        assert_cc(sizeof(uint32_t) == sizeof(unsigned));
-        return safe_atou(s, (unsigned*) ret_u);
-}
-
-static inline int safe_atoi32(const char *s, int32_t *ret_i) {
-        assert_cc(sizeof(int32_t) == sizeof(int));
-        return safe_atoi(s, (int*) ret_i);
-}
-
-static inline int safe_atou64(const char *s, uint64_t *ret_u) {
-        assert_cc(sizeof(uint64_t) == sizeof(unsigned long long));
-        return safe_atollu(s, (unsigned long long*) ret_u);
-}
-
-static inline int safe_atoi64(const char *s, int64_t *ret_i) {
-        assert_cc(sizeof(int64_t) == sizeof(long long int));
-        return safe_atolli(s, (long long int*) ret_i);
-}
-
 char *split(const char *c, size_t *l, const char *separator, char **state);
 char *split_quoted(const char *c, size_t *l, char **state);
-
-#define FOREACH_WORD(word, length, s, state)                            \
-        for ((state) = NULL, (word) = split((s), &(length), WHITESPACE, &(state)); (word); (word) = split((s), &(length), WHITESPACE, &(state)))
-
-#define FOREACH_WORD_SEPARATOR(word, length, s, separator, state)       \
-        for ((state) = NULL, (word) = split((s), &(length), (separator), &(state)); (word); (word) = split((s), &(length), (separator), &(state)))
 
 #define FOREACH_WORD_QUOTED(word, length, s, state)                     \
         for ((state) = NULL, (word) = split_quoted((s), &(length), &(state)); (word); (word) = split_quoted((s), &(length), &(state)))
@@ -284,9 +200,6 @@ char *strjoin(const char *x, ...) _sentinel_;
 
 bool is_main_thread(void);
 
-#define NULSTR_FOREACH(i, l)                                    \
-        for ((i) = (l); (i) && *(i); (i) = strchr((i), 0)+1)
-
 #define NULSTR_FOREACH_PAIR(i, j, l)                             \
         for ((i) = (l), (j) = strchr((i), 0)+1; (i) && *(i); (i) = strchr((j), 0)+1, (j) = *(i) ? strchr((i), 0)+1 : (i))
 
@@ -329,11 +242,6 @@ static inline void fclosep(FILE **f) {
                 fclose(*f);
 }
 
-static inline void pclosep(FILE **f) {
-        if (*f)
-                pclose(*f);
-}
-
 static inline void closep(int *fd) {
         if (*fd >= 0)
                 close_nointr_nofail(*fd);
@@ -344,17 +252,10 @@ static inline void closedirp(DIR **d) {
                 closedir(*d);
 }
 
-static inline void umaskp(mode_t *u) {
-        umask(*u);
-}
-
 #define _cleanup_free_ _cleanup_(freep)
 #define _cleanup_fclose_ _cleanup_(fclosep)
-#define _cleanup_pclose_ _cleanup_(pclosep)
 #define _cleanup_close_ _cleanup_(closep)
 #define _cleanup_closedir_ _cleanup_(closedirp)
-#define _cleanup_umask_ _cleanup_(umaskp)
-#define _cleanup_globfree_ _cleanup_(globfree)
 
 _malloc_  _alloc_(1, 2) static inline void *malloc_multiply(size_t a, size_t b) {
         if (_unlikely_(b == 0 || a > ((size_t) -1) / b))
@@ -367,38 +268,8 @@ void *xbsearch_r(const void *key, const void *base, size_t nmemb, size_t size,
                  int (*compar) (const void *, const void *, void *),
                  void *arg);
 
-typedef enum DrawSpecialChar {
-        DRAW_TREE_VERT,
-        DRAW_TREE_BRANCH,
-        DRAW_TREE_RIGHT,
-        DRAW_TREE_SPACE,
-        DRAW_TRIANGULAR_BULLET,
-        _DRAW_SPECIAL_CHAR_MAX
-} DrawSpecialChar;
-
-
-#define FOREACH_LINE(line, f, on_error)                         \
-        for (;;)                                                \
-                if (!fgets(line, sizeof(line), f)) {            \
-                        if (ferror(f)) {                        \
-                                on_error;                       \
-                        }                                       \
-                        break;                                  \
-                } else
-
-
 static inline void _reset_errno_(int *saved_errno) {
         errno = *saved_errno;
 }
 
 #define PROTECT_ERRNO _cleanup_(_reset_errno_) __attribute__((unused)) int _saved_errno_ = errno
-
-#define procfs_file_alloca(pid, field)                                  \
-        ({                                                              \
-                pid_t _pid_ = (pid);                                    \
-                char *_r_;                                              \
-                _r_ = alloca(sizeof("/proc/") -1 + DECIMAL_STR_MAX(pid_t) + 1 + sizeof(field)); \
-                sprintf(_r_, "/proc/%lu/" field, (unsigned long) _pid_); \
-                _r_;                                                    \
-        })
-
