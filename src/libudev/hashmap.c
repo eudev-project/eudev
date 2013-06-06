@@ -103,19 +103,6 @@ static void deallocate_tile(void **first_tile, void *p) {
         *first_tile = p;
 }
 
-#ifdef VALGRIND
-
-static void drop_pool(struct pool *p) {
-        while (p) {
-                struct pool *n;
-                n = p->next;
-                free(p);
-                p = n;
-        }
-}
-
-#endif
-
 unsigned string_hash_func(const void *p) {
         unsigned hash = 5381;
         const signed char *c;
@@ -363,25 +350,6 @@ bool hashmap_contains(Hashmap *h, const void *key) {
         return true;
 }
 
-void* hashmap_remove(Hashmap *h, const void *key) {
-        struct hashmap_entry *e;
-        unsigned hash;
-        void *data;
-
-        if (!h)
-                return NULL;
-
-        hash = h->hash_func(key) % NBUCKETS;
-
-        if (!(e = hash_scan(h, hash, key)))
-                return NULL;
-
-        data = e->value;
-        remove_entry(h, e);
-
-        return data;
-}
-
 void *hashmap_iterate(Hashmap *h, Iterator *i, const void **key) {
         struct hashmap_entry *e;
 
@@ -492,34 +460,6 @@ int hashmap_merge(Hashmap *h, Hashmap *other) {
         }
 
         return 0;
-}
-
-void hashmap_move(Hashmap *h, Hashmap *other) {
-        struct hashmap_entry *e, *n;
-
-        assert(h);
-
-        /* The same as hashmap_merge(), but every new item from other
-         * is moved to h. This function is guaranteed to succeed. */
-
-        if (!other)
-                return;
-
-        for (e = other->iterate_list_head; e; e = n) {
-                unsigned h_hash, other_hash;
-
-                n = e->iterate_next;
-
-                h_hash = h->hash_func(e->key) % NBUCKETS;
-
-                if (hash_scan(h, h_hash, e->key))
-                        continue;
-
-                other_hash = other->hash_func(e->key) % NBUCKETS;
-
-                unlink_entry(other, e, other_hash);
-                link_entry(h, e, h_hash);
-        }
 }
 
 char **hashmap_get_strv(Hashmap *h) {

@@ -145,9 +145,6 @@ char *startswith(const char *s, const char *prefix) _pure_;
 int close_nointr(int fd);
 void close_nointr_nofail(int fd);
 
-int parse_uid(const char *s, uid_t* ret_uid);
-#define parse_gid(s, ret_uid) parse_uid(s, ret_uid)
-
 int safe_atou(const char *s, unsigned *ret_u);
 int safe_atoi(const char *s, int *ret_i);
 
@@ -208,30 +205,19 @@ char *split_quoted(const char *c, size_t *l, char **state);
 
 int write_one_line_file(const char *fn, const char *line);
 int read_one_line_file(const char *fn, char **line);
-int read_full_file(const char *fn, char **contents, size_t *size);
 
 char *strappend(const char *s, const char *suffix);
 char *strnappend(const char *s, const char *suffix, size_t length);
 
 int readlink_malloc(const char *p, char **r);
 
-char *strstrip(char *s);
 char *truncate_nl(char *s);
-
-char *file_in_same_dir(const char *path, const char *filename);
 
 char hexchar(int x) _const_;
 int unhexchar(char c) _const_;
 char octchar(int x) _const_;
 int unoctchar(char c) _const_;
 
-char *cunescape(const char *s);
-char *cunescape_length(const char *s, size_t length);
-char *cunescape_length_with_prefix(const char *s, size_t length, const char *prefix);
-
-char *xescape(const char *s, const char *bad);
-
-bool dirent_is_file(const struct dirent *de) _pure_;
 bool dirent_is_file_with_suffix(const struct dirent *de, const char *suffix) _pure_;
 
 bool ignore_file(const char *filename) _pure_;
@@ -292,64 +278,20 @@ char *format_timespan(char *buf, size_t l, usec_t t);
         }                                                               \
         struct __useless_struct_to_allow_trailing_semicolon__
 
-int close_all_fds(const int except[], unsigned n_except);
-
-int read_one_char(FILE *f, char *ret, usec_t timeout, bool *need_nl);
-int ask(char *ret, const char *replies, const char *text, ...) _printf_attr_(3, 4);
-
-int reset_terminal_fd(int fd, bool switch_to_text);
-int reset_terminal(const char *name);
-
 int open_terminal(const char *name, int mode);
-
-int flush_fd(int fd);
 
 int fopen_temporary(const char *path, FILE **_f, char **_temp_path);
 
-ssize_t loop_read(int fd, void *buf, size_t nbytes, bool do_poll);
-
-int get_ctty_devnr(pid_t pid, dev_t *d);
-int get_ctty(pid_t, dev_t *_devnr, char **r);
-
 int chmod_and_chown(const char *path, mode_t mode, uid_t uid, gid_t gid);
-
-int rm_rf_children(int fd, bool only_dirs, bool honour_sticky, struct stat *root_dev);
-int rm_rf_children_dangerous(int fd, bool only_dirs, bool honour_sticky, struct stat *root_dev);
-int rm_rf(const char *path, bool only_dirs, bool delete_root, bool honour_sticky);
-
-int status_vprintf(const char *status, bool ellipse, bool ephemeral, const char *format, va_list ap) _printf_attr_(4,0);
-
-int fd_columns(int fd);
-unsigned columns(void);
-int fd_lines(int fd);
-unsigned lines(void);
-
-bool on_tty(void);
-
-char *ellipsize(const char *s, size_t length, unsigned percent);
-char *ellipsize_mem(const char *s, size_t old_length, size_t new_length, unsigned percent);
-
-int touch(const char *path);
-
-char *unquote(const char *s, const char *quotes);
 
 bool null_or_empty(struct stat *st) _pure_;
 int null_or_empty_path(const char *fn);
 
-char *resolve_dev_console(char **active);
-bool tty_is_vc(const char *tty);
-int vtnr_from_tty(const char *tty);
-
 int execute_command(const char *command, char *const argv[]);
-
-int terminal_vhangup_fd(int fd);
-int terminal_vhangup(const char *name);
 
 char *strjoin(const char *x, ...) _sentinel_;
 
 bool is_main_thread(void);
-
-int file_is_priv_sticky(const char *p);
 
 #define NULSTR_FOREACH(i, l)                                    \
         for ((i) = (l); (i) && *(i); (i) = strchr((i), 0)+1)
@@ -379,14 +321,9 @@ int ip_tos_to_string_alloc(int i, char **s);
 int ip_tos_from_string(const char *s);
 
 const char *signal_to_string(int i) _const_;
-int signal_from_string(const char *s) _pure_;
 
 extern int saved_argc;
 extern char **saved_argv;
-
-int fd_wait_for_event(int fd, int event, usec_t timeout);
-
-void* memdup(const void *p, size_t l) _alloc_(2);
 
 int fd_inc_sndbuf(int fd, size_t n);
 
@@ -433,13 +370,6 @@ _malloc_  _alloc_(1, 2) static inline void *malloc_multiply(size_t a, size_t b) 
                 return NULL;
 
         return malloc(a * b);
-}
-
-_alloc_(2, 3) static inline void *memdup_multiply(const void *p, size_t a, size_t b) {
-        if (_unlikely_(b == 0 || a > ((size_t) -1) / b))
-                return NULL;
-
-        return memdup(p, a * b);
 }
 
 void *xbsearch_r(const void *key, const void *base, size_t nmemb, size_t size,

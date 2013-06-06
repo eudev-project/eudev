@@ -56,10 +56,8 @@ void hashmap_free_free(Hashmap *h);
 int hashmap_put(Hashmap *h, const void *key, void *value);
 void *hashmap_get(Hashmap *h, const void *key);
 bool hashmap_contains(Hashmap *h, const void *key);
-void *hashmap_remove(Hashmap *h, const void *key);
 
 int hashmap_merge(Hashmap *h, Hashmap *other);
-void hashmap_move(Hashmap *h, Hashmap *other);
 
 unsigned hashmap_size(Hashmap *h) _pure_;
 

@@ -73,14 +73,6 @@ int log_oom_internal(
                 int line,
                 const char *func);
 
-/* This modifies the buffer passed! */
-int log_dump_internal(
-                int level,
-                const char*file,
-                int line,
-                const char *func,
-                char *buffer);
-
 _noreturn_ void log_assert_failed(
                 const char *text,
                 const char *file,
@@ -102,9 +94,6 @@ _noreturn_ void log_assert_failed_unreachable(
 #define log_error(...)   log_meta(LOG_ERR,     __FILE__, __LINE__, __func__, __VA_ARGS__)
 
 #define log_oom() log_oom_internal(__FILE__, __LINE__, __func__)
-
-/* This modifies the buffer passed! */
-#define log_dump(level, buffer) log_dump_internal(level, __FILE__, __LINE__, __func__, buffer)
 
 const char *log_target_to_string(LogTarget target) _const_;
 LogTarget log_target_from_string(const char *s) _pure_;

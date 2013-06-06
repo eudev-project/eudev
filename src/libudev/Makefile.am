@@ -36,7 +36,6 @@ libudev_la_SOURCES =\
 	cgroup-util.c \
 	conf-files.c \
 	exit-status.c \
-	env-util.c \
 	hashmap.c \
 	log.c \
 	path-util.c \
@@ -51,7 +50,6 @@ noinst_HEADERS = \
 	cgroup-util.h \
 	conf-files.h \
 	def.h \
-	env-util.h \
 	exit-status.h \
 	hashmap.h \
 	ioprio.h \
