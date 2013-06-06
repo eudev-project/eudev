@@ -37,10 +37,6 @@ void set_free(Set* s) {
         hashmap_free(MAKE_HASHMAP(s));
 }
 
-void set_free_free(Set *s) {
-        hashmap_free_free(MAKE_HASHMAP(s));
-}
-
 int set_put(Set *s, void *value) {
         return hashmap_put(MAKE_HASHMAP(s), value, value);
 }

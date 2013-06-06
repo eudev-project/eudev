@@ -443,25 +443,6 @@ unsigned hashmap_size(Hashmap *h) {
         return h->n_entries;
 }
 
-int hashmap_merge(Hashmap *h, Hashmap *other) {
-        struct hashmap_entry *e;
-
-        assert(h);
-
-        if (!other)
-                return 0;
-
-        for (e = other->iterate_list_head; e; e = e->iterate_next) {
-                int r;
-
-                if ((r = hashmap_put(h, e->key, e->value)) < 0)
-                        if (r != -EEXIST)
-                                return r;
-        }
-
-        return 0;
-}
-
 char **hashmap_get_strv(Hashmap *h) {
         char **sv;
         Iterator it;

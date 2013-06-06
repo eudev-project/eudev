@@ -576,23 +576,6 @@ static int log_dispatch(
         return r;
 }
 
-int log_dump_internal(
-        int level,
-        const char*file,
-        int line,
-        const char *func,
-        char *buffer) {
-
-        PROTECT_ERRNO;
-
-        /* This modifies the buffer... */
-
-        if (_likely_(LOG_PRI(level) > log_max_level))
-                return 0;
-
-        return log_dispatch(level, file, line, func, NULL, NULL, buffer);
-}
-
 int log_metav(
         int level,
         const char*file,

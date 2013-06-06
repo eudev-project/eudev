@@ -57,8 +57,6 @@ int hashmap_put(Hashmap *h, const void *key, void *value);
 void *hashmap_get(Hashmap *h, const void *key);
 bool hashmap_contains(Hashmap *h, const void *key);
 
-int hashmap_merge(Hashmap *h, Hashmap *other);
-
 unsigned hashmap_size(Hashmap *h) _pure_;
 
 void *hashmap_iterate(Hashmap *h, Iterator *i, const void **key);

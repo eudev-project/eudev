@@ -331,14 +331,3 @@ fallback:
 
         return a.st_dev != b.st_dev;
 }
-
-int path_is_read_only_fs(const char *path) {
-        struct statvfs st;
-
-        assert(path);
-
-        if (statvfs(path, &st) < 0)
-                return -errno;
-
-        return !!(st.f_flag & ST_RDONLY);
-}

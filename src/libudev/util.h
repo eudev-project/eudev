@@ -209,20 +209,11 @@ int read_one_line_file(const char *fn, char **line);
 char *strappend(const char *s, const char *suffix);
 char *strnappend(const char *s, const char *suffix, size_t length);
 
-int readlink_malloc(const char *p, char **r);
-
 char *truncate_nl(char *s);
-
-char hexchar(int x) _const_;
-int unhexchar(char c) _const_;
-char octchar(int x) _const_;
-int unoctchar(char c) _const_;
 
 bool dirent_is_file_with_suffix(const struct dirent *de, const char *suffix) _pure_;
 
 bool ignore_file(const char *filename) _pure_;
-
-char *format_timespan(char *buf, size_t l, usec_t t);
 
 /* For basic lookup tables with strictly enumerated entries */
 #define __DEFINE_STRING_TABLE_LOOKUP(name,type,scope)                   \

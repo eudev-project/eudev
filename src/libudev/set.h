@@ -37,11 +37,6 @@ static inline void set_freep(Set **s) {
         set_free(*s);
 }
 
-void set_free_free(Set *s);
-static inline void set_free_freep(Set **s) {
-        set_free_free(*s);
-}
-
 int set_put(Set *s, void *value);
 void *set_get(Set *s, void *value);
 bool set_contains(Set *s, void *value);
@@ -56,4 +51,3 @@ void *set_iterate_backwards(Set *s, Iterator *i);
         for ((i) = ITERATOR_LAST, (e) = set_iterate_backwards((s), &(i)); (e); (e) = set_iterate_backwards((s), &(i)))
 
 #define _cleanup_set_free_ _cleanup_(set_freep)
-#define _cleanup_set_free_free_ _cleanup_(set_free_freep)
