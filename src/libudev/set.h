@@ -45,14 +45,9 @@ static inline void set_free_freep(Set **s) {
 int set_put(Set *s, void *value);
 void *set_get(Set *s, void *value);
 bool set_contains(Set *s, void *value);
-void *set_remove(Set *s, void *value);
-
-void set_move(Set *s, Set *other);
 
 void *set_iterate(Set *s, Iterator *i);
 void *set_iterate_backwards(Set *s, Iterator *i);
-
-void set_clear(Set *s);
 
 #define SET_FOREACH(e, s, i) \
         for ((i) = ITERATOR_FIRST, (e) = set_iterate((s), &(i)); (e); (e) = set_iterate((s), &(i)))

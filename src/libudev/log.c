@@ -630,29 +630,6 @@ int log_meta(
         return r;
 }
 
-int log_metav_object(
-        int level,
-        const char*file,
-        int line,
-        const char *func,
-        const char *object_name,
-        const char *object,
-        const char *format,
-        va_list ap) {
-
-        PROTECT_ERRNO;
-        char buffer[LINE_MAX];
-
-        if (_likely_(LOG_PRI(level) > log_max_level))
-                return 0;
-
-        vsnprintf(buffer, sizeof(buffer), format, ap);
-        char_array_0(buffer);
-
-        return log_dispatch(level, file, line, func,
-                            object_name, object, buffer);
-}
-
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wformat-nonliteral"
 _noreturn_ static void log_assert(const char *text, const char *file, int line, const char *func, const char *format) {
@@ -679,14 +656,6 @@ _noreturn_ void log_assert_failed_unreachable(const char *text, const char *file
 int log_oom_internal(const char *file, int line, const char *func) {
         log_meta(LOG_ERR, file, line, func, "Out of memory.");
         return -ENOMEM;
-}
-
-void log_show_color(bool b) {
-        show_color = b;
-}
-
-void log_show_location(bool b) {
-        show_location = b;
 }
 
 static const char *const log_target_table[] = {

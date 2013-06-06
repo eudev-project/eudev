@@ -45,9 +45,6 @@ typedef enum LogTarget{
 void log_set_target(LogTarget target);
 void log_set_max_level(int level);
 
-void log_show_color(bool b);
-void log_show_location(bool b);
-
 int log_open(void);
 void log_close(void);
 
@@ -70,16 +67,6 @@ int log_metav(
                 const char *func,
                 const char *format,
                 va_list ap) _printf_attr_(5,0);
-
-int log_metav_object(
-                int level,
-                const char*file,
-                int line,
-                const char *func,
-                const char *object_name,
-                const char *object,
-                const char *format,
-                va_list ap) _printf_attr_(7,0);
 
 int log_oom_internal(
                 const char *file,

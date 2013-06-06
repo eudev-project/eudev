@@ -53,22 +53,10 @@ bool set_contains(Set *s, void *value) {
         return hashmap_contains(MAKE_HASHMAP(s), value);
 }
 
-void *set_remove(Set *s, void *value) {
-        return hashmap_remove(MAKE_HASHMAP(s), value);
-}
-
 void *set_iterate(Set *s, Iterator *i) {
         return hashmap_iterate(MAKE_HASHMAP(s), i, NULL);
 }
 
 void *set_iterate_backwards(Set *s, Iterator *i) {
         return hashmap_iterate_backwards(MAKE_HASHMAP(s), i, NULL);
-}
-
-void set_move(Set *s, Set *other) {
-        return hashmap_move(MAKE_HASHMAP(s), MAKE_HASHMAP(other));
-}
-
-void set_clear(Set *s) {
-        hashmap_clear(MAKE_HASHMAP(s));
 }

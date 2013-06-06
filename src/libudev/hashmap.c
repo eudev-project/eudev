@@ -114,13 +114,6 @@ static void drop_pool(struct pool *p) {
         }
 }
 
-__attribute__((destructor)) static void cleanup_pool(void) {
-        /* Be nice to valgrind */
-
-        drop_pool(first_hashmap_pool);
-        drop_pool(first_entry_pool);
-}
-
 #endif
 
 unsigned string_hash_func(const void *p) {
@@ -145,16 +138,6 @@ unsigned trivial_hash_func(const void *p) {
 
 int trivial_compare_func(const void *a, const void *b) {
         return a < b ? -1 : (a > b ? 1 : 0);
-}
-
-unsigned uint64_hash_func(const void *p) {
-        uint64_t u;
-
-        assert_cc(sizeof(uint64_t) == 2*sizeof(unsigned));
-
-        u = *(const uint64_t*) p;
-
-        return (unsigned) ((u >> 32) ^ u);
 }
 
 Hashmap *hashmap_new(hash_func_t hash_func, compare_func_t compare_func) {
@@ -188,18 +171,6 @@ Hashmap *hashmap_new(hash_func_t hash_func, compare_func_t compare_func) {
         h->from_pool = b;
 
         return h;
-}
-
-int hashmap_ensure_allocated(Hashmap **h, hash_func_t hash_func, compare_func_t compare_func) {
-        assert(h);
-
-        if (*h)
-                return 0;
-
-        if (!(*h = hashmap_new(hash_func, compare_func)))
-                return -ENOMEM;
-
-        return 0;
 }
 
 static void link_entry(Hashmap *h, struct hashmap_entry *e, unsigned hash) {
@@ -318,22 +289,6 @@ void hashmap_clear_free(Hashmap *h) {
                 free(p);
 }
 
-void hashmap_clear_free_free(Hashmap *h) {
-        if (!h)
-                return;
-
-        while (h->iterate_list_head) {
-                void *a, *b;
-
-                a = h->iterate_list_head->value;
-                b = (void*) h->iterate_list_head->key;
-                remove_entry(h, h->iterate_list_head);
-                free(a);
-                free(b);
-        }
-}
-
-
 static struct hashmap_entry *hash_scan(Hashmap *h, unsigned hash, const void *key) {
         struct hashmap_entry *e;
         assert(h);
@@ -377,23 +332,6 @@ int hashmap_put(Hashmap *h, const void *key, void *value) {
         link_entry(h, e, hash);
 
         return 1;
-}
-
-int hashmap_replace(Hashmap *h, const void *key, void *value) {
-        struct hashmap_entry *e;
-        unsigned hash;
-
-        assert(h);
-
-        hash = h->hash_func(key) % NBUCKETS;
-        e = hash_scan(h, hash, key);
-        if (e) {
-                e->key = key;
-                e->value = value;
-                return 0;
-        }
-
-        return hashmap_put(h, key, value);
 }
 
 void* hashmap_get(Hashmap *h, const void *key) {
@@ -442,31 +380,6 @@ void* hashmap_remove(Hashmap *h, const void *key) {
         remove_entry(h, e);
 
         return data;
-}
-
-int hashmap_remove_and_put(Hashmap *h, const void *old_key, const void *new_key, void *value) {
-        struct hashmap_entry *e;
-        unsigned old_hash, new_hash;
-
-        if (!h)
-                return -ENOENT;
-
-        old_hash = h->hash_func(old_key) % NBUCKETS;
-        if (!(e = hash_scan(h, old_hash, old_key)))
-                return -ENOENT;
-
-        new_hash = h->hash_func(new_key) % NBUCKETS;
-        if (hash_scan(h, new_hash, new_key))
-                return -EEXIST;
-
-        unlink_entry(h, e, old_hash);
-
-        e->key = new_key;
-        e->value = value;
-
-        link_entry(h, e, new_hash);
-
-        return 0;
 }
 
 void *hashmap_iterate(Hashmap *h, Iterator *i, const void **key) {
@@ -539,56 +452,6 @@ at_beginning:
         return NULL;
 }
 
-void *hashmap_iterate_skip(Hashmap *h, const void *key, Iterator *i) {
-        unsigned hash;
-        struct hashmap_entry *e;
-
-        if (!h)
-                return NULL;
-
-        hash = h->hash_func(key) % NBUCKETS;
-
-        if (!(e = hash_scan(h, hash, key)))
-                return NULL;
-
-        *i = (Iterator) e;
-
-        return e->value;
-}
-
-void* hashmap_first(Hashmap *h) {
-
-        if (!h)
-                return NULL;
-
-        if (!h->iterate_list_head)
-                return NULL;
-
-        return h->iterate_list_head->value;
-}
-
-void* hashmap_first_key(Hashmap *h) {
-
-        if (!h)
-                return NULL;
-
-        if (!h->iterate_list_head)
-                return NULL;
-
-        return (void*) h->iterate_list_head->key;
-}
-
-void* hashmap_last(Hashmap *h) {
-
-        if (!h)
-                return NULL;
-
-        if (!h->iterate_list_tail)
-                return NULL;
-
-        return h->iterate_list_tail->value;
-}
-
 void* hashmap_steal_first(Hashmap *h) {
         void *data;
 
@@ -610,14 +473,6 @@ unsigned hashmap_size(Hashmap *h) {
                 return 0;
 
         return h->n_entries;
-}
-
-bool hashmap_isempty(Hashmap *h) {
-
-        if (!h)
-                return true;
-
-        return h->n_entries == 0;
 }
 
 int hashmap_merge(Hashmap *h, Hashmap *other) {
@@ -665,45 +520,6 @@ void hashmap_move(Hashmap *h, Hashmap *other) {
                 unlink_entry(other, e, other_hash);
                 link_entry(h, e, h_hash);
         }
-}
-
-int hashmap_move_one(Hashmap *h, Hashmap *other, const void *key) {
-        unsigned h_hash, other_hash;
-        struct hashmap_entry *e;
-
-        if (!other)
-                return 0;
-
-        assert(h);
-
-        h_hash = h->hash_func(key) % NBUCKETS;
-        if (hash_scan(h, h_hash, key))
-                return -EEXIST;
-
-        other_hash = other->hash_func(key) % NBUCKETS;
-        if (!(e = hash_scan(other, other_hash, key)))
-                return -ENOENT;
-
-        unlink_entry(other, e, other_hash);
-        link_entry(h, e, h_hash);
-
-        return 0;
-}
-
-Hashmap *hashmap_copy(Hashmap *h) {
-        Hashmap *copy;
-
-        assert(h);
-
-        if (!(copy = hashmap_new(h->hash_func, h->compare_func)))
-                return NULL;
-
-        if (hashmap_merge(copy, h) < 0) {
-                hashmap_free(copy);
-                return NULL;
-        }
-
-        return copy;
 }
 
 char **hashmap_get_strv(Hashmap *h) {

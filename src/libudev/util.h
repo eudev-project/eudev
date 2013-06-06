@@ -97,16 +97,9 @@ union dirent_storage {
 
 usec_t now(clockid_t clock);
 
-dual_timestamp* dual_timestamp_get(dual_timestamp *ts);
-dual_timestamp* dual_timestamp_from_realtime(dual_timestamp *ts, usec_t u);
-
 #define dual_timestamp_is_set(ts) ((ts)->realtime > 0)
 
 usec_t timespec_load(const struct timespec *ts);
-struct timespec *timespec_store(struct timespec *ts, usec_t u);
-
-usec_t timeval_load(const struct timeval *tv);
-struct timeval *timeval_store(struct timeval *tv, usec_t u);
 
 size_t page_size(void);
 #define PAGE_ALIGN(l) ALIGN_TO((l), page_size())
@@ -152,8 +145,6 @@ char *startswith(const char *s, const char *prefix) _pure_;
 int close_nointr(int fd);
 void close_nointr_nofail(int fd);
 
-int parse_boolean(const char *v) _pure_;
-int parse_usec(const char *t, usec_t *usec);
 int parse_uid(const char *s, uid_t* ret_uid);
 #define parse_gid(s, ret_uid) parse_uid(s, ret_uid)
 
@@ -219,22 +210,15 @@ int write_one_line_file(const char *fn, const char *line);
 int read_one_line_file(const char *fn, char **line);
 int read_full_file(const char *fn, char **contents, size_t *size);
 
-int parse_env_file(const char *fname, const char *separator, ...) _sentinel_;
-
 char *strappend(const char *s, const char *suffix);
 char *strnappend(const char *s, const char *suffix, size_t length);
 
-char *replace_env(const char *format, char **env);
-
 int readlink_malloc(const char *p, char **r);
-int readlink_and_make_absolute(const char *p, char **r);
 
 char *strstrip(char *s);
 char *truncate_nl(char *s);
 
 char *file_in_same_dir(const char *path, const char *filename);
-
-int get_process_comm(pid_t pid, char **name);
 
 char hexchar(int x) _const_;
 int unhexchar(char c) _const_;
@@ -247,19 +231,12 @@ char *cunescape_length_with_prefix(const char *s, size_t length, const char *pre
 
 char *xescape(const char *s, const char *bad);
 
-char *bus_path_unescape(const char *s);
-
 bool dirent_is_file(const struct dirent *de) _pure_;
 bool dirent_is_file_with_suffix(const struct dirent *de, const char *suffix) _pure_;
 
 bool ignore_file(const char *filename) _pure_;
 
-char *format_timestamp(char *buf, size_t l, usec_t t);
 char *format_timespan(char *buf, size_t l, usec_t t);
-
-int make_stdio(int fd);
-
-unsigned long long random_ull(void);
 
 /* For basic lookup tables with strictly enumerated entries */
 #define __DEFINE_STRING_TABLE_LOOKUP(name,type,scope)                   \
@@ -324,16 +301,12 @@ int reset_terminal_fd(int fd, bool switch_to_text);
 int reset_terminal(const char *name);
 
 int open_terminal(const char *name, int mode);
-int acquire_terminal(const char *name, bool fail, bool force, bool ignore_tiocstty_eperm, usec_t timeout);
 
 int flush_fd(int fd);
 
 int fopen_temporary(const char *path, FILE **_f, char **_temp_path);
 
 ssize_t loop_read(int fd, void *buf, size_t nbytes, bool do_poll);
-ssize_t loop_write(int fd, const void *buf, size_t nbytes, bool do_poll);
-
-int getttyname_malloc(int fd, char **r);
 
 int get_ctty_devnr(pid_t pid, dev_t *d);
 int get_ctty(pid_t, dev_t *_devnr, char **r);
@@ -345,7 +318,6 @@ int rm_rf_children_dangerous(int fd, bool only_dirs, bool honour_sticky, struct 
 int rm_rf(const char *path, bool only_dirs, bool delete_root, bool honour_sticky);
 
 int status_vprintf(const char *status, bool ellipse, bool ephemeral, const char *format, va_list ap) _printf_attr_(4,0);
-int status_printf(const char *status, bool ellipse, bool ephemeral, const char *format, ...) _printf_attr_(4,5);
 
 int fd_columns(int fd);
 unsigned columns(void);
@@ -360,38 +332,18 @@ char *ellipsize_mem(const char *s, size_t old_length, size_t new_length, unsigne
 int touch(const char *path);
 
 char *unquote(const char *s, const char *quotes);
-char *normalize_env_assignment(const char *s);
-
-int wait_for_terminate(pid_t pid, siginfo_t *status);
-
-_noreturn_ void freeze(void);
 
 bool null_or_empty(struct stat *st) _pure_;
 int null_or_empty_path(const char *fn);
 
 char *resolve_dev_console(char **active);
 bool tty_is_vc(const char *tty);
-bool tty_is_vc_resolve(const char *tty);
 int vtnr_from_tty(const char *tty);
 
 int execute_command(const char *command, char *const argv[]);
 
-bool nulstr_contains(const char*nulstr, const char *needle);
-
-char* strshorten(char *s, size_t l);
-
 int terminal_vhangup_fd(int fd);
 int terminal_vhangup(const char *name);
-
-int fchmod_umask(int fd, mode_t mode);
-
-bool display_is_local(const char *display) _pure_;
-
-int get_group_creds(const char **groupname, gid_t *gid);
-
-int in_gid(gid_t gid);
-
-int dirent_ensure_type(DIR *d, struct dirent *de);
 
 char *strjoin(const char *x, ...) _sentinel_;
 
@@ -493,8 +445,6 @@ _alloc_(2, 3) static inline void *memdup_multiply(const void *p, size_t a, size_
 void *xbsearch_r(const void *key, const void *base, size_t nmemb, size_t size,
                  int (*compar) (const void *, const void *, void *),
                  void *arg);
-
-bool is_locale_utf8(void);
 
 typedef enum DrawSpecialChar {
         DRAW_TREE_VERT,

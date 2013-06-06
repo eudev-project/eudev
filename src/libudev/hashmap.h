@@ -49,40 +49,27 @@ int string_compare_func(const void *a, const void *b) _pure_;
 unsigned trivial_hash_func(const void *p) _const_;
 int trivial_compare_func(const void *a, const void *b) _const_;
 
-unsigned uint64_hash_func(const void *p) _pure_;
-
 Hashmap *hashmap_new(hash_func_t hash_func, compare_func_t compare_func);
 void hashmap_free(Hashmap *h);
 void hashmap_free_free(Hashmap *h);
-Hashmap *hashmap_copy(Hashmap *h);
-int hashmap_ensure_allocated(Hashmap **h, hash_func_t hash_func, compare_func_t compare_func);
 
 int hashmap_put(Hashmap *h, const void *key, void *value);
-int hashmap_replace(Hashmap *h, const void *key, void *value);
 void *hashmap_get(Hashmap *h, const void *key);
 bool hashmap_contains(Hashmap *h, const void *key);
 void *hashmap_remove(Hashmap *h, const void *key);
-int hashmap_remove_and_put(Hashmap *h, const void *old_key, const void *new_key, void *value);
 
 int hashmap_merge(Hashmap *h, Hashmap *other);
 void hashmap_move(Hashmap *h, Hashmap *other);
-int hashmap_move_one(Hashmap *h, Hashmap *other, const void *key);
 
 unsigned hashmap_size(Hashmap *h) _pure_;
-bool hashmap_isempty(Hashmap *h) _pure_;
 
 void *hashmap_iterate(Hashmap *h, Iterator *i, const void **key);
 void *hashmap_iterate_backwards(Hashmap *h, Iterator *i, const void **key);
-void *hashmap_iterate_skip(Hashmap *h, const void *key, Iterator *i);
 
 void hashmap_clear(Hashmap *h);
 void hashmap_clear_free(Hashmap *h);
-void hashmap_clear_free_free(Hashmap *h);
 
 void *hashmap_steal_first(Hashmap *h);
-void *hashmap_first(Hashmap *h) _pure_;
-void *hashmap_first_key(Hashmap *h) _pure_;
-void *hashmap_last(Hashmap *h) _pure_;
 
 char **hashmap_get_strv(Hashmap *h);
 
