@@ -148,19 +148,12 @@ static inline bool isempty(const char *p) {
 
 char *endswith(const char *s, const char *postfix) _pure_;
 char *startswith(const char *s, const char *prefix) _pure_;
-char *startswith_no_case(const char *s, const char *prefix) _pure_;
-
-bool first_word(const char *s, const char *word) _pure_;
 
 int close_nointr(int fd);
 void close_nointr_nofail(int fd);
-void close_many(const int fds[], unsigned n_fd);
 
 int parse_boolean(const char *v) _pure_;
 int parse_usec(const char *t, usec_t *usec);
-int parse_nsec(const char *t, nsec_t *nsec);
-int parse_bytes(const char *t, off_t *bytes);
-int parse_pid(const char *s, pid_t* ret_pid);
 int parse_uid(const char *s, uid_t* ret_uid);
 #define parse_gid(s, ret_uid) parse_uid(s, ret_uid)
 
@@ -222,77 +215,49 @@ char *split_quoted(const char *c, size_t *l, char **state);
 #define FOREACH_WORD_QUOTED(word, length, s, state)                     \
         for ((state) = NULL, (word) = split_quoted((s), &(length), &(state)); (word); (word) = split_quoted((s), &(length), &(state)))
 
-pid_t get_parent_of_pid(pid_t pid, pid_t *ppid);
-int get_starttime_of_pid(pid_t pid, unsigned long long *st);
-
 int write_one_line_file(const char *fn, const char *line);
-int write_one_line_file_atomic(const char *fn, const char *line);
 int read_one_line_file(const char *fn, char **line);
 int read_full_file(const char *fn, char **contents, size_t *size);
 
 int parse_env_file(const char *fname, const char *separator, ...) _sentinel_;
-int load_env_file(const char *fname, char ***l);
-int write_env_file(const char *fname, char **l);
 
 char *strappend(const char *s, const char *suffix);
 char *strnappend(const char *s, const char *suffix, size_t length);
 
 char *replace_env(const char *format, char **env);
-char **replace_env_argv(char **argv, char **env);
 
 int readlink_malloc(const char *p, char **r);
 int readlink_and_make_absolute(const char *p, char **r);
-int readlink_and_canonicalize(const char *p, char **r);
-
-int reset_all_signal_handlers(void);
 
 char *strstrip(char *s);
-char *delete_chars(char *s, const char *bad);
 char *truncate_nl(char *s);
 
 char *file_in_same_dir(const char *path, const char *filename);
 
-int rmdir_parents(const char *path, const char *stop);
-
 int get_process_comm(pid_t pid, char **name);
-int get_process_cmdline(pid_t pid, size_t max_length, bool comm_fallback, char **line);
-int get_process_exe(pid_t pid, char **name);
-int get_process_uid(pid_t pid, uid_t *uid);
-int get_process_gid(pid_t pid, gid_t *gid);
 
 char hexchar(int x) _const_;
 int unhexchar(char c) _const_;
 char octchar(int x) _const_;
 int unoctchar(char c) _const_;
-char decchar(int x) _const_;
-int undecchar(char c) _const_;
 
-char *cescape(const char *s);
 char *cunescape(const char *s);
 char *cunescape_length(const char *s, size_t length);
 char *cunescape_length_with_prefix(const char *s, size_t length, const char *prefix);
 
 char *xescape(const char *s, const char *bad);
 
-char *bus_path_escape(const char *s);
 char *bus_path_unescape(const char *s);
-
-char *ascii_strlower(char *path);
 
 bool dirent_is_file(const struct dirent *de) _pure_;
 bool dirent_is_file_with_suffix(const struct dirent *de, const char *suffix) _pure_;
 
 bool ignore_file(const char *filename) _pure_;
 
-bool chars_intersect(const char *a, const char *b) _pure_;
-
 char *format_timestamp(char *buf, size_t l, usec_t t);
-char *format_timestamp_pretty(char *buf, size_t l, usec_t t);
 char *format_timespan(char *buf, size_t l, usec_t t);
 
 int make_stdio(int fd);
-int make_null_stdio(void);
-int make_console_stdio(void);
 
 unsigned long long random_ull(void);
 
@@ -350,14 +315,7 @@ unsigned long long random_ull(void);
         }                                                               \
         struct __useless_struct_to_allow_trailing_semicolon__
 
-int fd_nonblock(int fd, bool nonblock);
-int fd_cloexec(int fd, bool cloexec);
-
 int close_all_fds(const int except[], unsigned n_except);
-
-bool fstype_is_network(const char *fstype);
-
-int chvt(int vt);
 
 int read_one_char(FILE *f, char *ret, usec_t timeout, bool *need_nl);
 int ask(char *ret, const char *replies, const char *text, ...) _printf_attr_(3, 4);
@@ -367,65 +325,34 @@ int reset_terminal(const char *name);
 
 int open_terminal(const char *name, int mode);
 int acquire_terminal(const char *name, bool fail, bool force, bool ignore_tiocstty_eperm, usec_t timeout);
-int release_terminal(void);
 
 int flush_fd(int fd);
 
-int ignore_signals(int sig, ...);
-int default_signals(int sig, ...);
-int sigaction_many(const struct sigaction *sa, ...);
-
-int close_pipe(int p[]);
 int fopen_temporary(const char *path, FILE **_f, char **_temp_path);
 
 ssize_t loop_read(int fd, void *buf, size_t nbytes, bool do_poll);
 ssize_t loop_write(int fd, const void *buf, size_t nbytes, bool do_poll);
 
-bool is_device_path(const char *path);
-
-int dir_is_empty(const char *path);
-
-void rename_process(const char name[8]);
-
-void sigset_add_many(sigset_t *ss, ...);
-
-bool hostname_is_set(void);
-
-char* gethostname_malloc(void);
-char* getlogname_malloc(void);
-char* getusername_malloc(void);
-
 int getttyname_malloc(int fd, char **r);
-int getttyname_harder(int fd, char **r);
 
 int get_ctty_devnr(pid_t pid, dev_t *d);
 int get_ctty(pid_t, dev_t *_devnr, char **r);
 
 int chmod_and_chown(const char *path, mode_t mode, uid_t uid, gid_t gid);
-int fchmod_and_fchown(int fd, mode_t mode, uid_t uid, gid_t gid);
 
 int rm_rf_children(int fd, bool only_dirs, bool honour_sticky, struct stat *root_dev);
 int rm_rf_children_dangerous(int fd, bool only_dirs, bool honour_sticky, struct stat *root_dev);
 int rm_rf(const char *path, bool only_dirs, bool delete_root, bool honour_sticky);
-int rm_rf_dangerous(const char *path, bool only_dirs, bool delete_root, bool honour_sticky);
-
-int pipe_eof(int fd);
-
-cpu_set_t* cpu_set_malloc(unsigned *ncpus);
 
 int status_vprintf(const char *status, bool ellipse, bool ephemeral, const char *format, va_list ap) _printf_attr_(4,0);
 int status_printf(const char *status, bool ellipse, bool ephemeral, const char *format, ...) _printf_attr_(4,5);
-int status_welcome(void);
 
 int fd_columns(int fd);
 unsigned columns(void);
 int fd_lines(int fd);
 unsigned lines(void);
-void columns_lines_cache_reset(int _unused_ signum);
 
 bool on_tty(void);
-
-int running_in_chroot(void);
 
 char *ellipsize(const char *s, size_t length, unsigned percent);
 char *ellipsize_mem(const char *s, size_t old_length, size_t new_length, unsigned percent);
@@ -436,79 +363,41 @@ char *unquote(const char *s, const char *quotes);
 char *normalize_env_assignment(const char *s);
 
 int wait_for_terminate(pid_t pid, siginfo_t *status);
-int wait_for_terminate_and_warn(const char *name, pid_t pid);
 
 _noreturn_ void freeze(void);
 
 bool null_or_empty(struct stat *st) _pure_;
 int null_or_empty_path(const char *fn);
 
-DIR *xopendirat(int dirfd, const char *name, int flags);
-
-void dual_timestamp_serialize(FILE *f, const char *name, dual_timestamp *t);
-void dual_timestamp_deserialize(const char *value, dual_timestamp *t);
-
-char *fstab_node_to_udev_node(const char *p);
-
 char *resolve_dev_console(char **active);
 bool tty_is_vc(const char *tty);
 bool tty_is_vc_resolve(const char *tty);
-bool tty_is_console(const char *tty) _pure_;
 int vtnr_from_tty(const char *tty);
-const char *default_term_for_tty(const char *tty);
 
 int execute_command(const char *command, char *const argv[]);
-void execute_directory(const char *directory, DIR *_d, char *argv[]);
-
-int kill_and_sigcont(pid_t pid, int sig);
 
 bool nulstr_contains(const char*nulstr, const char *needle);
-
-bool plymouth_running(void);
-
-bool hostname_is_valid(const char *s) _pure_;
-char* hostname_cleanup(char *s, bool lowercase);
 
 char* strshorten(char *s, size_t l);
 
 int terminal_vhangup_fd(int fd);
 int terminal_vhangup(const char *name);
 
-int vt_disallocate(const char *name);
-
-int copy_file(const char *from, const char *to);
-
-int symlink_atomic(const char *from, const char *to);
-
 int fchmod_umask(int fd, mode_t mode);
 
 bool display_is_local(const char *display) _pure_;
-int socket_from_display(const char *display, char **path);
 
-int get_user_creds(const char **username, uid_t *uid, gid_t *gid, const char **home, const char **shell);
 int get_group_creds(const char **groupname, gid_t *gid);
 
 int in_gid(gid_t gid);
-int in_group(const char *name);
-
-int glob_exists(const char *path);
 
 int dirent_ensure_type(DIR *d, struct dirent *de);
-
-int in_search_path(const char *path, char **search);
-int get_files_in_directory(const char *path, char ***list);
 
 char *strjoin(const char *x, ...) _sentinel_;
 
 bool is_main_thread(void);
 
-bool in_charset(const char *s, const char* charset) _pure_;
-
-int block_get_whole_disk(dev_t d, dev_t *ret);
-
 int file_is_priv_sticky(const char *p);
-
-int strdup_or_null(const char *a, char **b);
 
 #define NULSTR_FOREACH(i, l)                                    \
         for ((i) = (l); (i) && *(i); (i) = strchr((i), 0)+1)
@@ -540,42 +429,16 @@ int ip_tos_from_string(const char *s);
 const char *signal_to_string(int i) _const_;
 int signal_from_string(const char *s) _pure_;
 
-int signal_from_string_try_harder(const char *s);
-
 extern int saved_argc;
 extern char **saved_argv;
-
-bool kexec_loaded(void);
-
-int prot_from_flags(int flags) _const_;
-
-char *format_bytes(char *buf, size_t l, off_t t);
 
 int fd_wait_for_event(int fd, int event, usec_t timeout);
 
 void* memdup(const void *p, size_t l) _alloc_(2);
 
-int is_kernel_thread(pid_t pid);
-
 int fd_inc_sndbuf(int fd, size_t n);
-int fd_inc_rcvbuf(int fd, size_t n);
-
-int fork_agent(pid_t *pid, const int except[], unsigned n_except, const char *path, ...);
-
-int setrlimit_closest(int resource, const struct rlimit *rlim);
-
-int getenv_for_pid(pid_t pid, const char *field, char **_value);
-
-int can_sleep(const char *type);
-int can_sleep_disk(const char *type);
-
-bool is_valid_documentation_url(const char *url);
 
 bool in_initrd(void);
-
-void warn_melody(void);
-
-int get_home_dir(char **ret);
 
 static inline void freep(void *p) {
         free(*(void**) p);
@@ -627,11 +490,6 @@ _alloc_(2, 3) static inline void *memdup_multiply(const void *p, size_t a, size_
         return memdup(p, a * b);
 }
 
-bool filename_is_safe(const char *p) _pure_;
-bool string_is_safe(const char *p) _pure_;
-
-int parse_timestamp(const char *t, usec_t *usec);
-
 void *xbsearch_r(const void *key, const void *base, size_t nmemb, size_t size,
                  int (*compar) (const void *, const void *, void *),
                  void *arg);
@@ -646,9 +504,6 @@ typedef enum DrawSpecialChar {
         DRAW_TRIANGULAR_BULLET,
         _DRAW_SPECIAL_CHAR_MAX
 } DrawSpecialChar;
-const char *draw_special_char(DrawSpecialChar ch);
-
-char *strreplace(const char *text, const char *old_string, const char *new_string);
 
 
 #define FOREACH_LINE(line, f, on_error)                         \
