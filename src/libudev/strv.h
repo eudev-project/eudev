@@ -42,20 +42,9 @@ char **strv_uniq(char **l);
 char **strv_new(const char *x, ...) _sentinel_;
 char **strv_new_ap(const char *x, va_list ap);
 
-static inline const char* STRV_IFNOTNULL(const char *x) {
-        return x ? x : (const char *) -1;
-}
-
 static inline bool strv_isempty(char * const *l) {
         return !l || !*l;
 }
 
 #define STRV_FOREACH(s, l)                      \
         for ((s) = (l); (s) && *(s); (s)++)
-
-#define STRV_FOREACH_BACKWARDS(s, l)            \
-        for (; (l) && ((s) >= (l)); (s)--)
-
-#define STRV_FOREACH_PAIR(x, y, l)               \
-        for ((x) = (l), (y) = (x+1); (x) && *(x) && *(y); (x) += 2, (y) = (x + 1))
-

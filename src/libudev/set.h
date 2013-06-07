@@ -44,10 +44,4 @@ bool set_contains(Set *s, void *value);
 void *set_iterate(Set *s, Iterator *i);
 void *set_iterate_backwards(Set *s, Iterator *i);
 
-#define SET_FOREACH(e, s, i) \
-        for ((i) = ITERATOR_FIRST, (e) = set_iterate((s), &(i)); (e); (e) = set_iterate((s), &(i)))
-
-#define SET_FOREACH_BACKWARDS(e, s, i) \
-        for ((i) = ITERATOR_LAST, (e) = set_iterate_backwards((s), &(i)); (e); (e) = set_iterate_backwards((s), &(i)))
-
 #define _cleanup_set_free_ _cleanup_(set_freep)

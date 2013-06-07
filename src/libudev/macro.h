@@ -31,28 +31,14 @@
 #define _alloc_(...) __attribute__ ((alloc_size(__VA_ARGS__)))
 #define _sentinel_ __attribute__ ((sentinel))
 #define _noreturn_ __attribute__((noreturn))
-#define _unused_ __attribute__ ((unused))
-#define _destructor_ __attribute__ ((destructor))
 #define _pure_ __attribute__ ((pure))
 #define _const_ __attribute__ ((const))
-#define _deprecated_ __attribute__ ((deprecated))
 #define _packed_ __attribute__ ((packed))
 #define _malloc_ __attribute__ ((malloc))
-#define _weak_ __attribute__ ((weak))
 #define _likely_(x) (__builtin_expect(!!(x),1))
 #define _unlikely_(x) (__builtin_expect(!!(x),0))
 #define _public_ __attribute__ ((visibility("default")))
-#define _hidden_ __attribute__ ((visibility("hidden")))
-#define _weakref_(x) __attribute__((weakref(#x)))
-#define _introspect_(x) __attribute__((section("introspect." x)))
-#define _alignas_(x) __attribute__((aligned(__alignof(x))))
 #define _cleanup_(x) __attribute__((cleanup(x)))
-
-/* automake test harness */
-#define EXIT_TEST_SKIP 77
-
-#define XSTRINGIFY(x) #x
-#define STRINGIFY(x) XSTRINGIFY(x)
 
 /* Rounds up */
 
@@ -66,10 +52,6 @@
 #else
 #error "Wut? Pointers are neither 4 nor 8 bytes long?"
 #endif
-
-#define ALIGN_PTR(p) ((void*) ALIGN((unsigned long) p))
-#define ALIGN4_PTR(p) ((void*) ALIGN4((unsigned long) p))
-#define ALIGN8_PTR(p) ((void*) ALIGN8((unsigned long) p))
 
 static inline size_t ALIGN_TO(size_t l, size_t ali) {
         return ((l + ali - 1) & ~(ali - 1));
@@ -86,43 +68,12 @@ static inline size_t ALIGN_TO(size_t l, size_t ali) {
  * @member: the name of the member within the struct.
  *
  */
+
 #define container_of(ptr, type, member)                                 \
         __extension__ ({                                                \
                         const typeof( ((type *)0)->member ) *__mptr = (ptr); \
                         (type *)( (char *)__mptr - offsetof(type,member) ); \
                 })
-
-#undef MAX
-#define MAX(a,b)                                 \
-        __extension__ ({                         \
-                        typeof(a) _a = (a);      \
-                        typeof(b) _b = (b);      \
-                        _a > _b ? _a : _b;       \
-                })
-
-#define MAX3(x,y,z)                              \
-        __extension__ ({                         \
-                        typeof(x) _c = MAX(x,y); \
-                        MAX(_c, z);              \
-                })
-
-#undef MIN
-#define MIN(a,b)                                \
-        __extension__ ({                        \
-                        typeof(a) _a = (a);     \
-                        typeof(b) _b = (b);     \
-                        _a < _b ? _a : _b;      \
-                })
-
-#ifndef CLAMP
-#define CLAMP(x, low, high)                                             \
-        __extension__ ({                                                \
-                        typeof(x) _x = (x);                             \
-                        typeof(low) _low = (low);                       \
-                        typeof(high) _high = (high);                    \
-                        ((_x > _high) ? _high : ((_x < _low) ? _low : _x)); \
-                })
-#endif
 
 #define assert_se(expr)                                                 \
         do {                                                            \
@@ -180,9 +131,6 @@ static inline size_t ALIGN_TO(size_t l, size_t ali) {
 #define UINT64_TO_PTR(u) ((void *) ((uintptr_t) (u)))
 
 #define memzero(x,l) (memset((x), 0, (l)))
-#define zero(x) (memzero(&(x), sizeof(x)))
-
-#define CHAR_TO_STR(x) ((char[2]) { x, 0 })
 
 #define char_array_0(x) x[sizeof(x)-1] = 0;
 
@@ -222,51 +170,6 @@ static inline size_t IOVEC_INCREMENT(struct iovec *i, unsigned n, size_t k) {
         return k;
 }
 
-#define VA_FORMAT_ADVANCE(format, ap)                                   \
-do {                                                                    \
-        int _argtypes[128];                                             \
-        size_t _i, _k;                                                  \
-        _k = parse_printf_format((format), ELEMENTSOF(_argtypes), _argtypes); \
-        assert(_k < ELEMENTSOF(_argtypes));                             \
-        for (_i = 0; _i < _k; _i++) {                                   \
-                if (_argtypes[_i] & PA_FLAG_PTR)  {                     \
-                        (void) va_arg(ap, void*);                       \
-                        continue;                                       \
-                }                                                       \
-                                                                        \
-                switch (_argtypes[_i]) {                                \
-                case PA_INT:                                            \
-                case PA_INT|PA_FLAG_SHORT:                              \
-                case PA_CHAR:                                           \
-                        (void) va_arg(ap, int);                         \
-                        break;                                          \
-                case PA_INT|PA_FLAG_LONG:                               \
-                        (void) va_arg(ap, long int);                    \
-                        break;                                          \
-                case PA_INT|PA_FLAG_LONG_LONG:                          \
-                        (void) va_arg(ap, long long int);               \
-                        break;                                          \
-                case PA_WCHAR:                                          \
-                        (void) va_arg(ap, wchar_t);                     \
-                        break;                                          \
-                case PA_WSTRING:                                        \
-                case PA_STRING:                                         \
-                case PA_POINTER:                                        \
-                        (void) va_arg(ap, void*);                       \
-                        break;                                          \
-                case PA_FLOAT:                                          \
-                case PA_DOUBLE:                                         \
-                        (void) va_arg(ap, double);                      \
-                        break;                                          \
-                case PA_DOUBLE|PA_FLAG_LONG_DOUBLE:                     \
-                        (void) va_arg(ap, long double);                 \
-                        break;                                          \
-                default:                                                \
-                        assert_not_reached("Unknown format string argument."); \
-                }                                                       \
-        }                                                               \
-} while(false)
-
  /* Because statfs.t_type can be int on some architecures, we have to cast
   * the const magic to the type, otherwise the compiler warns about
   * signed/unsigned comparison, because the magic can be 32 bit unsigned.
@@ -283,8 +186,5 @@ do {                                                                    \
             sizeof(type) <= 2 ? 5 :                                     \
             sizeof(type) <= 4 ? 10 :                                    \
             sizeof(type) <= 8 ? 20 : sizeof(int[-2*(sizeof(type) > 8)])))
-
-#define SET_FLAG(v, flag, b) \
-        (v) = (b) ? ((v) | (flag)) : ((v) & ~(flag))
 
 #include "log.h"
