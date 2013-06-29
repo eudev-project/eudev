@@ -10,6 +10,7 @@
  */
 
 #include <errno.h>
+#include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <stddef.h>
@@ -177,6 +178,18 @@ int udev_ctrl_get_fd(struct udev_ctrl *uctrl)
         return uctrl->sock;
 }
 
+static inline accept4_fallback(int sockfd)
+{
+        int fd;
+
+        if ((fd = accept(sockfd, NULL, NULL)) >= 0) {
+                fcntl(fd, F_SETFL, O_NONBLOCK);
+                fcntl(fd, F_SETFD, FD_CLOEXEC);
+        }
+
+        return fd;
+}
+
 struct udev_ctrl_connection *udev_ctrl_get_connection(struct udev_ctrl *uctrl)
 {
         struct udev_ctrl_connection *conn;
@@ -192,8 +205,12 @@ struct udev_ctrl_connection *udev_ctrl_get_connection(struct udev_ctrl *uctrl)
 
 #if HAVE_DECL_ACCEPT4
         conn->sock = accept4(uctrl->sock, NULL, NULL, SOCK_CLOEXEC|SOCK_NONBLOCK);
+
+        /* Fallback path when accept4() is unavailable */
+        if ( conn->sock < 0 && (errno == ENOSYS || errno == ENOTSUP) )
+                conn->sock = accept4_fallback(uctrl->sock);
 #else
-        conn->sock = accept(uctrl->sock, NULL, NULL);
+        conn->sock = accept4_fallback(uctrl->sock);
 #endif
 
         if (conn->sock < 0) {
