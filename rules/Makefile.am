@@ -42,3 +42,6 @@ dist_udevrules_DATA += \
 	95-keymap.rules \
 	95-keyboard-force-release.rules
 endif
+
+install-data-local:
+	$(MKDIR_P) $(DESTDIR)$(udevconfdir)/rules.d
