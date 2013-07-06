@@ -1,0 +1,17 @@
+language: c
+compiler:
+ - gcc
+ - clang
+env:
+ - CONFIG=minimal
+ - CONFIG=full
+before_install:
+ - sudo apt-get update -qq
+# Deps are in same order as in Gentoo ebuild
+# non optional deps
+ - sudo apt-get install -qq pkg-config docbook-xsl xsltproc gawk
+# optional deps
+# TODO libkmod-dev is not in ubuntu-12.04
+ - sh -c "if [ '$CONFIG' = 'full' ]; then sudo apt-get install -qq libglib2.0-dev gobject-introspection libgirepository1.0-dev gir1.2-glib-2.0 libselinux1-dev libsepol1-dev gperf gtk-doc-tools; fi"
+# TODO: does not find selinux
+script: export CXXFLAGS="-O2 -fstack-protector --param=ssp-buffer-size=4 -Wformat -Werror=format-security -D_FORTIFY_SOURCE=2" && export LDFLAGS="-Wl,-z,relro -Wl,--as-needed" && ./autogen.sh && sh -c "if [ '$CONFIG' = 'full' ]; then ./configure --prefix=/r/usr --mandir=/r/usr/share/man --infodir=/r/usr/share/info --datadir=/r/usr/share --sysconfdir=/r/etc --localstatedir=/r/var/lib --disable-silent-rules --disable-dependency-tracking ac_cv_search_cap_init= ac_cv_header_sys_capability_h=yes DBUS_CFLAGS=' ' DBUS_LIBS=' ' --with-rootprefix=/r --docdir=/r/usr/share/doc/eudev-1.0 --libdir=/r/usr/lib64 --with-firmware-path=usr/lib/firmware/updates:usr/lib/firmware:lib/firmware/updates:lib/firmware --with-html-dir=/r/usr/share/doc/eudev-1.0/html --with-rootlibdir=/r/lib64 --enable-split-usr --exec-prefix=/r/ --enable-gtk-doc --enable-gudev --enable-introspection --enable-keymap --disable-libkmod --enable-modules --disable-selinux --enable-static --enable-rule-generator; else ./configure --prefix=/r/usr --mandir=/r/usr/share/man --infodir=/r/usr/share/info --datadir=/r/usr/share --sysconfdir=/r/etc --localstatedir=/r/var/lib --disable-silent-rules --disable-dependency-tracking ac_cv_search_cap_init= ac_cv_header_sys_capability_h=yes DBUS_CFLAGS=' ' DBUS_LIBS=' ' --with-rootprefix=/r --docdir=/r/usr/share/doc/eudev-1.0 --libdir=/r/usr/lib64 --with-firmware-path=usr/lib/firmware/updates:usr/lib/firmware:lib/firmware/updates:lib/firmware --with-html-dir=/r/usr/share/doc/eudev-1.0/html --with-rootlibdir=/r/lib64 --enable-split-usr --exec-prefix=/r/ --disable-gtk-doc --disable-gudev --disable-introspection --disable-keymap --disable-libkmod --disable-modules --disable-selinux --disable-static --disable-rule-generator; fi" && make -j2 && make -j2 check && sudo make install && du -s /r/ && du -sc /r/bin/udevadm /r/etc/udev/* /r/lib/udev/* /r/lib64/libudev.so* /r/sbin/udevd /r/usr/include/libudev.h
