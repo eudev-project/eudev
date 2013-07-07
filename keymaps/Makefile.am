@@ -57,6 +57,7 @@ KEYMAPS = \
 	onkyo \
 	oqo-model2 \
 	samsung-other \
+	samsung-series-3 \
 	samsung-series-9 \
 	samsung-sq1us \
 	samsung-sx20s \
