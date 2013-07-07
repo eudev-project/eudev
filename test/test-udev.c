@@ -60,6 +60,7 @@ static int fake_filesystems(void) {
                 { "test/dev", "/dev",                   "failed to mount test /dev" },
                 { "test/run", "/run",                   "failed to mount test /run" },
                 { "test/run", "/etc/udev/rules.d",      "failed to mount empty /etc/udev/rules.d" },
+                { "test/run", "/lib/udev/rules.d",      "failed to mount empty /lib/udev/rules.d" },
         };
         unsigned int i;
         int err;
@@ -78,7 +79,7 @@ static int fake_filesystems(void) {
         }
 
         for (i = 0; i < ELEMENTSOF(fakefss); i++) {
-                err = mount(fakefss[i].src, fakefss[i].target, "tmpfs", MS_BIND, NULL);
+                err = mount(fakefss[i].src, fakefss[i].target, NULL, MS_BIND, NULL);
                 if (err < 0) {
                         err = -errno;
                         fprintf(stderr, "%s %m", fakefss[i].error);
