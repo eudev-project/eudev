@@ -29,6 +29,7 @@
 #include "macro.h"
 #include "util.h"
 #include "mkdir.h"
+#include "strxcpyx.h"
 
 #define READ_END  0
 #define WRITE_END 1
