@@ -54,7 +54,7 @@ int util_delete_path(struct udev *udev, const char *path)
         if (path[0] == '/')
                 while(path[1] == '/')
                         path++;
-        util_strscpy(p, sizeof(p), path);
+        strscpy(p, sizeof(p), path);
         pos = strrchr(p, '/');
         if (pos == p || pos == NULL)
                 return 0;
@@ -86,7 +86,7 @@ uid_t util_lookup_user(struct udev *udev, const char *user)
         size_t buflen = sysconf(_SC_GETPW_R_SIZE_MAX);
         char *buf = alloca(buflen);
 
-        if (strcmp(user, "root") == 0)
+        if (streq(user, "root"))
                 return 0;
         uid = strtoul(user, &endptr, 10);
         if (endptr[0] == '\0')
@@ -111,7 +111,7 @@ gid_t util_lookup_group(struct udev *udev, const char *group)
         size_t buflen = sysconf(_SC_GETPW_R_SIZE_MAX);
         char *buf = NULL;
 
-        if (strcmp(group, "root") == 0)
+        if (streq(group, "root"))
                 return 0;
         gid = strtoul(group, &endptr, 10);
         if (endptr[0] == '\0')
@@ -154,7 +154,7 @@ int util_resolve_subsys_kernel(struct udev *udev, const char *string,
         if (string[0] != '[')
                 return -1;
 
-        util_strscpy(temp, sizeof(temp), string);
+        strscpy(temp, sizeof(temp), string);
 
         subsys = &temp[1];
 
@@ -186,7 +186,7 @@ int util_resolve_subsys_kernel(struct udev *udev, const char *string,
 
                 val = udev_device_get_sysattr_value(dev, attr);
                 if (val != NULL)
-                        util_strscpy(result, maxsize, val);
+                        strscpy(result, maxsize, val);
                 else
                         result[0] = '\0';
                 udev_dbg(udev, "value '[%s/%s]%s' is '%s'\n", subsys, sysname, attr, result);
@@ -195,9 +195,9 @@ int util_resolve_subsys_kernel(struct udev *udev, const char *string,
                 char *s;
 
                 s = result;
-                l = util_strpcpyl(&s, maxsize, udev_device_get_syspath(dev), NULL);
+                l = strpcpyl(&s, maxsize, udev_device_get_syspath(dev), NULL);
                 if (attr != NULL)
-                        util_strpcpyl(&s, l, "/", attr, NULL);
+                        strpcpyl(&s, l, "/", attr, NULL);
                 udev_dbg(udev, "path '[%s/%s]%s' is '%s'\n", subsys, sysname, attr, result);
         }
         udev_device_unref(dev);
@@ -210,7 +210,7 @@ ssize_t util_get_sys_core_link_value(struct udev *udev, const char *slink, const
         ssize_t len;
         const char *pos;
 
-        util_strscpyl(path, sizeof(path), syspath, "/", slink, NULL);
+        strscpyl(path, sizeof(path), syspath, "/", slink, NULL);
         len = readlink(path, target, sizeof(target));
         if (len <= 0 || len == (ssize_t)sizeof(target))
                 return -1;
@@ -219,7 +219,7 @@ ssize_t util_get_sys_core_link_value(struct udev *udev, const char *slink, const
         if (pos == NULL)
                 return -1;
         pos = &pos[1];
-        return util_strscpy(value, size, pos);
+        return strscpy(value, size, pos);
 }
 
 int util_resolve_sys_link(struct udev *udev, char *syspath, size_t size)
@@ -245,7 +245,7 @@ int util_resolve_sys_link(struct udev *udev, char *syspath, size_t size)
                 base[0] = '\0';
         }
 
-        util_strscpyl(base, size - (base - syspath), "/", &link_target[back * 3], NULL);
+        strscpyl(base, size - (base - syspath), "/", &link_target[back * 3], NULL);
         return 0;
 }
 
@@ -307,89 +307,6 @@ void util_remove_trailing_chars(char *path, char c)
         len = strlen(path);
         while (len > 0 && path[len-1] == c)
                 path[--len] = '\0';
-}
-
-/*
- * Concatenates strings. In any case, terminates in _all_ cases with '\0'
- * and moves the @dest pointer forward to the added '\0'. Returns the
- * remaining size, and 0 if the string was truncated.
- */
-size_t util_strpcpy(char **dest, size_t size, const char *src)
-{
-        char *dstend = *dest + (size - 1);
-        
-        if (!size) return 0; /*Nothing to do if size is 0*/
-        
-        *dest = memccpy(*dest, src, '\0', size);
-        
-        if (*dest) {/*Terminator character found*/
-                (*dest)--; /*memccpy points to the element after the one with '\0'*/
-                return (dstend - *dest) + 1;/*For some odd reason they are not taking into account the \0 in the capacity...*/
-        } else {
-                *(*dest = dstend) = '\0'; /*Restore dest and add terminator*/
-                return 0; /*But here they do*/
-        }
-}
-
-size_t util_strpcpyf(char **dest, size_t size, const char *src, ...)
-{
-        va_list va;
-        int i;
-
-        if (!size) return 0; /*Nothing to do if size is 0*/
-
-        va_start(va, src);
-        i = vsnprintf(*dest, size, src, va);
-        if (i < (int)size) {
-                *dest += i;
-                size -= i;
-        } else {
-                *dest += size - 1;
-                size = 0;
-        }
-        va_end(va);
-        *dest[0] = '\0';
-        return size;
-}
-
-/* concatenates list of strings, moves dest forward */
-/* Uses a va_list */
-size_t util_strpcpyv(char **dest, size_t size, const char *src, va_list va)
-{
-        do {
-                size = util_strpcpy(dest, size, src);
-        } while (size && (src = va_arg(va, char *)));
-        return size;
-}
-
-/* concatenates list of strings, moves dest forward */
-size_t util_strpcpyl(char **dest, size_t size, const char *src, ...)
-{
-        va_list va;
-
-        va_start(va, src);
-        size=util_strpcpyv(dest, size, src, va);
-        va_end(va);
-
-        return size;
-}
-
-/* copies string */
-size_t util_strscpy(char *dest, size_t size, const char *src)
-{
-        return util_strpcpy(&dest, size, src);
-}
-
-/* concatenates list of strings */
-size_t util_strscpyl(char *dest, size_t size, const char *src, ...)
-{
-        va_list va;
-
-        va_start(va, src);
-        size=util_strpcpyv(&dest, size, src, va);
-        va_end(va);
-
-        return size;
 }
 
 /* count of characters used to encode one unicode char */

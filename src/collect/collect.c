@@ -35,8 +35,8 @@
 #include "libudev-private.h"
 #include "macro.h"
 
-#define BUFSIZE                        16
-#define UDEV_ALARM_TIMEOUT        180
+#define BUFSIZE 16
+#define UDEV_ALARM_TIMEOUT 180
 
 enum collect_state {
         STATE_NONE,
@@ -140,12 +140,14 @@ static int checkout(int fd)
 
  restart:
         len = bufsize >> 1;
-        buf = calloc(1,bufsize + 1);
+        buf = malloc(bufsize + 1);
         if (!buf) {
                 fprintf(stderr, "Out of memory.\n");
                 return log_oom();
         }
         memset(buf, ' ', bufsize);
+        buf[bufsize] = '\0';
+
         ptr = buf + len;
         while ((read(fd, buf + len, len)) > 0) {
                 while (ptr && *ptr) {
@@ -214,7 +216,7 @@ static void invite(char *us)
         udev_list_node_foreach(him_node, &bunch) {
                 struct _mate *him = node_to_mate(him_node);
 
-                if (!strcmp(him->name, us)) {
+                if (streq(him->name, us)) {
                         him->state = STATE_CONFIRMED;
                         who = him;
                 }
@@ -242,7 +244,7 @@ static void reject(char *us)
         udev_list_node_foreach(him_node, &bunch) {
                 struct _mate *him = node_to_mate(him_node);
 
-                if (!strcmp(him->name, us)) {
+                if (streq(him->name, us)) {
                         him->state = STATE_NONE;
                         who = him;
                 }
@@ -415,7 +417,7 @@ int main(int argc, char **argv)
         if (debug)
                 fprintf(stderr, "Using checkpoint '%s'\n", checkpoint);
 
-        util_strscpyl(tmpdir, sizeof(tmpdir), "/run/udev/collect", NULL);
+        strscpyl(tmpdir, sizeof(tmpdir), "/run/udev/collect", NULL);
         fd = prepare(tmpdir, checkpoint);
         if (fd < 0) {
                 ret = 3;
@@ -435,7 +437,7 @@ int main(int argc, char **argv)
                 udev_list_node_foreach(him_node, &bunch) {
                         struct _mate *him = node_to_mate(him_node);
 
-                        if (!strcmp(him->name, argv[i]))
+                        if (streq(him->name, argv[i]))
                                 who = him;
                 }
                 if (!who) {

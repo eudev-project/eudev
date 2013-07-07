@@ -30,6 +30,8 @@ m4/lt~obsolete.m4
 
 docs/gudev/version.xml
 docs/libudev/version.xml
+docs/gudev/gudev-overrides.txt
+docs/libudev/libudev-overrides.txt
 man/udev.7
 man/udevadm.8
 
@@ -59,3 +61,4 @@ src/keymap/keys.txt
 test/test-libudev
 test/test-udev
 test/test
+test-driver

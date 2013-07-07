@@ -111,7 +111,7 @@ static int set_usb_mass_storage_ifsubtype(char *to, const char *from, size_t len
                         break;
                 }
         }
-        util_strscpy(to, len, type);
+        strscpy(to, len, type);
         return type_num;
 }
 
@@ -143,7 +143,7 @@ static void set_scsi_type(char *to, const char *from, size_t len)
                         break;
                 }
         }
-        util_strscpy(to, len, type);
+        strscpy(to, len, type);
 }
 
 #define USB_DT_DEVICE                        0x01
@@ -152,7 +152,7 @@ static void set_scsi_type(char *to, const char *from, size_t len)
 static int dev_if_packed_info(struct udev_device *dev, char *ifs_str, size_t len)
 {
         _cleanup_free_ char *filename = NULL;
-        int _cleanup_close_ fd = -1;
+        _cleanup_close_ int fd = -1;
         ssize_t size;
         unsigned char buf[18 + 65535];
         int pos = 0;
@@ -267,7 +267,7 @@ static int builtin_usb_id(struct udev_device *dev, int argc, char *argv[], bool 
         instance_str[0] = '\0';
 
         /* shortcut, if we are called directly for a "usb_device" type */
-        if (udev_device_get_devtype(dev) != NULL && strcmp(udev_device_get_devtype(dev), "usb_device") == 0) {
+        if (udev_device_get_devtype(dev) != NULL && streq(udev_device_get_devtype(dev), "usb_device")) {
                 dev_if_packed_info(dev, packed_if_str, sizeof(packed_if_str));
                 dev_usb = dev;
                 goto fallback;
@@ -443,12 +443,12 @@ fallback:
         }
 
         s = serial;
-        l = util_strpcpyl(&s, sizeof(serial), vendor_str, "_", model_str, NULL);
+        l = strpcpyl(&s, sizeof(serial), vendor_str, "_", model_str, NULL);
         if (serial_str[0] != '\0')
-                l = util_strpcpyl(&s, l, "_", serial_str, NULL);
+                l = strpcpyl(&s, l, "_", serial_str, NULL);
 
         if (instance_str[0] != '\0')
-                util_strpcpyl(&s, l, "-", instance_str, NULL);
+                strpcpyl(&s, l, "-", instance_str, NULL);
 
         udev_builtin_add_property(dev, test, "ID_VENDOR", vendor_str);
         udev_builtin_add_property(dev, test, "ID_VENDOR_ENC", vendor_str_enc);

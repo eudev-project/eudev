@@ -42,6 +42,7 @@ libudev_la_SOURCES =\
 	set.c \
 	strbuf.c \
 	strv.c \
+	strxcpyx.c  \
 	util.c
 
 noinst_HEADERS = \
@@ -62,6 +63,7 @@ noinst_HEADERS = \
 	sparse-endian.h \
 	strbuf.h \
 	strv.h \
+	strxcpyx.h \
 	util.h
 
 include_HEADERS = \

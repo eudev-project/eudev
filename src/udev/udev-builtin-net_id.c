@@ -193,12 +193,12 @@ static int dev_pci_slot(struct udev_device *dev, struct netnames *names) {
         s = names->pci_path;
         l = sizeof(names->pci_path);
         if (domain > 0)
-                l = util_strpcpyf(&s, l, "P%d", domain);
-        l = util_strpcpyf(&s, l, "p%ds%d", bus, slot);
+                l = strpcpyf(&s, l, "P%d", domain);
+        l = strpcpyf(&s, l, "p%ds%d", bus, slot);
         if (func > 0 || is_pci_multifunction(names->pcidev))
-                l = util_strpcpyf(&s, l, "f%d", func);
+                l = strpcpyf(&s, l, "f%d", func);
         if (dev_id > 0)
-                l = util_strpcpyf(&s, l, "d%d", dev_id);
+                l = strpcpyf(&s, l, "d%d", dev_id);
         if (l == 0)
                 names->pci_path[0] = '\0';
 
@@ -230,7 +230,7 @@ static int dev_pci_slot(struct udev_device *dev, struct netnames *names) {
                 snprintf(str, sizeof(str), "%s/%s/address", slots, dent->d_name);
                 if (read_one_line_file(str, &address) >= 0) {
                         /* match slot address with device by stripping the function */
-                        if (strncmp(address, udev_device_get_sysname(names->pcidev), strlen(address)) == 0)
+                        if (strneq(address, udev_device_get_sysname(names->pcidev), strlen(address)))
                                 hotplug_slot = i;
                         free(address);
                 }
@@ -244,12 +244,12 @@ static int dev_pci_slot(struct udev_device *dev, struct netnames *names) {
                 s = names->pci_slot;
                 l = sizeof(names->pci_slot);
                 if (domain > 0)
-                        l = util_strpcpyf(&s, l, "P%d", domain);
-                l = util_strpcpyf(&s, l, "s%d", hotplug_slot);
+                        l = strpcpyf(&s, l, "P%d", domain);
+                l = strpcpyf(&s, l, "s%d", hotplug_slot);
                 if (func > 0 || is_pci_multifunction(names->pcidev))
-                        l = util_strpcpyf(&s, l, "f%d", func);
+                        l = strpcpyf(&s, l, "f%d", func);
                 if (dev_id > 0)
-                        l = util_strpcpyf(&s, l, "d%d", dev_id);
+                        l = strpcpyf(&s, l, "d%d", dev_id);
                 if (l == 0)
                         names->pci_path[0] = '\0';
         }
@@ -292,7 +292,7 @@ static int names_usb(struct udev_device *dev, struct netnames *names) {
                 return -ENOENT;
 
         /* get USB port number chain, configuration, interface */
-        util_strscpy(name, sizeof(name), udev_device_get_sysname(usbdev));
+        strscpy(name, sizeof(name), udev_device_get_sysname(usbdev));
         s = strchr(name, '-');
         if (!s)
                 return -EINVAL;
@@ -315,15 +315,15 @@ static int names_usb(struct udev_device *dev, struct netnames *names) {
         while ((s = strchr(s, '.')))
                 s[0] = 'u';
         s = names->usb_ports;
-        l = util_strpcpyl(&s, sizeof(names->usb_ports), "u", ports, NULL);
+        l = strpcpyl(&s, sizeof(names->usb_ports), "u", ports, NULL);
 
         /* append USB config number, suppress the common config == 1 */
         if (!streq(config, "1"))
-                l = util_strpcpyl(&s, sizeof(names->usb_ports), "c", config, NULL);
+                l = strpcpyl(&s, sizeof(names->usb_ports), "c", config, NULL);
 
         /* append USB interface number, suppress the interface == 0 */
         if (!streq(interf, "0"))
-                l = util_strpcpyl(&s, sizeof(names->usb_ports), "i", interf, NULL);
+                l = strpcpyl(&s, sizeof(names->usb_ports), "i", interf, NULL);
         if (l == 0)
                 return -ENAMETOOLONG;
 
@@ -423,7 +423,7 @@ static int builtin_net_id(struct udev_device *dev, int argc, char *argv[], bool 
         p = udev_device_get_sysattr_value(dev, "iflink");
         if (!p)
                 return EXIT_FAILURE;
-        if (strcmp(s, p) != 0)
+        if (!streq(s, p))
                 return 0;
 
         devtype = udev_device_get_devtype(dev);

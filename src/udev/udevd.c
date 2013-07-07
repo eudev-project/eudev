@@ -503,7 +503,7 @@ static bool is_devpath_busy(struct event *event)
                         return true;
 
                 /* check our old name */
-                if (event->devpath_old != NULL && strcmp(loop_event->devpath, event->devpath_old) == 0) {
+                if (event->devpath_old != NULL && streq(loop_event->devpath, event->devpath_old)) {
                         event->delaying_seqnum = loop_event->seqnum;
                         return true;
                 }
@@ -732,7 +732,7 @@ static int handle_inotify(struct udev *udev)
                                 int fd;
 
                                 log_debug("device %s closed, synthesising 'change'\n", udev_device_get_devnode(dev));
-                                util_strscpyl(filename, sizeof(filename), udev_device_get_syspath(dev), "/uevent", NULL);
+                                strscpyl(filename, sizeof(filename), udev_device_get_syspath(dev), "/uevent", NULL);
                                 fd = open(filename, O_WRONLY);
                                 if (fd >= 0) {
                                         if (write(fd, "change", 6) < 0)
@@ -823,7 +823,7 @@ static void static_dev_create_from_modules(struct udev *udev)
                 return;
         }
 
-        util_strscpyl(modules, sizeof(modules), ROOTPREFIX "/lib/modules/", kernel.release, "/modules.devname", NULL);
+        strscpyl(modules, sizeof(modules), ROOTPREFIX "/lib/modules/", kernel.release, "/modules.devname", NULL);
         f = fopen(modules, "re");
         if (f == NULL)
                 return;
@@ -870,7 +870,7 @@ static void static_dev_create_from_modules(struct udev *udev)
                 else
                         continue;
 
-                util_strscpyl(filename, sizeof(filename), "/dev/", devname, NULL);
+                strscpyl(filename, sizeof(filename), "/dev/", devname, NULL);
                 mkdir_parents_label(filename, 0755);
                 label_context_set(filename, mode);
                 log_debug("mknod '%s' %c%u:%u\n", filename, type, maj, min);
@@ -983,11 +983,11 @@ int main(int argc, char *argv[])
                         udev_set_log_priority(udev, LOG_DEBUG);
                         break;
                 case 'N':
-                        if (strcmp (optarg, "early") == 0) {
+                        if (streq(optarg, "early")) {
                                 resolve_names = 1;
-                        } else if (strcmp (optarg, "late") == 0) {
+                        } else if (streq(optarg, "late")) {
                                 resolve_names = 0;
-                        } else if (strcmp (optarg, "never") == 0) {
+                        } else if (streq(optarg, "never")) {
                                 resolve_names = -1;
                         } else {
                                 fprintf(stderr, "resolve-names must be early, late or never\n");
@@ -1116,7 +1116,7 @@ int main(int argc, char *argv[])
                 write_one_line_file("/proc/self/oom_score_adj", "-1000");
         }
 
-        print_kmsg("starting eudev version " VERSION "\n");
+        print_kmsg("starting version " VERSION "\n");
 
         if (!debug) {
                 int fd;

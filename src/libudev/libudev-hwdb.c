@@ -140,9 +140,13 @@ static const struct trie_node_f *node_lookup_f(struct udev_hwdb *hwdb, const str
 }
 
 static int hwdb_add_property(struct udev_hwdb *hwdb, const char *key, const char *value) {
-        /* TODO: add sub-matches (+) against DMI data */
+        /*
+         * Silently ignore all properties which do not start with a
+         * space; future extensions might use additional prefixes.
+         */
         if (key[0] != ' ')
                 return 0;
+
         if (udev_list_entry_add(&hwdb->properties_list, key+1, value) == NULL)
                 return -ENOMEM;
         return 0;
@@ -300,11 +304,11 @@ _public_ struct udev_hwdb *udev_hwdb_new(struct udev *udev) {
         }
 
         log_debug("=== trie on-disk ===\n");
-        log_debug("tool version:          %llu", (unsigned long long)le64toh(hwdb->head->tool_version));
-        log_debug("file size:        %8llu bytes\n", (unsigned long long)hwdb->st.st_size);
-        log_debug("header size       %8llu bytes\n", (unsigned long long)le64toh(hwdb->head->header_size));
-        log_debug("strings           %8llu bytes\n", (unsigned long long)le64toh(hwdb->head->strings_len));
-        log_debug("nodes             %8llu bytes\n", (unsigned long long)le64toh(hwdb->head->nodes_len));
+        log_debug("tool version:          %"PRIu64, le64toh(hwdb->head->tool_version));
+        log_debug("file size:        %8llu bytes\n", (unsigned long long) hwdb->st.st_size);
+        log_debug("header size       %8"PRIu64" bytes\n", le64toh(hwdb->head->header_size));
+        log_debug("strings           %8"PRIu64" bytes\n", le64toh(hwdb->head->strings_len));
+        log_debug("nodes             %8"PRIu64" bytes\n", le64toh(hwdb->head->nodes_len));
         return hwdb;
 }
 

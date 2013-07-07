@@ -66,11 +66,11 @@ static int adm_test(struct udev *udev, int argc, char *argv[])
                         action = optarg;
                         break;
                 case 'N':
-                        if (strcmp (optarg, "early") == 0) {
+                        if (streq (optarg, "early")) {
                                 resolve_names = 1;
-                        } else if (strcmp (optarg, "late") == 0) {
+                        } else if (streq (optarg, "late")) {
                                 resolve_names = 0;
-                        } else if (strcmp (optarg, "never") == 0) {
+                        } else if (streq (optarg, "never")) {
                                 resolve_names = -1;
                         } else {
                                 fprintf(stderr, "resolve-names must be early, late or never\n");
@@ -113,9 +113,9 @@ static int adm_test(struct udev *udev, int argc, char *argv[])
 
         /* add /sys if needed */
         if (!startswith(syspath, "/sys"))
-                util_strscpyl(filename, sizeof(filename), "/sys", syspath, NULL);
+                strscpyl(filename, sizeof(filename), "/sys", syspath, NULL);
         else
-                util_strscpy(filename, sizeof(filename), syspath);
+                strscpy(filename, sizeof(filename), syspath);
         util_remove_trailing_chars(filename, '/');
 
         dev = udev_device_new_from_syspath(udev, filename);

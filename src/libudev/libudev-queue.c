@@ -458,7 +458,7 @@ _public_ struct udev_list_entry *udev_queue_get_queued_list_entry(struct udev_qu
                 snprintf(seqnum_str, sizeof(seqnum_str), "%llu", seqnum);
 
                 s = syspath;
-                l = util_strpcpy(&s, sizeof(syspath), "/sys");
+                l = strpcpy(&s, sizeof(syspath), "/sys");
                 len = udev_queue_read_devpath(queue_file, s, l);
                 if (len < 0)
                         break;
@@ -467,7 +467,7 @@ _public_ struct udev_list_entry *udev_queue_get_queued_list_entry(struct udev_qu
                         udev_list_entry_add(&udev_queue->queue_list, syspath, seqnum_str);
                 } else {
                         udev_list_entry_foreach(list_entry, udev_list_get_entry(&udev_queue->queue_list)) {
-                                if (strcmp(seqnum_str, udev_list_entry_get_value(list_entry)) == 0) {
+                                if (streq(seqnum_str, udev_list_entry_get_value(list_entry))) {
                                         udev_list_entry_delete(list_entry);
                                         break;
                                 }

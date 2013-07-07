@@ -108,7 +108,7 @@ static void set_type(const char *from, char *to, size_t len)
                         break;
                 }
         }
-        util_strscpy(to, len, type);
+        strscpy(to, len, type);
 }
 
 /*
@@ -227,7 +227,7 @@ static int get_file_options(struct udev *udev,
                         continue;
 
                 str1 = strsep(&buf, "=");
-                if (str1 && strcasecmp(str1, "VENDOR") == 0) {
+                if (str1 && strcaseeq(str1, "VENDOR")) {
                         str1 = get_value(&buf);
                         if (!str1) {
                                 retval = log_oom();
@@ -236,7 +236,7 @@ static int get_file_options(struct udev *udev,
                         vendor_in = str1;
 
                         str1 = strsep(&buf, "=");
-                        if (str1 && strcasecmp(str1, "MODEL") == 0) {
+                        if (str1 && strcaseeq(str1, "MODEL")) {
                                 str1 = get_value(&buf);
                                 if (!str1) {
                                         retval = log_oom();
@@ -247,7 +247,7 @@ static int get_file_options(struct udev *udev,
                         }
                 }
 
-                if (str1 && strcasecmp(str1, "OPTIONS") == 0) {
+                if (str1 && strcaseeq(str1, "OPTIONS")) {
                         str1 = get_value(&buf);
                         if (!str1) {
                                 retval = log_oom();
@@ -267,10 +267,10 @@ static int get_file_options(struct udev *udev,
                 if (vendor == NULL) {
                         if (vendor_in == NULL)
                                 break;
-                } else if ((vendor_in && strncmp(vendor, vendor_in,
-                                                 strlen(vendor_in)) == 0) &&
-                           (!model_in || (strncmp(model, model_in,
-                                                  strlen(model_in)) == 0))) {
+                } else if ((vendor_in && strneq(vendor, vendor_in,
+                                                 strlen(vendor_in))) &&
+                           (!model_in || (strneq(model, model_in,
+                                                  strlen(model_in))))) {
                                 /*
                                  * Matched vendor and optionally model.
                                  *
@@ -341,7 +341,7 @@ static int set_options(struct udev *udev,
 
                 case 'd':
                         dev_specified = 1;
-                        util_strscpy(maj_min_dev, MAX_PATH_LEN, optarg);
+                        strscpy(maj_min_dev, MAX_PATH_LEN, optarg);
                         break;
 
                 case 'e':
@@ -349,7 +349,7 @@ static int set_options(struct udev *udev,
                         break;
 
                 case 'f':
-                        util_strscpy(config_file, MAX_PATH_LEN, optarg);
+                        strscpy(config_file, MAX_PATH_LEN, optarg);
                         break;
 
                 case 'g':
@@ -372,11 +372,11 @@ static int set_options(struct udev *udev,
                         exit(0);
 
                 case 'p':
-                        if (strcmp(optarg, "0x80") == 0) {
+                        if (streq(optarg, "0x80")) {
                                 default_page_code = PAGE_80;
-                        } else if (strcmp(optarg, "0x83") == 0) {
+                        } else if (streq(optarg, "0x83")) {
                                 default_page_code = PAGE_83;
-                        } else if (strcmp(optarg, "pre-spc3-83") == 0) {
+                        } else if (streq(optarg, "pre-spc3-83")) {
                                 default_page_code = PAGE_83_PRE_SPC3;
                         } else {
                                 log_error("Unknown page code '%s'\n", optarg);
@@ -415,7 +415,7 @@ static int set_options(struct udev *udev,
         }
         if (optind < argc && !dev_specified) {
                 dev_specified = 1;
-                util_strscpy(maj_min_dev, MAX_PATH_LEN, argv[optind]);
+                strscpy(maj_min_dev, MAX_PATH_LEN, argv[optind]);
         }
         return 0;
 }
@@ -449,11 +449,11 @@ static int per_dev_options(struct udev *udev,
                         break;
 
                 case 'p':
-                        if (strcmp(optarg, "0x80") == 0) {
+                        if (streq(optarg, "0x80")) {
                                 *page_code = PAGE_80;
-                        } else if (strcmp(optarg, "0x83") == 0) {
+                        } else if (streq(optarg, "0x83")) {
                                 *page_code = PAGE_83;
-                        } else if (strcmp(optarg, "pre-spc3-83") == 0) {
+                        } else if (streq(optarg, "pre-spc3-83")) {
                                 *page_code = PAGE_83_PRE_SPC3;
                         } else {
                                 log_error("Unknown page code '%s'\n", optarg);

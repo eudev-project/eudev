@@ -309,7 +309,7 @@ _public_ struct udev_list_entry *udev_enumerate_get_list_entry(struct udev_enume
                         }
 
                         if (move_later &&
-                            strncmp(entry->syspath, move_later->syspath, move_later_prefix) != 0) {
+                             !strneq(entry->syspath, move_later->syspath, move_later_prefix)) {
 
                                 udev_list_entry_add(&udev_enumerate->devices_list, move_later->syspath, NULL);
                                 move_later = NULL;
@@ -659,11 +659,11 @@ static int scan_dir_and_add_devices(struct udev_enumerate *udev_enumerate,
         struct dirent *dent;
 
         s = path;
-        l = util_strpcpyl(&s, sizeof(path), "/sys/", basedir, NULL);
+        l = strpcpyl(&s, sizeof(path), "/sys/", basedir, NULL);
         if (subdir1 != NULL)
-                l = util_strpcpyl(&s, l, "/", subdir1, NULL);
+                l = strpcpyl(&s, l, "/", subdir1, NULL);
         if (subdir2 != NULL)
-                util_strpcpyl(&s, l, "/", subdir2, NULL);
+                strpcpyl(&s, l, "/", subdir2, NULL);
         dir = opendir(path);
         if (dir == NULL)
                 return -ENOENT;
@@ -677,7 +677,7 @@ static int scan_dir_and_add_devices(struct udev_enumerate *udev_enumerate,
                 if (!match_sysname(udev_enumerate, dent->d_name))
                         continue;
 
-                util_strscpyl(syspath, sizeof(syspath), path, "/", dent->d_name, NULL);
+                strscpyl(syspath, sizeof(syspath), path, "/", dent->d_name, NULL);
                 dev = udev_device_new_from_syspath(udev_enumerate->udev, syspath);
                 if (dev == NULL)
                         continue;
@@ -738,7 +738,7 @@ static int scan_dir(struct udev_enumerate *udev_enumerate, const char *basedir, 
         DIR *dir;
         struct dirent *dent;
 
-        util_strscpyl(path, sizeof(path), "/sys/", basedir, NULL);
+        strscpyl(path, sizeof(path), "/sys/", basedir, NULL);
         dir = opendir(path);
         if (dir == NULL)
                 return -1;
@@ -789,7 +789,7 @@ static int scan_devices_tags(struct udev_enumerate *udev_enumerate)
                 struct dirent *dent;
                 char path[UTIL_PATH_SIZE];
 
-                util_strscpyl(path, sizeof(path), "/run/udev/tags/", udev_list_entry_get_name(list_entry), NULL);
+                strscpyl(path, sizeof(path), "/run/udev/tags/", udev_list_entry_get_name(list_entry), NULL);
                 dir = opendir(path);
                 if (dir == NULL)
                         continue;
