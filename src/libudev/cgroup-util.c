@@ -169,19 +169,19 @@ static const char *normalize_controller(const char *controller) {
 static int join_path(const char *controller, const char *path, const char *suffix, char **fs) {
         char *t = NULL;
 
-        if (controller) {
-                if (path && suffix)
+        if (!isempty(controller)) {
+                if (!isempty(path) && !isempty(suffix))
                         t = strjoin("/sys/fs/cgroup/", controller, "/", path, "/", suffix, NULL);
-                else if (path)
+                else if (!isempty(path))
                         t = strjoin("/sys/fs/cgroup/", controller, "/", path, NULL);
-                else if (suffix)
+                else if (!isempty(suffix))
                         t = strjoin("/sys/fs/cgroup/", controller, "/", suffix, NULL);
                 else
                         t = strappend("/sys/fs/cgroup/", controller);
         } else {
-                if (path && suffix)
+                if (!isempty(path) && !isempty(suffix))
                         t = strjoin(path, "/", suffix, NULL);
-                else if (path)
+                else if (!isempty(path))
                         t = strdup(path);
                 else
                         return -EINVAL;
