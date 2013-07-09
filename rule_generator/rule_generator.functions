@@ -76,6 +76,10 @@ choose_rules_file() {
 	local tmp_rules_file="$RUNDIR/tmp-rules--${RULES_FILE##*/}"
 	[ -e "$RULES_FILE" -o -e "$tmp_rules_file" ] || PRINT_HEADER=1
 
+	[ -d "${RULES_FILE%/*}" ] || if writeable ${RULES_FILE%/rules.d/*}; then
+		mkdir -p "${RULES_FILE%/*}"
+	fi
+
 	if writeable ${RULES_FILE%/*}; then
 		RO_RULES_FILE='/dev/null'
 	else
