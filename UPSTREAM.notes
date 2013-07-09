@@ -1,0 +1,10 @@
+
+2013-07-09
+
+	* Import of hwdb
+	* Fix LGPL license for src/gudev
+	* Add "hwdb: add --lookup-prefix= option" commit a4bbef099209d4e3bccd913cd30da536f8971064
+	* DO NOT ADD "static-nodes: move creation of static nodes from udevd to tmpfiles"
+	  commit edeb68c53f1cdc452016b4c8512586a70b1262e3.  Upstream has moved this functionality
+	  to systemd-tmpfilesd since kmod v14 now exports static node info in tmpfiles.d format.
+	  We wish to retain this functionality in udevd.
