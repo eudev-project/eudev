@@ -39,6 +39,40 @@ static int is_dir(const char* path) {
         return S_ISDIR(st.st_mode);
 }
 
+
+char* path_startswith(const char *path, const char *prefix) {
+        assert(path);
+        assert(prefix);
+
+        if ((path[0] == '/') != (prefix[0] == '/'))
+                return NULL;
+
+        for (;;) {
+                size_t a, b;
+
+                path += strspn(path, "/");
+                prefix += strspn(prefix, "/");
+
+                if (*prefix == 0)
+                        return (char*) path;
+
+                if (*path == 0)
+                        return NULL;
+
+                a = strcspn(path, "/");
+                b = strcspn(prefix, "/");
+
+                if (a != b)
+                        return NULL;
+
+                if (memcmp(path, prefix, a) != 0)
+                        return NULL;
+
+                path += a;
+                prefix += b;
+        }
+}
+
 static int mkdir_parents_internal(const char *prefix, const char *path, mode_t mode, bool apply) {
         const char *p, *e;
         int r;

@@ -22,6 +22,7 @@
   along with systemd; If not, see <http://www.gnu.org/licenses/>.
 ***/
 
+char* path_startswith(const char *path, const char *prefix) _pure_;
 int mkdir_parents(const char *path, mode_t mode);
 int mkdir_parents_label(const char *path, mode_t mode);
 int mkdir_p(const char *path, mode_t mode);

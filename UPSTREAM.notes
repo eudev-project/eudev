@@ -12,8 +12,9 @@
 2013-07-10
 
 	* Add "hwdb: allow list of lookup keys per given record"
-	* Bring src/udev/mkdir.c in line with upstreams use of *_internal() with prefix
 	* Import format_timespan() from upstream's src/shared/time-util.c.  Note: our
 	  src/libudev/util.c is derived from upstream's src/shared/util.c minus unneeded functions
-	  plus three functions from src/shared/time-util.c: now(), timespec_load() and
-	  timespan().
+	  plus three functions from src/shared/time-util.c: now(), timespec_load() and timespan().
+	* Bring src/udev/mkdir.c in line with upstreams use of *_internal() with prefix.  Also
+	  import path_startswith() from upstream's src/shared/path-util.c.  This is now needed
+	  in our src/udev/mkdir.c in the new *_internal() functions.
