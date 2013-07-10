@@ -84,6 +84,7 @@ union dirent_storage {
 
 usec_t now(clockid_t clock);
 usec_t timespec_load(const struct timespec *ts);
+char *format_timespan(char *buf, size_t l, usec_t t, usec_t accuracy);
 
 size_t page_size(void);
 #define PAGE_ALIGN(l) ALIGN_TO((l), page_size())

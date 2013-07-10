@@ -8,3 +8,12 @@
 	  commit edeb68c53f1cdc452016b4c8512586a70b1262e3.  Upstream has moved this functionality
 	  to systemd-tmpfilesd since kmod v14 now exports static node info in tmpfiles.d format.
 	  We wish to retain this functionality in udevd.
+
+2013-07-10
+
+	* Add "hwdb: allow list of lookup keys per given record"
+	* Bring src/udev/mkdir.c in line with upstreams use of *_internal() with prefix
+	* Import format_timespan() from upstream's src/shared/time-util.c.  Note: our
+	  src/libudev/util.c is derived from upstream's src/shared/util.c minus unneeded functions
+	  plus three functions from src/shared/time-util.c: now(), timespec_load() and
+	  timespan().

@@ -26,54 +26,47 @@
 #include <stdlib.h>
 #include <stdio.h>
 
-#include "mkdir.h"
 #include "label.h"
 #include "util.h"
+#include "mkdir.h"
 
-static int makedir_safe(const char *path, mode_t mode, uid_t uid, gid_t gid, bool apply) {
+static int is_dir(const char* path) {
         struct stat st;
 
-        if (label_mkdir(path, mode, apply) >= 0)
-                if (chmod_and_chown(path, mode, uid, gid) < 0)
-                        return -errno;
-
-        if (lstat(path, &st) < 0)
+        if (stat(path, &st) < 0)
                 return -errno;
 
-        if ((st.st_mode & 0777) != mode ||
-            st.st_uid != uid ||
-            st.st_gid != gid ||
-            !S_ISDIR(st.st_mode)) {
-                errno = EEXIST;
-                return -errno;
-        }
-
-        return 0;
+        return S_ISDIR(st.st_mode);
 }
 
-static int makedir_parents(const char *path, mode_t mode, bool apply) {
-        struct stat st;
+static int mkdir_parents_internal(const char *prefix, const char *path, mode_t mode, bool apply) {
         const char *p, *e;
+        int r;
 
         assert(path);
+
+        if (prefix && !path_startswith(path, prefix))
+                return -ENOTDIR;
 
         /* return immediately if directory exists */
         e = strrchr(path, '/');
         if (!e)
                 return -EINVAL;
+
+        if (e == path)
+                return 0;
+
         p = strndupa(path, e - path);
-        if (stat(p, &st) >= 0) {
-                if ((st.st_mode & S_IFMT) == S_IFDIR)
-                        return 0;
-                else
-                        return -ENOTDIR;
-        }
+        r = is_dir(p);
+        if (r > 0)
+                return 0;
+        if (r == 0)
+                return -ENOTDIR;
 
         /* create every parent directory in the path, except the last component */
         p = path + strspn(path, "/");
         for (;;) {
-                int r;
-                char *t;
+                char t[strlen(path) + 1];
 
                 e = p + strcspn(p, "/");
                 p = e + strspn(e, "/");
@@ -83,39 +76,32 @@ static int makedir_parents(const char *path, mode_t mode, bool apply) {
                 if (*p == 0)
                         return 0;
 
-                t = strndup(path, e - path);
-                if (!t)
-                        return -ENOMEM;
+                memcpy(t, path, e - path);
+                t[e-path] = 0;
+
+                if (prefix && path_startswith(prefix, t))
+                        continue;
 
                 r = label_mkdir(t, mode, apply);
-                free(t);
-
                 if (r < 0 && errno != EEXIST)
                         return -errno;
         }
 }
 
 int mkdir_parents(const char *path, mode_t mode) {
-        return makedir_parents(path, mode, false);
+        return mkdir_parents_internal(NULL, path, mode, false);
 }
 
 int mkdir_parents_label(const char *path, mode_t mode) {
-        return makedir_parents(path, mode, true);
+        return mkdir_parents_internal(NULL, path, mode, true);
 }
 
-static int is_dir(const char* path) {
-        struct stat st;
-        if (stat(path, &st) < 0)
-                return -errno;
-        return S_ISDIR(st.st_mode);
-}
-
-static int makedir_p(const char *path, mode_t mode, bool apply) {
+static int mkdir_p_internal(const char *prefix, const char *path, mode_t mode, bool apply) {
         int r;
 
         /* Like mkdir -p */
 
-        r = makedir_parents(path, mode, apply);
+        r = mkdir_parents_internal(prefix, path, mode, apply);
         if (r < 0)
                 return r;
 
@@ -127,5 +113,5 @@ static int makedir_p(const char *path, mode_t mode, bool apply) {
 }
 
 int mkdir_p(const char *path, mode_t mode) {
-        return makedir_p(path, mode, false);
+        return mkdir_p_internal(NULL, path, mode, false);
 }
