@@ -207,6 +207,7 @@ static int trie_insert(struct trie *trie, struct trie_node *node, const char *se
                                 return -ENOMEM;
 
                         off = strbuf_add_string(trie->strings, s, p);
+                        free(s); /* fix clang-reported potential memleak */
                         if (off < 0)
                                 return off;
 
@@ -303,8 +304,10 @@ static int64_t trie_store_nodes(struct trie_f *trie, struct trie_node *node) {
                 int64_t child_off;
 
                 child_off = trie_store_nodes(trie, node->children[i].child);
-                if (child_off < 0)
+                if (child_off < 0) {
+                        free(children); /* clang reported memleak , children is thrown away if this fails */
                         return child_off;
+                }
                 children[i].c = node->children[i].c;
                 children[i].child_off = htole64(child_off);
         }

@@ -162,6 +162,7 @@ static void worker_cleanup(struct worker *worker)
         udev_monitor_unref(worker->monitor);
         children--;
         free(worker);
+        worker = NULL;
 }
 
 static void worker_unref(struct worker *worker)
@@ -1308,7 +1309,7 @@ int main(int argc, char *argv[])
                                         worker->state = WORKER_KILLED;
                                         /* drop reference taken for state 'running' */
                                         worker_unref(worker);
-                                        if (worker->event) {
+                                        if (worker && worker->event) {
                                                 log_error("seq %llu '%s' killed\n",
                                                           udev_device_get_seqnum(worker->event->dev), worker->event->devpath);
                                                 worker->event->exitcode = -64;

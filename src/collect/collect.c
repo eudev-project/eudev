@@ -453,6 +453,7 @@ int main(int argc, char **argv)
 
                         him->name = malloc(strlen(argv[i]) + 1);
                         if (!him->name) {
+                                free(him); /* clang reported memleak ; him is thrown away here */
                                 ret = ENOMEM;
                                 goto out;
                         }
