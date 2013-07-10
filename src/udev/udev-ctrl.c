@@ -178,7 +178,7 @@ int udev_ctrl_get_fd(struct udev_ctrl *uctrl)
         return uctrl->sock;
 }
 
-static inline accept4_fallback(int sockfd)
+static inline int accept4_fallback(int sockfd)
 {
         int fd;
 
