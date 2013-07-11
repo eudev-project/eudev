@@ -1,13 +1,12 @@
+2013-07-11
 
-2013-07-09
+	* Prepare 1.1 release.  Uptream imports are up to date as of 2013-07-10.   All commits
+	  previous to
 
-	* Import of hwdb
-	* Fix LGPL license for src/gudev
-	* Add "hwdb: add --lookup-prefix= option" commit a4bbef099209d4e3bccd913cd30da536f8971064
-	* DO NOT ADD "static-nodes: move creation of static nodes from udevd to tmpfiles"
-	  commit edeb68c53f1cdc452016b4c8512586a70b1262e3.  Upstream has moved this functionality
-	  to systemd-tmpfilesd since kmod v14 now exports static node info in tmpfiles.d format.
-	  We wish to retain this functionality in udevd.
+		http://cgit.freedesktop.org/systemd/systemd/commit/?id=9d7d42bc406a2ac04639674281ce3ff6beeda790
+
+	  have been considered.  That commit adds a new builtin 'keyboard' to manage key mappings.
+	  It is scheduled for inclusion in 1.2 which should coincide with uptream release v206.
 
 2013-07-10
 
@@ -18,3 +17,13 @@
 	* Bring src/udev/mkdir.c in line with upstreams use of *_internal() with prefix.  Also
 	  import path_startswith() from upstream's src/shared/path-util.c.  This is now needed
 	  in our src/udev/mkdir.c in the new *_internal() functions.
+
+2013-07-09
+
+	* Import of hwdb
+	* Fix LGPL license for src/gudev
+	* Add "hwdb: add --lookup-prefix= option" commit a4bbef099209d4e3bccd913cd30da536f8971064
+	* DO NOT ADD "static-nodes: move creation of static nodes from udevd to tmpfiles"
+	  commit edeb68c53f1cdc452016b4c8512586a70b1262e3.  Upstream has moved this functionality
+	  to systemd-tmpfilesd since kmod v14 now exports static node info in tmpfiles.d format.
+	  We wish to retain this functionality in udevd.
