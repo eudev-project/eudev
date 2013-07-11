@@ -207,7 +207,6 @@ static int trie_insert(struct trie *trie, struct trie_node *node, const char *se
                                 return -ENOMEM;
 
                         off = strbuf_add_string(trie->strings, s, p);
-                        free(s); /* fix clang-reported potential memleak */
                         if (off < 0)
                                 return off;
 
