@@ -68,8 +68,8 @@ static int load_module(struct udev *udev, const char *alias)
         kmod_module_unref_list(list);
         return err;
 #else
-	const char * argv[] = { MODPROBE, "-bq", alias, 0 };
-	return execute_command(MODPROBE, argv);
+        char *const argv[] = { MODPROBE, "-bq", alias, 0 };
+        return execute_command(MODPROBE, argv);
 #endif
 }
 
