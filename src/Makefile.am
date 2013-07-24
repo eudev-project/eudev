@@ -18,8 +18,3 @@ if ENABLE_GUDEV
 SUBDIRS += \
 	gudev
 endif
-
-if ENABLE_KEYMAP
-SUBDIRS += \
-	keymap
-endif

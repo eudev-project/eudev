@@ -1,3 +1,11 @@
+2013-07-24
+
+	* Incorporate migration from external to internal keymaps.  About 13 commits were cherry-picked
+	  out of upstream, after and including 9d7d42bc406a2ac04639674281ce3ff6beeda790, to assemble
+	  this commit in eudev.  Note that between this commit and upstream release 206 there are still
+	  many commits that need to be evaluated -- the commits are temporarily stored in the file
+	  'UPSTREAM-206-commit-todo'.
+
 2013-07-11
 
 	* Prepare 1.1 release.  Uptream imports are up to date as of 2013-07-10.   All commits

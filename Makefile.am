@@ -8,12 +8,6 @@ SUBDIRS = \
 	docs \
 	test
 
-if ENABLE_KEYMAP
-SUBDIRS += \
-	keymaps \
-	keymaps-force-release
-endif
-
 if ENABLE_MANPAGES
 SUBDIRS += \
 	man

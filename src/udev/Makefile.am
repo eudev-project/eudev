@@ -117,6 +117,41 @@ EXTRA_DIST = \
 CLEANFILES = \
 	udev.pc
 
+if ENABLE_KEYMAP
+AM_CPPFLAGS += \
+	-I $(top_builddir)/src/udev
+
+libudev_core_la_SOURCES += \
+	udev-builtin-keyboard.c
+
+nodist_libudev_core_la_SOURCES = \
+	keyboard-keys-from-name.h \
+	keyboard-keys-to-name.h
+
+keyboard-keys.txt: Makefile
+	$(AM_V_at)$(MKDIR_P) $(dir $@)
+	$(AM_V_GEN)$(CPP) $(CFLAGS) $(AM_CPPFLAGS) $(CPPFLAGS) -dM -include linux/input.h - < /dev/null | $(AWK) '/^#define[ \t]+KEY_[^ ]+[ \t]+[0-9]/ { if ($$2 != "KEY_MAX") { print $$2 } }' | sed 's/^KEY_COFFEE$$/KEY_SCREENLOCK/' > $@
+
+keyboard-keys-from-name.gperf: keyboard-keys.txt Makefile
+	$(AM_V_GEN)$(AWK) 'BEGIN{ print "struct key { const char* name; unsigned short id; };"; print "%null-strings"; print "%%";} { print tolower(substr($$1 ,5)) ", " $$1 }' < $< > $@
+
+keyboard-keys-from-name.h: keyboard-keys-from-name.gperf Makefile
+	$(AM_V_GPERF)$(GPERF) -L ANSI-C -t -N keyboard_lookup_key -H hash_key_name -p -C < $< > $@
+
+keyboard-keys-to-name.h: keyboard-keys.txt Makefile
+	$(AM_V_GEN)$(AWK) 'BEGIN{ print "const char* const key_names[KEY_CNT] = { "} { print "[" $$1 "] = \"" $$1 "\"," } END{print "};"}' < $< > $@
+
+
+BUILT_SOURCES = \
+	$(nodist_libudev_core_la_SOURCES)
+
+CLEANFILES += \
+	keyboard-keys-from-name.gperf \
+	keyboard-keys.txt \
+	$(BUILT_SOURCES)
+
+endif
+
 # install udevadm symlink in sbindir
 install-exec-hook:
 	if test "$(bindir)" != "$(sbindir)"; then \

@@ -1,6 +1,6 @@
 
 AC_PREREQ([2.68])
-AC_INIT([eudev],[1.1],[https://github.com/gentoo/eudev/issues])
+AC_INIT([eudev],[1.2],[https://github.com/gentoo/eudev/issues])
 AC_SUBST(UDEV_VERSION, 205)
 AC_CONFIG_SRCDIR([src/udev/udevd.c])
 
@@ -231,6 +231,7 @@ if test "x$enable_keymap" = "xyes"; then
         if test -z "$GPERF" ; then
                 AC_MSG_ERROR([*** gperf not found])
         fi
+        AC_DEFINE([ENABLE_KEYMAP], [1], [Define if we are enabling rule generator])
 fi
 
 AM_CONDITIONAL([ENABLE_KEYMAP], [test "x$enable_keymap" = "xyes"])
@@ -313,8 +314,6 @@ AC_CONFIG_FILES([Makefile
                  docs/libudev/Makefile
                  docs/libudev/version.xml
                  hwdb/Makefile
-                 keymaps-force-release/Makefile
-                 keymaps/Makefile
                  man/Makefile
                  rules/Makefile
                  rule_generator/Makefile
@@ -330,9 +329,6 @@ AC_CONFIG_FILES([Makefile
                  src/v4l_id/Makefile
                  src/gudev/Makefile
                  src/gudev/gudev-1.0.pc
-                 src/keymap/Makefile
-                 src/keymap/check-keymaps.sh
-                 src/keymap/keyboard-force-release.sh
                  src/libudev/Makefile
                  src/libudev/libudev.pc
                  src/udev/Makefile

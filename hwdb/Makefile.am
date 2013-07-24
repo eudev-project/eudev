@@ -8,3 +8,8 @@ dist_udevhwdb_DATA = \
 	20-pci-vendor-model.hwdb \
 	20-usb-classes.hwdb \
 	20-usb-vendor-model.hwdb
+
+if ENABLE_KEYMAP
+dist_udevhwdb_DATA += \
+	60-keyboard.hwdb
+endif

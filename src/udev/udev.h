@@ -145,6 +145,9 @@ enum udev_builtin_cmd {
 #endif
         UDEV_BUILTIN_HWDB,
         UDEV_BUILTIN_INPUT_ID,
+#ifdef ENABLE_KEYMAP
+        UDEV_BUILTIN_KEYBOARD,
+#endif
 #ifdef HAVE_MODULES
         UDEV_BUILTIN_KMOD,
 #endif
@@ -171,6 +174,9 @@ extern const struct udev_builtin udev_builtin_firmware;
 #endif
 extern const struct udev_builtin udev_builtin_hwdb;
 extern const struct udev_builtin udev_builtin_input_id;
+#ifdef ENABLE_KEYMAP
+extern const struct udev_builtin udev_builtin_keyboard;
+#endif
 #ifdef HAVE_MODULES
 extern const struct udev_builtin udev_builtin_kmod;
 #endif

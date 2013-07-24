@@ -53,13 +53,10 @@ src/gudev/gudevmarshal.h
 src/gudev/GUdev-1.0.gir
 src/gudev/GUdev-1.0.typelib
 
-src/keymap/check-keymaps.sh
-src/keymap/keyboard-force-release.sh
-src/keymap/keymap
-src/keymap/keys-from-name.gperf
-src/keymap/keys-from-name.h
-src/keymap/keys-to-name.h
-src/keymap/keys.txt
+src/udev/keyboard-keys-from-name.gperf
+src/udev/keyboard-keys-from-name.h
+src/udev/keyboard-keys-to-name.h
+src/udev/keyboard-keys.txt
 
 test/test-libudev
 test/test-udev

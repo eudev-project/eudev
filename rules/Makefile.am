@@ -39,8 +39,7 @@ endif
 
 if ENABLE_KEYMAP
 dist_udevrules_DATA += \
-	95-keymap.rules \
-	95-keyboard-force-release.rules
+	60-keyboard.rules
 endif
 
 install-data-local:

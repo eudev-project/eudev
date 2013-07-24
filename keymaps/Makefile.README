@@ -1,3 +1,0 @@
-Because of the parsing done by src/keymap/check-keymaps.sh,
-you should not put anything in this directory except for
-keymap files and files begining with Makefile.
