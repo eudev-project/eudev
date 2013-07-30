@@ -546,7 +546,7 @@ static int adm_hwdb(struct udev *udev, int argc, char *argv[]) {
                 {}
         };
         const char *test = NULL;
-        const char *root_path = NULL;
+        const char *root = "";
         char *udev_hwdb_path = UDEV_HWDB_BIN;
         bool update = false;
         struct trie *trie = NULL;
@@ -568,7 +568,7 @@ static int adm_hwdb(struct udev *udev, int argc, char *argv[]) {
                         test = optarg;
                         break;
                 case 'r':
-                        root_path = optarg;
+                        root = optarg;
                         break;
                 case 'h':
                         help();
@@ -605,7 +605,7 @@ static int adm_hwdb(struct udev *udev, int argc, char *argv[]) {
                 }
                 trie->nodes_count++;
 
-                err = conf_files_list_strv(&files, ".hwdb", root_path, (const char **)conf_file_dirs);
+                err = conf_files_list_strv(&files, ".hwdb", root, conf_file_dirs);
                 if (err < 0) {
                         log_error("failed to enumerate hwdb files: %s\n", strerror(-err));
                         rc = EXIT_FAILURE;
@@ -633,9 +633,9 @@ static int adm_hwdb(struct udev *udev, int argc, char *argv[]) {
                 log_debug("strings dedup'ed: %8zu bytes (%8zu)\n",
                           trie->strings->dedup_len, trie->strings->dedup_count);
 
-                if (root_path) {
+                if (root) {
                     if (asprintf(&udev_hwdb_path,
-                                 "%s/%s", root_path, udev_hwdb_path) < 0) {
+                                 "%s/%s", root, udev_hwdb_path) < 0) {
                         rc = EXIT_FAILURE;
                         goto out;
                     }
@@ -644,13 +644,13 @@ static int adm_hwdb(struct udev *udev, int argc, char *argv[]) {
                 mkdir_parents(udev_hwdb_path, 0755);
                 err = trie_store(trie, udev_hwdb_path);
 
-                if (root_path) {
+                if (root) {
                     free(udev_hwdb_path);
                 }
 
                 if (err < 0) {
-                        log_error("Failure writing hardware database '%s': %s",
-                        udev_hwdb_path, strerror(-err));
+                        log_error("Failure writing database %s: %s",
+                            udev_hwdb_path, strerror(-err));
                         rc = EXIT_FAILURE;
                 }
         }

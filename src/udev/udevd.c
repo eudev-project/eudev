@@ -162,7 +162,6 @@ static void worker_cleanup(struct worker *worker)
         udev_monitor_unref(worker->monitor);
         children--;
         free(worker);
-        worker = NULL;
 }
 
 static void worker_unref(struct worker *worker)
