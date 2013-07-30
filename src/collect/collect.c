@@ -104,8 +104,7 @@ static int prepare(char *dir, char *filename)
                         fprintf(stderr, "Lock taken, wait for %d seconds\n", UDEV_ALARM_TIMEOUT);
                 if (errno == EAGAIN || errno == EACCES) {
                         alarm(UDEV_ALARM_TIMEOUT);
-                        if (lockf(fd, F_LOCK, 0) == -1)
-                                fprintf(stderr, "Failed to acquire lock on %s\n", buf);
+                        lockf(fd, F_LOCK, 0);
                         if (debug)
                                 fprintf(stderr, "Acquired lock on %s\n", buf);
                 } else {
@@ -141,10 +140,8 @@ static int checkout(int fd)
  restart:
         len = bufsize >> 1;
         buf = malloc(bufsize + 1);
-        if (!buf) {
-                fprintf(stderr, "Out of memory.\n");
+        if (!buf)
                 return log_oom();
-        }
         memset(buf, ' ', bufsize);
         buf[bufsize] = '\0';
 
@@ -445,20 +442,19 @@ int main(int argc, char **argv)
 
                         if (debug)
                                 fprintf(stderr, "ID %s: not in database\n", argv[i]);
-                        him = malloc(sizeof (struct _mate));
+                        him = new(struct _mate, 1);
                         if (!him) {
                                 ret = ENOMEM;
                                 goto out;
                         }
 
-                        him->name = malloc(strlen(argv[i]) + 1);
+                        him->name = strdup(argv[i]);
                         if (!him->name) {
-                                free(him); /* clang reported memleak ; him is thrown away here */
+                                free(him);
                                 ret = ENOMEM;
                                 goto out;
                         }
 
-                        strcpy(him->name, argv[i]);
                         him->state = STATE_NONE;
                         udev_list_node_append(&him->node, &bunch);
                 } else {
@@ -480,12 +476,10 @@ int main(int argc, char **argv)
         kickout();
 
         lseek(fd, 0, SEEK_SET);
-        if (ftruncate(fd, 0) == -1)
-                fprintf(stderr, "Failed to truncate '%s'\n", checkpoint);
+        ftruncate(fd, 0);
         ret = missing(fd);
 
-        if (lockf(fd, F_ULOCK, 0) == -1)
-                fprintf(stderr, "Failed to release lock from '%s'\n", checkpoint);
+        lockf(fd, F_ULOCK, 0);
         close(fd);
 out:
         if (debug)

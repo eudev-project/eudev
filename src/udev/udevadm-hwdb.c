@@ -304,7 +304,7 @@ static int64_t trie_store_nodes(struct trie_f *trie, struct trie_node *node) {
 
                 child_off = trie_store_nodes(trie, node->children[i].child);
                 if (child_off < 0) {
-                        free(children); /* clang reported memleak , children is thrown away if this fails */
+                        free(children);
                         return child_off;
                 }
                 children[i].c = node->children[i].c;
