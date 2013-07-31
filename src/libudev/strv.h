@@ -37,6 +37,8 @@ char **strv_copy(char * const *l);
 unsigned strv_length(char * const *l) _pure_;
 
 char **strv_remove(char **l, const char *s);
+int strv_push(char ***l, char *value);
+int strv_extend(char ***l, const char *value);
 char **strv_uniq(char **l);
 
 char **strv_new(const char *x, ...) _sentinel_;
