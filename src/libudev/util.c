@@ -999,6 +999,12 @@ int fd_inc_sndbuf(int fd, size_t n) {
         return 1;
 }
 
+char hexchar(int x) {
+        static const char table[16] = "0123456789abcdef";
+
+        return table[x & 15];
+}
+
 bool in_initrd(void) {
         static __thread int saved = -1;
         struct statfs s;

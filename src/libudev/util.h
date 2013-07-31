@@ -235,6 +235,8 @@ extern char **saved_argv;
 
 int fd_inc_sndbuf(int fd, size_t n);
 
+char hexchar(int x);
+
 bool in_initrd(void);
 
 static inline void freep(void *p) {
