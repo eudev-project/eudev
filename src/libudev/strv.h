@@ -36,9 +36,6 @@ static inline void strv_freep(char ***l) {
 char **strv_copy(char * const *l);
 unsigned strv_length(char * const *l) _pure_;
 
-int strv_extend(char ***l, const char *value);
-int strv_push(char ***l, char *value);
-
 char **strv_remove(char **l, const char *s);
 char **strv_uniq(char **l);
 

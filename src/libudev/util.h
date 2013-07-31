@@ -131,10 +131,6 @@ char *strnappend(const char *s, const char *suffix, size_t length);
 
 char *truncate_nl(char *s);
 
-char hexchar(int x) _const_;
-
-char *xescape(const char *s, const char *bad);
-
 bool dirent_is_file_with_suffix(const struct dirent *de, const char *suffix) _pure_;
 
 bool ignore_file(const char *filename) _pure_;
