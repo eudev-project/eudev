@@ -811,6 +811,7 @@ static void handle_signal(struct udev *udev, int signo)
         }
 }
 
+#ifndef HAVE_LIBKMOD
 static void static_dev_create_from_modules(struct udev *udev)
 {
         struct utsname kernel;
@@ -881,6 +882,7 @@ static void static_dev_create_from_modules(struct udev *udev)
 
         fclose(f);
 }
+#endif
 
 /*
  * read the kernel commandline, in case we need to get into debug mode
@@ -1033,7 +1035,9 @@ int main(int argc, char *argv[])
         mkdir("/run/udev", 0755);
 
         dev_setup(NULL);
+#ifndef HAVE_LIBKMOD
         static_dev_create_from_modules(udev);
+#endif
 
         /* before opening new files, make sure std{in,out,err} fds are in a sane state */
         if (daemonize) {

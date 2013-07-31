@@ -1,7 +1,7 @@
 
 AC_PREREQ([2.68])
 AC_INIT([eudev],[1.2],[https://github.com/gentoo/eudev/issues])
-AC_SUBST(UDEV_VERSION, 205)
+AC_SUBST(UDEV_VERSION, 206)
 AC_CONFIG_SRCDIR([src/udev/udevd.c])
 
 AC_USE_SYSTEM_EXTENSIONS
@@ -267,10 +267,10 @@ if test "x${enable_modules}" = xyes; then
 
         AS_IF([test "x${enable_libkmod}" = xyes],
           [AC_CHECK_LIB([kmod], [main],
-            [PKG_CHECK_MODULES(KMOD, [libkmod >= 5])
+            [PKG_CHECK_MODULES(KMOD, [libkmod >= 14])
              AC_SUBST([LIBKMOD], ["-lkmod"])
              AC_DEFINE([HAVE_LIBKMOD], [1],
-                       [Define if you have libkmod])
+                       [AC_MSG_ERROR([*** kmod version >= 14 not found])])
             ],
             [AC_MSG_FAILURE(
                [--enable-libkmod was given, but test for kmod failed])],
@@ -280,7 +280,6 @@ fi
 
 AM_CONDITIONAL([HAVE_MODULES], [test "x${enable_modules}" = xyes])
 AM_CONDITIONAL([HAVE_LIBKMOD], [test "x${enable_libkmod}" = xyes])
-
 
 # ------------------------------------------------------------------------------
 

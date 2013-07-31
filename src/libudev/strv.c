@@ -142,6 +142,43 @@ char **strv_new(const char *x, ...) {
         return r;
 }
 
+int strv_push(char ***l, char *value) {
+        char **c;
+        unsigned n;
+
+        if (!value)
+                return 0;
+
+        n = strv_length(*l);
+        c = realloc(*l, sizeof(char*) * (n + 2));
+        if (!c)
+                return -ENOMEM;
+
+        c[n] = value;
+        c[n+1] = NULL;
+
+        *l = c;
+        return 0;
+}
+
+int strv_extend(char ***l, const char *value) {
+        char *v;
+        int r;
+
+        if (!value)
+                return 0;
+
+        v = strdup(value);
+        if (!v)
+                return -ENOMEM;
+
+        r = strv_push(l, v);
+        if (r < 0)
+                free(v);
+
+        return r;
+}
+
 char **strv_uniq(char **l) {
         char **i;
 

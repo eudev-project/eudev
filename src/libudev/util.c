@@ -664,6 +664,41 @@ int null_or_empty_path(const char *fn) {
         return null_or_empty(&st);
 }
 
+char hexchar(int x) {
+        static const char table[16] = "0123456789abcdef";
+
+        return table[x & 15];
+}
+
+char *xescape(const char *s, const char *bad) {
+        char *r, *t;
+        const char *f;
+
+        /* Escapes all chars in bad, in addition to \ and all special
+         * chars, in \xFF style escaping. May be reversed with
+         * cunescape. */
+
+        r = new(char, strlen(s) * 4 + 1);
+        if (!r)
+                return NULL;
+
+        for (f = s, t = r; *f; f++) {
+
+                if ((*f < ' ') || (*f >= 127) ||
+                    (*f == '\\') || strchr(bad, *f)) {
+                        *(t++) = '\\';
+                        *(t++) = 'x';
+                        *(t++) = hexchar(*f >> 4);
+                        *(t++) = hexchar(*f);
+                } else
+                        *(t++) = *f;
+        }
+
+        *t = 0;
+
+        return r;
+}
+
 bool dirent_is_file_with_suffix(const struct dirent *de, const char *suffix) {
         assert(de);
 
