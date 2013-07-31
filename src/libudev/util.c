@@ -1046,3 +1046,31 @@ void *xbsearch_r(const void *key, const void *base, size_t nmemb, size_t size,
         return NULL;
 }
 
+char *xescape(const char *s, const char *bad) {
+        char *r, *t;
+        const char *f;
+
+        /* Escapes all chars in bad, in addition to \ and all special
+         * chars, in \xFF style escaping. May be reversed with
+         * cunescape. */
+
+        if (!(r = new(char, strlen(s)*4+1)))
+                return NULL;
+
+        for (f = s, t = r; *f; f++) {
+
+                if (*f < ' ' || *f >= 127 ||
+                    *f == '\\' || strchr(bad, *f)) {
+                        *(t++) = '\\';
+                        *(t++) = 'x';
+                        *(t++) = hexchar(*f >> 4);
+                        *(t++) = hexchar(*f);
+                } else
+                        *(t++) = *f;
+        }
+
+        *t = 0;
+
+        return r;
+}
+

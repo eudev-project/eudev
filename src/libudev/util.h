@@ -272,6 +272,8 @@ void *xbsearch_r(const void *key, const void *base, size_t nmemb, size_t size,
                  int (*compar) (const void *, const void *, void *),
                  void *arg);
 
+char *xescape(const char *s, const char *bad);
+
 static inline void _reset_errno_(int *saved_errno) {
         errno = *saved_errno;
 }
