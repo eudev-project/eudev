@@ -33,7 +33,7 @@ dist_udevrules_DATA += \
 endif
 
 if HAVE_MODULES
-if HAVE_KMOD
+if HAVE_LIBKMOD
 dist_udevrules_DATA += \
 	80-drivers.rules
 else
