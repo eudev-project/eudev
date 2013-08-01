@@ -33,8 +33,13 @@ dist_udevrules_DATA += \
 endif
 
 if HAVE_MODULES
+if HAVE_KMOD
 dist_udevrules_DATA += \
 	80-drivers.rules
+else
+dist_udevrules_DATA += \
+	80-drivers-modprobe.rules
+endif
 endif
 
 if ENABLE_KEYMAP
