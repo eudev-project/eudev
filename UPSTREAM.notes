@@ -1,3 +1,12 @@
+2013-08-01
+
+	* Prepare 1.2 release.  Upstream imports are up to date as of udev-206 release.  All commits
+	  previous to
+
+		http://cgit.freedesktop.org/systemd/systemd/commit/?id=251cc8194228ac86c9a7a4c75a54a94cea2095c7
+
+	  have been considered, except for those still present in the UPSTREAM-206-commit-todo file.
+
 2013-07-24
 
 	* Incorporate migration from external to internal keymaps.  About 13 commits were cherry-picked
