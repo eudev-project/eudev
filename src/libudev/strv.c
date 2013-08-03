@@ -144,32 +144,23 @@ char **strv_new(const char *x, ...) {
 
 int strv_push(char ***l, char *value) {
         char **c;
-        char *v;
         unsigned n;
 
         if (!value)
                 return 0;
 
-        v = strdup(value);
-        if (!v)
-                return -ENOMEM;
-
         n = strv_length(*l);
         c = realloc(*l, sizeof(char*) * (n + 2));
-        if (!c) {
-                free(v);
         if (!c)
                 return -ENOMEM;
-        }
 
-        c[n] = v;
         c[n] = value;
         c[n+1] = NULL;
 
         *l = c;
         return 0;
 }
- 
+
 int strv_extend(char ***l, const char *value) {
         char *v;
         int r;
