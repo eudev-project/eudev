@@ -1,3 +1,10 @@
+2013-08-02
+
+	* Integrated upstream commit dd94c17e7da89fa612952119ac825116dc5a8deb.  No more commits
+	to be considered in UPSTREAM-206-commit-todo.
+	* Fixed UDEV_VERSION.  It should have been set to 206 for the 1.2 release.
+
+
 2013-08-01
 
 	* Prepare 1.2 release.  Upstream imports are up to date as of udev-206 release.  All commits
