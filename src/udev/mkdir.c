@@ -25,6 +25,7 @@
 #include <errno.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <limits.h>
 
 #include "label.h"
 #include "util.h"
@@ -90,7 +91,12 @@ static int mkdir_parents_internal(const char *prefix, const char *path, mode_t m
         if (e == path)
                 return 0;
 
-        p = strndupa(path, e - path);
+	char buf[PATH_MAX + 1];
+	p = buf;
+	assert(e-path < sizeof(buf));
+	memcpy(buf, path, e-path);
+	buf[e-path] = 0;
+
         r = is_dir(p);
         if (r > 0)
                 return 0;
