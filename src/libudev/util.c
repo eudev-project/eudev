@@ -40,7 +40,7 @@
 #include <termios.h>
 #include <stdarg.h>
 #include <sys/inotify.h>
-#include <sys/poll.h>
+#include <poll.h>
 #include <libgen.h>
 #include <ctype.h>
 #include <sys/prctl.h>
