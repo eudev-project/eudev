@@ -17,7 +17,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <sys/types.h>
-#include <sys/poll.h>
+#include <poll.h>
 #include <sys/socket.h>
 #include <sys/un.h>
 

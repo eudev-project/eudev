@@ -27,7 +27,7 @@
 #include <net/if.h>
 #include <sys/ioctl.h>
 #include <sys/prctl.h>
-#include <sys/poll.h>
+#include <poll.h>
 #include <sys/epoll.h>
 #include <sys/wait.h>
 #include <sys/socket.h>
