@@ -27,6 +27,7 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <stddef.h>
+#include <string.h>
 
 #include "log.h"
 #include "util.h"
