@@ -95,8 +95,8 @@ void strbuf_cleanup(struct strbuf *str) {
         free(str);
 }
 
-static int strbuf_children_cmp(const struct strbuf_child_entry *n1,
-                               const struct strbuf_child_entry *n2) {
+static int strbuf_children_cmp(const void* v1, const void* v2) {
+	const struct strbuf_child_entry *n1 = v1, *n2 = v2;
         return n1->c - n2->c;
 }
 
@@ -161,8 +161,7 @@ ssize_t strbuf_add_string(struct strbuf *str, const char *s, size_t len) {
                 c = s[len - 1 - depth];
                 search.c = c;
                 child = bsearch(&search, node->children, node->children_count,
-                                sizeof(struct strbuf_child_entry),
-                                (__compar_fn_t) strbuf_children_cmp);
+                                sizeof(struct strbuf_child_entry), strbuf_children_cmp);
                 if (!child)
                         break;
                 node = child->child;
