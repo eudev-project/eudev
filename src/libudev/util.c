@@ -551,6 +551,86 @@ char hexchar(int x) {
         return table[x & 15];
 }
 
+char octchar(int x) {
+        return '0' + (x & 7);
+}
+
+char *cescape(const char *s) {
+        char *r, *t;
+        const char *f;
+
+        assert(s);
+
+        /* Does C style string escaping. */
+
+        r = new(char, strlen(s)*4 + 1);
+        if (!r)
+                return NULL;
+
+        for (f = s, t = r; *f; f++)
+
+                switch (*f) {
+
+                case '\a':
+                        *(t++) = '\\';
+                        *(t++) = 'a';
+                        break;
+                case '\b':
+                        *(t++) = '\\';
+                        *(t++) = 'b';
+                        break;
+                case '\f':
+                        *(t++) = '\\';
+                        *(t++) = 'f';
+                        break;
+                case '\n':
+                        *(t++) = '\\';
+                        *(t++) = 'n';
+                        break;
+                case '\r':
+                        *(t++) = '\\';
+                        *(t++) = 'r';
+                        break;
+                case '\t':
+                        *(t++) = '\\';
+                        *(t++) = 't';
+                        break;
+                case '\v':
+                        *(t++) = '\\';
+                        *(t++) = 'v';
+                        break;
+                case '\\':
+                        *(t++) = '\\';
+                        *(t++) = '\\';
+                        break;
+                case '"':
+                        *(t++) = '\\';
+                        *(t++) = '"';
+                        break;
+                case '\'':
+                        *(t++) = '\\';
+                        *(t++) = '\'';
+                        break;
+
+                default:
+                        /* For special chars we prefer octal over
+                         * hexadecimal encoding, simply because glib's
+                         * g_strescape() does the same */
+                        if ((*f < ' ') || (*f >= 127)) {
+                                *(t++) = '\\';
+                                *(t++) = octchar((unsigned char) *f >> 6);
+                                *(t++) = octchar((unsigned char) *f >> 3);
+                                *(t++) = octchar((unsigned char) *f);
+                        } else
+                                *(t++) = *f;
+                        break;
+                }
+
+        *t = 0;
+
+        return r;
+}
+
 char *xescape(const char *s, const char *bad) {
         char *r, *t;
         const char *f;
