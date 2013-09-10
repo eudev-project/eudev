@@ -1,3 +1,7 @@
+2013-09-10
+
+	* Incorporate upstream changes to hwdb, rules, libudev and udev, up to Sept. 10, 2013
+
 2013-08-02
 
 	* Integrated upstream commit dd94c17e7da89fa612952119ac825116dc5a8deb.  No more commits
