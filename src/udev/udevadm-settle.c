@@ -152,8 +152,8 @@ static int adm_settle(struct udev *udev, int argc, char *argv[])
         if (pfd[0].fd < 0) {
                 log_error("inotify_init failed: %m\n");
         } else {
-                if (inotify_add_watch(pfd[0].fd, "/run/udev" , IN_MOVED_TO) < 0) {
-                        log_error("watching /run/udev failed\n");
+                if (inotify_add_watch(pfd[0].fd, RUN_DIR "/udev" , IN_MOVED_TO) < 0) {
+                        log_error("watching " RUN_DIR "/udev failed\n");
                         close(pfd[0].fd);
                         pfd[0].fd = -1;
                 }

@@ -220,7 +220,7 @@ static FILE *open_queue_file(struct udev_queue *udev_queue, unsigned long long i
 {
         FILE *queue_file;
 
-        queue_file = fopen("/run/udev/queue.bin", "re");
+        queue_file = fopen(RUN_DIR "/udev/queue.bin", "re");
         if (queue_file == NULL)
                 return NULL;
 

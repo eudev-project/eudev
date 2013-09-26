@@ -1618,7 +1618,7 @@ struct udev_rules *udev_rules_new(struct udev *udev, int resolve_names)
 
         rules->dirs = strv_new(UDEV_CONF_DIR "/rules.d",
                                UDEV_RULES_DIR,
-                               "/run/udev/rules.d",
+                               RUN_DIR "/udev/rules.d",
                                UDEV_LIBEXEC_DIR "/rules.d",
 #ifdef HAVE_SPLIT_USR
                                "/lib/udev/rules.d",
@@ -2652,7 +2652,7 @@ int udev_rules_apply_static_dev_perms(struct udev_rules *rules)
                                 STRV_FOREACH(t, tags) {
                                         _cleanup_free_ char *unescaped_filename = NULL;
 
-                                        strscpyl(tags_dir, sizeof(tags_dir), "/run/udev/static_node-tags/", *t, "/", NULL);
+                                        strscpyl(tags_dir, sizeof(tags_dir), RUN_DIR "/udev/static_node-tags/", *t, "/", NULL);
                                         r = mkdir_p(tags_dir, 0755);
                                         if (r < 0) {
                                                 log_error("failed to create %s: %s\n", tags_dir, strerror(-r));
@@ -2718,9 +2718,9 @@ finish:
         if (f) {
                 fflush(f);
                 fchmod(fileno(f), 0644);
-                if (ferror(f) || rename(path, "/run/udev/static_node-tags") < 0) {
+                if (ferror(f) || rename(path, RUN_DIR "/udev/static_node-tags") < 0) {
                         r = -errno;
-                        unlink("/run/udev/static_node-tags");
+                        unlink(RUN_DIR "/udev/static_node-tags");
                         unlink(path);
                 }
                 fclose(f);
