@@ -48,6 +48,12 @@ AC_CHECK_HEADERS(
         [AC_MSG_ERROR([*** POSIX header not found])]
 )
 
+AC_CHECK_HEADERS(
+	[mtd/mtd-user.h],
+	[],
+	[AC_MSG_ERROR([*** KERNEL header not found])]
+)
+
 # Checks for typedefs, structures, and compiler characteristics.
 AC_TYPE_UID_T
 AC_C_INLINE
