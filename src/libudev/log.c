@@ -44,7 +44,6 @@ static int log_facility = LOG_DAEMON;
 static int console_fd = STDERR_FILENO;
 static int syslog_fd = -1;
 static int kmsg_fd = -1;
-static int journal_fd = -1;
 
 static bool syslog_is_stream = false;
 
@@ -172,43 +171,6 @@ fail:
         return r;
 }
 
-void log_close_journal(void) {
-
-        if (journal_fd < 0)
-                return;
-
-        close_nointr_nofail(journal_fd);
-        journal_fd = -1;
-}
-
-static int log_open_journal(void) {
-        union sockaddr_union sa = {
-                .un.sun_family = AF_UNIX,
-                .un.sun_path = "/run/systemd/journal/socket",
-        };
-        int r;
-
-        if (journal_fd >= 0)
-                return 0;
-
-        journal_fd = create_log_socket(SOCK_DGRAM);
-        if (journal_fd < 0) {
-                r = journal_fd;
-                goto fail;
-        }
-
-        if (connect(journal_fd, &sa.sa, offsetof(struct sockaddr_un, sun_path) + strlen(sa.un.sun_path)) < 0) {
-                r = -errno;
-                goto fail;
-        }
-
-        return 0;
-
-fail:
-        log_close_journal();
-        return r;
-}
-
 int log_open(void) {
         int r;
 
@@ -219,7 +181,6 @@ int log_open(void) {
          * because there is no reason to close it. */
 
         if (log_target == LOG_TARGET_NULL) {
-                log_close_journal();
                 log_close_syslog();
                 log_close_console();
                 return 0;
@@ -229,22 +190,10 @@ int log_open(void) {
             getpid() == 1 ||
             isatty(STDERR_FILENO) <= 0) {
 
-                if (log_target == LOG_TARGET_AUTO ||
-                    log_target == LOG_TARGET_JOURNAL_OR_KMSG ||
-                    log_target == LOG_TARGET_JOURNAL) {
-                        r = log_open_journal();
-                        if (r >= 0) {
-                                log_close_syslog();
-                                log_close_console();
-                                return r;
-                        }
-                }
-
                 if (log_target == LOG_TARGET_SYSLOG_OR_KMSG ||
                     log_target == LOG_TARGET_SYSLOG) {
                         r = log_open_syslog();
                         if (r >= 0) {
-                                log_close_journal();
                                 log_close_console();
                                 return r;
                         }
@@ -252,12 +201,10 @@ int log_open(void) {
 
                 if (log_target == LOG_TARGET_AUTO ||
                     log_target == LOG_TARGET_SAFE ||
-                    log_target == LOG_TARGET_JOURNAL_OR_KMSG ||
                     log_target == LOG_TARGET_SYSLOG_OR_KMSG ||
                     log_target == LOG_TARGET_KMSG) {
                         r = log_open_kmsg();
                         if (r >= 0) {
-                                log_close_journal();
                                 log_close_syslog();
                                 log_close_console();
                                 return r;
@@ -265,7 +212,6 @@ int log_open(void) {
                 }
         }
 
-        log_close_journal();
         log_close_syslog();
 
         /* Get the real /dev/console if we are PID=1, hence reopen */
@@ -281,7 +227,6 @@ void log_set_target(LogTarget target) {
 }
 
 void log_close(void) {
-        log_close_journal();
         log_close_syslog();
         log_close_kmsg();
         log_close_console();
@@ -457,39 +402,6 @@ static int log_do_header(char *header, size_t size,
         return 0;
 }
 
-static int write_to_journal(
-        int level,
-        const char*file,
-        int line,
-        const char *func,
-        const char *object_name,
-        const char *object,
-        const char *buffer) {
-
-        char header[LINE_MAX];
-        struct iovec iovec[4] = {};
-        struct msghdr mh = {};
-
-        if (journal_fd < 0)
-                return 0;
-
-        log_do_header(header, sizeof(header), level,
-                      file, line, func, object_name, object);
-
-        IOVEC_SET_STRING(iovec[0], header);
-        IOVEC_SET_STRING(iovec[1], "MESSAGE=");
-        IOVEC_SET_STRING(iovec[2], buffer);
-        IOVEC_SET_STRING(iovec[3], "\n");
-
-        mh.msg_iov = iovec;
-        mh.msg_iovlen = ELEMENTSOF(iovec);
-
-        if (sendmsg(journal_fd, &mh, MSG_NOSIGNAL) < 0)
-                return -errno;
-
-        return 1;
-}
-
 static int log_dispatch(
         int level,
         const char*file,
@@ -520,19 +432,8 @@ static int log_dispatch(
                 if ((e = strpbrk(buffer, NEWLINE)))
                         *(e++) = 0;
 
-                if (log_target == LOG_TARGET_AUTO ||
-                    log_target == LOG_TARGET_JOURNAL_OR_KMSG ||
-                    log_target == LOG_TARGET_JOURNAL) {
-
-                        k = write_to_journal(level, file, line, func,
-                                             object_name, object, buffer);
-                        if (k < 0) {
-                                if (k != -EAGAIN)
-                                        log_close_journal();
-                                log_open_kmsg();
-                        } else if (k > 0)
-                                r++;
-                }
+                if (log_target == LOG_TARGET_AUTO)
+                        log_open_kmsg();
 
                 if (log_target == LOG_TARGET_SYSLOG_OR_KMSG ||
                     log_target == LOG_TARGET_SYSLOG) {
@@ -551,7 +452,6 @@ static int log_dispatch(
                     (log_target == LOG_TARGET_AUTO ||
                      log_target == LOG_TARGET_SAFE ||
                      log_target == LOG_TARGET_SYSLOG_OR_KMSG ||
-                     log_target == LOG_TARGET_JOURNAL_OR_KMSG ||
                      log_target == LOG_TARGET_KMSG)) {
 
                         k = write_to_kmsg(level, file, line, func,
@@ -644,8 +544,6 @@ int log_oom_internal(const char *file, int line, const char *func) {
 static const char *const log_target_table[] = {
         [LOG_TARGET_CONSOLE] = "console",
         [LOG_TARGET_KMSG] = "kmsg",
-        [LOG_TARGET_JOURNAL] = "journal",
-        [LOG_TARGET_JOURNAL_OR_KMSG] = "journal-or-kmsg",
         [LOG_TARGET_SYSLOG] = "syslog",
         [LOG_TARGET_SYSLOG_OR_KMSG] = "syslog-or-kmsg",
         [LOG_TARGET_AUTO] = "auto",
