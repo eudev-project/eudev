@@ -96,7 +96,7 @@ struct udev_ctrl *udev_ctrl_new_from_fd(struct udev *udev, int fd)
         setsockopt(uctrl->sock, SOL_SOCKET, SO_PASSCRED, &on, sizeof(on));
 
         uctrl->saddr.sun_family = AF_LOCAL;
-        strscpy(uctrl->saddr.sun_path, sizeof(uctrl->saddr.sun_path), "/run/udev/control");
+        strscpy(uctrl->saddr.sun_path, sizeof(uctrl->saddr.sun_path), RUN_DIR "/udev/control");
         uctrl->addrlen = offsetof(struct sockaddr_un, sun_path) + strlen(uctrl->saddr.sun_path);
         return uctrl;
 }

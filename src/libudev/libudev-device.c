@@ -527,7 +527,7 @@ int udev_device_read_db(struct udev_device *udev_device, const char *dbfile)
                 id = udev_device_get_id_filename(udev_device);
                 if (id == NULL)
                         return -1;
-                strscpyl(filename, sizeof(filename), "/run/udev/data/", id, NULL);
+                strscpyl(filename, sizeof(filename), RUN_DIR "/udev/data/", id, NULL);
                 dbfile = filename;
         }
 

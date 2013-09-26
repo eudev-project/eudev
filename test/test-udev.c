@@ -58,7 +58,7 @@ static int fake_filesystems(void) {
         } fakefss[] = {
                 { "test/sys", "/sys",                   "failed to mount test /sys" },
                 { "test/dev", "/dev",                   "failed to mount test /dev" },
-                { "test/run", "/run",                   "failed to mount test /run" },
+                { "test/run", RUN_DIR,                   "failed to mount test " RUN_DIR },
                 { "test/run", "/etc/udev/rules.d",      "failed to mount empty /etc/udev/rules.d" },
                 { "test/run", "/lib/udev/rules.d",      "failed to mount empty /lib/udev/rules.d" },
         };
