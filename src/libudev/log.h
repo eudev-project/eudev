@@ -58,7 +58,7 @@ int log_meta(
                 const char*file,
                 int line,
                 const char *func,
-                const char *format, ...) _printf_attr_(5,6);
+                const char *format, ...) _printf_(5,6);
 
 int log_metav(
                 int level,
@@ -66,7 +66,7 @@ int log_metav(
                 int line,
                 const char *func,
                 const char *format,
-                va_list ap) _printf_attr_(5,0);
+                va_list ap) _printf_(5,0);
 
 int log_oom_internal(
                 const char *file,
