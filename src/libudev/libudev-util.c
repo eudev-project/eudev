@@ -84,8 +84,11 @@ uid_t util_lookup_user(struct udev *udev, const char *user)
         struct passwd *pw;
         uid_t uid;
         size_t buflen = sysconf(_SC_GETPW_R_SIZE_MAX);
-        char *buf = alloca(buflen);
+        char *buf;
 
+        if (buflen == -1)
+                buflen = 1024;
+        buf = alloca(buflen);
         if (streq(user, "root"))
                 return 0;
         uid = strtoul(user, &endptr, 10);
@@ -108,9 +111,11 @@ gid_t util_lookup_group(struct udev *udev, const char *group)
         struct group grbuf;
         struct group *gr;
         gid_t gid = 0;
-        size_t buflen = sysconf(_SC_GETPW_R_SIZE_MAX);
+        size_t buflen = sysconf(_SC_GETGR_R_SIZE_MAX);
         char *buf = NULL;
 
+        if (buflen == -1)
+                buflen = 1024;
         if (streq(group, "root"))
                 return 0;
         gid = strtoul(group, &endptr, 10);
