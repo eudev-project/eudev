@@ -155,7 +155,7 @@ endif
 # install udevadm symlink in sbindir
 install-exec-hook:
 	if test "$(bindir)" != "$(sbindir)"; then \
-		$(LN_S) -n -f $(DESTDIR)$(bindir)/udevadm $(DESTDIR)$(sbindir)/udevadm; \
+		$(LN_S) -n -f $(bindir)/udevadm $(DESTDIR)$(sbindir)/udevadm; \
 	fi
 
 uninstall-hook:
