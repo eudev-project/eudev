@@ -108,7 +108,7 @@ gid_t util_lookup_group(struct udev *udev, const char *group)
         struct group grbuf;
         struct group *gr;
         gid_t gid = 0;
-        size_t buflen = sysconf(_SC_GETPW_R_SIZE_MAX);
+        size_t buflen = sysconf(_SC_GETGR_R_SIZE_MAX);
         char *buf = NULL;
 
         if (streq(group, "root"))
