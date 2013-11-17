@@ -1028,6 +1028,13 @@ keyboard:dmi:bvn*:bvr*:bd*:svnTOSHIBA*:pnSatellite*M30X:pvr*
 keyboard:dmi:bvn*:bvr*:bd*:svnVIA:pnK8N800:pvr*
  KEYBOARD_KEY_81=prog1
 
+# Satellite U940
+keyboard:name:Toshiba*input*device:dmi:bvn*:bvr*:bd*:svnTOSHIBA*:pnSATELLITEU940:pvr*
+ KEYBOARD_KEY_13c=brightnessdown
+ KEYBOARD_KEY_13d=brightnessup
+ KEYBOARD_KEY_13e=switchvideomode
+ KEYBOARD_KEY_13f=f21                                   # Touchpad toggle
+
 ###########################################################
 # Zepto
 ###########################################################
