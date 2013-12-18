@@ -580,12 +580,16 @@ static int adm_hwdb(struct udev *udev, int argc, char *argv[]) {
                 case 'h':
                         help();
                         return EXIT_SUCCESS;
+                case '?':
+                        return EXIT_FAILURE;
+                default:
+                        assert_not_reached("Unknown option");
                 }
         }
 
         if (!update && !test) {
-                help();
-                return EXIT_SUCCESS;
+                log_error("Either --update or --test must be used");
+                return EXIT_FAILURE;
         }
 
         if (update) {
