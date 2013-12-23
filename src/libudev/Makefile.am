@@ -39,6 +39,7 @@ libudev_la_SOURCES =\
 	exit-status.c \
 	hashmap.c \
 	log.c \
+	MurmurHash2.c \
 	path-util.c \
 	set.c \
 	strbuf.c \
@@ -60,6 +61,7 @@ noinst_HEADERS = \
 	log.h \
 	macro.h \
 	missing.h \
+	MurmurHash2.h \
 	path-util.h \
 	set.h \
 	socket-util.h \
