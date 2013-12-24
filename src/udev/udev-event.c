@@ -177,7 +177,7 @@ subst:
                         from++;
                         for (i = 0; from[i] != '}'; i++) {
                                 if (from[i] == '\0') {
-                                        log_error("missing closing brace for format '%s'\n", src);
+                                        log_error("missing closing brace for format '%s'", src);
                                         goto out;
                                 }
                         }
@@ -258,7 +258,7 @@ subst:
                                                 cpos++;
                                 }
                                 if (i > 0) {
-                                        log_error("requested part of result string not found\n");
+                                        log_error("requested part of result string not found");
                                         break;
                                 }
                                 strscpy(tmp, sizeof(tmp), cpos);
@@ -281,7 +281,7 @@ subst:
                         int count;
 
                         if (attr == NULL) {
-                                log_error("missing file parameter for attr\n");
+                                log_error("missing file parameter for attr");
                                 break;
                         }
 
@@ -308,7 +308,7 @@ subst:
                                 vbuf[len] = '\0';
                         count = util_replace_chars(vbuf, UDEV_ALLOWED_CHARS_INPUT);
                         if (count > 0)
-                                log_debug("%i character(s) replaced\n" , count);
+                                log_debug("%i character(s) replaced" , count);
                         l = strpcpy(&s, l, vbuf);
                         break;
                 }
@@ -366,7 +366,7 @@ subst:
                                 break;
                         }
                 default:
-                        log_error("unknown substitution type=%i\n", type);
+                        log_error("unknown substitution type=%i", type);
                         break;
                 }
         }
@@ -393,7 +393,7 @@ static int spawn_exec(struct udev_event *event,
                         dup2(fd, STDERR_FILENO);
                 close(fd);
         } else {
-                log_error("open /dev/null failed: %m\n");
+                log_error("open /dev/null failed: %m");
         }
 
         /* connect pipes to std{out,err} */
@@ -417,7 +417,7 @@ static int spawn_exec(struct udev_event *event,
 
         /* exec failed */
         err = -errno;
-        log_error("failed to execute '%s' '%s': %m\n", argv[0], cmd);
+        log_error("failed to execute '%s' '%s': %m", argv[0], cmd);
         return err;
 }
 
@@ -436,7 +436,7 @@ static void spawn_read(struct udev_event *event,
 
         fd_ep = epoll_create1(EPOLL_CLOEXEC);
         if (fd_ep < 0) {
-                log_error("error creating epoll fd: %m\n");
+                log_error("error creating epoll fd: %m");
                 goto out;
         }
 
@@ -445,7 +445,7 @@ static void spawn_read(struct udev_event *event,
                 ep_outpipe.events = EPOLLIN;
                 ep_outpipe.data.ptr = &fd_stdout;
                 if (epoll_ctl(fd_ep, EPOLL_CTL_ADD, fd_stdout, &ep_outpipe) < 0) {
-                        log_error("fail to add fd to epoll: %m\n");
+                        log_error("fail to add fd to epoll: %m");
                         goto out;
                 }
         }
@@ -455,7 +455,7 @@ static void spawn_read(struct udev_event *event,
                 ep_errpipe.events = EPOLLIN;
                 ep_errpipe.data.ptr = &fd_stderr;
                 if (epoll_ctl(fd_ep, EPOLL_CTL_ADD, fd_stderr, &ep_errpipe) < 0) {
-                        log_error("fail to add fd to epoll: %m\n");
+                        log_error("fail to add fd to epoll: %m");
                         goto out;
                 }
         }
@@ -472,7 +472,7 @@ static void spawn_read(struct udev_event *event,
 
                         age_usec = now(CLOCK_MONOTONIC) - event->birth_usec;
                         if (age_usec >= event->timeout_usec) {
-                                log_error("timeout '%s'\n", cmd);
+                                log_error("timeout '%s'", cmd);
                                 goto out;
                         }
                         timeout = ((event->timeout_usec - age_usec) / 1000) + 1000;
@@ -484,11 +484,11 @@ static void spawn_read(struct udev_event *event,
                 if (fdcount < 0) {
                         if (errno == EINTR)
                                 continue;
-                        log_error("failed to poll: %m\n");
+                        log_error("failed to poll: %m");
                         goto out;
                 }
                 if (fdcount == 0) {
-                        log_error("timeout '%s'\n", cmd);
+                        log_error("timeout '%s'", cmd);
                         goto out;
                 }
 
@@ -510,7 +510,7 @@ static void spawn_read(struct udev_event *event,
                                                 memcpy(&result[respos], buf, count);
                                                 respos += count;
                                         } else {
-                                                log_error("'%s' ressize %zd too short\n", cmd, ressize);
+                                                log_error("'%s' ressize %zd too short", cmd, ressize);
                                         }
                                 }
 
@@ -522,12 +522,12 @@ static void spawn_read(struct udev_event *event,
                                         pos = buf;
                                         while ((line = strsep(&pos, "\n"))) {
                                                 if (pos != NULL || line[0] != '\0')
-                                                        log_debug("'%s'(%s) '%s'\n", cmd, *fd == fd_stdout ? "out" : "err" , line);
+                                                        log_debug("'%s'(%s) '%s'", cmd, *fd == fd_stdout ? "out" : "err" , line);
                                         }
                                 }
                         } else if (ev[i].events & EPOLLHUP) {
                                 if (epoll_ctl(fd_ep, EPOLL_CTL_DEL, *fd, NULL) < 0) {
-                                        log_error("failed to remove fd from epoll: %m\n");
+                                        log_error("failed to remove fd from epoll: %m");
                                         goto out;
                                 }
                                 *fd = -1;
@@ -572,11 +572,11 @@ static int spawn_wait(struct udev_event *event, const char *cmd, pid_t pid)
                         if (errno == EINTR)
                                 continue;
                         err = -errno;
-                        log_error("failed to poll: %m\n");
+                        log_error("failed to poll: %m");
                         goto out;
                 }
                 if (fdcount == 0) {
-                        log_error("timeout: killing '%s' [%u]\n", cmd, pid);
+                        log_error("timeout: killing '%s' [%u]", cmd, pid);
                         kill(pid, SIGKILL);
                 }
 
@@ -597,20 +597,20 @@ static int spawn_wait(struct udev_event *event, const char *cmd, pid_t pid)
                                 if (waitpid(pid, &status, WNOHANG) < 0)
                                         break;
                                 if (WIFEXITED(status)) {
-                                        log_debug("'%s' [%u] exit with return code %i\n", cmd, pid, WEXITSTATUS(status));
+                                        log_debug("'%s' [%u] exit with return code %i", cmd, pid, WEXITSTATUS(status));
                                         if (WEXITSTATUS(status) != 0)
                                                 err = -1;
                                 } else if (WIFSIGNALED(status)) {
-                                        log_error("'%s' [%u] terminated by signal %i (%s)\n", cmd, pid, WTERMSIG(status), strsignal(WTERMSIG(status)));
+                                        log_error("'%s' [%u] terminated by signal %i (%s)", cmd, pid, WTERMSIG(status), strsignal(WTERMSIG(status)));
                                         err = -1;
                                 } else if (WIFSTOPPED(status)) {
-                                        log_error("'%s' [%u] stopped\n", cmd, pid);
+                                        log_error("'%s' [%u] stopped", cmd, pid);
                                         err = -1;
                                 } else if (WIFCONTINUED(status)) {
-                                        log_error("'%s' [%u] continued\n", cmd, pid);
+                                        log_error("'%s' [%u] continued", cmd, pid);
                                         err = -1;
                                 } else {
-                                        log_error("'%s' [%u] exit with status 0x%04x\n", cmd, pid, status);
+                                        log_error("'%s' [%u] exit with status 0x%04x", cmd, pid, status);
                                         err = -1;
                                 }
                                 pid = 0;
@@ -676,14 +676,14 @@ int udev_event_spawn(struct udev_event *event,
         if (result != NULL || udev_get_log_priority(udev) >= LOG_INFO) {
                 if (pipe2(outpipe, O_NONBLOCK) != 0) {
                         err = -errno;
-                        log_error("pipe failed: %m\n");
+                        log_error("pipe failed: %m");
                         goto out;
                 }
         }
         if (udev_get_log_priority(udev) >= LOG_INFO) {
                 if (pipe2(errpipe, O_NONBLOCK) != 0) {
                         err = -errno;
-                        log_error("pipe failed: %m\n");
+                        log_error("pipe failed: %m");
                         goto out;
                 }
         }
@@ -713,14 +713,14 @@ int udev_event_spawn(struct udev_event *event,
                         errpipe[READ_END] = -1;
                 }
 
-                log_debug("starting '%s'\n", cmd);
+                log_debug("starting '%s'", cmd);
 
                 spawn_exec(event, cmd, argv, envp, sigmask,
                            outpipe[WRITE_END], errpipe[WRITE_END]);
 
                 _exit(2 );
         case -1:
-                log_error("fork of '%s' failed: %m\n", cmd);
+                log_error("fork of '%s' failed: %m", cmd);
                 err = -1;
                 goto out;
         default:
@@ -764,13 +764,13 @@ static int rename_netif_dev_fromname_toname(struct udev_device *dev,const char *
         struct ifreq ifr;
         int err;
 
-        log_debug("changing net interface name from '%s' to '%s'\n",
+        log_debug("changing net interface name from '%s' to '%s'",
                   oldname, newname);
 
         sk = socket(PF_INET, SOCK_DGRAM, 0);
         if (sk < 0) {
                 err = -errno;
-                log_error("error opening socket: %m\n");
+                log_error("error opening socket: %m");
                 return err;
         }
 
@@ -787,7 +787,7 @@ static int rename_netif_dev_fromname_toname(struct udev_device *dev,const char *
                 goto out;
         }
         /* keep trying if the destination interface name already exists */
-        log_debug("collision on rename of network interface %s to %s , retrying until timeout\n",
+        log_debug("collision on rename of network interface %s to %s , retrying until timeout",
                 ifr.ifr_name, ifr.ifr_newname);
 
         err = -errno;
@@ -813,13 +813,13 @@ static int rename_netif_dev_fromname_toname(struct udev_device *dev,const char *
 
 out:
         if (err < 0)
-                log_error("error changing net interface name %s to %s: %m\n", ifr.ifr_name, ifr.ifr_newname);
+                log_error("error changing net interface name %s to %s: %m", ifr.ifr_name, ifr.ifr_newname);
 #else
         if (err >= 0) {
-                print_kmsg("renamed network interface %s to %s\n", ifr.ifr_name, ifr.ifr_newname);
+                print_kmsg("renamed network interface %s to %s", ifr.ifr_name, ifr.ifr_newname);
         } else {
                 err = -errno;
-                log_error("error changing net interface name %s to %s: %m\n", ifr.ifr_name, ifr.ifr_newname);
+                log_error("error changing net interface name %s to %s: %m", ifr.ifr_name, ifr.ifr_newname);
         }
 #endif
 
@@ -921,9 +921,9 @@ int udev_event_execute_rules(struct udev_event *event, struct udev_rules *rules,
                                         err = rename_netif_dev_fromname_toname(dev,udev_device_get_sysname(dev),newifname);
                                         if (err == 0) {
                                                 finalifname = newifname;
-                                                log_debug("renamed netif to '%s' for collision avoidance\n", newifname);
+                                                log_debug("renamed netif to '%s' for collision avoidance", newifname);
                                         } else {
-                                                log_error("could not rename netif to '%s' for collision avoidance\n",newifname);
+                                                log_error("could not rename netif to '%s' for collision avoidance",newifname);
                                         }
                                 }
                                 /* rename it now to its final target if its not already there */
@@ -944,7 +944,7 @@ int udev_event_execute_rules(struct udev_event *event, struct udev_rules *rules,
                         err = rename_netif(event);
 #endif
                         if (err == 0) {
-                                log_debug("renamed netif to '%s'\n", finalifname);
+                                log_debug("renamed netif to '%s'", finalifname);
 
                                 /* remember old name */
                                 udev_device_add_property(dev, "INTERFACE_OLD", udev_device_get_sysname(dev));
@@ -957,7 +957,7 @@ int udev_event_execute_rules(struct udev_event *event, struct udev_rules *rules,
                                         strscpy(pos, sizeof(syspath) - (pos - syspath), finalifname);
                                         udev_device_set_syspath(event->dev, syspath);
                                         udev_device_add_property(dev, "INTERFACE", udev_device_get_sysname(dev));
-                                        log_debug("changed devpath to '%s'\n", udev_device_get_devpath(dev));
+                                        log_debug("changed devpath to '%s'", udev_device_get_devpath(dev));
                                 }
                         }
                 }
@@ -1027,7 +1027,7 @@ void udev_event_execute_run(struct udev_event *event, const sigset_t *sigmask)
                         char **envp;
 
                         if (event->exec_delay > 0) {
-                                log_debug("delay execution of '%s'\n", program);
+                                log_debug("delay execution of '%s'", program);
                                 sleep(event->exec_delay);
                         }
 
