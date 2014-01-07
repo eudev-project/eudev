@@ -888,6 +888,13 @@ keyboard:dmi:bvn*:bvr*:bd*:svn[sS][aA][mM][sS][uU][nN][gG]*:pn*900X[34]*:pvr*
  KEYBOARD_KEY_97=!                                      # Fn+F12 Wi-Fi toggle
  KEYBOARD_KEY_d5=!                                      # Fn+F6 battery life extender
 
+keyboard:dmi:bvn*:bvr*:bd*:svn[sS][aA][mM][sS][uU][nN][gG]*:pn*90X3A*:pvr*
+ KEYBOARD_KEY_ce=!prog1                                 # Fn+F1 launch settings
+ KEYBOARD_KEY_8d=!prog3                                 # Fn+F6 performance mode
+ KEYBOARD_KEY_97=!kbdillumdown                          # Fn+F7 keyboard backlight down
+ KEYBOARD_KEY_96=!kbdillumup                            # Fn+F8 keyboard backlight up
+ KEYBOARD_KEY_d5=!wlan                                  # Fn+F12 Wi-Fi toggle
+
 # SQ1US
 keyboard:dmi:bvn*:bvr*:bd*:svn[sS][aA][mM][sS][uU][nN][gG]*:pnSQ1US:pvr*
  KEYBOARD_KEY_d4=menu
