@@ -278,6 +278,15 @@ void *xbsearch_r(const void *key, const void *base, size_t nmemb, size_t size,
                  int (*compar) (const void *, const void *, void *),
                  void *arg);
 
+#define FOREACH_LINE(line, f, on_error)                         \
+        for (;;)                                                \
+                if (!fgets(line, sizeof(line), f)) {            \
+                        if (ferror(f)) {                        \
+                                on_error;                       \
+                        }                                       \
+                        break;                                  \
+                } else
+
 static inline void _reset_errno_(int *saved_errno) {
         errno = *saved_errno;
 }
