@@ -8,7 +8,8 @@ AM_CPPFLAGS = \
 
 noinst_PROGRAMS = \
 	test-libudev \
-	test-udev
+	test-udev \
+	test_utf8
 
 test_libudev_SOURCES = \
 	test-libudev.c
@@ -29,6 +30,15 @@ test_udev_LDADD = \
 	$(top_builddir)/src/udev/libudev-core.la \
 	$(BLKID_LIBS) \
 	$(SELINUX_LIBS)
+
+test_utf8_SOURCES = \
+	test-utf8.c
+
+test_utf8_CFLAGS = \
+	$(AM_CFLAGS)
+
+test_utf8_LDADD = \
+	$(top_builddir)/src/libudev/libudev-private.la
 
 if HAVE_LIBKMOD
 test_udev_LDADD += $(KMOD_LIBS)

@@ -43,7 +43,8 @@ libudev_la_SOURCES =\
 	strbuf.c \
 	strv.c \
 	strxcpyx.c  \
-	util.c
+	util.c \
+	utf8.c
 
 noinst_HEADERS = \
 	libudev-hwdb-def.h \
@@ -64,7 +65,8 @@ noinst_HEADERS = \
 	strbuf.h \
 	strv.h \
 	strxcpyx.h \
-	util.h
+	util.h \
+	utf8.h
 
 include_HEADERS = \
 	libudev.h
