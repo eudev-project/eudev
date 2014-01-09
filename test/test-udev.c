@@ -91,9 +91,8 @@ out:
 }
 
 
-int main(int argc, char *argv[])
-{
-        struct udev *udev;
+int main(int argc, char *argv[]) {
+        struct udev *udev = NULL;
         struct udev_event *event = NULL;
         struct udev_device *dev = NULL;
         struct udev_rules *rules = NULL;
@@ -109,21 +108,22 @@ int main(int argc, char *argv[])
 
         udev = udev_new();
         if (udev == NULL)
-                exit(EXIT_FAILURE);
-        log_debug("version %s\n", VERSION);
+                return EXIT_FAILURE;
+
+        log_debug("version %s", VERSION);
         label_init("/dev");
 
         sigprocmask(SIG_SETMASK, NULL, &sigmask_orig);
 
         action = argv[1];
         if (action == NULL) {
-                log_error("action missing\n");
+                log_error("action missing");
                 goto out;
         }
 
         devpath = argv[2];
         if (devpath == NULL) {
-                log_error("devpath missing\n");
+                log_error("devpath missing");
                 goto out;
         }
 
@@ -132,7 +132,7 @@ int main(int argc, char *argv[])
         strscpyl(syspath, sizeof(syspath), "/sys", devpath, NULL);
         dev = udev_device_new_from_syspath(udev, syspath);
         if (dev == NULL) {
-                log_debug("unknown device '%s'\n", devpath);
+                log_debug("unknown device '%s'", devpath);
                 goto out;
         }
 
@@ -151,12 +151,12 @@ int main(int argc, char *argv[])
         if (udev_device_get_devnode(dev) != NULL) {
                 mode_t mode = 0600;
 
-                if (strcmp(udev_device_get_subsystem(dev), "block") == 0)
+                if (streq(udev_device_get_subsystem(dev), "block"))
                         mode |= S_IFBLK;
                 else
                         mode |= S_IFCHR;
 
-                if (strcmp(action, "remove") != 0) {
+                if (!streq(action, "remove")) {
                         mkdir_parents_label(udev_device_get_devnode(dev), 0755);
                         mknod(udev_device_get_devnode(dev), mode, udev_device_get_devnum(dev));
                 } else {
@@ -176,7 +176,5 @@ out:
         udev_rules_unref(rules);
         label_finish();
         udev_unref(udev);
-        if (err != 0)
-                return EXIT_FAILURE;
-        return EXIT_SUCCESS;
+        return err ? EXIT_FAILURE : EXIT_SUCCESS;
 }
