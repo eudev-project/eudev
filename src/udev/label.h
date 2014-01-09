@@ -34,3 +34,5 @@ int label_context_set(const char *path, mode_t mode);
 void label_context_clear(void);
 
 int label_mkdir(const char *path, mode_t mode, bool apply);
+
+int label_apply(const char *path, const char *label);
