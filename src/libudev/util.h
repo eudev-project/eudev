@@ -283,3 +283,11 @@ static inline void _reset_errno_(int *saved_errno) {
 }
 
 #define PROTECT_ERRNO _cleanup_(_reset_errno_) __attribute__((unused)) int _saved_errno_ = errno
+
+static inline void qsort_safe(void *base, size_t nmemb, size_t size,
+                              int (*compar)(const void *, const void *)) {
+        if (nmemb) {
+                assert(base);
+                qsort(base, nmemb, size, compar);
+        }
+}
