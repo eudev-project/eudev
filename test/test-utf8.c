@@ -19,41 +19,35 @@
   along with systemd; If not, see <http://www.gnu.org/licenses/>.
 ***/
 
-
 #include "utf8.h"
 #include "util.h"
 
-/* helpers for test_udev_encode_string */
-static char *do_encode_string(const char *in) {
-        size_t out_len = strlen(in) * 4;
-        char *out = malloc(out_len);
-
-        assert_se(out);
-        assert_se(udev_encode_string(in, out, out_len) >= 0);
-        puts(out);
-
-        return out;
+static void test_utf8_is_printable(void) {
+        assert_se(utf8_is_printable("ascii is valid\tunicode", 22));
+        assert_se(utf8_is_printable("\342\204\242", 3));
+        assert_se(!utf8_is_printable("\341\204", 2));
+        assert_se(utf8_is_printable("ąę", 4));
 }
 
-static bool expect_encoded_as(const char *in, const char *expected) {
-        _cleanup_free_ char *encoded = do_encode_string(in);
-        return streq(encoded, expected);
+static void test_ascii_is_valid(void) {
+        assert_se(ascii_is_valid("alsdjf\t\vbarr\nba z"));
+        assert_se(!ascii_is_valid("\342\204\242"));
+        assert_se(!ascii_is_valid("\341\204"));
 }
 
-static void test_udev_encode_string(void) {
-        assert_se(expect_encoded_as("systemd sucks", "systemd\\x20sucks"));
-        assert_se(expect_encoded_as("pinkiepie", "pinkiepie"));
-        assert_se(expect_encoded_as("valíd\\ųtf8", "valíd\\x5cųtf8"));
-        assert_se(expect_encoded_as("s/ash/ng", "s\\x2fash\\x2fng"));
-}
+static void test_utf8_encoded_valid_unichar(void) {
+        assert_se(utf8_encoded_valid_unichar("\342\204\242") == 3);
+        assert_se(utf8_encoded_valid_unichar("\302\256") == 2);
+        assert_se(utf8_encoded_valid_unichar("a") == 1);
+        assert_se(utf8_encoded_valid_unichar("\341\204") < 0);
+        assert_se(utf8_encoded_valid_unichar("\341\204\341\204") < 0);
 
-static void test_utf8_is_valid(void) {
-        assert_se(utf8_is_valid("ascii is valid unicode"));
-        assert_se(utf8_is_valid("\341\204\242"));
-        assert_se(!utf8_is_valid("\341\204"));
 }
 
 int main(int argc, char *argv[]) {
-        test_utf8_is_valid();
-        test_udev_encode_string();
+        test_utf8_is_printable();
+        test_ascii_is_valid();
+        test_utf8_encoded_valid_unichar();
+
+        return 0;
 }

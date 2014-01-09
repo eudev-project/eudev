@@ -35,6 +35,7 @@ libudev_la_SOURCES =\
 	libudev-hwdb.c \
 	cgroup-util.c \
 	conf-files.c \
+	device-nodes.c \
 	exit-status.c \
 	hashmap.c \
 	log.c \
@@ -52,6 +53,7 @@ noinst_HEADERS = \
 	cgroup-util.h \
 	conf-files.h \
 	def.h \
+	device-nodes.h \
 	exit-status.h \
 	hashmap.h \
 	ioprio.h \
