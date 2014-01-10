@@ -57,7 +57,8 @@ libudev_core_la_SOURCES = \
 	udev-builtin-usb_id.c \
 	dev-setup.c \
 	label.c \
-	mkdir.c
+	mkdir.c \
+	smack-util.c
 
 if ENABLE_FIRMWARE
 libudev_core_la_SOURCES += \
@@ -67,7 +68,8 @@ endif
 noinst_HEADERS = \
 	dev-setup.h \
 	label.h \
-	mkdir.h
+	mkdir.h \
+	smack-util.h
 
 include_HEADERS = \
 	udev.h
