@@ -58,6 +58,7 @@ libudev_core_la_SOURCES = \
 	dev-setup.c \
 	label.c \
 	mkdir.c \
+	path-util.c \
 	smack-util.c
 
 if ENABLE_FIRMWARE
@@ -69,6 +70,7 @@ noinst_HEADERS = \
 	dev-setup.h \
 	label.h \
 	mkdir.h \
+	path-util.h \
 	smack-util.h
 
 include_HEADERS = \
