@@ -1,9 +1,5 @@
-/*-*- Mode: C; c-basic-offset: 8; indent-tabs-mode: nil -*-*/
-
-#pragma once
-
 /***
-  This file is part of systemd.
+  This file is part of eudev, forked from systemd.
 
   Copyright 2010-2012 Lennart Poettering
 
@@ -22,6 +18,10 @@
 ***/
 
 #include <stdbool.h>
+#include <inttypes.h>
+
+typedef uint64_t usec_t;
+typedef uint64_t nsec_t;
 
 char* path_get_file_name(const char *p) _pure_;
 int path_get_parent(const char *path, char **parent);
@@ -35,3 +35,5 @@ char** path_strv_canonicalize(char **l);
 char** path_strv_canonicalize_uniq(char **l);
 
 int path_is_mount_point(const char *path, bool allow_symlink);
+
+bool paths_check_timestamp(char **paths, usec_t *paths_ts_usec, bool update);
