@@ -33,7 +33,6 @@
 #endif
 
 #include "udev.h"
-#include "util.h"
 
 static struct kmod_ctx *ctx;
 
@@ -49,18 +48,18 @@ static int load_module(struct udev *udev, const char *alias)
                 return err;
 
         if (list == NULL)
-                log_debug("no module matches '%s'\n", alias);
+                log_debug("no module matches '%s'", alias);
 
         kmod_list_foreach(l, list) {
                 struct kmod_module *mod = kmod_module_get_module(l);
 
                 err = kmod_module_probe_insert_module(mod, KMOD_PROBE_APPLY_BLACKLIST, NULL, NULL, NULL, NULL);
                 if (err == KMOD_PROBE_APPLY_BLACKLIST)
-                        log_debug("module '%s' is blacklisted\n", kmod_module_get_name(mod));
+                        log_debug("module '%s' is blacklisted", kmod_module_get_name(mod));
                 else if (err == 0)
-                        log_debug("inserted '%s'\n", kmod_module_get_name(mod));
+                        log_debug("inserted '%s'", kmod_module_get_name(mod));
                 else
-                        log_debug("failed to insert '%s'\n", kmod_module_get_name(mod));
+                        log_debug("failed to insert '%s'", kmod_module_get_name(mod));
 
                 kmod_module_unref(mod);
         }
@@ -91,12 +90,12 @@ static int builtin_kmod(struct udev_device *dev, int argc, char *argv[], bool te
 #endif
 
         if (argc < 3 || !streq(argv[1], "load")) {
-                log_error("expect: %s load <module>\n", argv[0]);
+                log_error("expect: %s load <module>", argv[0]);
                 return EXIT_FAILURE;
         }
 
         for (i = 2; argv[i]; i++) {
-                log_debug("execute '%s' '%s'\n", argv[1], argv[i]);
+                log_debug("execute '%s' '%s'", argv[1], argv[i]);
                 load_module(udev, argv[i]);
         }
 
@@ -114,7 +113,7 @@ static int builtin_kmod_init(struct udev *udev)
         if (!ctx)
                 return -ENOMEM;
 
-        log_debug("load module index\n");
+        log_debug("load module index");
         kmod_set_log_fn(ctx, udev_kmod_log, udev);
         kmod_load_resources(ctx);
 #endif
@@ -125,7 +124,7 @@ static int builtin_kmod_init(struct udev *udev)
 static void builtin_kmod_exit(struct udev *udev)
 {
 #ifdef HAVE_LIBKMOD
-        log_debug("unload module index\n");
+        log_debug("unload module index");
         ctx = kmod_unref(ctx);
 #endif
 }
@@ -134,7 +133,7 @@ static void builtin_kmod_exit(struct udev *udev)
 /* called every couple of seconds during event activity; 'true' if config has changed */
 static bool builtin_kmod_validate(struct udev *udev)
 {
-        log_debug("validate module index\n");
+        log_debug("validate module index");
         if (!ctx)
                 return false;
         return (kmod_validate_resources(ctx) != KMOD_RESOURCES_OK);

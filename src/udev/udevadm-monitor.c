@@ -33,6 +33,7 @@
 #include <linux/netlink.h>
 
 #include "udev.h"
+#include "udev-util.h"
 
 static bool udev_exit;
 
@@ -64,43 +65,48 @@ static void print_device(struct udev_device *device, const char *source, int pro
         }
 }
 
+static void help(void) {
+        printf("Usage: udevadm monitor [--property] [--kernel] [--udev] [--help]\n"
+               "  -p,--property                            print the event properties\n"
+               "  -k,--kernel                              print kernel uevents\n"
+               "  -u,--udev                                print udev events\n"
+               "  -s,--subsystem-match=SUBSYSTEM[/DEVTYPE] filter events by subsystem\n"
+               "  -t,--tag-match=TAG                       filter events by tag\n"
+               "  -h,--help\n\n");
+}
+
 static int adm_monitor(struct udev *udev, int argc, char *argv[])
 {
-        struct sigaction act;
+        struct sigaction act = {};
         sigset_t mask;
-        int option;
         bool prop = false;
         bool print_kernel = false;
         bool print_udev = false;
-        struct udev_list subsystem_match_list;
-        struct udev_list tag_match_list;
-        struct udev_monitor *udev_monitor = NULL;
-        struct udev_monitor *kernel_monitor = NULL;
-        int fd_ep = -1;
+        _cleanup_udev_list_cleanup_ struct udev_list subsystem_match_list;
+        _cleanup_udev_list_cleanup_ struct udev_list tag_match_list;
+        _cleanup_udev_monitor_unref_ struct udev_monitor *udev_monitor = NULL;
+        _cleanup_udev_monitor_unref_ struct udev_monitor *kernel_monitor = NULL;
+        _cleanup_close_ int fd_ep = -1;
         int fd_kernel = -1, fd_udev = -1;
         struct epoll_event ep_kernel, ep_udev;
-        int rc = 0;
+        int c;
 
         static const struct option options[] = {
-                { "property", no_argument, NULL, 'p' },
-                { "environment", no_argument, NULL, 'e' },
-                { "kernel", no_argument, NULL, 'k' },
-                { "udev", no_argument, NULL, 'u' },
+                { "property",        no_argument,       NULL, 'p' },
+                { "environment",     no_argument,       NULL, 'e' }, /* alias for -p */
+                { "kernel",          no_argument,       NULL, 'k' },
+                { "udev",            no_argument,       NULL, 'u' },
                 { "subsystem-match", required_argument, NULL, 's' },
-                { "tag-match", required_argument, NULL, 't' },
-                { "help", no_argument, NULL, 'h' },
+                { "tag-match",       required_argument, NULL, 't' },
+                { "help",            no_argument,       NULL, 'h' },
                 {}
         };
 
         udev_list_init(udev, &subsystem_match_list, true);
         udev_list_init(udev, &tag_match_list, true);
 
-        for (;;) {
-                option = getopt_long(argc, argv, "pekus:t:h", options, NULL);
-                if (option == -1)
-                        break;
-
-                switch (option) {
+        while((c = getopt_long(argc, argv, "pekus:t:h", options, NULL)) >= 0)
+                switch (c) {
                 case 'p':
                 case 'e':
                         prop = true;
@@ -129,19 +135,11 @@ static int adm_monitor(struct udev *udev, int argc, char *argv[])
                         udev_list_entry_add(&tag_match_list, optarg, NULL);
                         break;
                 case 'h':
-                        printf("Usage: udevadm monitor [--property] [--kernel] [--udev] [--help]\n"
-                               "  --property                              print the event properties\n"
-                               "  --kernel                                print kernel uevents\n"
-                               "  --udev                                  print udev events\n"
-                               "  --subsystem-match=<subsystem[/devtype]> filter events by subsystem\n"
-                               "  --tag-match=<tag>                       filter events by tag\n"
-                               "  --help\n\n");
-                        goto out;
+                        help();
+                        return 0;
                 default:
-                        rc = 1;
-                        goto out;
+                        return 1;
                 }
-        }
 
         if (!print_kernel && !print_udev) {
                 print_kernel = true;
@@ -149,9 +147,7 @@ static int adm_monitor(struct udev *udev, int argc, char *argv[])
         }
 
         /* set signal handlers */
-        memset(&act, 0x00, sizeof(struct sigaction));
         act.sa_handler = sig_handler;
-        sigemptyset(&act.sa_mask);
         act.sa_flags = SA_RESTART;
         sigaction(SIGINT, &act, NULL);
         sigaction(SIGTERM, &act, NULL);
@@ -162,8 +158,8 @@ static int adm_monitor(struct udev *udev, int argc, char *argv[])
 
         fd_ep = epoll_create1(EPOLL_CLOEXEC);
         if (fd_ep < 0) {
-                log_error("error creating epoll fd: %m\n");
-                goto out;
+                log_error("error creating epoll fd: %m");
+                return 1;
         }
 
         printf("monitor will print the received events for:\n");
@@ -173,8 +169,7 @@ static int adm_monitor(struct udev *udev, int argc, char *argv[])
                 udev_monitor = udev_monitor_new_from_netlink(udev, "udev");
                 if (udev_monitor == NULL) {
                         fprintf(stderr, "error: unable to create netlink socket\n");
-                        rc = 1;
-                        goto out;
+                        return 1;
                 }
                 udev_monitor_set_receive_buffer_size(udev_monitor, 128*1024*1024);
                 fd_udev = udev_monitor_get_fd(udev_monitor);
@@ -196,16 +191,15 @@ static int adm_monitor(struct udev *udev, int argc, char *argv[])
 
                 if (udev_monitor_enable_receiving(udev_monitor) < 0) {
                         fprintf(stderr, "error: unable to subscribe to udev events\n");
-                        rc = 2;
-                        goto out;
+                        return 2;
                 }
 
                 memset(&ep_udev, 0, sizeof(struct epoll_event));
                 ep_udev.events = EPOLLIN;
                 ep_udev.data.fd = fd_udev;
                 if (epoll_ctl(fd_ep, EPOLL_CTL_ADD, fd_udev, &ep_udev) < 0) {
-                        log_error("fail to add fd to epoll: %m\n");
-                        goto out;
+                        log_error("fail to add fd to epoll: %m");
+                        return 2;
                 }
 
                 printf("UDEV - the event which udev sends out after rule processing\n");
@@ -217,8 +211,7 @@ static int adm_monitor(struct udev *udev, int argc, char *argv[])
                 kernel_monitor = udev_monitor_new_from_netlink(udev, "kernel");
                 if (kernel_monitor == NULL) {
                         fprintf(stderr, "error: unable to create netlink socket\n");
-                        rc = 3;
-                        goto out;
+                        return 3;
                 }
                 udev_monitor_set_receive_buffer_size(kernel_monitor, 128*1024*1024);
                 fd_kernel = udev_monitor_get_fd(kernel_monitor);
@@ -232,16 +225,15 @@ static int adm_monitor(struct udev *udev, int argc, char *argv[])
 
                 if (udev_monitor_enable_receiving(kernel_monitor) < 0) {
                         fprintf(stderr, "error: unable to subscribe to kernel events\n");
-                        rc = 4;
-                        goto out;
+                        return 4;
                 }
 
                 memset(&ep_kernel, 0, sizeof(struct epoll_event));
                 ep_kernel.events = EPOLLIN;
                 ep_kernel.data.fd = fd_kernel;
                 if (epoll_ctl(fd_ep, EPOLL_CTL_ADD, fd_kernel, &ep_kernel) < 0) {
-                        log_error("fail to add fd to epoll: %m\n");
-                        goto out;
+                        log_error("fail to add fd to epoll: %m");
+                        return 5;
                 }
 
                 printf("KERNEL - the kernel uevent\n");
@@ -280,14 +272,8 @@ static int adm_monitor(struct udev *udev, int argc, char *argv[])
                         }
                 }
         }
-out:
-        if (fd_ep >= 0)
-                close(fd_ep);
-        udev_monitor_unref(udev_monitor);
-        udev_monitor_unref(kernel_monitor);
-        udev_list_cleanup(&subsystem_match_list);
-        udev_list_cleanup(&tag_match_list);
-        return rc;
+
+        return 0;
 }
 
 const struct udevadm_cmd udevadm_monitor = {

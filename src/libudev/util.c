@@ -69,6 +69,7 @@
 #include "path-util.h"
 #include "exit-status.h"
 #include "hashmap.h"
+#include "fileio.h"
 
 int saved_argc = 0;
 char **saved_argv = NULL;
@@ -254,23 +255,6 @@ char* endswith(const char *s, const char *postfix) {
         return (char*) s + sl - pl;
 }
 
-char* startswith(const char *s, const char *prefix) {
-        const char *a, *b;
-
-        assert(s);
-        assert(prefix);
-
-        a = s, b = prefix;
-        for (;;) {
-                if (*b == 0)
-                        return (char*) a;
-                if (*a != *b)
-                        return NULL;
-
-                a++, b++;
-        }
-}
-
 int close_nointr(int fd) {
         int r;
 
@@ -447,59 +431,6 @@ char *split_quoted(const char *c, size_t *l, char **state) {
         }
 
         return (char*) current;
-}
-
-int write_one_line_file(const char *fn, const char *line) {
-        _cleanup_fclose_ FILE *f = NULL;
-
-        assert(fn);
-        assert(line);
-
-        f = fopen(fn, "we");
-        if (!f)
-                return -errno;
-
-        errno = 0;
-        if (fputs(line, f) < 0)
-                return errno ? -errno : -EIO;
-
-        if (!endswith(line, "\n"))
-                fputc('\n', f);
-
-        fflush(f);
-
-        if (ferror(f))
-                return errno ? -errno : -EIO;
-
-        return 0;
-}
-
-int read_one_line_file(const char *fn, char **line) {
-        _cleanup_fclose_ FILE *f = NULL;
-        char t[LINE_MAX], *c;
-
-        assert(fn);
-        assert(line);
-
-        f = fopen(fn, "re");
-        if (!f)
-                return -errno;
-
-        if (!fgets(t, sizeof(t), f)) {
-
-                if (ferror(f))
-                        return errno ? -errno : -EIO;
-
-                t[0] = 0;
-        }
-
-        c = strdup(t);
-        if (!c)
-                return -ENOMEM;
-        truncate_nl(c);
-
-        *line = c;
-        return 0;
 }
 
 char *truncate_nl(char *s) {
@@ -792,6 +723,19 @@ bool dirent_is_file_with_suffix(const struct dirent *de, const char *suffix) {
                 return false;
 
         return endswith(de->d_name, suffix);
+}
+
+bool nulstr_contains(const char*nulstr, const char *needle) {
+        const char *i;
+
+        if (!nulstr)
+                return false;
+
+        NULSTR_FOREACH(i, nulstr)
+                if (streq(i, needle))
+                        return true;
+
+        return false;
 }
 
 int execute_command(const char *command, char *const argv[])
@@ -1160,4 +1104,57 @@ void *xbsearch_r(const void *key, const void *base, size_t nmemb, size_t size,
                         return (void *)p;
         }
         return NULL;
+}
+
+int proc_cmdline(char **ret) {
+        int r;
+
+	/* disable containers for now
+        if (detect_container(NULL) > 0) {
+                char *buf, *p;
+                size_t sz = 0;
+
+                r = read_full_file("/proc/1/cmdline", &buf, &sz);
+                if (r < 0)
+                        return r;
+
+                for (p = buf; p + 1 < buf + sz; p++)
+                        if (*p == 0)
+                                *p = ' ';
+
+                *p  = 0;
+                *ret = buf;
+                return 1;
+        }
+	*/
+
+        r = read_one_line_file("/proc/cmdline", ret);
+        if (r < 0)
+                return r;
+
+        return 1;
+}
+
+int getpeercred(int fd, struct ucred *ucred) {
+        socklen_t n = sizeof(struct ucred);
+        struct ucred u;
+        int r;
+
+        assert(fd >= 0);
+        assert(ucred);
+
+        r = getsockopt(fd, SOL_SOCKET, SO_PEERCRED, &u, &n);
+        if (r < 0)
+                return -errno;
+
+        if (n != sizeof(struct ucred))
+                return -EIO;
+
+        /* Check if the data is actually useful and not suppressed due
+         * to namespacing issues */
+        if (u.pid <= 0)
+                return -ENODATA;
+
+        *ucred = u;
+        return 0;
 }

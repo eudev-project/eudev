@@ -28,6 +28,7 @@
  *
  * Two character prefixes based on the type of interface:
  *   en -- ethernet
+ *   sl -- serial line IP (slip)
  *   wl -- wlan
  *   ww -- wwan
  *
@@ -100,6 +101,8 @@ enum netname_type{
         NET_PCI,
         NET_USB,
         NET_BCMA,
+        NET_VIRTIO,
+        NET_CCWGROUP,
 };
 
 struct netnames {
@@ -117,6 +120,10 @@ struct netnames {
         char usb_ports[IFNAMSIZ];
 
         char bcma_core[IFNAMSIZ];
+
+        char virtio_core[IFNAMSIZ];
+
+        char ccw_core[IFNAMSIZ];
 };
 
 /* retrieve on-board index number and label from firmware */
@@ -158,30 +165,24 @@ static bool is_pci_multifunction(struct udev_device *dev) {
         if ((config[PCI_HEADER_TYPE] & 0x80) != 0)
                 multi = true;
 out:
-        if(f)
+        if (f)
                 fclose(f);
         return multi;
 }
 
 static int dev_pci_slot(struct udev_device *dev, struct netnames *names) {
         struct udev *udev = udev_device_get_udev(names->pcidev);
-        unsigned int domain;
-        unsigned int bus;
-        unsigned int slot;
-        unsigned int func;
-        unsigned int dev_id = 0;
+        unsigned domain, bus, slot, func, dev_id = 0;
         size_t l;
         char *s;
         const char *attr;
         struct udev_device *pci = NULL;
-        char slots[256];
-        DIR *dir;
+        char slots[256], str[256];
+        _cleanup_closedir_ DIR *dir = NULL;
         struct dirent *dent;
-        char str[256];
-        int hotplug_slot = 0;
-        int err = 0;
+        int hotplug_slot = 0, err = 0;
 
-        if (sscanf(udev_device_get_sysname(names->pcidev), "%x:%x:%x.%d", &domain, &bus, &slot, &func) != 4)
+        if (sscanf(udev_device_get_sysname(names->pcidev), "%x:%x:%x.%u", &domain, &bus, &slot, &func) != 4)
                 return -ENOENT;
 
         /* kernel provided multi-device index */
@@ -238,7 +239,6 @@ static int dev_pci_slot(struct udev_device *dev, struct netnames *names) {
                 if (hotplug_slot > 0)
                         break;
         }
-        closedir(dir);
 
         if (hotplug_slot > 0) {
                 s = names->pci_slot;
@@ -340,13 +340,70 @@ static int names_bcma(struct udev_device *dev, struct netnames *names) {
                 return -ENOENT;
 
         /* bus num:core num */
-        if (sscanf(udev_device_get_sysname(bcmadev), "bcma%*d:%d", &core) != 1)
+        if (sscanf(udev_device_get_sysname(bcmadev), "bcma%*u:%u", &core) != 1)
                 return -EINVAL;
         /* suppress the common core == 0 */
         if (core > 0)
-                snprintf(names->bcma_core, sizeof(names->bcma_core), "b%d", core);
+                snprintf(names->bcma_core, sizeof(names->bcma_core), "b%u", core);
 
         names->type = NET_BCMA;
+        return 0;
+}
+
+static int names_virtio(struct udev_device *dev, struct netnames *names) {
+        struct udev_device *virtdev;
+        unsigned int core;
+
+        virtdev = udev_device_get_parent_with_subsystem_devtype(dev, "virtio", NULL);
+        if (!virtdev)
+                return -ENOENT;
+
+        /* core num */
+        if (sscanf(udev_device_get_sysname(virtdev), "virtio%u", &core) != 1)
+                return -EINVAL;
+        /* suppress the common core == 0 */
+        if (core > 0)
+                snprintf(names->virtio_core, sizeof(names->virtio_core), "v%u", core);
+
+        names->type = NET_VIRTIO;
+        return 0;
+}
+
+static int names_ccw(struct  udev_device *dev, struct netnames *names) {
+        struct udev_device *cdev;
+        const char *bus_id;
+        size_t bus_id_len;
+        int rc;
+
+        /* Retrieve the associated CCW device */
+        cdev = udev_device_get_parent(dev);
+        if (!cdev)
+                return -ENOENT;
+
+        /* Network devices are always grouped CCW devices */
+        if (!streq_ptr("ccwgroup", udev_device_get_subsystem(cdev)))
+                return -ENOENT;
+
+        /* Retrieve bus-ID of the grouped CCW device.  The bus-ID uniquely
+         * identifies the network device on the Linux on System z channel
+         * subsystem.  Note that the bus-ID contains lowercase characters.
+         */
+        bus_id = udev_device_get_sysname(cdev);
+        if (!bus_id)
+                return -ENOENT;
+
+        /* Check the length of the bus-ID.  Rely on that the kernel provides
+         * a correct bus-ID; alternatively, improve this check and parse and
+         * verify each bus-ID part...
+         */
+        bus_id_len = strlen(bus_id);
+        if (!bus_id_len || bus_id_len < 8 || bus_id_len > 9)
+                return -EINVAL;
+
+        /* Store the CCW bus-ID for use as network device name */
+        rc = snprintf(names->ccw_core, sizeof(names->ccw_core), "ccw%s", bus_id);
+        if (rc >= 0 && rc < (int)sizeof(names->ccw_core))
+                names->type = NET_CCWGROUP;
         return 0;
 }
 
@@ -408,13 +465,21 @@ static int builtin_net_id(struct udev_device *dev, int argc, char *argv[], bool 
         struct netnames names = {};
         int err;
 
-        /* handle only ARPHRD_ETHER devices */
+        /* handle only ARPHRD_ETHER and ARPHRD_SLIP devices */
         s = udev_device_get_sysattr_value(dev, "type");
         if (!s)
                 return EXIT_FAILURE;
         i = strtoul(s, NULL, 0);
-        if (i != 1)
+        switch (i) {
+        case 1: /* ARPHRD_ETHER */
+                prefix = "en";
+                break;
+        case 256: /* ARPHRD_SLIP */
+                prefix = "sl";
+                break;
+        default:
                 return 0;
+        }
 
         /* skip stacked devices, like VLANs, ... */
         s = udev_device_get_sysattr_value(dev, "ifindex");
@@ -444,6 +509,16 @@ static int builtin_net_id(struct udev_device *dev, int argc, char *argv[], bool 
                 udev_builtin_add_property(dev, test, "ID_NET_NAME_MAC", str);
 
                 ieee_oui(dev, &names, test);
+        }
+
+        /* get path names for Linux on System z network devices */
+        err = names_ccw(dev, &names);
+        if (err >= 0 && names.type == NET_CCWGROUP) {
+                char str[IFNAMSIZ];
+
+                if (snprintf(str, sizeof(str), "%s%s", prefix, names.ccw_core) < (int)sizeof(str))
+                        udev_builtin_add_property(dev, test, "ID_NET_NAME_PATH", str);
+                goto out;
         }
 
         /* get PCI based path names, we compose only PCI based paths */
@@ -499,6 +574,21 @@ static int builtin_net_id(struct udev_device *dev, int argc, char *argv[], bool 
 
                 if (names.pci_slot[0])
                         if (snprintf(str, sizeof(str), "%s%s%s", prefix, names.pci_slot, names.bcma_core) < (int)sizeof(str))
+                                udev_builtin_add_property(dev, test, "ID_NET_NAME_SLOT", str);
+                goto out;
+        }
+
+        /* virtio bus */
+        err = names_virtio(dev, &names);
+        if (err >= 0 && names.type == NET_VIRTIO) {
+                char str[IFNAMSIZ];
+
+                if (names.pci_path[0])
+                        if (snprintf(str, sizeof(str), "%s%s%s", prefix, names.pci_path, names.virtio_core) < (int)sizeof(str))
+                                udev_builtin_add_property(dev, test, "ID_NET_NAME_PATH", str);
+
+                if (names.pci_slot[0])
+                        if (snprintf(str, sizeof(str), "%s%s%s", prefix, names.pci_slot, names.virtio_core) < (int)sizeof(str))
                                 udev_builtin_add_property(dev, test, "ID_NET_NAME_SLOT", str);
                 goto out;
         }

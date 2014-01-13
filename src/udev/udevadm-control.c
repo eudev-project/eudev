@@ -26,39 +26,40 @@
 #include <sys/un.h>
 
 #include "udev.h"
+#include "udev-util.h"
 
 static void print_help(void)
 {
         printf("Usage: udevadm control COMMAND\n"
-                "  --exit                   instruct the daemon to cleanup and exit\n"
-                "  --log-priority=<level>   set the udev log level for the daemon\n"
-                "  --stop-exec-queue        do not execute events, queue only\n"
-                "  --start-exec-queue       execute events, flush queue\n"
-                "  --reload                 reload rules and databases\n"
-                "  --property=<KEY>=<value> set a global property for all events\n"
-                "  --children-max=<N>       maximum number of children\n"
-                "  --timeout=<seconds>      maximum time to block for a reply\n"
-                "  --help                   print this help text\n\n");
+                "  -e,--exit                 instruct the daemon to cleanup and exit\n"
+                "  -l,--log-priority=LEVEL   set the udev log level for the daemon\n"
+                "  -s,--stop-exec-queue      do not execute events, queue only\n"
+                "  -S,--start-exec-queue     execute events, flush queue\n"
+                "  -R,--reload               reload rules and databases\n"
+                "  -p,--property=KEY=VALUE   set a global property for all events\n"
+                "  -m,--children-max=N       maximum number of children\n"
+                "     --timeout=SECONDS      maximum time to block for a reply\n"
+                "  -h,--help                 print this help text\n\n");
 }
 
 static int adm_control(struct udev *udev, int argc, char *argv[])
 {
-        struct udev_ctrl *uctrl = NULL;
+        _cleanup_udev_ctrl_unref_ struct udev_ctrl *uctrl = NULL;
         int timeout = 60;
-        int rc = 1;
+        int rc = 1, c;
 
         static const struct option options[] = {
-                { "exit", no_argument, NULL, 'e' },
-                { "log-priority", required_argument, NULL, 'l' },
-                { "stop-exec-queue", no_argument, NULL, 's' },
-                { "start-exec-queue", no_argument, NULL, 'S' },
-                { "reload", no_argument, NULL, 'R' },
-                { "reload-rules", no_argument, NULL, 'R' },
-                { "property", required_argument, NULL, 'p' },
-                { "env", required_argument, NULL, 'p' },
-                { "children-max", required_argument, NULL, 'm' },
-                { "timeout", required_argument, NULL, 't' },
-                { "help", no_argument, NULL, 'h' },
+                { "exit",             no_argument,       NULL, 'e' },
+                { "log-priority",     required_argument, NULL, 'l' },
+                { "stop-exec-queue",  no_argument,       NULL, 's' },
+                { "start-exec-queue", no_argument,       NULL, 'S' },
+                { "reload",           no_argument,       NULL, 'R' },
+                { "reload-rules",     no_argument,       NULL, 'R' }, /* alias for -R */
+                { "property",         required_argument, NULL, 'p' },
+                { "env",              required_argument, NULL, 'p' }, /* alias for -p */
+                { "children-max",     required_argument, NULL, 'm' },
+                { "timeout",          required_argument, NULL, 't' },
+                { "help",             no_argument,       NULL, 'h' },
                 {}
         };
 
@@ -71,14 +72,8 @@ static int adm_control(struct udev *udev, int argc, char *argv[])
         if (uctrl == NULL)
                 return 2;
 
-        for (;;) {
-                int option;
-
-                option = getopt_long(argc, argv, "el:sSRp:m:h", options, NULL);
-                if (option == -1)
-                        break;
-
-                switch (option) {
+        while ((c = getopt_long(argc, argv, "el:sSRp:m:h", options, NULL)) >= 0)
+                switch (c) {
                 case 'e':
                         if (udev_ctrl_send_exit(uctrl, timeout) < 0)
                                 rc = 2;
@@ -91,7 +86,7 @@ static int adm_control(struct udev *udev, int argc, char *argv[])
                         i = util_log_priority(optarg);
                         if (i < 0) {
                                 fprintf(stderr, "invalid number '%s'\n", optarg);
-                                goto out;
+                                return rc;
                         }
                         if (udev_ctrl_send_set_log_level(uctrl, util_log_priority(optarg), timeout) < 0)
                                 rc = 2;
@@ -120,7 +115,7 @@ static int adm_control(struct udev *udev, int argc, char *argv[])
                 case 'p':
                         if (strchr(optarg, '=') == NULL) {
                                 fprintf(stderr, "expect <KEY>=<value> instead of '%s'\n", optarg);
-                                goto out;
+                                return rc;
                         }
                         if (udev_ctrl_send_set_env(uctrl, optarg, timeout) < 0)
                                 rc = 2;
@@ -134,7 +129,7 @@ static int adm_control(struct udev *udev, int argc, char *argv[])
                         i = strtoul(optarg, &endp, 0);
                         if (endp[0] != '\0' || i < 1) {
                                 fprintf(stderr, "invalid number '%s'\n", optarg);
-                                goto out;
+                                return rc;
                         }
                         if (udev_ctrl_send_set_children_max(uctrl, i, timeout) < 0)
                                 rc = 2;
@@ -157,14 +152,11 @@ static int adm_control(struct udev *udev, int argc, char *argv[])
                         rc = 0;
                         break;
                 }
-        }
 
-        if (argv[optind] != NULL)
-                fprintf(stderr, "unknown option\n");
+        if (optind < argc)
+                fprintf(stderr, "Extraneous argument: %s\n", argv[optind]);
         else if (optind == 1)
-                fprintf(stderr, "missing option\n");
-out:
-        udev_ctrl_unref(uctrl);
+                fprintf(stderr, "Option missing\n");
         return rc;
 }
 

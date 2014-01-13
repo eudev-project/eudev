@@ -21,6 +21,7 @@
   along with systemd; If not, see <http://www.gnu.org/licenses/>.
 ***/
 
+#include <string.h>
 #include <time.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -30,6 +31,7 @@
 #include <dirent.h>
 #include <stddef.h>
 #include <unistd.h>
+#include <sys/socket.h>
 
 #include "macro.h"
 
@@ -69,9 +71,12 @@ union dirent_storage {
 
 /* What is interpreted as whitespace? */
 #define WHITESPACE " \t\n\r"
-#define NEWLINE "\n\r"
-#define QUOTES "\"\'"
-#define COMMENTS "#;"
+#define NEWLINE    "\n\r"
+#define QUOTES     "\"\'"
+#define COMMENTS   "#;"
+#define GLOB_CHARS "*?["
+
+#define FORMAT_BYTES_MAX 8
 
 #define ANSI_HIGHLIGHT_ON "\x1B[1;39m"
 #define ANSI_RED_ON "\x1B[31m"
@@ -79,6 +84,7 @@ union dirent_storage {
 #define ANSI_GREEN_ON "\x1B[32m"
 #define ANSI_HIGHLIGHT_GREEN_ON "\x1B[1;32m"
 #define ANSI_HIGHLIGHT_YELLOW_ON "\x1B[1;33m"
+#define ANSI_HIGHLIGHT_BLUE_ON "\x1B[1;34m"
 #define ANSI_HIGHLIGHT_OFF "\x1B[0m"
 #define ANSI_ERASE_TO_END_OF_LINE "\x1B[K"
 
@@ -105,8 +111,13 @@ static inline bool isempty(const char *p) {
         return !p || !p[0];
 }
 
+static inline const char *startswith(const char *s, const char *prefix) {
+        if (strncmp(s, prefix, strlen(prefix)) == 0)
+                return s + strlen(prefix);
+        return NULL;
+}
+
 char *endswith(const char *s, const char *postfix) _pure_;
-char *startswith(const char *s, const char *prefix) _pure_;
 
 int close_nointr(int fd);
 void close_nointr_nofail(int fd);
@@ -122,9 +133,6 @@ char *split_quoted(const char *c, size_t *l, char **state);
 
 #define FOREACH_WORD_QUOTED(word, length, s, state)                     \
         for ((state) = NULL, (word) = split_quoted((s), &(length), &(state)); (word); (word) = split_quoted((s), &(length), &(state)))
-
-int write_one_line_file(const char *fn, const char *line);
-int read_one_line_file(const char *fn, char **line);
 
 char *strappend(const char *s, const char *suffix);
 char *strnappend(const char *s, const char *suffix, size_t length);
@@ -206,9 +214,14 @@ int null_or_empty_path(const char *fn);
 
 int execute_command(const char *command, char *const argv[]);
 
+bool nulstr_contains(const char*nulstr, const char *needle);
+
 char *strjoin(const char *x, ...) _sentinel_;
 
 bool is_main_thread(void);
+
+#define NULSTR_FOREACH(i, l)                                    \
+        for ((i) = (l); (i) && *(i); (i) = strchr((i), 0)+1)
 
 #define NULSTR_FOREACH_PAIR(i, j, l)                             \
         for ((i) = (l), (j) = strchr((i), 0)+1; (i) && *(i); (i) = strchr((j), 0)+1, (j) = *(i) ? strchr((i), 0)+1 : (i))
@@ -247,6 +260,13 @@ static inline void freep(void *p) {
         free(*(void**) p);
 }
 
+#define DEFINE_TRIVIAL_CLEANUP_FUNC(type, func)                 \
+        static inline void func##p(type *p) {                   \
+                if (*p)                                         \
+                        func(*p);                               \
+        }                                                       \
+        struct __useless_struct_to_allow_trailing_semicolon__
+
 static inline void fclosep(FILE **f) {
         if (*f)
                 fclose(*f);
@@ -272,6 +292,13 @@ _malloc_  _alloc_(1, 2) static inline void *malloc_multiply(size_t a, size_t b) 
                 return NULL;
 
         return malloc(a * b);
+}
+
+/**
+ * Check if a string contains any glob patterns.
+ */
+_pure_ static inline bool string_is_glob(const char *p) {
+        return !!strpbrk(p, GLOB_CHARS);
 }
 
 void *xbsearch_r(const void *key, const void *base, size_t nmemb, size_t size,
@@ -300,3 +327,6 @@ static inline void qsort_safe(void *base, size_t nmemb, size_t size,
                 qsort(base, nmemb, size, compar);
         }
 }
+
+int proc_cmdline(char **ret);
+int getpeercred(int fd, struct ucred *ucred);

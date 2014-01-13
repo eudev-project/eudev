@@ -37,6 +37,7 @@ libudev_la_SOURCES =\
 	conf-files.c \
 	device-nodes.c \
 	exit-status.c \
+	fileio.c \
 	hashmap.c \
 	log.c \
 	MurmurHash2.c \
@@ -56,6 +57,7 @@ noinst_HEADERS = \
 	def.h \
 	device-nodes.h \
 	exit-status.h \
+	fileio.h \
 	hashmap.h \
 	ioprio.h \
 	log.h \

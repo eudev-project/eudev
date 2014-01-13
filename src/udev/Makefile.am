@@ -69,7 +69,8 @@ noinst_HEADERS = \
 	dev-setup.h \
 	label.h \
 	mkdir.h \
-	smack-util.h
+	smack-util.h \
+	udev-util.h
 
 include_HEADERS = \
 	udev.h

@@ -30,6 +30,7 @@
 #include <sys/signalfd.h>
 
 #include "udev.h"
+#include "udev-util.h"
 
 static int adm_test(struct udev *udev, int argc, char *argv[])
 {
@@ -37,13 +38,13 @@ static int adm_test(struct udev *udev, int argc, char *argv[])
         char filename[UTIL_PATH_SIZE];
         const char *action = "add";
         const char *syspath = NULL;
-        struct udev_event *event = NULL;
-        struct udev_device *dev = NULL;
-        struct udev_rules *rules = NULL;
         struct udev_list_entry *entry;
+        _cleanup_udev_rules_unref_ struct udev_rules *rules = NULL;
+        _cleanup_udev_device_unref_ struct udev_device *dev = NULL;
+        _cleanup_udev_event_unref_ struct udev_event *event = NULL;
         sigset_t mask, sigmask_orig;
         int err;
-        int rc = 0;
+        int rc = 0, c;
 
         static const struct option options[] = {
                 { "action", required_argument, NULL, 'a' },
@@ -52,16 +53,10 @@ static int adm_test(struct udev *udev, int argc, char *argv[])
                 {}
         };
 
-        log_debug("version %s\n", VERSION);
+        log_debug("version %s", VERSION);
 
-        for (;;) {
-                int option;
-
-                option = getopt_long(argc, argv, "a:s:N:fh", options, NULL);
-                if (option == -1)
-                        break;
-
-                switch (option) {
+        while((c = getopt_long(argc, argv, "a:N:h", options, NULL)) >= 0)
+                switch (c) {
                 case 'a':
                         action = optarg;
                         break;
@@ -74,21 +69,24 @@ static int adm_test(struct udev *udev, int argc, char *argv[])
                                 resolve_names = -1;
                         } else {
                                 fprintf(stderr, "resolve-names must be early, late or never\n");
-                                log_error("resolve-names must be early, late or never\n");
+                                log_error("resolve-names must be early, late or never");
                                 exit(EXIT_FAILURE);
                         }
                         break;
                 case 'h':
                         printf("Usage: udevadm test OPTIONS <syspath>\n"
-                               "  --action=<string>     set action string\n"
-                               "  --help\n\n");
+                               "  -a,--action=ACTION                  set action string\n"
+                               "  -N,--resolve-names=early|late|never when to resolve names\n"
+                               "  -h,--help                           print this help string\n"
+                               "\n");
                         exit(EXIT_SUCCESS);
-                default:
+                case '?':
                         exit(EXIT_FAILURE);
+                default:
+                        assert_not_reached("Unknown option");
                 }
-        }
-        syspath = argv[optind];
 
+        syspath = argv[optind];
         if (syspath == NULL) {
                 fprintf(stderr, "syspath parameter missing\n");
                 rc = 2;
@@ -157,9 +155,6 @@ static int adm_test(struct udev *udev, int argc, char *argv[])
 out:
         if (event != NULL && event->fd_signal >= 0)
                 close(event->fd_signal);
-        udev_event_unref(event);
-        udev_device_unref(dev);
-        udev_rules_unref(rules);
         udev_builtin_exit(udev);
         return rc;
 }

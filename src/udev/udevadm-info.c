@@ -30,6 +30,8 @@
 #include <sys/types.h>
 
 #include "udev.h"
+#include "udev-util.h"
+#include "util.h"
 
 static bool skip_attribute(const char *name)
 {
@@ -296,49 +298,50 @@ static struct udev_device *find_device(struct udev *udev, const char *id, const 
 
 static int uinfo(struct udev *udev, int argc, char *argv[])
 {
-        struct udev_device *device = NULL;
+        _cleanup_udev_device_unref_ struct udev_device *device = NULL;
         bool root = 0;
         bool export = 0;
         const char *export_prefix = NULL;
         char name[UTIL_PATH_SIZE];
         struct udev_list_entry *list_entry;
-        int rc = 0;
+        int c;
 
         static const struct option options[] = {
-                { "name", required_argument, NULL, 'n' },
-                { "path", required_argument, NULL, 'p' },
-                { "query", required_argument, NULL, 'q' },
-                { "attribute-walk", no_argument, NULL, 'a' },
-                { "cleanup-db", no_argument, NULL, 'c' },
-                { "export-db", no_argument, NULL, 'e' },
-                { "root", no_argument, NULL, 'r' },
+                { "name",              required_argument, NULL, 'n' },
+                { "path",              required_argument, NULL, 'p' },
+                { "query",             required_argument, NULL, 'q' },
+                { "attribute-walk",    no_argument,       NULL, 'a' },
+                { "cleanup-db",        no_argument,       NULL, 'c' },
+                { "export-db",         no_argument,       NULL, 'e' },
+                { "root",              no_argument,       NULL, 'r' },
                 { "device-id-of-file", required_argument, NULL, 'd' },
-                { "export", no_argument, NULL, 'x' },
-                { "export-prefix", required_argument, NULL, 'P' },
-                { "version", no_argument, NULL, 'V' },
-                { "help", no_argument, NULL, 'h' },
+                { "export",            no_argument,       NULL, 'x' },
+                { "export-prefix",     required_argument, NULL, 'P' },
+                { "version",           no_argument,       NULL, 'V' },
+                { "help",              no_argument,       NULL, 'h' },
                 {}
         };
 
         static const char *usage =
-                "Usage: udevadm info OPTIONS\n"
-                "  --query=<type>             query device information:\n"
+                "Usage: udevadm info [OPTIONS] [DEVPATH|FILE]\n"
+                " -q,--query=TYPE             query device information:\n"
                 "      name                     name of device node\n"
                 "      symlink                  pointing to node\n"
                 "      path                     sys device path\n"
                 "      property                 the device properties\n"
                 "      all                      all values\n"
-                "  --path=<syspath>           sys device path used for query or attribute walk\n"
-                "  --name=<name>              node or symlink name used for query or attribute walk\n"
-                "  --root                     prepend dev directory to path names\n"
-                "  --attribute-walk           print all key matches while walking along the chain\n"
+                " -p,--path=SYSPATH           sys device path used for query or attribute walk\n"
+                " -n,--name=NAME              node or symlink name used for query or attribute walk\n"
+                " -r,--root                   prepend dev directory to path names\n"
+                " -a,--attribute-walk         print all key matches walking along the chain\n"
                 "                             of parent devices\n"
-                "  --device-id-of-file=<file> print major:minor of device containing this file\n"
-                "  --export                   export key/value pairs\n"
-                "  --export-prefix            export the key name with a prefix\n"
-                "  --export-db                export the content of the udev database\n"
-                "  --cleanup-db               cleanup the udev database\n"
-                "  --help\n";
+                " -d,--device-id-of-file=FILE print major:minor of device containing this file\n"
+                " -x,--export                 export key/value pairs\n"
+                " -P,--export-prefix          export the key name with a prefix\n"
+                " -e,--export-db              export the content of the udev database\n"
+                " -c,--cleanup-db             cleanup the udev database\n"
+                "    --version                print version of the program\n"
+                " -h,--help                   print this message\n";
 
         enum action_type {
                 ACTION_QUERY,
@@ -354,59 +357,48 @@ static int uinfo(struct udev *udev, int argc, char *argv[])
                 QUERY_ALL,
         } query = QUERY_ALL;
 
-        for (;;) {
-                int option;
-
-                option = getopt_long(argc, argv, "aced:n:p:q:rxP:RVh", options, NULL);
-                if (option == -1)
-                        break;
-
-                switch (option) {
+        while ((c = getopt_long(argc, argv, "aced:n:p:q:rxP:RVh", options, NULL)) >= 0)
+                switch (c) {
                 case 'n': {
                         if (device != NULL) {
                                 fprintf(stderr, "device already specified\n");
-                                rc = 2;
-                                goto exit;
+                                return 2;
                         }
 
                         device = find_device(udev, optarg, "/dev/");
                         if (device == NULL) {
                                 fprintf(stderr, "device node not found\n");
-                                rc = 2;
-                                goto exit;
+                                return 2;
                         }
                         break;
                 }
                 case 'p':
                         if (device != NULL) {
                                 fprintf(stderr, "device already specified\n");
-                                rc = 2;
-                                goto exit;
+                                return 2;
                         }
 
                         device = find_device(udev, optarg, "/sys");
                         if (device == NULL) {
                                 fprintf(stderr, "syspath not found\n");
-                                rc = 2;
-                                goto exit;
+                                return 2;
                         }
                         break;
                 case 'q':
                         action = ACTION_QUERY;
-                        if (streq(optarg, "property") || streq(optarg, "env")) {
+                        if (streq(optarg, "property") || streq(optarg, "env"))
                                 query = QUERY_PROPERTY;
-                        } else if (streq(optarg, "name")) {
+                        else if (streq(optarg, "name"))
                                 query = QUERY_NAME;
-                        } else if (streq(optarg, "symlink")) {
+                        else if (streq(optarg, "symlink"))
                                 query = QUERY_SYMLINK;
-                        } else if (streq(optarg, "path")) {
+                        else if (streq(optarg, "path"))
                                 query = QUERY_PATH;
-                        } else if (streq(optarg, "all")) {
+                        else if (streq(optarg, "all"))
                                 query = QUERY_ALL;
-                        } else {
+                        else {
                                 fprintf(stderr, "unknown query type\n");
-                                rc = 3;
-                                goto exit;
+                                return 3;
                         }
                         break;
                 case 'r':
@@ -421,10 +413,10 @@ static int uinfo(struct udev *udev, int argc, char *argv[])
                         break;
                 case 'e':
                         export_devices(udev);
-                        goto exit;
+                        return 0;
                 case 'c':
                         cleanup_db(udev);
-                        goto exit;
+                        return 0;
                 case 'x':
                         export = true;
                         break;
@@ -433,29 +425,25 @@ static int uinfo(struct udev *udev, int argc, char *argv[])
                         break;
                 case 'V':
                         printf("%s\n", UDEV_VERSION);
-                        goto exit;
+                        return 0;
                 case 'h':
                         printf("%s\n", usage);
-                        goto exit;
+                        return 0;
                 default:
-                        rc = 1;
-                        goto exit;
+                        return 1;
                 }
-        }
 
         switch (action) {
         case ACTION_QUERY:
                 if (!device) {
                         if (!argv[optind]) {
                                 fprintf(stderr, "%s\n", usage);
-                                rc = 2;
-                                goto exit;
+                                return 2;
                         }
                         device = find_device(udev, argv[optind], NULL);
                         if (!device) {
                                 fprintf(stderr, "Unknown device, --name=, --path=, or absolute path in /dev/ or /sys expected.\n");
-                                rc = 4;
-                                goto exit;
+                                return 4;
                         }
                 }
 
@@ -465,8 +453,7 @@ static int uinfo(struct udev *udev, int argc, char *argv[])
 
                         if (node == NULL) {
                                 fprintf(stderr, "no device node found\n");
-                                rc = 5;
-                                goto exit;
+                                return 5;
                         }
 
                         if (root)
@@ -490,7 +477,7 @@ static int uinfo(struct udev *udev, int argc, char *argv[])
                         break;
                 case QUERY_PATH:
                         printf("%s\n", udev_device_get_devpath(device));
-                        goto exit;
+                        return 0;
                 case QUERY_PROPERTY:
                         list_entry = udev_device_get_properties_list_entry(device);
                         while (list_entry != NULL) {
@@ -521,26 +508,22 @@ static int uinfo(struct udev *udev, int argc, char *argv[])
                         device = find_device(udev, argv[optind], NULL);
                         if (!device) {
                                 fprintf(stderr, "Unknown device, absolute path in /dev/ or /sys expected.\n");
-                                rc = 4;
-                                goto exit;
+                                return 4;
                         }
                 }
                 if (!device) {
                         fprintf(stderr, "Unknown device, --name=, --path=, or absolute path in /dev/ or /sys expected.\n");
-                        rc = 4;
-                        goto exit;
+                        return 4;
                 }
                 print_device_chain(device);
                 break;
         case ACTION_DEVICE_ID_FILE:
                 if (stat_device(name, export, export_prefix) != 0)
-                        rc = 1;
+                        return 1;
                 break;
         }
 
-exit:
-        udev_device_unref(device);
-        return rc;
+        return 0;
 }
 
 const struct udevadm_cmd udevadm_info = {
