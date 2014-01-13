@@ -1,3 +1,10 @@
+2014-01-13
+
+	* Incorporate upstream chages to hwdb, rules, libudev and udev, up to Jan 13, 2014,
+	except for the new udev_builtin_net_setup_link.  This code resides under upstream's
+	systemd/src/udev/net.  See upstream's af6f0d422c521374ee6a2dd92df5935a5a476ae5 on
+	2013-10-25 by Tom Gundersen which initially added that builtin.
+
 2013-09-10
 
 	* Incorporate upstream changes to hwdb, rules, libudev and udev, up to Sept. 10, 2013
