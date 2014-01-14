@@ -35,5 +35,5 @@ char** path_strv_canonicalize(char **l);
 char** path_strv_canonicalize_uniq(char **l);
 
 int path_is_mount_point(const char *path, bool allow_symlink);
+bool paths_check_timestamp(const char* const* paths, usec_t *paths_ts_usec, bool update);
 
-bool paths_check_timestamp(char **paths, usec_t *paths_ts_usec, bool update);

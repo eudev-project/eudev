@@ -43,6 +43,7 @@ libudev_la_SOURCES =\
 	MurmurHash2.c \
 	path-util.c \
 	set.c \
+	siphash24.c \
 	strbuf.c \
 	strv.c \
 	strxcpyx.c  \
@@ -66,6 +67,7 @@ noinst_HEADERS = \
 	MurmurHash2.h \
 	path-util.h \
 	set.h \
+	siphash24.h \
 	socket-util.h \
 	sparse-endian.h \
 	strbuf.h \

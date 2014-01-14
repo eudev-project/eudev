@@ -23,7 +23,6 @@
 
 #include <endian.h>
 #include <stdint.h>
-#include <byteswap.h>
 
 #ifdef __CHECKER__
 #define __bitwise __attribute__((bitwise))

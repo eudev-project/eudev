@@ -1,9 +1,5 @@
-/*-*- Mode: C; c-basic-offset: 8; indent-tabs-mode: nil -*-*/
-
-#pragma once
-
 /***
-  This file is part of systemd.
+  This file is part of eudev, forked from systemd.
 
   Copyright 2010 Lennart Poettering
 
@@ -20,6 +16,8 @@
   You should have received a copy of the GNU Lesser General Public License
   along with systemd; If not, see <http://www.gnu.org/licenses/>.
 ***/
+
+#pragma once
 
 #include <string.h>
 #include <time.h>
@@ -149,6 +147,8 @@ bool dirent_is_file_with_suffix(const struct dirent *de, const char *suffix) _pu
 
 bool ignore_file(const char *filename) _pure_;
 
+void random_bytes(void *p, size_t n);
+
 /* For basic lookup tables with strictly enumerated entries */
 #define __DEFINE_STRING_TABLE_LOOKUP(name,type,scope)                   \
         scope const char *name##_to_string(type i) {                    \
@@ -207,6 +207,7 @@ int open_terminal(const char *name, int mode);
 
 int fopen_temporary(const char *path, FILE **_f, char **_temp_path);
 
+ssize_t loop_read(int fd, void *buf, size_t nbytes, bool do_poll);
 int chmod_and_chown(const char *path, mode_t mode, uid_t uid, gid_t gid);
 
 bool null_or_empty(struct stat *st) _pure_;

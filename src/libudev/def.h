@@ -24,3 +24,8 @@
 #include "util.h"
 
 #define SYSTEMD_CGROUP_CONTROLLER "name=systemd"
+
+#define DIGITS            "0123456789"
+#define LOWERCASE_LETTERS "abcdefghijklmnopqrstuvwxyz"
+#define UPPERCASE_LETTERS "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+#define LETTERS LOWERCASE_LETTERS UPPERCASE_LETTERS

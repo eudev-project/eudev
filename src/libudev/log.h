@@ -44,6 +44,7 @@ typedef enum LogTarget{
 
 void log_set_target(LogTarget target);
 void log_set_max_level(int level);
+int log_get_max_level(void) _pure_;
 
 int log_open(void);
 void log_close(void);
@@ -73,25 +74,32 @@ int log_oom_internal(
                 int line,
                 const char *func);
 
-_noreturn_ void log_assert_failed(
+noreturn void log_assert_failed(
                 const char *text,
                 const char *file,
                 int line,
                 const char *func);
 
-_noreturn_ void log_assert_failed_unreachable(
+noreturn void log_assert_failed_unreachable(
                 const char *text,
                 const char *file,
                 int line,
                 const char *func);
 
-#define log_full(level, ...) log_meta(level,   __FILE__, __LINE__, __func__, __VA_ARGS__)
 
-#define log_debug(...)   log_meta(LOG_DEBUG,   __FILE__, __LINE__, __func__, __VA_ARGS__)
-#define log_info(...)    log_meta(LOG_INFO,    __FILE__, __LINE__, __func__, __VA_ARGS__)
-#define log_notice(...)  log_meta(LOG_NOTICE,  __FILE__, __LINE__, __func__, __VA_ARGS__)
-#define log_warning(...) log_meta(LOG_WARNING, __FILE__, __LINE__, __func__, __VA_ARGS__)
-#define log_error(...)   log_meta(LOG_ERR,     __FILE__, __LINE__, __func__, __VA_ARGS__)
+#define log_full(level, ...) \
+do { \
+        if (log_get_max_level() >= (level)) \
+                log_meta((level), __FILE__, __LINE__, __func__, __VA_ARGS__); \
+} while (0)
+
+#define log_debug(...)   log_full(LOG_DEBUG,   __VA_ARGS__)
+#define log_info(...)    log_full(LOG_INFO,    __VA_ARGS__)
+#define log_notice(...)  log_full(LOG_NOTICE,  __VA_ARGS__)
+#define log_warning(...) log_full(LOG_WARNING, __VA_ARGS__)
+#define log_error(...)   log_full(LOG_ERR,     __VA_ARGS__)
+
+#define log_struct(level, ...) log_struct_internal(level, __FILE__, __LINE__, __func__, __VA_ARGS__)
 
 #define log_oom() log_oom_internal(__FILE__, __LINE__, __func__)
 

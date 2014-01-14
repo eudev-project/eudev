@@ -224,8 +224,8 @@ static int rebuild_queue_file(struct udev_queue_export *udev_queue_export)
         if (new_queue_file == NULL)
                 goto error;
         seqnum = udev_queue_export->seqnum_max;
-        if (fwrite(&seqnum, 1, sizeof(unsigned long long int), new_queue_file) != sizeof(unsigned long long int))
-                goto error;
+        fwrite(&seqnum, 1, sizeof(unsigned long long int), new_queue_file);
+
         /* copy unfinished events only to the new file */
         if (devpaths != NULL) {
                 for (i = devpaths->devpaths_first; i < devpaths->devpaths_size; i++) {
@@ -239,12 +239,9 @@ static int rebuild_queue_file(struct udev_queue_export *udev_queue_export)
                                 err = udev_queue_read_devpath(udev_queue_export->queue_file, devpath, sizeof(devpath));
                                 devpath_len = err;
 
-                                if (fwrite(&seqnum, sizeof(unsigned long long int), 1, new_queue_file) != 1)
-                                        goto error;
-                                if (fwrite(&devpath_len, sizeof(unsigned short), 1, new_queue_file) != 1)
-                                        goto error;
-                                if (fwrite(devpath, 1, devpath_len, new_queue_file) != devpath_len)
-                                        goto error;
+                                fwrite(&seqnum, sizeof(unsigned long long int), 1, new_queue_file);
+                                fwrite(&devpath_len, sizeof(unsigned short), 1, new_queue_file);
+                                fwrite(devpath, 1, devpath_len, new_queue_file);
                         }
                         seqnum++;
                 }

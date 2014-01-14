@@ -30,7 +30,6 @@
 #define _printf_(a,b) __attribute__ ((format (printf, a, b)))
 #define _alloc_(...) __attribute__ ((alloc_size(__VA_ARGS__)))
 #define _sentinel_ __attribute__ ((sentinel))
-#define _noreturn_ __attribute__((noreturn))
 #define _pure_ __attribute__ ((pure))
 #define _const_ __attribute__ ((const))
 #define _packed_ __attribute__ ((packed))
@@ -68,7 +67,6 @@ static inline size_t ALIGN_TO(size_t l, size_t ali) {
  * @member: the name of the member within the struct.
  *
  */
-
 #define container_of(ptr, type, member)                                 \
         __extension__ ({                                                \
                         const typeof( ((type *)0)->member ) *__mptr = (ptr); \
@@ -95,19 +93,9 @@ static inline size_t ALIGN_TO(size_t l, size_t ali) {
         } while (false)
 
 #if defined(static_assert)
-#define assert_cc(expr)                         \
-        do {                                    \
-                static_assert(expr, #expr);     \
-        } while (false)
+#define assert_cc(expr) static_assert(expr, #expr)
 #else
-#define assert_cc(expr)                         \
-        do {                                    \
-                switch (0) {                    \
-                case 0:                         \
-                case !!(expr):                  \
-                        ;                       \
-                }                               \
-        } while (false)
+#define assert_cc(expr) struct UNIQUE(_assert_struct_) { char x[(expr) ? 0 : -1]; };
 #endif
 
 #define PTR_TO_INT(p) ((int) ((intptr_t) (p)))
@@ -174,17 +162,39 @@ static inline size_t IOVEC_INCREMENT(struct iovec *i, unsigned n, size_t k) {
   * the const magic to the type, otherwise the compiler warns about
   * signed/unsigned comparison, because the magic can be 32 bit unsigned.
  */
-#define F_TYPE_CMP(a, b) (a == (typeof(a)) b)
-
+#define F_TYPE_EQUAL(a, b) (a == (typeof(a)) b)
 
 /* Returns the number of chars needed to format variables of the
  * specified type as a decimal string. Adds in extra space for a
  * negative '-' prefix. */
-
 #define DECIMAL_STR_MAX(type)                                           \
-        (1+(sizeof(type) <= 1 ? 3 :                                     \
+        (2+(sizeof(type) <= 1 ? 3 :                                     \
             sizeof(type) <= 2 ? 5 :                                     \
             sizeof(type) <= 4 ? 10 :                                    \
             sizeof(type) <= 8 ? 20 : sizeof(int[-2*(sizeof(type) > 8)])))
+
+/* Define C11 thread_local attribute even on older gcc compiler
+ * version */
+#ifndef thread_local
+/*
+ * Don't break on glibc < 2.16 that doesn't define __STDC_NO_THREADS__
+ * see http://gcc.gnu.org/bugzilla/show_bug.cgi?id=53769
+ */
+#if __STDC_VERSION__ >= 201112L && !(defined(__STDC_NO_THREADS__) || (defined(__GNU_LIBRARY__) && __GLIBC__ == 2 && __GLIBC_MINOR__ < 16))
+#define thread_local _Thread_local
+#else
+#define thread_local __thread
+#endif
+#endif
+
+/* Define C11 noreturn without <stdnoreturn.h> and even on older gcc
+ * compiler versions */
+#ifndef noreturn
+#if __STDC_VERSION__ >= 201112L
+#define noreturn _Noreturn
+#else
+#define noreturn __attribute__((noreturn))
+#endif
+#endif
 
 #include "log.h"

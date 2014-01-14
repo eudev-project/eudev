@@ -107,7 +107,7 @@ char *path_make_absolute(const char *p, const char *prefix) {
 }
 
 char *path_make_absolute_cwd(const char *p) {
-        char *cwd, *r;
+        _cleanup_free_ char *cwd = NULL;
 
         assert(p);
 
@@ -121,10 +121,7 @@ char *path_make_absolute_cwd(const char *p) {
         if (!cwd)
                 return NULL;
 
-        r = path_make_absolute(p, cwd);
-        free(cwd);
-
-        return r;
+        return path_make_absolute(p, cwd);
 }
 
 char **path_strv_canonicalize(char **l) {
@@ -152,7 +149,7 @@ char **path_strv_canonicalize(char **l) {
                 }
 
                 errno = 0;
-                u = realpath(t, 0);
+                u = canonicalize_file_name(t);
                 if (!u) {
                         if (errno == ENOENT)
                                 u = t;
@@ -332,33 +329,37 @@ fallback:
         return a.st_dev != b.st_dev;
 }
 
-bool paths_check_timestamp(char **paths, usec_t *paths_ts_usec, bool update)
-{
-        unsigned int i;
+bool paths_check_timestamp(const char* const* paths, usec_t *timestamp, bool update) {
         bool changed = false;
+        const char* const* i;
+
+        assert(timestamp);
 
         if (paths == NULL)
-                goto out;
+                return false;
 
-        for (i = 0; paths[i]; i++) {
+        STRV_FOREACH(i, paths) {
                 struct stat stats;
+                usec_t u;
 
-                if (stat(paths[i], &stats) < 0)
+                if (stat(*i, &stats) < 0)
                         continue;
 
-                if (paths_ts_usec[i] == timespec_load(&stats.st_mtim))
-                        continue;
+                u = timespec_load(&stats.st_mtim);
 
                 /* first check */
-                if (paths_ts_usec[i] != 0) {
-                        log_debug("reload - timestamp of '%s' changed\n", paths[i]);
-                        changed = true;
-                }
+                if (*timestamp >= u)
+                        continue;
+
+                log_debug("timestamp of '%s' changed", *i);
 
                 /* update timestamp */
-                if (update)
-                        paths_ts_usec[i] = timespec_load(&stats.st_mtim);
+                if (update) {
+                        *timestamp = u;
+                        changed = true;
+                } else
+                        return true;
         }
-out:
+
         return changed;
 }

@@ -1,9 +1,5 @@
-/*-*- Mode: C; c-basic-offset: 8; indent-tabs-mode: nil -*-*/
-
-#pragma once
-
 /***
-  This file is part of systemd.
+  This file is part of eudev, forked from systemd.
 
   Copyright 2010 Lennart Poettering
 
@@ -21,14 +17,20 @@
   along with systemd; If not, see <http://www.gnu.org/licenses/>.
 ***/
 
+#include <sys/socket.h>
 #include <netinet/in.h>
+#include <sys/un.h>
+#include <net/if.h>
+#include <asm/types.h>
 #include <linux/netlink.h>
+#include <linux/if_packet.h>
 
 union sockaddr_union {
         struct sockaddr sa;
-        struct sockaddr_in in4;
+        struct sockaddr_in in;
         struct sockaddr_in6 in6;
         struct sockaddr_un un;
         struct sockaddr_nl nl;
         struct sockaddr_storage storage;
+        struct sockaddr_ll ll;
 };

@@ -115,10 +115,7 @@ void log_close_syslog(void) {
 static int create_log_socket(int type) {
         int fd;
 
-        /* All output to the syslog/journal fds we do asynchronously,
-         * and if the buffers are full we just drop the messages */
-
-        fd = socket(AF_UNIX, type|SOCK_CLOEXEC|SOCK_NONBLOCK, 0);
+        fd = socket(AF_UNIX, type|SOCK_CLOEXEC, 0);
         if (fd < 0)
                 return -errno;
 
@@ -190,6 +187,12 @@ int log_open(void) {
             getpid() == 1 ||
             isatty(STDERR_FILENO) <= 0) {
 
+                if (log_target == LOG_TARGET_AUTO)
+                    if (r >= 0) {
+                        log_close_syslog();
+                        log_close_console();
+                        return r;
+                     }
                 if (log_target == LOG_TARGET_SYSLOG_OR_KMSG ||
                     log_target == LOG_TARGET_SYSLOG) {
                         r = log_open_syslog();
@@ -214,8 +217,6 @@ int log_open(void) {
 
         log_close_syslog();
 
-        /* Get the real /dev/console if we are PID=1, hence reopen */
-        log_close_console();
         return log_open_console();
 }
 
@@ -270,8 +271,25 @@ static int write_to_console(
                 IOVEC_SET_STRING(iovec[n++], ANSI_HIGHLIGHT_OFF);
         IOVEC_SET_STRING(iovec[n++], "\n");
 
-        if (writev(console_fd, iovec, n) < 0)
-                return -errno;
+        if (writev(console_fd, iovec, n) < 0) {
+
+                if (errno == EIO && getpid() == 1) {
+
+                        /* If somebody tried to kick us from our
+                         * console tty (via vhangup() or suchlike),
+                         * try to reconnect */
+
+                        log_close_console();
+                        log_open_console();
+
+                        if (console_fd < 0)
+                                return 0;
+
+                        if (writev(console_fd, iovec, n) < 0)
+                                return -errno;
+                } else
+                        return -errno;
+        }
 
         return 1;
 }
@@ -515,25 +533,29 @@ int log_meta(
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wformat-nonliteral"
-_noreturn_ static void log_assert(const char *text, const char *file, int line, const char *func, const char *format) {
+static void log_assert(int level, const char *text, const char *file, int line, const char *func, const char *format) {
         static char buffer[LINE_MAX];
+
+        if (_likely_(LOG_PRI(level) > log_max_level))
+                return;
 
         snprintf(buffer, sizeof(buffer), format, text, file, line, func);
 
         char_array_0(buffer);
         log_abort_msg = buffer;
 
-        log_dispatch(LOG_CRIT, file, line, func, NULL, NULL, buffer);
-        abort();
+        log_dispatch(level, file, line, func, NULL, NULL, buffer);
 }
 #pragma GCC diagnostic pop
 
-_noreturn_ void log_assert_failed(const char *text, const char *file, int line, const char *func) {
-        log_assert(text, file, line, func, "Assertion '%s' failed at %s:%u, function %s(). Aborting.");
+noreturn void log_assert_failed(const char *text, const char *file, int line, const char *func) {
+        log_assert(LOG_CRIT, text, file, line, func, "Assertion '%s' failed at %s:%u, function %s(). Aborting.");
+        abort();
 }
 
-_noreturn_ void log_assert_failed_unreachable(const char *text, const char *file, int line, const char *func) {
-        log_assert(text, file, line, func, "Code should not be reached '%s' at %s:%u, function %s(). Aborting.");
+noreturn void log_assert_failed_unreachable(const char *text, const char *file, int line, const char *func) {
+        log_assert(LOG_CRIT, text, file, line, func, "Code should not be reached '%s' at %s:%u, function %s(). Aborting.");
+        abort();
 }
 
 int log_oom_internal(const char *file, int line, const char *func) {
@@ -541,6 +563,9 @@ int log_oom_internal(const char *file, int line, const char *func) {
         return -ENOMEM;
 }
 
+int log_get_max_level(void) {
+        return log_max_level;
+}
 static const char *const log_target_table[] = {
         [LOG_TARGET_CONSOLE] = "console",
         [LOG_TARGET_KMSG] = "kmsg",

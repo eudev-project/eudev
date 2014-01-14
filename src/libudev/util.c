@@ -1,7 +1,5 @@
-/*-*- Mode: C; c-basic-offset: 8; indent-tabs-mode: nil -*-*/
-
 /***
-  This file is part of systemd.
+  This file is part of eudev, forked from systemd.
 
   Copyright 2010 Lennart Poettering
 
@@ -78,7 +76,7 @@ static volatile unsigned cached_columns = 0;
 static volatile unsigned cached_lines = 0;
 
 size_t page_size(void) {
-        static __thread size_t pgsz = 0;
+        static thread_local size_t pgsz = 0;
         long r;
 
         if (_likely_(pgsz > 0))
@@ -615,6 +613,50 @@ bool ignore_file(const char *filename) {
         return ignore_file_allow_backup(filename);
 }
 
+void random_bytes(void *p, size_t n) {
+        static bool srand_called = false;
+        _cleanup_close_ int fd;
+        ssize_t k;
+        uint8_t *q;
+
+        fd = open("/dev/urandom", O_RDONLY|O_CLOEXEC|O_NOCTTY);
+        if (fd < 0)
+                goto fallback;
+
+        k = loop_read(fd, p, n, true);
+        if (k < 0 || (size_t) k != n)
+                goto fallback;
+
+        return;
+
+fallback:
+
+        if (!srand_called) {
+
+#ifdef HAVE_SYS_AUXV_H
+                /* The kernel provides us with a bit of entropy in
+                 * auxv, so let's try to make use of that to seed the
+                 * pseudo-random generator. It's better than
+                 * nothing... */
+
+                void *auxv;
+
+                auxv = (void*) getauxval(AT_RANDOM);
+                if (auxv)
+                        srand(*(unsigned*) auxv);
+                else
+#endif
+                        srand(time(NULL) + gettid());
+
+                srand_called = true;
+        }
+
+        /* If some idiot made /dev/urandom unavailable to us, he'll
+         * get a PRNG instead. */
+        for (q = p; q < (uint8_t*) p + n; q ++)
+                *q = rand();
+}
+
 int open_terminal(const char *name, int mode) {
         int fd, r;
         unsigned c = 0;
@@ -665,9 +707,9 @@ int open_terminal(const char *name, int mode) {
 
 _pure_ static int is_temporary_fs(struct statfs *s) {
         assert(s);
-        return
-                F_TYPE_CMP(s->f_type, TMPFS_MAGIC) ||
-                F_TYPE_CMP(s->f_type, RAMFS_MAGIC);
+
+        return F_TYPE_EQUAL(s->f_type, TMPFS_MAGIC) ||
+               F_TYPE_EQUAL(s->f_type, RAMFS_MAGIC);
 }
 
 int chmod_and_chown(const char *path, mode_t mode, uid_t uid, gid_t gid) {
@@ -821,6 +863,55 @@ int fopen_temporary(const char *path, FILE **_f, char **_temp_path) {
         *_temp_path = t;
 
         return 0;
+}
+
+ssize_t loop_read(int fd, void *buf, size_t nbytes, bool do_poll) {
+        uint8_t *p;
+        ssize_t n = 0;
+
+        assert(fd >= 0);
+        assert(buf);
+
+        p = buf;
+
+        while (nbytes > 0) {
+                ssize_t k;
+
+                if ((k = read(fd, p, nbytes)) <= 0) {
+
+                        if (k < 0 && errno == EINTR)
+                                continue;
+
+                        if (k < 0 && errno == EAGAIN && do_poll) {
+                                struct pollfd pollfd = {
+                                        .fd = fd,
+                                        .events = POLLIN,
+                                };
+
+                                if (poll(&pollfd, 1, -1) < 0) {
+                                        if (errno == EINTR)
+                                                continue;
+
+                                        return n > 0 ? n : -errno;
+                                }
+
+                                /* We knowingly ignore the revents value here,
+                                 * and expect that any error/EOF is reported
+                                 * via read()/write()
+                                 */
+
+                                continue;
+                        }
+
+                        return n > 0 ? n : (k < 0 ? -errno : 0);
+                }
+
+                p += k;
+                nbytes -= k;
+                n += k;
+        }
+
+        return n;
 }
 
 char *strjoin(const char *x, ...) {

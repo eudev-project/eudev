@@ -202,15 +202,11 @@ char **strv_remove(char **l, const char *s) {
         /* Drops every occurrence of s in the string list, edits
          * in-place. */
 
-        for (f = t = l; *f; f++) {
-
-                if (streq(*f, s)) {
+        for (f = t = l; *f; f++)
+                if (streq(*f, s))
                         free(*f);
-                        continue;
-                }
-
-                *(t++) = *f;
-        }
+                else
+                        *(t++) = *f;
 
         *t = NULL;
         return l;

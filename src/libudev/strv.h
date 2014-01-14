@@ -31,6 +31,7 @@ static inline void strv_freep(char ***l) {
         strv_free(*l);
 }
 
+void strv_free(char **l);
 #define _cleanup_strv_free_ _cleanup_(strv_freep)
 
 char **strv_copy(char * const *l);
