@@ -20,7 +20,7 @@
 ***/
 
 #include <sys/types.h>
-
+#include <string.h>
 #include "device-nodes.h"
 #include "util.h"
 
