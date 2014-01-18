@@ -834,6 +834,20 @@ int execute_command(const char *command, char *const argv[])
         }
 }
 
+bool nulstr_contains(const char*nulstr, const char *needle) {
+        const char *i;
+
+        if (!nulstr)
+                return false;
+
+        NULSTR_FOREACH(i, nulstr)
+                if (streq(i, needle))
+                        return true;
+
+        return false;
+}
+
+
 int fopen_temporary(const char *path, FILE **_f, char **_temp_path) {
         FILE *f;
         char *t;
