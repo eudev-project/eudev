@@ -252,6 +252,14 @@ static inline void freep(void *p) {
         free(*(void**) p);
 }
 
+#define DEFINE_TRIVIAL_CLEANUP_FUNC(type, func)                 \
+        static inline void func##p(type *p) {                   \
+                if (*p)                                         \
+                        func(*p);                               \
+        }                                                       \
+        struct __useless_struct_to_allow_trailing_semicolon__
+
+
 static inline void fclosep(FILE **f) {
         if (*f)
                 fclose(*f);
