@@ -21,6 +21,7 @@
   along with systemd; If not, see <http://www.gnu.org/licenses/>.
 ***/
 
+#include <string.h>
 #include <time.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -72,6 +73,7 @@ union dirent_storage {
 #define NEWLINE "\n\r"
 #define QUOTES "\"\'"
 #define COMMENTS "#;"
+#define GLOB_CHARS "*?["
 
 #define ANSI_HIGHLIGHT_ON "\x1B[1;39m"
 #define ANSI_RED_ON "\x1B[31m"
@@ -313,3 +315,11 @@ static inline void qsort_safe(void *base, size_t nmemb, size_t size,
                 qsort(base, nmemb, size, compar);
         }
 }
+
+/**
+ * Check if a string contains any glob patterns.
+ */
+_pure_ static inline bool string_is_glob(const char *p) {
+        return !!strpbrk(p, GLOB_CHARS);
+}
+
