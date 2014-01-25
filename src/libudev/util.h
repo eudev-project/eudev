@@ -33,6 +33,11 @@
 
 #include "macro.h"
 
+/* Note: the time definitions are from upstream's
+ * src/shared/time-util.h which I have put here
+ * for now.  We may need to beak these out later.
+ * <blueness@gentoo.org>
+ */
 typedef uint64_t usec_t;
 typedef uint64_t nsec_t;
 
@@ -66,6 +71,8 @@ union dirent_storage {
 #define NSEC_PER_MONTH (2629800ULL*NSEC_PER_SEC)
 #define USEC_PER_YEAR (31557600ULL*USEC_PER_SEC)
 #define NSEC_PER_YEAR (31557600ULL*NSEC_PER_SEC)
+
+#define FORMAT_TIMESPAN_MAX 64
 
 /* What is interpreted as whitespace? */
 #define WHITESPACE " \t\n\r"
