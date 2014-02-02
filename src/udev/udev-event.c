@@ -441,7 +441,7 @@ static void spawn_read(struct udev_event *event,
         }
 
         if (fd_stdout >= 0) {
-                memset(&ep_outpipe, 0, sizeof(struct epoll_event));
+                memzero(&ep_outpipe, sizeof(struct epoll_event));
                 ep_outpipe.events = EPOLLIN;
                 ep_outpipe.data.ptr = &fd_stdout;
                 if (epoll_ctl(fd_ep, EPOLL_CTL_ADD, fd_stdout, &ep_outpipe) < 0) {
@@ -451,7 +451,7 @@ static void spawn_read(struct udev_event *event,
         }
 
         if (fd_stderr >= 0) {
-                memset(&ep_errpipe, 0, sizeof(struct epoll_event));
+                memzero(&ep_errpipe, sizeof(struct epoll_event));
                 ep_errpipe.events = EPOLLIN;
                 ep_errpipe.data.ptr = &fd_stderr;
                 if (epoll_ctl(fd_ep, EPOLL_CTL_ADD, fd_stderr, &ep_errpipe) < 0) {
@@ -774,7 +774,8 @@ static int rename_netif_dev_fromname_toname(struct udev_device *dev,const char *
                 return err;
         }
 
-        memset(&ifr, 0x00, sizeof(struct ifreq));
+        memzero(&ifr, sizeof(struct ifreq));
+
         strscpy(ifr.ifr_name, IFNAMSIZ, oldname);
         strscpy(ifr.ifr_newname, IFNAMSIZ, newname);
         err = ioctl(sk, SIOCSIFNAME, &ifr);
