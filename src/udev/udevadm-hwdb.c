@@ -197,7 +197,7 @@ static int trie_insert(struct trie *trie, struct trie_node *node, const char *se
                                 continue;
 
                         /* split node */
-                        new_child = calloc(sizeof(struct trie_node), 1);
+                        new_child = new0(struct trie_node, 1);
                         if (!new_child)
                                 return -ENOMEM;
 
@@ -240,7 +240,7 @@ static int trie_insert(struct trie *trie, struct trie_node *node, const char *se
                         ssize_t off;
 
                         /* new child */
-                        child = calloc(sizeof(struct trie_node), 1);
+                        child = new0(struct trie_node, 1);
                         if (!child)
                                 return -ENOMEM;
 
@@ -583,7 +583,7 @@ static int adm_hwdb(struct udev *udev, int argc, char *argv[]) {
                 char **files, **f;
                 _cleanup_free_ char *hwdb_bin = UDEV_HWDB_BIN;
 
-                trie = calloc(sizeof(struct trie), 1);
+                trie = new0(struct trie, 1);
                 if (!trie) {
                         rc = EXIT_FAILURE;
                         goto out;
@@ -597,7 +597,7 @@ static int adm_hwdb(struct udev *udev, int argc, char *argv[]) {
                 }
 
                 /* index */
-                trie->root = calloc(sizeof(struct trie_node), 1);
+                trie->root = new0(struct trie_node, 1);
                 if (!trie->root) {
                         rc = EXIT_FAILURE;
                         goto out;

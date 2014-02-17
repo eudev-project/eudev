@@ -120,7 +120,7 @@ _public_ struct udev *udev_new(void)
         struct udev *udev;
         FILE *f;
 
-        udev = calloc(1, sizeof(struct udev));
+        udev = new0(struct udev, 1);
         if (udev == NULL)
                 return NULL;
         udev->refcount = 1;
