@@ -193,7 +193,7 @@ static inline int accept4_fallback(int sockfd)
 struct udev_ctrl_connection *udev_ctrl_get_connection(struct udev_ctrl *uctrl)
 {
         struct udev_ctrl_connection *conn;
-        struct ucred ucred;
+        struct ucred ucred = {};
         const int on = 1;
         int r;
 
