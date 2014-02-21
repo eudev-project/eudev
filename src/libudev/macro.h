@@ -39,6 +39,11 @@
 #define _public_ __attribute__ ((visibility("default")))
 #define _cleanup_(x) __attribute__((cleanup(x)))
 
+
+#define DISABLE_WARNING_FORMAT_NONLITERAL                               \
+        _Pragma("GCC diagnostic push");                                 \
+        _Pragma("GCC diagnostic ignored \"-Wformat-nonliteral\"")
+
 /* Rounds up */
 
 #define ALIGN4(l) (((l) + 3) & ~3)
