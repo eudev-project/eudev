@@ -44,6 +44,9 @@
         _Pragma("GCC diagnostic push");                                 \
         _Pragma("GCC diagnostic ignored \"-Wformat-nonliteral\"")
 
+#define REENABLE_WARNING                                                \
+        _Pragma("GCC diagnostic pop")
+
 /* Rounds up */
 
 #define ALIGN4(l) (((l) + 3) & ~3)

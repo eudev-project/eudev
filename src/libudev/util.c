@@ -284,6 +284,17 @@ void close_nointr_nofail(int fd) {
         assert_se(close_nointr(fd) == 0);
 }
 
+int unlink_noerrno(const char *path) {
+        PROTECT_ERRNO;
+        int r;
+
+        r = unlink(path);
+        if (r < 0)
+                return -errno;
+
+        return 0;
+}
+
 int safe_atou(const char *s, unsigned *ret_u) {
         char *x = NULL;
         unsigned long l;
