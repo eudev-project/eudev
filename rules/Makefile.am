@@ -4,6 +4,7 @@ dist_udevrules_DATA = \
 	42-usb-hid-pm.rules \
 	50-udev-default.rules \
 	60-cdrom_id.rules \
+	60-drm.rules \
 	60-persistent-alsa.rules \
 	60-persistent-input.rules \
 	60-persistent-serial.rules \
@@ -15,6 +16,7 @@ dist_udevrules_DATA = \
 	75-probe_mtd.rules \
 	75-tty-description.rules \
 	78-sound-card.rules \
+	80-net-setup-link.rules \
 	95-udev-late.rules
 
 if !ENABLE_RULE_GENERATOR
