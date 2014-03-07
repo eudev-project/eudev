@@ -31,6 +31,10 @@
 #include <linux/loop.h>
 #include <blkid/blkid.h>
 
+#include "blockdev-util.h"
+#include "efivars.h"
+#include "gpt.h"
+#include "id128-util.h"
 #include "udev.h"
 #include "utf8.h"
 
@@ -123,6 +127,232 @@ static void print_property(struct udev_device *dev, enum udev_event_mode mode, c
                 blkid_encode_string(value, s, sizeof(s));
                 udev_builtin_add_property(dev, mode, "ID_FS_DATA_PREPARER_ID", s);
         }
+}
+
+#ifdef GPT_ROOT_NATIVE
+static int blkid_partition_get_uuid_id128(blkid_partition p, id128_t *ret) {
+        const char *s;
+
+        assert(p);
+
+        s = blkid_partition_get_uuid(p);
+        if (isempty(s))
+                return -ENXIO;
+
+        return id128_from_string(s, ret);
+}
+
+static int blkid_partition_get_type_id128(blkid_partition p, id128_t *ret) {
+        const char *s;
+
+        assert(p);
+
+        s = blkid_partition_get_type_string(p);
+        if (isempty(s))
+                return -ENXIO;
+
+        return id128_from_string(s, ret);
+}
+#endif
+
+static int find_gpt_root(struct udev_device *dev, blkid_probe pr, const char *loop_backing_fname, enum udev_event_mode mode) {
+
+#ifdef GPT_ROOT_NATIVE
+        _cleanup_free_ char *root_label = NULL;
+        id128_t esp_or_xbootldr = ID128_NULL, root_id = ID128_NULL;
+        bool need_esp_or_xbootldr, found_esp_or_xbootldr = false;
+        dev_t root_devno = 0;
+        const char *devnode;
+        blkid_partlist pl;
+        int r;
+
+        assert(dev);
+        assert(pr);
+
+        /* In the initrd: Iterate through the partitions on this disk, and see if the UEFI ESP or XBOOTLDR
+         * partition we booted from is on it. If so, find the newest root partition, and add a property
+         * indicating its partition UUID. We also do this if we are dealing with a loopback block device
+         * whose "backing filename" field is set to the string "root". In the latter case we do not search
+         * for ESP or XBOOTLDR.
+         *
+         * After the initrd→host transition: look at the current block device mounted at / and set the same
+         * properties to its whole block device. */
+
+        devnode = udev_device_get_devnode(dev);
+        if (!devnode)
+                return log_debug_errno(ENODEV, "%s: Failed to get device node.", udev_device_get_sysname(dev));
+
+        r = block_device_is_whole_disk(dev);
+        if (r < 0)
+                return log_debug_errno(r, "Unable to determine if device '%s' is a whole-block device: %m", devnode);
+        if (r == 0) {
+                log_debug("Invoked on device '%s' which is not a whole-disk block device, ignoring.", devnode);
+                return 0;
+        }
+
+        r = blockdev_partscan_enabled(dev);
+        if (r < 0)
+                return log_debug_errno(r, "Failed to determine if block device '%s' supports partitions: %m", devnode);
+        if (r == 0) {
+                log_debug("Invoked on block device '%s' that lacks partition scanning, ignoring.", devnode);
+                return 0;
+        }
+
+        if (in_initrd()) {
+                /* In the initrd look at the boot loader provided data (and loopback backing fname) to find
+                 * our *future* root */
+
+                r = efi_loader_get_device_part_uuid(&esp_or_xbootldr);
+                if (r < 0) {
+                        if (r != -ENOENT && !IN_SET(r, -EOPNOTSUPP, -ENOTTY, -ENOSYS))
+                                return log_debug_errno(r, "Unable to determine loader partition UUID: %m");
+
+                        log_debug("No loader partition UUID EFI variable set, not using partition data to search for default root block device.");
+
+                        /* NB: if an ESP/xbootldr field is set, we always use that. We do this in order to guarantee
+                         * systematic behaviour. */
+                        if (!streq_ptr(loop_backing_fname, "rootdisk") && !streq_ptr(loop_backing_fname, "rootdisk.raw")) {
+                                log_debug("Device is not a loopback block device with reference string 'root', not considering block device as default root block device.");
+                                return 0;
+                        }
+
+                        /* OK, we have now sufficiently identified this device as the right root "whole" device,
+                         * hence no need to bother with searching for ESP/XBOOTLDR */
+                        need_esp_or_xbootldr = false;
+                } else
+                        /* We now know the ESP/xbootldr UUID, but we cannot be sure yet it's on this block
+                         * device, hence look for it among partitions now */
+                        need_esp_or_xbootldr = true;
+        } else {
+                dev_t whole_devno;
+
+                /* On the main system look at the *current* root instead */
+
+                r = blockdev_get_root(LOG_DEBUG, &root_devno);
+                if (r < 0) {
+                        log_debug_errno(r, "Unable to determine current root block device, skipping gpt-auto probing: %m");
+                        return 0;
+                }
+                if (r == 0) {
+                        log_debug("Root block device not backed by a (single) whole block device, skipping gpt-auto probing.");
+                        return 0;
+                }
+
+                r = block_get_whole_disk(root_devno, &whole_devno);
+                if (r < 0)
+                        return log_debug_errno(r, "Failed to find whole block device for root block device: %m");
+
+                if (whole_devno != udev_device_get_devnum(dev)) {
+                        log_debug("This device is not the current root block device.");
+                        return 0;
+                }
+
+                /* We don't need to check ESP/XBOOTLDR UUID, we *know* what our root disk is */
+                need_esp_or_xbootldr = false;
+        }
+
+        errno = 0;
+        pl = blkid_probe_get_partitions(pr);
+        if (!pl)
+                return log_debug_errno(errno_or_else(ENOMEM), "Failed to probe partitions: %m");
+
+        if (root_devno != 0) {
+                blkid_partition root_partition;
+
+                /* If we already know the root partition, let's verify its type ID and then directly query
+                 * its ID */
+
+                root_partition = blkid_partlist_devno_to_partition(pl, root_devno);
+                if (root_partition) {
+                        id128_t type;
+
+                        r = blkid_partition_get_type_id128(root_partition, &type);
+                        if (r < 0)
+                                log_debug_errno(r, "Failed to get root partition type UUID, ignoring: %m");
+                        else if (id128_equal(type, GPT_ROOT_NATIVE)) {
+                                r = blkid_partition_get_uuid_id128(root_partition, &root_id);
+                                if (r < 0)
+                                        log_debug_errno(r, "Failed to get partition UUID, ignoring: %m");
+                        }
+                }
+        } else {
+                int i, nvals;
+
+                /* We do not know the root partition, let's search for it. */
+
+                nvals = blkid_partlist_numof_partitions(pl);
+                for (i = 0; i < nvals; i++) {
+                        blkid_partition pp;
+                        const char *label;
+                        id128_t type, id;
+
+                        pp = blkid_partlist_get_partition(pl, i);
+                        if (!pp)
+                                continue;
+
+                        r = blkid_partition_get_uuid_id128(pp, &id);
+                        if (r < 0) {
+                                log_debug_errno(r, "Failed to get partition UUID, ignoring: %m");
+                                continue;
+                        }
+
+                        r = blkid_partition_get_type_id128(pp, &type);
+                        if (r < 0) {
+                                log_debug_errno(r, "Failed to get partition type UUID, ignoring: %m");
+                                continue;
+                        }
+
+                        label = blkid_partition_get_name(pp); /* returns NULL if empty */
+
+                        if (need_esp_or_xbootldr && id128_in_set(type, GPT_ESP, GPT_XBOOTLDR)) {
+
+                                /* We found an ESP or XBOOTLDR, let's see if it matches the ESP/XBOOTLDR we booted from. */
+                                if (id128_equal(id, esp_or_xbootldr))
+                                        found_esp_or_xbootldr = true;
+
+                        } else if (id128_equal(type, GPT_ROOT_NATIVE)) {
+                                unsigned long long flags;
+
+                                flags = blkid_partition_get_flags(pp);
+                                if (flags & GPT_FLAG_NO_AUTO)
+                                        continue;
+
+                                /* systemd-sysupdate expects empty partitions to be marked with an "_empty" label, hence ignore them here. */
+                                if (streq_ptr(label, "_empty"))
+                                        continue;
+
+                                /* We found a suitable root partition, let's remember the first one, or the one with
+                                 * the newest version, as determined by comparing the partition labels. */
+
+                                if (id128_is_null(root_id) || strverscmp_improved(label, root_label) > 0) {
+                                        root_id = id;
+
+                                        free(root_label);
+                                        root_label = NULL;
+                                        if (label) {
+                                                root_label = strdup(label);
+                                                if (!root_label)
+                                                        return log_oom();
+                                        }
+                                }
+                        }
+                }
+        }
+
+        if (!need_esp_or_xbootldr || found_esp_or_xbootldr) {
+                /* We found the ESP/XBOOTLDR on this disk (or we didn't need it) */
+                udev_builtin_add_property(dev, mode, "ID_PART_GPT_AUTO_ROOT_DISK", "1");
+
+                /* We found a root partition, nice! Let's export its UUID. */
+                if (!id128_is_null(root_id)) {
+                        char s[ID128_UUID_STRING_MAX];
+
+                        udev_builtin_add_property(dev, mode, "ID_PART_GPT_AUTO_ROOT_UUID", id128_to_uuid_string(root_id, s));
+                }
+        }
+#endif
+
+        return 0;
 }
 
 static int probe_superblocks(blkid_probe pr) {
@@ -239,6 +469,8 @@ static int builtin_blkid(struct udev_device *dev, int argc, char *argv[], enum u
         const char *data;
         const char *name;
         const char *prtype = NULL;
+        const char *root_partition;
+        bool is_gpt = false;
         int nvals;
         int i;
         int err = 0;
@@ -332,12 +564,24 @@ static int builtin_blkid(struct udev_device *dev, int argc, char *argv[], enum u
                 goto out;
         }
 
+        /* If the device is a partition then its parent passed the root partition UUID to the device */
+        root_partition = udev_device_get_property_value(dev, "ID_PART_GPT_AUTO_ROOT_UUID");
+
         nvals = blkid_probe_numof_values(pr);
         for (i = 0; i < nvals; i++) {
                 if (blkid_probe_get_value(pr, i, &name, &data, NULL))
                         continue;
 
                 print_property(dev, mode, name, data);
+
+                /* Is this a disk with GPT partition table? */
+                if (streq(name, "PTTYPE") && streq(data, "gpt"))
+                        is_gpt = true;
+
+                /* Is this a partition that matches the root partition
+                 * property inherited from the parent? */
+                if (root_partition && streq(name, "PART_ENTRY_UUID") && streq(data, root_partition))
+                        udev_builtin_add_property(dev, mode, "ID_PART_GPT_AUTO_ROOT", "1");
         }
 
         r = read_loopback_backing_inode(
@@ -372,6 +616,9 @@ static int builtin_blkid(struct udev_device *dev, int argc, char *argv[], enum u
                         udev_builtin_add_property(dev, mode, "ID_LOOP_BACKING_FILENAME_ENC", encoded);
                 }
         }
+
+        if (is_gpt)
+                find_gpt_root(dev, pr, backing_fname, mode);
 
 out:
         if (err < 0)
