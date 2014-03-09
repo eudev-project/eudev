@@ -25,6 +25,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <stdlib.h>
+#include <linux/fcntl.h>
 
 int main(int argc, char** argv)
 {

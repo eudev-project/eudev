@@ -33,6 +33,7 @@
 #include <scsi/sg.h>
 #include <linux/types.h>
 #include <linux/bsg.h>
+#include <linux/fcntl.h>
 
 #include "libudev.h"
 #include "libudev-private.h"

@@ -39,6 +39,7 @@
 #include <linux/fs.h>
 #include <linux/cdrom.h>
 #include <linux/bsg.h>
+#include <linux/fcntl.h>
 #include <arpa/inet.h>
 
 #include "libudev.h"

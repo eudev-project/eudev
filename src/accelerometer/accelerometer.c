@@ -57,6 +57,7 @@
 #include <limits.h>
 #include <linux/limits.h>
 #include <linux/input.h>
+#include <linux/fcntl.h>
 
 #include "libudev.h"
 #include "libudev-private.h"

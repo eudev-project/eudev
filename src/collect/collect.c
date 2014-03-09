@@ -30,6 +30,7 @@
 #include <getopt.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <linux/fcntl.h>
 
 #include "libudev.h"
 #include "libudev-private.h"
