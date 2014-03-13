@@ -1,3 +1,10 @@
+2014-03-13
+
+	* Incorporate upstream chages to hwdb, rules, libudev and udev, up to Fri Mar 7,
+	except for cbd353ce7787ab11a9aa193f35abb97548b3fcf2 where "when a GPT partition is found
+	marked as root disk on the same disk as the ESP, expose a property on the udev device."
+	This commit is too integrated with systemd stuff.
+
 2014-01-13
 
 	* Incorporate upstream chages to hwdb, rules, libudev and udev, up to Jan 13, 2014,
