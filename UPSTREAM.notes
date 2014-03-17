@@ -1,3 +1,10 @@
+2014-03-17
+
+	* Incorporate all upstream changes to Mar 17.  Note except for:
+		cbd353ce7787ab11a9aa193f35abb97548b3fcf2
+		329f7803ee4414cd015e6f83a835079208608171 
+		8a39439e08cf14c22e9f1ca5e69d1ba499075051
+
 2014-03-13
 
 	* Incorporate upstream chages to hwdb, rules, libudev and udev, up to Fri Mar 7,
