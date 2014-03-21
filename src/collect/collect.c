@@ -83,6 +83,8 @@ static void usage(void)
  * prepare
  *
  * Prepares the database file
+ * returns file descriptor on success
+ * returns errno on failure
  */
 static int prepare(char *dir, char *filename)
 {
@@ -96,21 +98,22 @@ static int prepare(char *dir, char *filename)
         snprintf(buf, sizeof(buf), "%s/%s", dir, filename);
 
         fd = open(buf,O_RDWR|O_CREAT|O_CLOEXEC, S_IRUSR|S_IWUSR);
-        if (fd < 0)
+        if (fd < 0) {
                 fprintf(stderr, "Cannot open %s: %m\n", buf);
-
+				return errno;
+		}
         if (lockf(fd,F_TLOCK,0) < 0) {
                 if (debug)
-                        fprintf(stderr, "Lock taken, wait for %d seconds\n", UDEV_ALARM_TIMEOUT);
-                if (errno == EAGAIN || errno == EACCES) {
-                        alarm(UDEV_ALARM_TIMEOUT);
-                        lockf(fd, F_LOCK, 0);
-                        if (debug)
-                                fprintf(stderr, "Acquired lock on %s\n", buf);
-                } else {
+                        fprintf(stderr, "Lock aquisition failed, retry in %d seconds\n"
+						              , UDEV_ALARM_TIMEOUT);
+                alarm(UDEV_ALARM_TIMEOUT);
+                if(lockf(fd, F_LOCK, 0)<0){
                         if (debug)
                                 fprintf(stderr, "Could not get lock on %s: %m\n", buf);
-                }
+						return errno;
+				}
+                if (debug)
+                        fprintf(stderr, "Acquired lock on %s\n", buf);
         }
 
         return fd;
@@ -476,10 +479,16 @@ int main(int argc, char **argv)
         kickout();
 
         lseek(fd, 0, SEEK_SET);
-        ftruncate(fd, 0);
+        if(ftruncate(fd, 0)!=0) {
+		        ret = errno;
+				goto out;
+		}
         ret = missing(fd);
 
-        lockf(fd, F_ULOCK, 0);
+        if(lockf(fd, F_ULOCK, 0) !=0 ) {
+		        ret = errno;
+				goto out;
+		}
         close(fd);
 out:
         if (debug)

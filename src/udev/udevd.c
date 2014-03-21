@@ -1031,7 +1031,10 @@ int main(int argc, char *argv[])
         }
 
         /* set umask before creating any file/directory */
-        chdir("/");
+        if(chdir("/")!= 0) {
+                log_error("unable to change into directory '/'");
+                goto exit;
+        }
         umask(022);
 
         mkdir("/run/udev", 0755);
