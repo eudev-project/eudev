@@ -67,8 +67,21 @@ static int load_module(struct udev *udev, const char *alias)
         kmod_module_unref_list(list);
         return err;
 #else
-        char *const argv[] = { MODPROBE, "-bq", alias, 0 };
-        return execute_command(MODPROBE, argv);
+        int retval;
+
+        /* 
+           These 3 temporaries are needed because argv (below) is a const pointer, not pointer to const
+        */
+        char *tmp_alias = strdup(alias);
+        char *tmp_modprobe = strdup(MODPROBE);
+        char *tmp_bq = strdup("-bq");
+        char *const argv[] = { tmp_modprobe, tmp_bq, tmp_alias, 0 };
+
+        retval = execute_command(MODPROBE, argv);
+
+        free(tmp_alias);
+        free(tmp_modprobe);
+        free(tmp_bq);
 #endif
 }
 
