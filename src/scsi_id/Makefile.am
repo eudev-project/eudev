@@ -2,6 +2,7 @@ ACLOCAL_AMFLAGS = -I m4 ${ACLOCAL_FLAGS}
 
 AM_CPPFLAGS = \
 	-DVERSION \
+	-D_GNU_SOURCE \
 	-I $(top_srcdir)/src/libudev \
 	-I $(top_srcdir)/src/udev
 
