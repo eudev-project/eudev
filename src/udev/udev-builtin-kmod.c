@@ -38,10 +38,10 @@ static struct kmod_ctx *ctx;
 
 static int load_module(struct udev *udev, const char *alias)
 {
+        int err;
 #ifdef HAVE_LIBKMOD
         struct kmod_list *list = NULL;
         struct kmod_list *l;
-        int err;
 
         err = kmod_module_new_from_lookup(ctx, alias, &list);
         if (err < 0)
@@ -65,9 +65,7 @@ static int load_module(struct udev *udev, const char *alias)
         }
 
         kmod_module_unref_list(list);
-        return err;
 #else
-        int retval;
 
         /* 
            These 3 temporaries are needed because argv (below) is a const pointer, not pointer to const
@@ -77,12 +75,15 @@ static int load_module(struct udev *udev, const char *alias)
         char *tmp_bq = strdup("-bq");
         char *const argv[] = { tmp_modprobe, tmp_bq, tmp_alias, 0 };
 
-        retval = execute_command(MODPROBE, argv);
+        err = execute_command(MODPROBE, argv);
 
         free(tmp_alias);
         free(tmp_modprobe);
         free(tmp_bq);
 #endif
+        /*  both 'kmod_module_new_from_lookup' and 'execute_command' return <0 on error
+		    so it is ok to assign both to 'err' */
+        return err;
 }
 
 _printf_(6,0)
