@@ -286,8 +286,13 @@ static int node_permissions_apply(struct udev_device *dev, bool apply,
 
                 if ((stats.st_mode & 0777) != (mode & 0777) || stats.st_uid != uid || stats.st_gid != gid) {
                         log_debug("set permissions %s, %#o, uid=%u, gid=%u", devnode, mode, uid, gid);
-                        chmod(devnode, mode);
-                        chown(devnode, uid, gid);
+                        ;
+                        if((chmod(devnode, mode) !=0 ) || (chown(devnode, uid,gid) !=0)) {
+				                err = -errno;  
+                                log_error("FAILED to set permissions %s, %#o, uid=%u, gid=%u"
+								          ,devnode, mode, uid, gid);
+								goto out;
+						}
                 } else {
                         log_debug("preserve permissions %s, %#o, uid=%u, gid=%u", devnode, mode, uid, gid);
                 }
