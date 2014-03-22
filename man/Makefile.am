@@ -22,8 +22,7 @@ man_MANS = \
 CLEANFILES = \
 	$(MANPAGES)
 
-XSLTPROC_FLAGS = \
-	--nonet \
+XSLTPROC_FLAGS += \
 	--stringparam man.output.quietly 1 \
 	--stringparam funcsynopsis.style ansi \
 	--stringparam man.th.extra1.suppress 1 \
