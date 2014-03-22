@@ -23,6 +23,7 @@
 #include <stdio.h>
 #include <errno.h>
 #include <string.h>
+#include <fcntl.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <syslog.h>
@@ -32,7 +33,10 @@
 #include <scsi/sg.h>
 #include <linux/types.h>
 #include <linux/bsg.h>
+
+#ifdef __UCLIBC__
 #include <linux/fcntl.h>
+#endif
 
 #include "libudev.h"
 #include "libudev-private.h"

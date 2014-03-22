@@ -24,12 +24,16 @@
 #include <stddef.h>
 #include <unistd.h>
 #include <signal.h>
+#include <fcntl.h>
 #include <errno.h>
 #include <string.h>
 #include <getopt.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+
+#ifdef __UCLIBC__
 #include <linux/fcntl.h>
+#endif
 
 #include "libudev.h"
 #include "libudev-private.h"

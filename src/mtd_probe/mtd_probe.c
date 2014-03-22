@@ -22,9 +22,13 @@
 #include <mtd/mtd-user.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <fcntl.h>
 #include <unistd.h>
 #include <stdlib.h>
+
+#ifdef __UCLIBC__
 #include <linux/fcntl.h>
+#endif
 
 int main(int argc, char** argv)
 {

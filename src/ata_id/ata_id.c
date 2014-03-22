@@ -23,6 +23,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <unistd.h>
+#include <fcntl.h>
 #include <ctype.h>
 #include <string.h>
 #include <errno.h>
@@ -38,8 +39,11 @@
 #include <linux/fs.h>
 #include <linux/cdrom.h>
 #include <linux/bsg.h>
-#include <linux/fcntl.h>
 #include <arpa/inet.h>
+
+#ifdef __UCLIBC__
+#include <linux/fcntl.h>
+#endif
 
 #include "libudev.h"
 #include "libudev-private.h"

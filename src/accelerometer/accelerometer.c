@@ -50,13 +50,17 @@
 #include <math.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <fcntl.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <getopt.h>
 #include <limits.h>
 #include <linux/limits.h>
 #include <linux/input.h>
+
+#ifdef __UCLIBC__
 #include <linux/fcntl.h>
+#endif
 
 #include "libudev.h"
 #include "libudev-private.h"
