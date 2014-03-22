@@ -1,3 +1,8 @@
+2014-03-22
+
+	* Incorporate all upstream changes to Mar 22.
+	* Fix issue #87 that affected 1.5.1 and 1.5.2
+
 2014-03-17
 
 	* Incorporate all upstream changes to Mar 17.  Note except for:
