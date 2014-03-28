@@ -911,3 +911,33 @@ bluetooth:v012C*
 
 bluetooth:v012D*
  ID_VENDOR_FROM_DATABASE=Sony Corporation
+
+bluetooth:v012E*
+ ID_VENDOR_FROM_DATABASE=ASSA ABLOY
+
+bluetooth:v012F*
+ ID_VENDOR_FROM_DATABASE=Clarion Co., Ltd.
+
+bluetooth:v0130*
+ ID_VENDOR_FROM_DATABASE=Warehouse Innovations
+
+bluetooth:v0131*
+ ID_VENDOR_FROM_DATABASE=Cypress Semiconductor Corporation
+
+bluetooth:v0132*
+ ID_VENDOR_FROM_DATABASE=MADS Inc
+
+bluetooth:v0133*
+ ID_VENDOR_FROM_DATABASE=Blue Maestro Limited
+
+bluetooth:v0134*
+ ID_VENDOR_FROM_DATABASE=Resolution Products, Inc.
+
+bluetooth:v0135*
+ ID_VENDOR_FROM_DATABASE=Airewear LLC
+
+bluetooth:v0136*
+ ID_VENDOR_FROM_DATABASE=ETC sp. z.o.o.
+
+bluetooth:v0137*
+ ID_VENDOR_FROM_DATABASE=Prestigio Plaza Ltd.
