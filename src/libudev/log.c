@@ -30,6 +30,7 @@
 #include <string.h>
 
 #include "log.h"
+#include "time-util.h"
 #include "util.h"
 #include "missing.h"
 #include "macro.h"

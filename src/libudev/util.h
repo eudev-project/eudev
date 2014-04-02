@@ -33,46 +33,11 @@
 
 #include "macro.h"
 
-/* Note: the time definitions are from upstream's
- * src/shared/time-util.h which I have put here
- * for now.  We may need to beak these out later.
- * <blueness@gentoo.org>
- */
-typedef uint64_t usec_t;
-typedef uint64_t nsec_t;
-
-typedef struct dual_timestamp {
-        usec_t realtime;
-        usec_t monotonic;
-} dual_timestamp;
-
 union dirent_storage {
         struct dirent de;
         uint8_t storage[offsetof(struct dirent, d_name) +
                         ((NAME_MAX + 1 + sizeof(long)) & ~(sizeof(long) - 1))];
 };
-
-#define MSEC_PER_SEC  1000ULL
-#define USEC_PER_SEC  1000000ULL
-#define USEC_PER_MSEC 1000ULL
-#define NSEC_PER_SEC  1000000000ULL
-#define NSEC_PER_MSEC 1000000ULL
-#define NSEC_PER_USEC 1000ULL
-
-#define USEC_PER_MINUTE (60ULL*USEC_PER_SEC)
-#define NSEC_PER_MINUTE (60ULL*NSEC_PER_SEC)
-#define USEC_PER_HOUR (60ULL*USEC_PER_MINUTE)
-#define NSEC_PER_HOUR (60ULL*NSEC_PER_MINUTE)
-#define USEC_PER_DAY (24ULL*USEC_PER_HOUR)
-#define NSEC_PER_DAY (24ULL*NSEC_PER_HOUR)
-#define USEC_PER_WEEK (7ULL*USEC_PER_DAY)
-#define NSEC_PER_WEEK (7ULL*NSEC_PER_DAY)
-#define USEC_PER_MONTH (2629800ULL*USEC_PER_SEC)
-#define NSEC_PER_MONTH (2629800ULL*NSEC_PER_SEC)
-#define USEC_PER_YEAR (31557600ULL*USEC_PER_SEC)
-#define NSEC_PER_YEAR (31557600ULL*NSEC_PER_SEC)
-
-#define FORMAT_TIMESPAN_MAX 64
 
 /* What is interpreted as whitespace? */
 #define WHITESPACE " \t\n\r"
@@ -92,10 +57,6 @@ union dirent_storage {
 #define ANSI_HIGHLIGHT_BLUE_ON "\x1B[1;34m"
 #define ANSI_HIGHLIGHT_OFF "\x1B[0m"
 #define ANSI_ERASE_TO_END_OF_LINE "\x1B[K"
-
-usec_t now(clockid_t clock);
-usec_t timespec_load(const struct timespec *ts);
-char *format_timespan(char *buf, size_t l, usec_t t, usec_t accuracy);
 
 size_t page_size(void);
 #define PAGE_ALIGN(l) ALIGN_TO((l), page_size())

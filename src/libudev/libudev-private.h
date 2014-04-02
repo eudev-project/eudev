@@ -27,6 +27,7 @@
 
 #include "libudev.h"
 #include "macro.h"
+#include "time-util.h"
 #include "util.h"
 #include "mkdir.h"
 #include "strxcpyx.h"

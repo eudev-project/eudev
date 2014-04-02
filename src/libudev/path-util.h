@@ -18,10 +18,8 @@
 ***/
 
 #include <stdbool.h>
-#include <inttypes.h>
 
-typedef uint64_t usec_t;
-typedef uint64_t nsec_t;
+#include "time-util.h"
 
 char* path_get_file_name(const char *p) _pure_;
 int path_get_parent(const char *path, char **parent);
