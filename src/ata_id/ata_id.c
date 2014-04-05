@@ -19,6 +19,10 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE 1
+#endif
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
@@ -40,10 +44,6 @@
 #include <linux/cdrom.h>
 #include <linux/bsg.h>
 #include <arpa/inet.h>
-
-#ifdef __UCLIBC__
-#include <linux/fcntl.h>
-#endif
 
 #include "libudev.h"
 #include "libudev-private.h"

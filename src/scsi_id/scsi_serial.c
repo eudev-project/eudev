@@ -17,6 +17,10 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE 1
+#endif
+
 #include <sys/types.h>
 #include <sys/ioctl.h>
 #include <sys/stat.h>
@@ -33,10 +37,6 @@
 #include <scsi/sg.h>
 #include <linux/types.h>
 #include <linux/bsg.h>
-
-#ifdef __UCLIBC__
-#include <linux/fcntl.h>
-#endif
 
 #include "libudev.h"
 #include "libudev-private.h"

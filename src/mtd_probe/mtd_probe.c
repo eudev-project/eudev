@@ -16,6 +16,11 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor,
  * Boston, MA  02110-1301  USA
  */
+
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE 1
+#endif
+
 #include "mtd_probe.h"
 #include <stdio.h>
 #include <sys/ioctl.h>
@@ -25,10 +30,6 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <stdlib.h>
-
-#ifdef __UCLIBC__
-#include <linux/fcntl.h>
-#endif
 
 int main(int argc, char** argv)
 {

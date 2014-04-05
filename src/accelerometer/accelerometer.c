@@ -44,6 +44,10 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE 1
+#endif
+
 #include <stdio.h>
 #include <string.h>
 #include <stdbool.h>
@@ -57,10 +61,6 @@
 #include <limits.h>
 #include <linux/limits.h>
 #include <linux/input.h>
-
-#ifdef __UCLIBC__
-#include <linux/fcntl.h>
-#endif
 
 #include "libudev.h"
 #include "libudev-private.h"

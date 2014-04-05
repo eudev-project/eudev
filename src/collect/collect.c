@@ -19,6 +19,10 @@
  *
  */
 
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE 1
+#endif
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <stddef.h>
@@ -30,10 +34,6 @@
 #include <getopt.h>
 #include <sys/types.h>
 #include <sys/stat.h>
-
-#ifdef __UCLIBC__
-#include <linux/fcntl.h>
-#endif
 
 #include "libudev.h"
 #include "libudev-private.h"
