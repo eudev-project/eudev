@@ -309,7 +309,6 @@ _public_ struct udev_hwdb *udev_hwdb_new(struct udev *udev) {
         udev_dbg(udev, "header size       %8"PRIu64" bytes\n", le64toh(hwdb->head->header_size));
         udev_dbg(udev, "strings           %8"PRIu64" bytes\n", le64toh(hwdb->head->strings_len));
         udev_dbg(udev, "nodes             %8"PRIu64" bytes\n", le64toh(hwdb->head->nodes_len));
-
         return hwdb;
 }
 
