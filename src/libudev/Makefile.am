@@ -88,8 +88,7 @@ libudev_la_LDFLAGS = \
 
 
 libudev_private_la_SOURCES =\
-	libudev-device-private.c \
-	libudev-queue-private.c
+	libudev-device-private.c
 
 libudev_private_la_LIBADD =\
 	libudev.la
