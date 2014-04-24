@@ -143,7 +143,6 @@ static int builtin_blkid(struct udev_device *dev, int argc, char *argv[], bool t
         const char *name;
         int nvals;
         int i;
-        size_t len;
         int err = 0;
 
         static const struct option options[] = {
@@ -201,10 +200,10 @@ static int builtin_blkid(struct udev_device *dev, int argc, char *argv[], bool t
 
         nvals = blkid_probe_numof_values(pr);
         for (i = 0; i < nvals; i++) {
-                if (blkid_probe_get_value(pr, i, &name, &data, &len))
+                if (blkid_probe_get_value(pr, i, &name, &data, NULL))
                         continue;
-                len = strnlen((char *) data, len);
-                print_property(dev, test, name, (char *) data);
+
+                print_property(dev, test, name, data);
         }
 
         blkid_free_probe(pr);
