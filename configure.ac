@@ -60,7 +60,7 @@ AC_C_INLINE
 AC_TYPE_MODE_T
 AC_TYPE_PID_T
 AC_CHECK_MEMBERS([struct stat.st_rdev])
-AC_CHECK_DECLS([gettid, pivot_root, name_to_handle_at, accept4, mkostemp], [], [], [[#include <sys/types.h>
+AC_CHECK_DECLS([gettid, name_to_handle_at, accept4, mkostemp], [], [], [[#include <sys/types.h>
 #include <unistd.h>
 #include <sys/mount.h>
 #include <fcntl.h>

@@ -33,6 +33,7 @@
 #include <sys/socket.h>
 
 #include "macro.h"
+#include "missing.h"
 
 union dirent_storage {
         struct dirent de;
