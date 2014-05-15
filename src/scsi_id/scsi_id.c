@@ -398,7 +398,7 @@ static int set_options(struct udev *udev,
                         break;
 
                 case 'V':
-                        printf("%i\n", VERSION);
+                        printf("%s\n", VERSION);
                         exit(0);
 
                 case 'x':
