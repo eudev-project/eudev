@@ -66,6 +66,14 @@ AC_CHECK_DECLS([gettid, name_to_handle_at, accept4, mkostemp], [], [], [[#includ
 #include <fcntl.h>
 #include <sys/socket.h>]])
 
+AC_CHECK_SIZEOF(pid_t)
+AC_CHECK_SIZEOF(uid_t)
+AC_CHECK_SIZEOF(gid_t)
+AC_CHECK_SIZEOF(time_t)
+AC_CHECK_SIZEOF(rlim_t,,[
+       #include <sys/time.h>
+       #include <sys/resource.h>
+])
 
 # Checks for library functions.
 AC_FUNC_CHOWN

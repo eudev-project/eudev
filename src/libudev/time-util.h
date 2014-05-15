@@ -24,6 +24,8 @@
 typedef uint64_t usec_t;
 typedef uint64_t nsec_t;
 
+#define USEC_FMT "%" PRIu64
+
 typedef struct dual_timestamp {
         usec_t realtime;
         usec_t monotonic;

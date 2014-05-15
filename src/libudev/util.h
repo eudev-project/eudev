@@ -32,14 +32,50 @@
 #include <unistd.h>
 #include <sys/socket.h>
 
+#include "config.h"
+
+#if SIZEOF_PID_T == 4
+#  define PID_FMT "%" PRIu32
+#elif SIZEOF_PID_T == 2
+#  define PID_FMT "%" PRIu16
+#else
+#  error Unknown pid_t size
+#endif
+
+#if SIZEOF_UID_T == 4
+#  define UID_FMT "%" PRIu32
+#elif SIZEOF_UID_T == 2
+#  define UID_FMT "%" PRIu16
+#else
+#  error Unknown uid_t size
+#endif
+
+#if SIZEOF_GID_T == 4
+#  define GID_FMT "%" PRIu32
+#elif SIZEOF_GID_T == 2
+#  define GID_FMT "%" PRIu16
+#else
+#  error Unknown gid_t size
+#endif
+
+#if SIZEOF_TIME_T == 8
+#  define PRI_TIME PRIu64
+#elif SIZEOF_GID_T == 4
+#  define PRI_TIME PRIu32
+#else
+#  error Unknown time_t size
+#endif
+
+#if SIZEOF_RLIM_T == 8
+#  define RLIM_FMT "%" PRIu64
+#elif SIZEOF_RLIM_T == 4
+#  define RLIM_FMT "%" PRIu32
+#else
+#  error Unknown rlim_t size
+#endif
+
 #include "macro.h"
 #include "missing.h"
-
-union dirent_storage {
-        struct dirent de;
-        uint8_t storage[offsetof(struct dirent, d_name) +
-                        ((NAME_MAX + 1 + sizeof(long)) & ~(sizeof(long) - 1))];
-};
 
 /* What is interpreted as whitespace? */
 #define WHITESPACE " \t\n\r"

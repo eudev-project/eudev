@@ -119,9 +119,9 @@ char *format_timespan(char *buf, size_t l, usec_t t, usec_t accuracy) {
 
                         if (j > 0) {
                                 k = snprintf(p, l,
-                                             "%s%llu.%0*llu%s",
+                                             "%s"USEC_FMT".%0*llu%s",
                                              p > buf ? " " : "",
-                                             (unsigned long long) a,
+                                             a,
                                              j,
                                              (unsigned long long) b,
                                              table[i].suffix);
@@ -134,9 +134,9 @@ char *format_timespan(char *buf, size_t l, usec_t t, usec_t accuracy) {
                 /* No? Then let's show it normally */
                 if (!done) {
                         k = snprintf(p, l,
-                                     "%s%llu%s",
+                                     "%s"USEC_FMT"%s",
                                      p > buf ? " " : "",
-                                     (unsigned long long) a,
+                                     a,
                                      table[i].suffix);
 
                         t = b;
