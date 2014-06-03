@@ -154,6 +154,30 @@ void close_nointr_nofail(int fd) {
         assert_se(close_nointr(fd) == 0);
 }
 
+int safe_close(int fd) {
+
+        /*
+         * Like close_nointr() but cannot fail. Guarantees errno is
+         * unchanged. Is a NOP with negative fds passed, and returns
+         * -1, so that it can be used in this syntax:
+         *
+         * fd = safe_close(fd);
+         */
+
+        if (fd >= 0) {
+                PROTECT_ERRNO;
+
+                /* The kernel might return pretty much any error code
+                 * via close(), but the fd will be closed anyway. The
+                 * only condition we want to check for here is whether
+                 * the fd was invalid at all... */
+
+                assert_se(close_nointr(fd) != -EBADF);
+        }
+
+        return -1;
+}
+
 int unlink_noerrno(const char *path) {
         PROTECT_ERRNO;
         int r;

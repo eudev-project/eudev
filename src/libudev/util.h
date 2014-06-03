@@ -124,6 +124,8 @@ static inline const char *startswith(const char *s, const char *prefix) {
 char *endswith(const char *s, const char *postfix) _pure_;
 
 int close_nointr(int fd);
+int safe_close(int fd);
+
 void close_nointr_nofail(int fd);
 
 int safe_atou(const char *s, unsigned *ret_u);
