@@ -33,6 +33,7 @@ CLEANFILES = \
 	gudev-1.0.pc
 
 libgudev_1_0_la_SOURCES = \
+	libgudev-1.0.sym \
 	gudevenumtypes.c\
 	gudevclient.c \
 	gudevdevice.c \
@@ -69,8 +70,9 @@ libgudev_1_0_la_LIBADD = \
 libgudev_1_0_la_LDFLAGS = \
 	$(AM_LDFLAGS) \
 	-version-info $(LIBGUDEV_CURRENT):$(LIBGUDEV_REVISION):$(LIBGUDEV_AGE) \
-	-export-dynamic -no-undefined \
-	-export-symbols-regex '^g_udev_.*'
+	-export-dynamic \
+	-no-undefined \
+	-Wl,--version-script=$(top_srcdir)/src/gudev/libgudev-1.0.sym
 
 gudevmarshal.h: gudevmarshal.list
 	$(AM_V_at)$(MKDIR_P) $(dir $@)
