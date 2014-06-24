@@ -119,6 +119,15 @@ AC_ARG_WITH(
         [with_rootlibdir=${libdir}]
 )
 
+AC_ARG_WITH(
+        [rootlibexecdir],
+        [AS_HELP_STRING(
+                [--with-rootlibexecdir=DIR],
+                [Root directory for libexecs necessary for boot])],
+        [],
+        [with_rootlibexecdir=${with_rootlibdir}/udev]
+)
+
 AC_ARG_ENABLE(
         [split-usr],
         [AS_HELP_STRING(
@@ -139,7 +148,8 @@ AS_IF(
 # Configured paths
 AC_SUBST([rootprefix], [$with_rootprefix])
 AC_SUBST([rootlibdir], [$with_rootlibdir])
-AC_SUBST([udevlibexecdir], [${rootlibdir}/udev])
+AC_SUBST([rootlibexecdir], [${with_rootlibexecdir}])
+AC_SUBST([udevlibexecdir], [${rootlibexecdir}])
 
 # sysconfdir paths
 AC_SUBST([udevconfdir],[${sysconfdir}/udev])
@@ -393,13 +403,14 @@ AC_MSG_RESULT([
 
         rootprefix:              ${rootprefix}
         rootlibdir:              ${rootlibdir}
-        udevlibexecdir:          ${udevlibexecdir}
+        rootlibexecdir:          ${rootlibexecdir}
         datarootdir:             ${datarootdir}
 
         udevconfdir:             ${udevconfdir}
         udevconffile:            ${udevconffile}
         udevhwdbdir:             ${udevhwdbdir}
         udevhwdbbin:             ${udevhwdbbin}
+        udevlibexecdir:          ${udevlibexecdir}
         udevkeymapdir:           ${udevkeymapdir}
         udevkeymapforceredir:    ${udevkeymapforceredir}
         udevrulesdir:            ${udevrulesdir}
