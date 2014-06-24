@@ -139,7 +139,7 @@ AS_IF(
 # Configured paths
 AC_SUBST([rootprefix], [$with_rootprefix])
 AC_SUBST([rootlibdir], [$with_rootlibdir])
-AC_SUBST([udevlibexecdir], [${rootprefix}/lib/udev])
+AC_SUBST([udevlibexecdir], [${rootlibdir}/udev])
 
 # sysconfdir paths
 AC_SUBST([udevconfdir],[${sysconfdir}/udev])
