@@ -213,6 +213,8 @@ void random_bytes(void *p, size_t n);
 
 int open_terminal(const char *name, int mode);
 
+int flush_fd(int fd);
+
 int fopen_temporary(const char *path, FILE **_f, char **_temp_path);
 
 ssize_t loop_read(int fd, void *buf, size_t nbytes, bool do_poll);

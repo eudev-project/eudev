@@ -725,6 +725,42 @@ int execute_command(const char *command, char *const argv[])
         }
 }
 
+int flush_fd(int fd) {
+        struct pollfd pollfd = {
+                .fd = fd,
+                .events = POLLIN,
+        };
+
+        for (;;) {
+                char buf[LINE_MAX];
+                ssize_t l;
+                int r;
+
+                r = poll(&pollfd, 1, 0);
+                if (r < 0) {
+                        if (errno == EINTR)
+                                continue;
+
+                        return -errno;
+
+                } else if (r == 0)
+                        return 0;
+
+                l = read(fd, buf, sizeof(buf));
+                if (l < 0) {
+
+                        if (errno == EINTR)
+                                continue;
+
+                        if (errno == EAGAIN)
+                                return 0;
+
+                        return -errno;
+                } else if (l == 0)
+                        return 0;
+        }
+}
+
 int fopen_temporary(const char *path, FILE **_f, char **_temp_path) {
         FILE *f;
         char *t;
