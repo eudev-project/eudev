@@ -222,6 +222,7 @@ int chmod_and_chown(const char *path, mode_t mode, uid_t uid, gid_t gid);
 
 bool null_or_empty(struct stat *st) _pure_;
 int null_or_empty_path(const char *fn);
+int null_or_empty_fd(int fd);
 
 int execute_command(const char *command, char *const argv[]);
 

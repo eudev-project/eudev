@@ -658,6 +658,17 @@ int null_or_empty_path(const char *fn) {
         return null_or_empty(&st);
 }
 
+int null_or_empty_fd(int fd) {
+        struct stat st;
+
+        assert(fd >= 0);
+
+        if (fstat(fd, &st) < 0)
+                return -errno;
+
+        return null_or_empty(&st);
+}
+
 bool dirent_is_file_with_suffix(const struct dirent *de, const char *suffix) {
         assert(de);
 
