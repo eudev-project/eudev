@@ -142,7 +142,6 @@ enum token_type {
         TK_M_PARENTS_MAX,
 
         TK_M_TEST,                      /* val, mode_t */
-        TK_M_EVENT_TIMEOUT,             /* int */
         TK_M_PROGRAM,                   /* val */
         TK_M_IMPORT_FILE,               /* val */
         TK_M_IMPORT_PROG,               /* val */
@@ -206,7 +205,6 @@ struct token {
                                 uid_t uid;
                                 gid_t gid;
                                 int devlink_prio;
-                                int event_timeout;
                                 int watch;
                                 enum udev_builtin_cmd builtin_cmd;
                         };
@@ -280,7 +278,6 @@ static const char *token_str(enum token_type type)
                 [TK_M_PARENTS_MAX] =            "M PARENTS_MAX",
 
                 [TK_M_TEST] =                   "M TEST",
-                [TK_M_EVENT_TIMEOUT] =          "M EVENT_TIMEOUT",
                 [TK_M_PROGRAM] =                "M PROGRAM",
                 [TK_M_IMPORT_FILE] =            "M IMPORT_FILE",
                 [TK_M_IMPORT_PROG] =            "M IMPORT_PROG",
@@ -413,9 +410,6 @@ static void dump_token(struct udev_rules *rules, struct token *token)
                 break;
         case TK_A_SECLABEL:
                 log_debug("%s %s '%s' '%s'", token_str(type), operation_str(op), attr, value);
-                break;
-        case TK_M_EVENT_TIMEOUT:
-                log_debug("%s %u", token_str(type), token->key.event_timeout);
                 break;
         case TK_A_GOTO:
                 log_debug("%s '%s' %u", token_str(type), value, token->key.rule_goto);
@@ -632,8 +626,9 @@ static int import_file_into_properties(struct udev_device *dev, const char *file
         return 0;
 }
 
-static int import_program_into_properties(struct udev_event *event, const char *program, const sigset_t *sigmask)
-{
+static int import_program_into_properties(struct udev_event *event,
+                                          usec_t timeout_usec,
+                                          const char *program, const sigset_t *sigmask) {
         struct udev_device *dev = event->dev;
         char **envp;
         char result[UTIL_LINE_SIZE];
@@ -641,7 +636,7 @@ static int import_program_into_properties(struct udev_event *event, const char *
         int err;
 
         envp = udev_device_get_properties_envp(dev);
-        err = udev_event_spawn(event, program, envp, sigmask, result, sizeof(result));
+        err = udev_event_spawn(event, timeout_usec, program, envp, sigmask, result, sizeof(result));
         if (err < 0)
                 return err;
 
@@ -946,9 +941,6 @@ static int rule_add_key(struct rule_tmp *rule_tmp, enum token_type type,
                 break;
         case TK_A_MODE_ID:
                 token->key.mode = *(mode_t *)data;
-                break;
-        case TK_M_EVENT_TIMEOUT:
-                token->key.event_timeout = *(int *)data;
                 break;
         case TK_RULE:
         case TK_M_PARENTS_MIN:
@@ -1467,14 +1459,6 @@ static int add_rule(struct udev_rules *rules, char *line,
                                 rule_add_key(&rule_tmp, TK_A_DEVLINK_PRIO, op, NULL, &prio);
                         }
 
-                        pos = strstr(value, "event_timeout=");
-                        if (pos != NULL) {
-                                int tout = atoi(&pos[strlen("event_timeout=")]);
-
-                                rule_add_key(&rule_tmp, TK_M_EVENT_TIMEOUT, op, NULL, &tout);
-                        }
-
-                        pos = strstr(value, "string_escape=");
                         if (pos != NULL) {
                                 pos = &pos[strlen("string_escape=")];
                                 if (startswith(pos, "none"))
@@ -1899,8 +1883,10 @@ int udev_rules_assigning_name_to(struct udev_rules *rules, const char *match_nam
 }
 #endif
 
-int udev_rules_apply_to_event(struct udev_rules *rules, struct udev_event *event, const sigset_t *sigmask)
-{
+int udev_rules_apply_to_event(struct udev_rules *rules,
+                              struct udev_event *event,
+                              usec_t timeout_usec,
+                              const sigset_t *sigmask) {
         struct token *cur;
         struct token *rule;
         enum escape_type esc = ESCAPE_UNSET;
@@ -2094,10 +2080,6 @@ int udev_rules_apply_to_event(struct udev_rules *rules, struct udev_event *event
                                 goto nomatch;
                         break;
                 }
-                case TK_M_EVENT_TIMEOUT:
-                        log_debug("OPTIONS event_timeout=%u", cur->key.event_timeout);
-                        event->timeout_usec = cur->key.event_timeout * 1000 * 1000;
-                        break;
                 case TK_M_PROGRAM: {
                         char program[UTIL_PATH_SIZE];
                         char **envp;
@@ -2112,7 +2094,7 @@ int udev_rules_apply_to_event(struct udev_rules *rules, struct udev_event *event
                                   rules_str(rules, rule->rule.filename_off),
                                   rule->rule.filename_line);
 
-                        if (udev_event_spawn(event, program, envp, sigmask, result, sizeof(result)) < 0) {
+                        if (udev_event_spawn(event, timeout_usec, program, envp, sigmask, result, sizeof(result)) < 0) {
                                 if (cur->key.op != OP_NOMATCH)
                                         goto nomatch;
                         } else {
@@ -2148,7 +2130,7 @@ int udev_rules_apply_to_event(struct udev_rules *rules, struct udev_event *event
                                   rules_str(rules, rule->rule.filename_off),
                                   rule->rule.filename_line);
 
-                        if (import_program_into_properties(event, import, sigmask) != 0)
+                        if (import_program_into_properties(event, timeout_usec, import, sigmask) != 0)
                                 if (cur->key.op != OP_NOMATCH)
                                         goto nomatch;
                         break;
