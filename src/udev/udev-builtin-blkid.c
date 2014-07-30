@@ -31,8 +31,7 @@
 
 #include "udev.h"
 
-static void print_property(struct udev_device *dev, bool test, const char *name, const char *value)
-{
+static void print_property(struct udev_device *dev, bool test, const char *name, const char *value) {
         char s[256];
 
         s[0] = '\0';
@@ -100,8 +99,7 @@ static void print_property(struct udev_device *dev, bool test, const char *name,
         }
 }
 
-static int probe_superblocks(blkid_probe pr)
-{
+static int probe_superblocks(blkid_probe pr) {
         struct stat st;
         int rc;
 
@@ -133,8 +131,7 @@ static int probe_superblocks(blkid_probe pr)
         return blkid_do_safeprobe(pr);
 }
 
-static int builtin_blkid(struct udev_device *dev, int argc, char *argv[], bool test)
-{
+static int builtin_blkid(struct udev_device *dev, int argc, char *argv[], bool test) {
         int64_t offset = 0;
         bool noraid = false;
         _cleanup_close_ int fd = -1;

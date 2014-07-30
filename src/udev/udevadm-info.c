@@ -33,8 +33,7 @@
 #include "udev-util.h"
 #include "util.h"
 
-static bool skip_attribute(const char *name)
-{
+static bool skip_attribute(const char *name) {
         static const char* const skip[] = {
                 "uevent",
                 "dev",
@@ -52,8 +51,7 @@ static bool skip_attribute(const char *name)
         return false;
 }
 
-static void print_all_attributes(struct udev_device *device, const char *key)
-{
+static void print_all_attributes(struct udev_device *device, const char *key) {
         struct udev_list_entry *sysattr;
 
         udev_list_entry_foreach(sysattr, udev_device_get_sysattr_list_entry(device)) {
@@ -85,8 +83,7 @@ static void print_all_attributes(struct udev_device *device, const char *key)
         printf("\n");
 }
 
-static int print_device_chain(struct udev_device *device)
-{
+static int print_device_chain(struct udev_device *device) {
         struct udev_device *device_parent;
         const char *str;
 
@@ -131,8 +128,7 @@ static int print_device_chain(struct udev_device *device)
         return 0;
 }
 
-static void print_record(struct udev_device *device)
-{
+static void print_record(struct udev_device *device) {
         const char *str;
         int i;
         struct udev_list_entry *list_entry;
@@ -157,8 +153,7 @@ static void print_record(struct udev_device *device)
         printf("\n");
 }
 
-static int stat_device(const char *name, bool export, const char *prefix)
-{
+static int stat_device(const char *name, bool export, const char *prefix) {
         struct stat statbuf;
 
         if (stat(name, &statbuf) != 0)
@@ -176,8 +171,7 @@ static int stat_device(const char *name, bool export, const char *prefix)
         return 0;
 }
 
-static int export_devices(struct udev *udev)
-{
+static int export_devices(struct udev *udev) {
         struct udev_enumerate *udev_enumerate;
         struct udev_list_entry *list_entry;
 
@@ -198,8 +192,7 @@ static int export_devices(struct udev *udev)
         return 0;
 }
 
-static void cleanup_dir(DIR *dir, mode_t mask, int depth)
-{
+static void cleanup_dir(DIR *dir, mode_t mask, int depth) {
         struct dirent *dent;
 
         if (depth <= 0)
@@ -229,8 +222,7 @@ static void cleanup_dir(DIR *dir, mode_t mask, int depth)
         }
 }
 
-static void cleanup_db(struct udev *udev)
-{
+static void cleanup_db(struct udev *udev) {
         DIR *dir;
 
         unlink("/run/udev/queue.bin");
@@ -266,8 +258,7 @@ static void cleanup_db(struct udev *udev)
         }
 }
 
-static struct udev_device *find_device(struct udev *udev, const char *id, const char *prefix)
-{
+static struct udev_device *find_device(struct udev *udev, const char *id, const char *prefix) {
         char name[UTIL_PATH_SIZE];
 
         if (prefix && !startswith(id, prefix)) {
@@ -296,8 +287,7 @@ static struct udev_device *find_device(struct udev *udev, const char *id, const 
                 return NULL;
 }
 
-static int uinfo(struct udev *udev, int argc, char *argv[])
-{
+static int uinfo(struct udev *udev, int argc, char *argv[]) {
         _cleanup_udev_device_unref_ struct udev_device *device = NULL;
         bool root = 0;
         bool export = 0;

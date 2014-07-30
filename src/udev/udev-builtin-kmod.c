@@ -36,8 +36,7 @@
 
 static struct kmod_ctx *ctx;
 
-static int load_module(struct udev *udev, const char *alias)
-{
+static int load_module(struct udev *udev, const char *alias) {
         int err;
 #ifdef HAVE_LIBKMOD
         struct kmod_list *list = NULL;
@@ -88,13 +87,11 @@ static int load_module(struct udev *udev, const char *alias)
 
 _printf_(6,0)
 static void udev_kmod_log(void *data, int priority, const char *file, int line,
-                          const char *fn, const char *format, va_list args)
-{
+                          const char *fn, const char *format, va_list args) {
         udev_main_log(data, priority, file, line, fn, format, args);
 }
 
-static int builtin_kmod(struct udev_device *dev, int argc, char *argv[], bool test)
-{
+static int builtin_kmod(struct udev_device *dev, int argc, char *argv[], bool test) {
         struct udev *udev = udev_device_get_udev(dev);
         int i;
 
@@ -117,8 +114,7 @@ static int builtin_kmod(struct udev_device *dev, int argc, char *argv[], bool te
 }
 
 /* called at udev startup and reload */
-static int builtin_kmod_init(struct udev *udev)
-{
+static int builtin_kmod_init(struct udev *udev) {
 #ifdef HAVE_LIBKMOD
         if (ctx)
                 return 0;
@@ -135,8 +131,7 @@ static int builtin_kmod_init(struct udev *udev)
 }
 
 /* called on udev shutdown and reload request */
-static void builtin_kmod_exit(struct udev *udev)
-{
+static void builtin_kmod_exit(struct udev *udev) {
 #ifdef HAVE_LIBKMOD
         log_debug("unload module index");
         ctx = kmod_unref(ctx);
@@ -145,8 +140,7 @@ static void builtin_kmod_exit(struct udev *udev)
 
 #ifdef HAVE_LIBKMOD
 /* called every couple of seconds during event activity; 'true' if config has changed */
-static bool builtin_kmod_validate(struct udev *udev)
-{
+static bool builtin_kmod_validate(struct udev *udev) {
         log_debug("validate module index");
         if (!ctx)
                 return false;
