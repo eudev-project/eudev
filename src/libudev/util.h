@@ -134,11 +134,13 @@ int safe_atoi(const char *s, int *ret_i);
 int safe_atollu(const char *s, unsigned long long *ret_u);
 int safe_atolli(const char *s, long long int *ret_i);
 
-char *split(const char *c, size_t *l, const char *separator, char **state);
-char *split_quoted(const char *c, size_t *l, char **state);
+const char* split(const char **state, size_t *l, const char *separator, bool quoted);
 
 #define FOREACH_WORD_QUOTED(word, length, s, state)                     \
-        for ((state) = NULL, (word) = split_quoted((s), &(length), &(state)); (word); (word) = split_quoted((s), &(length), &(state)))
+        _FOREACH_WORD(word, length, s, WHITESPACE, true, state)
+
+#define _FOREACH_WORD(word, length, s, separator, quoted, state)        \
+        for ((state) = (s), (word) = split(&(state), &(length), (separator), (quoted)); (word); (word) = split(&(state), &(length), (separator), (quoted)))
 
 char *strappend(const char *s, const char *suffix);
 char *strnappend(const char *s, const char *suffix, size_t length);

@@ -263,78 +263,62 @@ int safe_atolli(const char *s, long long int *ret_lli) {
         return 0;
 }
 
-/* Split a string into words. */
-char *split(const char *c, size_t *l, const char *separator, char **state) {
-        char *current;
+static size_t strcspn_escaped(const char *s, const char *reject) {
+        bool escaped = false;
+        size_t n;
 
-        current = *state ? *state : (char*) c;
-
-        if (!*current || *c == 0)
-                return NULL;
-
-        current += strspn(current, separator);
-        *l = strcspn(current, separator);
-        *state = current+*l;
-
-        return (char*) current;
+        for (n=0; s[n]; n++) {
+                if (escaped)
+                        escaped = false;
+                else if (s[n] == '\\')
+                        escaped = true;
+                else if (strchr(reject, s[n]))
+                        break;
+        }
+        /* if s ends in \, return index of previous char */
+        return n - escaped;
 }
 
-/* Split a string into words, but consider strings enclosed in '' and
- * "" as words even if they include spaces. */
-char *split_quoted(const char *c, size_t *l, char **state) {
-        char *current, *e;
-        bool escaped = false;
+/* Split a string into words. */
+const char* split(const char **state, size_t *l, const char *separator, bool quoted) {
+        const char *current;
 
-        current = *state ? *state : (char*) c;
+        current = *state;
 
-        if (!*current || *c == 0)
+        if (!*current) {
+                assert(**state == '\0');
                 return NULL;
-
-        current += strspn(current, WHITESPACE);
-
-        if (*current == '\'') {
-                current ++;
-
-                for (e = current; *e; e++) {
-                        if (escaped)
-                                escaped = false;
-                        else if (*e == '\\')
-                                escaped = true;
-                        else if (*e == '\'')
-                                break;
-                }
-
-                *l = e-current;
-                *state = *e == 0 ? e : e+1;
-        } else if (*current == '\"') {
-                current ++;
-
-                for (e = current; *e; e++) {
-                        if (escaped)
-                                escaped = false;
-                        else if (*e == '\\')
-                                escaped = true;
-                        else if (*e == '\"')
-                                break;
-                }
-
-                *l = e-current;
-                *state = *e == 0 ? e : e+1;
-        } else {
-                for (e = current; *e; e++) {
-                        if (escaped)
-                                escaped = false;
-                        else if (*e == '\\')
-                                escaped = true;
-                        else if (strchr(WHITESPACE, *e))
-                                break;
-                }
-                *l = e-current;
-                *state = e;
         }
 
-        return (char*) current;
+        current += strspn(current, separator);
+        if (!*current) {
+                *state = current;
+                return NULL;
+        }
+
+        if (quoted && strchr("\'\"", *current)) {
+                char quotechars[2] = {*current, '\0'};
+
+                *l = strcspn_escaped(current + 1, quotechars);
+                if (current[*l + 1] == '\0' ||
+                    (current[*l + 2] && !strchr(separator, current[*l + 2]))) {
+                        /* right quote missing or garbage at the end*/
+                        *state = current;
+                        return NULL;
+                }
+                assert(current[*l + 1] == quotechars[0]);
+                *state = current++ + *l + 2;
+        } else if (quoted) {
+                *l = strcspn_escaped(current, separator);
+                *state = current + *l;
+        } else {
+                *l = strcspn(current, separator);
+                *state = current + *l;
+        }
+
+        return current;
 }
+
 
 char *truncate_nl(char *s) {
         assert(s);
