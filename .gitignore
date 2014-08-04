@@ -33,6 +33,7 @@ docs/libudev/version.xml
 docs/gudev/gudev-overrides.txt
 docs/libudev/libudev-overrides.txt
 man/udev.7
+man/udev.conf.5
 man/udevd.8
 man/udevadm.8
 rule_generator/write_cd_rules
