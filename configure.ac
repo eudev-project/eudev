@@ -49,7 +49,7 @@ AC_CHECK_HEADERS(
 )
 
 AC_CHECK_HEADERS(
-	[mtd/mtd-user.h],
+	[linux/btrfs.h mtd/mtd-user.h],
 	[],
 	[AC_MSG_ERROR([*** KERNEL header not found])]
 )

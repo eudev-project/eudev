@@ -41,12 +41,79 @@
 #define RLIMIT_RTTIME 15
 #endif
 
-#ifndef MS_PRIVATE
-#define MS_PRIVATE  (1 << 18)
+#ifndef BTRFS_IOCTL_MAGIC
+#define BTRFS_IOCTL_MAGIC 0x94
 #endif
 
-#ifndef MS_REC
-#define MS_REC 16384
+#ifndef BTRFS_PATH_NAME_MAX
+#define BTRFS_PATH_NAME_MAX 4087
+#endif
+
+#ifndef BTRFS_DEVICE_PATH_NAME_MAX
+#define BTRFS_DEVICE_PATH_NAME_MAX 1024
+#endif
+
+#ifndef BTRFS_FSID_SIZE
+#define BTRFS_FSID_SIZE 16
+#endif
+
+#ifndef BTRFS_UUID_SIZE
+#define BTRFS_UUID_SIZE 16
+#endif
+
+#ifndef HAVE_LINUX_BTRFS_H
+struct btrfs_ioctl_vol_args {
+        int64_t fd;
+        char name[BTRFS_PATH_NAME_MAX + 1];
+};
+
+struct btrfs_ioctl_dev_info_args {
+        uint64_t devid;                         /* in/out */
+        uint8_t uuid[BTRFS_UUID_SIZE];          /* in/out */
+        uint64_t bytes_used;                    /* out */
+        uint64_t total_bytes;                   /* out */
+        uint64_t unused[379];                   /* pad to 4k */
+        char path[BTRFS_DEVICE_PATH_NAME_MAX];  /* out */
+};
+
+struct btrfs_ioctl_fs_info_args {
+        uint64_t max_id;                        /* out */
+        uint64_t num_devices;                   /* out */
+        uint8_t fsid[BTRFS_FSID_SIZE];          /* out */
+        uint64_t reserved[124];                 /* pad to 1k */
+};
+#endif
+
+#ifndef BTRFS_IOC_DEFRAG
+#define BTRFS_IOC_DEFRAG _IOW(BTRFS_IOCTL_MAGIC, 2, \
+                                 struct btrfs_ioctl_vol_args)
+#endif
+
+#ifndef BTRFS_IOC_DEV_INFO
+#define BTRFS_IOC_DEV_INFO _IOWR(BTRFS_IOCTL_MAGIC, 30, \
+                                 struct btrfs_ioctl_dev_info_args)
+#endif
+
+#ifndef BTRFS_IOC_FS_INFO
+#define BTRFS_IOC_FS_INFO _IOR(BTRFS_IOCTL_MAGIC, 31, \
+                                 struct btrfs_ioctl_fs_info_args)
+#endif
+
+#ifndef BTRFS_IOC_DEVICES_READY
+#define BTRFS_IOC_DEVICES_READY _IOR(BTRFS_IOCTL_MAGIC, 39, \
+                                 struct btrfs_ioctl_vol_args)
+#endif
+
+#ifndef BTRFS_SUPER_MAGIC
+#define BTRFS_SUPER_MAGIC 0x9123683E
+#endif
+
+#ifndef MS_MOVE
+#define MS_MOVE 8192
+#endif
+
+#ifndef MS_PRIVATE
+#define MS_PRIVATE  (1 << 18)
 #endif
 
 #if !HAVE_DECL_GETTID
@@ -55,29 +122,29 @@ static inline pid_t gettid(void) {
 }
 #endif
 
+#ifndef MS_PRIVATE
+#define MS_PRIVATE  (1 << 18)
+#endif
+
+#ifndef MS_REC
+#define MS_REC 16384
+#endif
+
 #ifndef MAX_HANDLE_SZ
 #define MAX_HANDLE_SZ 128
 #endif
 
-#if defined __x86_64__
-#  ifndef __NR_name_to_handle_at
+#ifndef __NR_name_to_handle_at
+#  if defined(__x86_64__)
 #    define __NR_name_to_handle_at 303
-#  endif
-#elif defined __i386__
-#  ifndef __NR_name_to_handle_at
+#  elif defined(__i386__)
 #    define __NR_name_to_handle_at 341
-#  endif
-#elif defined __arm__
-#  ifndef __NR_name_to_handle_at
+#  elif defined(__arm__)
 #    define __NR_name_to_handle_at 370
-#  endif
-#elif defined __powerpc__
-#  ifndef __NR_name_to_handle_at
+#  elif defined(__powerpc__)
 #    define __NR_name_to_handle_at 345
-#  endif
-#else
-#  ifndef __NR_name_to_handle_at
-#    error __NR_name_to_handle_at is not defined
+#  else
+#    error "__NR_name_to_handle_at is not defined"
 #  endif
 #endif
 

@@ -32,6 +32,7 @@
 #include <unistd.h>
 #include <sys/socket.h>
 
+#include "missing.h"
 #include "config.h"
 
 #if SIZEOF_PID_T == 4
