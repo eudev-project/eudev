@@ -49,63 +49,16 @@
 #define BTRFS_PATH_NAME_MAX 4087
 #endif
 
-#ifndef BTRFS_DEVICE_PATH_NAME_MAX
-#define BTRFS_DEVICE_PATH_NAME_MAX 1024
-#endif
-
-#ifndef BTRFS_FSID_SIZE
-#define BTRFS_FSID_SIZE 16
-#endif
-
-#ifndef BTRFS_UUID_SIZE
-#define BTRFS_UUID_SIZE 16
-#endif
-
 #ifndef HAVE_LINUX_BTRFS_H
 struct btrfs_ioctl_vol_args {
         int64_t fd;
         char name[BTRFS_PATH_NAME_MAX + 1];
 };
-
-struct btrfs_ioctl_dev_info_args {
-        uint64_t devid;                         /* in/out */
-        uint8_t uuid[BTRFS_UUID_SIZE];          /* in/out */
-        uint64_t bytes_used;                    /* out */
-        uint64_t total_bytes;                   /* out */
-        uint64_t unused[379];                   /* pad to 4k */
-        char path[BTRFS_DEVICE_PATH_NAME_MAX];  /* out */
-};
-
-struct btrfs_ioctl_fs_info_args {
-        uint64_t max_id;                        /* out */
-        uint64_t num_devices;                   /* out */
-        uint8_t fsid[BTRFS_FSID_SIZE];          /* out */
-        uint64_t reserved[124];                 /* pad to 1k */
-};
-#endif
-
-#ifndef BTRFS_IOC_DEFRAG
-#define BTRFS_IOC_DEFRAG _IOW(BTRFS_IOCTL_MAGIC, 2, \
-                                 struct btrfs_ioctl_vol_args)
-#endif
-
-#ifndef BTRFS_IOC_DEV_INFO
-#define BTRFS_IOC_DEV_INFO _IOWR(BTRFS_IOCTL_MAGIC, 30, \
-                                 struct btrfs_ioctl_dev_info_args)
-#endif
-
-#ifndef BTRFS_IOC_FS_INFO
-#define BTRFS_IOC_FS_INFO _IOR(BTRFS_IOCTL_MAGIC, 31, \
-                                 struct btrfs_ioctl_fs_info_args)
 #endif
 
 #ifndef BTRFS_IOC_DEVICES_READY
 #define BTRFS_IOC_DEVICES_READY _IOR(BTRFS_IOCTL_MAGIC, 39, \
                                  struct btrfs_ioctl_vol_args)
-#endif
-
-#ifndef BTRFS_SUPER_MAGIC
-#define BTRFS_SUPER_MAGIC 0x9123683E
 #endif
 
 #ifndef MS_MOVE
