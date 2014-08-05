@@ -3,7 +3,7 @@
 /***
   This file is part of eudev, forked from systemd.
 
-  Copyright 2012 Lennart Poettering
+  Copyright 2008-2011 Kay Sievers
 
   systemd is free software; you can redistribute it and/or modify it
   under the terms of the GNU Lesser General Public License as published by
@@ -21,8 +21,8 @@
 
 #include <stdlib.h>
 #include <stdio.h>
-#include <string.h>
 #include <stdint.h>
+#include <string.h>
 #include <sys/types.h>
 
 #include "device-nodes.h"

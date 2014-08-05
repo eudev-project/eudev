@@ -21,9 +21,9 @@
   along with systemd; If not, see <http://www.gnu.org/licenses/>.
 ***/
 
-#include <syslog.h>
 #include <stdbool.h>
 #include <stdarg.h>
+#include <syslog.h>
 #include <errno.h>
 
 #include "macro.h"

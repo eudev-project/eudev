@@ -39,6 +39,7 @@ unsigned strv_length(char * const *l) _pure_;
 
 int strv_extend(char ***l, const char *value);
 int strv_push(char ***l, char *value);
+int strv_consume(char ***l, char *value);
 
 char **strv_remove(char **l, const char *s);
 char **strv_uniq(char **l);

@@ -64,7 +64,6 @@ static inline size_t ALIGN_TO(size_t l, size_t ali) {
         return ((l + ali - 1) & ~(ali - 1));
 }
 
-#define ALIGN_TO_PTR(p, ali) ((void*) ALIGN_TO((unsigned long) p))
 
 #define ELEMENTSOF(x) (sizeof(x)/sizeof((x)[0]))
 
@@ -99,12 +98,6 @@ static inline size_t ALIGN_TO(size_t l, size_t ali) {
         do {                                                            \
                 log_assert_failed_unreachable(t, __FILE__, __LINE__, __PRETTY_FUNCTION__); \
         } while (false)
-
-#if defined(static_assert)
-#define assert_cc(expr) static_assert(expr, #expr)
-#else
-#define assert_cc(expr) struct UNIQUE(_assert_struct_) { char x[(expr) ? 0 : -1]; };
-#endif
 
 #define PTR_TO_INT(p) ((int) ((intptr_t) (p)))
 #define INT_TO_PTR(u) ((void *) ((intptr_t) (u)))

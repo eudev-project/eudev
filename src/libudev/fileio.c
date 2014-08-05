@@ -25,8 +25,12 @@
 #include "utf8.h"
 #include "ctype.h"
 
-int write_string_to_file(FILE *f, const char *line) {
+int write_string_stream(FILE *f, const char *line) {
+        assert(f);
+        assert(line);
+
         errno = 0;
+
         fputs(line, f);
         if (!endswith(line, "\n"))
                 fputc('\n', f);
@@ -49,7 +53,7 @@ int write_string_file(const char *fn, const char *line) {
         if (!f)
                 return -errno;
 
-        return write_string_to_file(f, line);
+        return write_string_stream(f, line);
 }
 int read_one_line_file(const char *fn, char **line) {
         _cleanup_fclose_ FILE *f = NULL;

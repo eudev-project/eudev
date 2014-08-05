@@ -24,7 +24,7 @@
 #include "set.h"
 
 typedef struct ExitStatusSet {
-        Set *code;
+        Set *status;
         Set *signal;
 } ExitStatusSet;
 

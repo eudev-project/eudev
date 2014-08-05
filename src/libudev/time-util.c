@@ -38,10 +38,10 @@ usec_t timespec_load(const struct timespec *ts) {
 
         if (ts->tv_sec == (time_t) -1 &&
             ts->tv_nsec == (long) -1)
-                return (usec_t) -1;
+                return USEC_INFINITY;
 
         if ((usec_t) ts->tv_sec > (UINT64_MAX - (ts->tv_nsec / NSEC_PER_USEC)) / USEC_PER_SEC)
-                return (usec_t) -1;
+                return USEC_INFINITY;
 
         return
                 (usec_t) ts->tv_sec * USEC_PER_SEC +
@@ -71,7 +71,7 @@ char *format_timespan(char *buf, size_t l, usec_t t, usec_t accuracy) {
         assert(buf);
         assert(l > 0);
 
-        if (t == (usec_t) -1)
+        if (t == USEC_INFINITY)
                 return NULL;
 
         if (t <= 0) {
@@ -83,7 +83,7 @@ char *format_timespan(char *buf, size_t l, usec_t t, usec_t accuracy) {
         /* The result of this function can be parsed with parse_sec */
 
         for (i = 0; i < ELEMENTSOF(table); i++) {
-                int k;
+                int k = 0;
                 size_t n;
                 bool done = false;
                 usec_t a, b;
