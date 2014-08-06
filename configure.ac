@@ -383,6 +383,7 @@ AC_CONFIG_FILES([Makefile
                  src/v4l_id/Makefile
                  src/gudev/Makefile
                  src/gudev/gudev-1.0.pc
+                 src/shared/Makefile
                  src/libudev/Makefile
                  src/libudev/libudev.pc
                  src/udev/Makefile

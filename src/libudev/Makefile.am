@@ -1,8 +1,8 @@
 ACLOCAL_AMFLAGS = -I m4 ${ACLOCAL_FLAGS}
 
-LIBUDEV_CURRENT=2
-LIBUDEV_REVISION=6
-LIBUDEV_AGE=1
+LIBUDEV_CURRENT=6
+LIBUDEV_REVISION=0
+LIBUDEV_AGE=5
 
 define move-to-rootlibdir
 	if test "$(libdir)" != "$(rootlibdir)"; then \
@@ -19,7 +19,7 @@ AM_CPPFLAGS = \
 	-DUDEV_CONF_FILE=\"$(udevconffile)\" \
 	-DUDEV_HWDB_BIN=\"$(udevhwdbbin)\" \
 	-DUDEV_VERSION=$(UDEV_VERSION) \
-	-I $(top_srcdir)/src/udev
+	-I $(top_srcdir)/src/shared
 
 lib_LTLIBRARIES = \
 	libudev.la
@@ -32,51 +32,11 @@ libudev_la_SOURCES =\
 	libudev-enumerate.c \
 	libudev-monitor.c \
 	libudev-queue.c \
-	libudev-hwdb.c \
-	cgroup-util.c \
-	conf-files.c \
-	device-nodes.c \
-	exit-status.c \
-	fileio.c \
-	hashmap.c \
-	log.c \
-	MurmurHash2.c \
-	path-util.c \
-	set.c \
-	siphash24.c \
-	strbuf.c \
-	strv.c \
-	strxcpyx.c  \
-	time-util.c \
-	util.c \
-	utf8.c
+	libudev-hwdb.c
 
 noinst_HEADERS = \
 	libudev-hwdb-def.h \
-	libudev-private.h \
-	cgroup-util.h \
-	conf-files.h \
-	def.h \
-	device-nodes.h \
-	exit-status.h \
-	fileio.h \
-	hashmap.h \
-	ioprio.h \
-	log.h \
-	macro.h \
-	missing.h \
-	MurmurHash2.h \
-	path-util.h \
-	set.h \
-	siphash24.h \
-	socket-util.h \
-	sparse-endian.h \
-	strbuf.h \
-	strv.h \
-	strxcpyx.h \
-	time-util.h \
-	util.h \
-	utf8.h
+	libudev-private.h
 
 include_HEADERS = \
 	libudev.h
@@ -86,6 +46,8 @@ libudev_la_LDFLAGS = \
 	-version-info $(LIBUDEV_CURRENT):$(LIBUDEV_REVISION):$(LIBUDEV_AGE) \
 	-Wl,--version-script=$(top_srcdir)/src/libudev/libudev.sym
 
+libudev_la_LIBADD = \
+	$(top_builddir)/src/shared/libudev_shared.la
 
 libudev_private_la_SOURCES =\
 	libudev-device-private.c

@@ -10,6 +10,7 @@ AM_CPPFLAGS = \
 	-DUDEV_RULES_DIR=\"$(udevrulesdir)\" \
 	-DUDEV_LIBEXEC_DIR=\"$(udevlibexecdir)\" \
 	-DUDEV_VERSION=\"$(UDEV_VERSION)\" \
+	-I $(top_srcdir)/src/shared \
 	-I $(top_srcdir)/src/libudev
 
 bin_PROGRAMS = \
@@ -54,23 +55,12 @@ libudev_core_la_SOURCES = \
 	udev-builtin-input_id.c \
 	udev-builtin-net_id.c \
 	udev-builtin-path_id.c \
-	udev-builtin-usb_id.c \
-	dev-setup.c \
-	label.c \
-	mkdir.c \
-	smack-util.c
+	udev-builtin-usb_id.c
 
 if ENABLE_FIRMWARE
 libudev_core_la_SOURCES += \
 	udev-builtin-firmware.c
 endif
-
-noinst_HEADERS = \
-	dev-setup.h \
-	label.h \
-	mkdir.h \
-	smack-util.h \
-	udev-util.h
 
 include_HEADERS = \
 	udev.h
@@ -80,6 +70,7 @@ libudev_core_la_CFLAGS = \
 	$(BLKID_CFLAGS)
 
 libudev_core_la_LIBADD = \
+	$(top_builddir)/src/shared/libudev_shared.la \
 	$(top_builddir)/src/libudev/libudev-private.la \
 	$(BLKID_LIBS) \
 	$(SELINUX_LIBS)
@@ -92,14 +83,11 @@ endif
 if HAVE_MODULES
 libudev_core_la_SOURCES += \
 	udev-builtin-kmod.c
-
 if HAVE_LIBKMOD
 libudev_core_la_CFLAGS += $(KMOD_CFLAGS)
 libudev_core_la_LIBADD += $(KMOD_LIBS)
 endif
 endif
-
-
 
 libudev_core_la_CPPFLAGS = \
 	$(AM_CPPFLAGS) \

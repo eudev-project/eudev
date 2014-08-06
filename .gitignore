@@ -29,9 +29,25 @@ m4/ltversion.m4
 m4/lt~obsolete.m4
 
 docs/gudev/version.xml
+docs/gudev/*.txt
+docs/gudev/*.stamp
+docs/gudev/gudev.args
+docs/gudev/gudev.hierarchy
+docs/gudev/gudev.interfaces
+docs/gudev/gudev.prerequisites
+docs/gudev/gudev.signals
+docs/gudev/html/
+docs/gudev/xml/
 docs/libudev/version.xml
-docs/gudev/gudev-overrides.txt
-docs/libudev/libudev-overrides.txt
+docs/libudev/*.txt
+docs/libudev/*.stamp
+docs/libudev/libudev.args
+docs/libudev/libudev.hierarchy
+docs/libudev/libudev.interfaces
+docs/libudev/libudev.prerequisites
+docs/libudev/libudev.signals
+docs/libudev/html/
+docs/libudev/xml/
 man/udev.7
 man/udev.conf.5
 man/udevd.8
