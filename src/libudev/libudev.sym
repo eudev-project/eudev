@@ -93,6 +93,8 @@ global:
         udev_set_userdata;
         udev_unref;
         udev_util_encode_string;
+local:
+        *;
 };
 
 LIBUDEV_189 {
@@ -112,8 +114,3 @@ LIBUDEV_199 {
 global:
         udev_device_set_sysattr_value;
 } LIBUDEV_196;
-
-LIBUDEV_internal {
-global:
-        *;
-} LIBUDEV_199;

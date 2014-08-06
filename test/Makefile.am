@@ -39,6 +39,7 @@ test_utf8_CFLAGS = \
 	$(AM_CFLAGS)
 
 test_utf8_LDADD = \
+	$(top_builddir)/src/shared/libudev_shared.la \
 	$(top_builddir)/src/libudev/libudev-private.la
 
 test_device_nodes_SOURCES = \
@@ -48,6 +49,7 @@ test_device_nodes_CFLAGS = \
 	$(AM_CFLAGS)
 
 test_device_nodes_LDADD = \
+	$(top_builddir)/src/shared/libudev_shared.la \
 	$(top_builddir)/src/libudev/libudev-private.la
 
 if HAVE_LIBKMOD

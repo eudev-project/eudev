@@ -25,6 +25,8 @@ lib_LTLIBRARIES = \
 	libudev.la
 
 libudev_la_SOURCES =\
+	libudev.sym \
+	libudev-private.h \
 	libudev.c \
 	libudev-list.c \
 	libudev-util.c \
@@ -32,7 +34,12 @@ libudev_la_SOURCES =\
 	libudev-enumerate.c \
 	libudev-monitor.c \
 	libudev-queue.c \
+	libudev-hwdb-def.h \
 	libudev-hwdb.c
+
+libudev_la_CFLAGS = \
+	$(AM_CFLAGS) \
+	-fvisibility=hidden
 
 noinst_HEADERS = \
 	libudev-hwdb-def.h \
@@ -49,11 +56,13 @@ libudev_la_LDFLAGS = \
 libudev_la_LIBADD = \
 	$(top_builddir)/src/shared/libudev_shared.la
 
-libudev_private_la_SOURCES =\
+libudev_private_la_SOURCES = \
+	$(libudev_la_SOURCES) \
 	libudev-device-private.c
 
-libudev_private_la_LIBADD =\
-	libudev.la
+libudev_private_la_CFLAGS = \
+	$(AM_CFLAGS) \
+	-fvisibility=default
 
 noinst_LTLIBRARIES = \
 	libudev-private.la
