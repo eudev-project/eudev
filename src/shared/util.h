@@ -336,6 +336,19 @@ static inline void _reset_errno_(int *saved_errno) {
 #define PROTECT_ERRNO _cleanup_(_reset_errno_) __attribute__((unused)) int _saved_errno_ = errno
 
 int unlink_noerrno(const char *path);
+
+#define strappenda(a, b)                                \
+        ({                                              \
+                const char *_a_ = (a), *_b_ = (b);      \
+                char *_c_;                              \
+                size_t _x_, _y_;                        \
+                _x_ = strlen(_a_);                      \
+                _y_ = strlen(_b_);                      \
+                _c_ = alloca(_x_ + _y_ + 1);            \
+                strcpy(stpcpy(_c_, _a_), _b_);          \
+                _c_;                                    \
+        })
+
 static inline void qsort_safe(void *base, size_t nmemb, size_t size,
                               int (*compar)(const void *, const void *)) {
         if (nmemb) {
