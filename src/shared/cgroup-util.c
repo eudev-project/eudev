@@ -119,12 +119,12 @@ int cg_kill(const char *controller, const char *path, int sig, bool sigcont, boo
                         if (kill(pid, sig) < 0) {
                                 if (ret >= 0 && errno != ESRCH)
                                         ret = -errno;
-                        } else if (ret == 0) {
-
+                        } else {
                                 if (sigcont)
                                         kill(pid, SIGCONT);
 
-                                ret = 1;
+                                if (ret == 0)
+                                        ret = 1;
                         }
 
                         done = false;
@@ -190,9 +190,7 @@ static int join_path(const char *controller, const char *path, const char *suffi
         if (!t)
                 return -ENOMEM;
 
-        path_kill_slashes(t);
-
-        *fs = t;
+        *fs = path_kill_slashes(t);
         return 0;
 }
 
@@ -220,7 +218,6 @@ int cg_get_path(const char *controller, const char *path, const char *suffix, ch
 
         return join_path(p, path, suffix, fs);
 }
-
 
 #define CONTROLLER_VALID                        \
         DIGITS LETTERS                          \
