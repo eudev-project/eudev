@@ -1,9 +1,5 @@
-/*-*- Mode: C; c-basic-offset: 8; indent-tabs-mode: nil -*-*/
-
-#pragma once
-
 /***
-  This file is part of systemd.
+  This file is part of eudev, forked from systemd.
 
   Copyright 2010 Lennart Poettering
 
@@ -20,6 +16,8 @@
   You should have received a copy of the GNU Lesser General Public License
   along with systemd; If not, see <http://www.gnu.org/licenses/>.
 ***/
+
+#pragma once
 
 int mkdir_parents(const char *path, mode_t mode);
 int mkdir_p(const char *path, mode_t mode);

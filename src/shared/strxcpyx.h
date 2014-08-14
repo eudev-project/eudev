@@ -1,7 +1,3 @@
-/*-*- Mode: C; c-basic-offset: 8; indent-tabs-mode: nil -*-*/
-
-#pragma once
-
 /***
   This file is part of eudev from systemd.
 
@@ -20,6 +16,8 @@
   You should have received a copy of the GNU Lesser General Public License
   along with systemd; If not, see <http://www.gnu.org/licenses/>.
 ***/
+
+#pragma once
 
 #include <stdarg.h>
 #include <stdbool.h>

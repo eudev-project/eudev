@@ -1,7 +1,5 @@
-/*-*- Mode: C; c-basic-offset: 8; indent-tabs-mode: nil -*-*/
-
 /***
-  This file is part of systemd.
+  This file is part of eudev, forked from systemd.
 
   Copyright 2012 Kay Sievers <kay@vrfy.org>
 
