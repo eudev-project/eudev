@@ -1,7 +1,7 @@
 /***
-  This file is part of eudev, forked from systemd
+  This file is part of systemd.
 
-  Copyright 2012 Lennart Poettering
+  Copyright 2010 Lennart Poettering
 
   systemd is free software; you can redistribute it and/or modify it
   under the terms of the GNU Lesser General Public License as published by
@@ -17,20 +17,33 @@
   along with systemd; If not, see <http://www.gnu.org/licenses/>.
 ***/
 
-#pragma once
+#include "selinux-util.h"
 
-#include <stdbool.h>
+#ifdef HAVE_SELINUX
 
-#include "macro.h"
+#include <selinux/selinux.h>
 
-char *ascii_is_valid(const char *s) _pure_;
+static int use_selinux_cached = -1;
 
-bool utf8_is_printable_newline(const char* str, size_t length, bool newline) _pure_;
-_pure_ static inline bool utf8_is_printable(const char* str, size_t length) {
-        return utf8_is_printable_newline(str, length, true);
+bool use_selinux(void) {
+
+        if (use_selinux_cached < 0)
+                use_selinux_cached = is_selinux_enabled() > 0;
+
+        return use_selinux_cached;
 }
 
-char *utf16_to_utf8(const void *s, size_t length);
+void retest_selinux(void) {
+        use_selinux_cached = -1;
+}
 
-int utf8_encoded_valid_unichar(const char *str);
-int utf8_encoded_to_unichar(const char *str);
+#else
+
+bool use_selinux(void) {
+        return false;
+}
+
+void retest_selinux(void) {
+}
+
+#endif

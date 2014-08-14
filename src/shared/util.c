@@ -543,6 +543,77 @@ int open_terminal(const char *name, int mode) {
         return fd;
 }
 
+int flush_fd(int fd) {
+        struct pollfd pollfd = {
+                .fd = fd,
+                .events = POLLIN,
+        };
+
+        for (;;) {
+                char buf[LINE_MAX];
+                ssize_t l;
+                int r;
+
+                r = poll(&pollfd, 1, 0);
+                if (r < 0) {
+                        if (errno == EINTR)
+                                continue;
+
+                        return -errno;
+
+                } else if (r == 0)
+                        return 0;
+
+                l = read(fd, buf, sizeof(buf));
+                if (l < 0) {
+
+                        if (errno == EINTR)
+                                continue;
+
+                        if (errno == EAGAIN)
+                                return 0;
+
+                        return -errno;
+                } else if (l == 0)
+                        return 0;
+        }
+}
+
+ssize_t loop_read(int fd, void *buf, size_t nbytes, bool do_poll) {
+        uint8_t *p = buf;
+        ssize_t n = 0;
+
+        assert(fd >= 0);
+        assert(buf);
+
+        while (nbytes > 0) {
+                ssize_t k;
+
+                k = read(fd, p, nbytes);
+                if (k < 0 && errno == EINTR)
+                        continue;
+
+                if (k < 0 && errno == EAGAIN && do_poll) {
+
+                        /* We knowingly ignore any return value here,
+                         * and expect that any error/EOF is reported
+                         * via read() */
+
+                        fd_wait_for_event(fd, POLLIN, USEC_INFINITY);
+                        continue;
+                }
+
+                if (k <= 0)
+                        return n > 0 ? n : (k < 0 ? -errno : 0);
+
+                p += k;
+                nbytes -= k;
+                n += k;
+        }
+
+        return n;
+}
+
 int dev_urandom(void *p, size_t n) {
         _cleanup_close_ int fd;
         ssize_t k;
@@ -604,41 +675,6 @@ _pure_ static int is_temporary_fs(struct statfs *s) {
 
         return F_TYPE_EQUAL(s->f_type, TMPFS_MAGIC) ||
                F_TYPE_EQUAL(s->f_type, RAMFS_MAGIC);
-}
-
-ssize_t loop_read(int fd, void *buf, size_t nbytes, bool do_poll) {
-        uint8_t *p = buf;
-        ssize_t n = 0;
-
-        assert(fd >= 0);
-        assert(buf);
-
-        while (nbytes > 0) {
-                ssize_t k;
-
-                k = read(fd, p, nbytes);
-                if (k < 0 && errno == EINTR)
-                        continue;
-
-                if (k < 0 && errno == EAGAIN && do_poll) {
-
-                        /* We knowingly ignore any return value here,
-                         * and expect that any error/EOF is reported
-                         * via read() */
-
-                        fd_wait_for_event(fd, POLLIN, USEC_INFINITY);
-                        continue;
-                }
-
-                if (k <= 0)
-                        return n > 0 ? n : (k < 0 ? -errno : 0);
-
-                p += k;
-                nbytes -= k;
-                n += k;
-        }
-
-        return n;
 }
 
 int chmod_and_chown(const char *path, mode_t mode, uid_t uid, gid_t gid) {
@@ -718,81 +754,6 @@ bool nulstr_contains(const char*nulstr, const char *needle) {
                         return true;
 
         return false;
-}
-
-int execute_command(const char *command, char *const argv[]) {
-
-        pid_t pid;
-        int status;
-
-        if ((status = access(command, X_OK)) != 0)
-                return status;
-
-        if ((pid = fork()) < 0) {
-                log_error("Failed to fork: %m");
-                return pid;
-        }
-
-        if (pid == 0) {
-
-                execvp(command, argv);
-
-                log_error("Failed to execute %s: %m", command);
-                _exit(EXIT_FAILURE);
-        }
-        else while (1)
-        {
-                siginfo_t si;
-
-                int r = waitid(P_PID, pid, &si, WEXITED);
-
-                if (!is_clean_exit(si.si_code, si.si_status, NULL)) {
-                        if (si.si_code == CLD_EXITED)
-                                log_error("%s exited with exit status %i.", command, si.si_status);
-                        else
-                                log_error("%s terminated by signal %s.", command, signal_to_string(si.si_status));
-                } else
-                        log_debug("%s exited successfully.", command);
-
-                return si.si_status;
-
-        }
-}
-
-int flush_fd(int fd) {
-        struct pollfd pollfd = {
-                .fd = fd,
-                .events = POLLIN,
-        };
-
-        for (;;) {
-                char buf[LINE_MAX];
-                ssize_t l;
-                int r;
-
-                r = poll(&pollfd, 1, 0);
-                if (r < 0) {
-                        if (errno == EINTR)
-                                continue;
-
-                        return -errno;
-
-                } else if (r == 0)
-                        return 0;
-
-                l = read(fd, buf, sizeof(buf));
-                if (l < 0) {
-
-                        if (errno == EINTR)
-                                continue;
-
-                        if (errno == EAGAIN)
-                                return 0;
-
-                        return -errno;
-                } else if (l == 0)
-                        return 0;
-        }
 }
 
 int fopen_temporary(const char *path, FILE **_f, char **_temp_path) {
@@ -1235,4 +1196,43 @@ char *tempfn_xxxxxx(const char *p) {
         strcpy(stpcpy(stpcpy(mempcpy(t, p, k), "."), fn), "XXXXXX");
 
         return t;
+}
+
+int execute_command(const char *command, char *const argv[]) {
+
+        pid_t pid;
+        int status;
+
+        if ((status = access(command, X_OK)) != 0)
+                return status;
+
+        if ((pid = fork()) < 0) {
+                log_error("Failed to fork: %m");
+                return pid;
+        }
+
+        if (pid == 0) {
+
+                execvp(command, argv);
+
+                log_error("Failed to execute %s: %m", command);
+                _exit(EXIT_FAILURE);
+        }
+        else while (1)
+        {
+                siginfo_t si;
+
+                int r = waitid(P_PID, pid, &si, WEXITED);
+
+                if (!is_clean_exit(si.si_code, si.si_status, NULL)) {
+                        if (si.si_code == CLD_EXITED)
+                                log_error("%s exited with exit status %i.", command, si.si_status);
+                        else
+                                log_error("%s terminated by signal %s.", command, signal_to_string(si.si_status));
+                } else
+                        log_debug("%s exited successfully.", command);
+
+                return si.si_status;
+
+        }
 }

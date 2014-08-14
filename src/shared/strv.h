@@ -27,11 +27,7 @@
 #include "macro.h"
 
 void strv_free(char **l);
-static inline void strv_freep(char ***l) {
-        strv_free(*l);
-}
-
-void strv_free(char **l);
+DEFINE_TRIVIAL_CLEANUP_FUNC(char**, strv_free);
 #define _cleanup_strv_free_ _cleanup_(strv_freep)
 
 char **strv_copy(char * const *l);

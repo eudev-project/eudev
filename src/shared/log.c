@@ -30,11 +30,11 @@
 #include <string.h>
 
 #include "log.h"
-#include "time-util.h"
 #include "util.h"
 #include "missing.h"
 #include "macro.h"
 #include "socket-util.h"
+#include "time-util.h"
 
 #define SNDBUF_SIZE (8*1024*1024)
 

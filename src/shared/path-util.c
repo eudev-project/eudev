@@ -248,6 +248,39 @@ char *path_kill_slashes(char *path) {
         return path;
 }
 
+char* path_startswith(const char *path, const char *prefix) {
+        assert(path);
+        assert(prefix);
+
+        if ((path[0] == '/') != (prefix[0] == '/'))
+                return NULL;
+
+        for (;;) {
+                size_t a, b;
+
+                path += strspn(path, "/");
+                prefix += strspn(prefix, "/");
+
+                if (*prefix == 0)
+                        return (char*) path;
+
+                if (*path == 0)
+                        return NULL;
+
+                a = strcspn(path, "/");
+                b = strcspn(prefix, "/");
+
+                if (a != b)
+                        return NULL;
+
+                if (memcmp(path, prefix, a) != 0)
+                        return NULL;
+
+                path += a;
+                prefix += b;
+        }
+}
+
 bool path_equal(const char *a, const char *b) {
         assert(a);
         assert(b);

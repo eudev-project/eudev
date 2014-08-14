@@ -28,22 +28,53 @@
 #include "label.h"
 #include "util.h"
 #include "path-util.h"
+#include "selinux-util.h"
+#include "smack-util.h"
 
 #ifdef HAVE_SELINUX
-#include <stdbool.h>
-#include <selinux/selinux.h>
-#include <selinux/label.h>
-
 static struct selabel_handle *label_hnd = NULL;
-static int use_selinux_cached = -1;
-
-bool use_selinux(void) {
-        if (use_selinux_cached < 0)
-                use_selinux_cached = is_selinux_enabled() > 0;
-
-        return use_selinux_cached;
-}
 #endif
+
+static int smack_relabel_in_dev(const char *path) {
+        int r = 0;
+
+#ifdef HAVE_SMACK
+        struct stat sb;
+        const char *label;
+
+        /*
+         * Path must be in /dev and must exist
+         */
+        if (!path_startswith(path, "/dev"))
+                return 0;
+
+        r = lstat(path, &sb);
+        if (r < 0)
+                return -errno;
+
+        /*
+         * Label directories and character devices "*".
+         * Label symlinks "_".
+         * Don't change anything else.
+         */
+        if (S_ISDIR(sb.st_mode))
+                label = SMACK_STAR_LABEL;
+        else if (S_ISLNK(sb.st_mode))
+                label = SMACK_FLOOR_LABEL;
+        else if (S_ISCHR(sb.st_mode))
+                label = SMACK_STAR_LABEL;
+        else
+                return 0;
+
+        r = setxattr(path, "security.SMACK64", label, strlen(label), 0);
+        if (r < 0) {
+                log_error("Smack relabeling \"%s\" %m", path);
+                return -errno;
+        }
+#endif
+
+        return r;
+}
 
 int label_init(const char *prefix) {
         int r = 0;
@@ -92,14 +123,14 @@ int label_init(const char *prefix) {
         return r;
 }
 
-int label_fix(const char *path, bool ignore_enoent, bool ignore_erofs) {
+static int label_fix_selinux(const char *path, bool ignore_enoent, bool ignore_erofs) {
         int r = 0;
 
 #ifdef HAVE_SELINUX
         struct stat st;
         security_context_t fcon;
 
-        if (!use_selinux() || !label_hnd)
+        if (!label_hnd)
                 return 0;
 
         r = lstat(path, &st);
@@ -122,6 +153,7 @@ int label_fix(const char *path, bool ignore_enoent, bool ignore_erofs) {
 
         if (r < 0) {
                 /* Ignore ENOENT in some cases */
+
                 if (ignore_enoent && errno == ENOENT)
                         return 0;
 
@@ -137,10 +169,31 @@ int label_fix(const char *path, bool ignore_enoent, bool ignore_erofs) {
         return r;
 }
 
+int label_fix(const char *path, bool ignore_enoent, bool ignore_erofs) {
+        int r = 0;
+
+        if (use_selinux()) {
+                r = label_fix_selinux(path, ignore_enoent, ignore_erofs);
+                if (r < 0)
+                        return r;
+        }
+
+        if (use_smack()) {
+                r = smack_relabel_in_dev(path);
+                if (r < 0)
+                        return r;
+        }
+
+        return r;
+}
+
 void label_finish(void) {
 
 #ifdef HAVE_SELINUX
-        if (use_selinux() && label_hnd)
+        if (!use_selinux())
+                return;
+
+        if (label_hnd)
                 selabel_close(label_hnd);
 #endif
 }
@@ -177,6 +230,8 @@ int label_context_set(const char *path, mode_t mode) {
 void label_context_clear(void) {
 
 #ifdef HAVE_SELINUX
+        PROTECT_ERRNO;
+
         if (!use_selinux())
                 return;
 
@@ -184,27 +239,26 @@ void label_context_clear(void) {
 #endif
 }
 
-int label_mkdir(const char *path, mode_t mode, bool apply) {
+static int label_mkdir_selinux(const char *path, mode_t mode) {
+        int r = 0;
 
-        /* Creates a directory and labels it according to the SELinux policy */
 #ifdef HAVE_SELINUX
-        int r;
+        /* Creates a directory and labels it according to the SELinux policy */
         security_context_t fcon = NULL;
 
-        if (!apply || !use_selinux() || !label_hnd)
-                goto skipped;
+        if (!label_hnd)
+                return 0;
 
         if (path_is_absolute(path))
                 r = selabel_lookup_raw(label_hnd, &fcon, path, S_IFDIR);
         else {
-                char *newpath;
+                _cleanup_free_ char *newpath;
 
                 newpath = path_make_absolute_cwd(path);
                 if (!newpath)
                         return -ENOMEM;
 
                 r = selabel_lookup_raw(label_hnd, &fcon, newpath, S_IFDIR);
-                free(newpath);
         }
 
         if (r == 0)
@@ -226,12 +280,35 @@ int label_mkdir(const char *path, mode_t mode, bool apply) {
 finish:
         setfscreatecon(NULL);
         freecon(fcon);
+#endif
 
         return r;
+}
 
-skipped:
-#endif
-        return mkdir(path, mode) < 0 ? -errno : 0;
+int label_mkdir(const char *path, mode_t mode) {
+        int r;
+
+        if (use_selinux()) {
+                r = label_mkdir_selinux(path, mode);
+                if (r < 0)
+                        return r;
+        }
+
+        if (use_smack()) {
+                r = mkdir(path, mode);
+                if (r < 0 && errno != EEXIST)
+                        return -errno;
+
+                r = smack_relabel_in_dev(path);
+                if (r < 0)
+                        return r;
+        }
+
+        r = mkdir(path, mode);
+        if (r < 0 && errno != EEXIST)
+                return -errno;
+
+        return 0;
 }
 
 int label_apply(const char *path, const char *label) {

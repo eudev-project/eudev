@@ -1,7 +1,10 @@
-/***
-  This file is part of eudev, forked from systemd
+/*-*- Mode: C; c-basic-offset: 8; indent-tabs-mode: nil -*-*/
 
-  Copyright 2012 Lennart Poettering
+/***
+  This file is part of systemd.
+
+  Copyright 2010 Lennart Poettering
+  Copyright 2013 Kay Sievers
 
   systemd is free software; you can redistribute it and/or modify it
   under the terms of the GNU Lesser General Public License as published by
@@ -17,20 +20,18 @@
   along with systemd; If not, see <http://www.gnu.org/licenses/>.
 ***/
 
-#pragma once
+#include <assert.h>
+#include <string.h>
+#include <unistd.h>
+#include <errno.h>
+#include <stdlib.h>
+#include <stdio.h>
 
-#include <stdbool.h>
+#include "label.h"
+#include "util.h"
+#include "path-util.h"
+#include "mkdir.h"
 
-#include "macro.h"
-
-char *ascii_is_valid(const char *s) _pure_;
-
-bool utf8_is_printable_newline(const char* str, size_t length, bool newline) _pure_;
-_pure_ static inline bool utf8_is_printable(const char* str, size_t length) {
-        return utf8_is_printable_newline(str, length, true);
+int mkdir_parents_label(const char *path, mode_t mode) {
+        return mkdir_parents_internal(NULL, path, mode, label_mkdir);
 }
-
-char *utf16_to_utf8(const void *s, size_t length);
-
-int utf8_encoded_valid_unichar(const char *str);
-int utf8_encoded_to_unichar(const char *str);

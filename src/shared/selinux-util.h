@@ -1,7 +1,7 @@
 /***
-  This file is part of eudev, forked from systemd
+  This file is part of systemd.
 
-  Copyright 2012 Lennart Poettering
+  Copyright 2010 Lennart Poettering
 
   systemd is free software; you can redistribute it and/or modify it
   under the terms of the GNU Lesser General Public License as published by
@@ -21,16 +21,5 @@
 
 #include <stdbool.h>
 
-#include "macro.h"
-
-char *ascii_is_valid(const char *s) _pure_;
-
-bool utf8_is_printable_newline(const char* str, size_t length, bool newline) _pure_;
-_pure_ static inline bool utf8_is_printable(const char* str, size_t length) {
-        return utf8_is_printable_newline(str, length, true);
-}
-
-char *utf16_to_utf8(const void *s, size_t length);
-
-int utf8_encoded_valid_unichar(const char *str);
-int utf8_encoded_to_unichar(const char *str);
+bool use_selinux(void);
+void retest_selinux(void);

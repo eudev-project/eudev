@@ -78,10 +78,6 @@ static inline pid_t gettid(void) {
 }
 #endif
 
-#ifndef MS_PRIVATE
-#define MS_PRIVATE  (1 << 18)
-#endif
-
 #ifndef MS_REC
 #define MS_REC 16384
 #endif

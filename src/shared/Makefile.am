@@ -7,18 +7,20 @@ libudev_shared_la_SOURCES=\
 	cgroup-util.c \
 	conf-files.c \
 	device-nodes.c \
-        dev-setup.c \
+	dev-setup.c \
 	exit-status.c \
 	fileio.c \
 	hashmap.c \
-        label.c \
+	label.c \
 	log.c \
-        mkdir.c \
+	mkdir.c \
+	mkdir-label.c \
 	MurmurHash2.c \
 	path-util.c \
+	selinux-util.c \
 	set.c \
 	siphash24.c \
-        smack-util.c \
+	smack-util.c \
 	strbuf.c \
 	strv.c \
 	strxcpyx.c  \
@@ -32,21 +34,22 @@ noinst_HEADERS = \
 	conf-files.h \
 	def.h \
 	device-nodes.h \
-        dev-setup.h \
+	dev-setup.h \
 	exit-status.h \
 	fileio.h \
 	hashmap.h \
 	ioprio.h \
-        label.h \
+	label.h \
 	log.h \
 	macro.h \
 	missing.h \
-        mkdir.h \
+	mkdir.h \
 	MurmurHash2.h \
 	path-util.h \
+	selinux-util.h \
 	set.h \
 	siphash24.h \
-        smack-util.h \
+	smack-util.h \
 	socket-util.h \
 	sparse-endian.h \
 	strbuf.h \
@@ -55,7 +58,7 @@ noinst_HEADERS = \
 	time-util.h \
 	util.h \
 	utf8.h \
-        udev-util.h \
+	udev-util.h \
 	virt.h
 
 libudev_shared_la_LDFLAGS = \

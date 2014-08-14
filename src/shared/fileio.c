@@ -83,29 +83,33 @@ int read_one_line_file(const char *fn, char **line) {
         return 0;
 }
 
-int read_full_file(const char *fn, char **contents, size_t *size) {
-        _cleanup_fclose_ FILE *f = NULL;
+int read_full_stream(FILE *f, char **contents, size_t *size) {
         size_t n, l;
         _cleanup_free_ char *buf = NULL;
         struct stat st;
 
-        assert(fn);
+        assert(f);
         assert(contents);
-
-        f = fopen(fn, "re");
-        if (!f)
-                return -errno;
 
         if (fstat(fileno(f), &st) < 0)
                 return -errno;
 
-        /* Safety check */
-        if (st.st_size > 4*1024*1024)
-                return -E2BIG;
+        n = LINE_MAX;
 
-        n = st.st_size > 0 ? st.st_size : LINE_MAX;
+        if (S_ISREG(st.st_mode)) {
+
+                /* Safety check */
+                if (st.st_size > 4*1024*1024)
+                        return -E2BIG;
+
+                /* Start with the right file size, but be prepared for
+                 * files from /proc which generally report a file size
+                 * of 0 */
+                if (st.st_size > 0)
+                        n = st.st_size;
+        }
+
         l = 0;
-
         for (;;) {
                 char *t;
                 size_t k;
@@ -140,4 +144,17 @@ int read_full_file(const char *fn, char **contents, size_t *size) {
                 *size = l;
 
         return 0;
+}
+
+int read_full_file(const char *fn, char **contents, size_t *size) {
+        _cleanup_fclose_ FILE *f = NULL;
+
+        assert(fn);
+        assert(contents);
+
+        f = fopen(fn, "re");
+        if (!f)
+                return -errno;
+
+        return read_full_stream(f, contents, size);
 }

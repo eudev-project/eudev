@@ -1,7 +1,6 @@
 /*-*- Mode: C; c-basic-offset: 8; indent-tabs-mode: nil -*-*/
 
-#ifndef foomkdirhfoo
-#define foomkdirhfoo
+#pragma once
 
 /***
   This file is part of systemd.
@@ -22,8 +21,9 @@
   along with systemd; If not, see <http://www.gnu.org/licenses/>.
 ***/
 
-char* path_startswith(const char *path, const char *prefix) _pure_;
 int mkdir_parents(const char *path, mode_t mode);
-int mkdir_parents_label(const char *path, mode_t mode);
 int mkdir_p(const char *path, mode_t mode);
-#endif
+
+/* internally used */
+typedef int (*mkdir_func_t)(const char *pathname, mode_t mode);
+int mkdir_p_internal(const char *prefix, const char *path, mode_t mode, mkdir_func_t _mkdir);

@@ -19,9 +19,15 @@
   along with systemd; If not, see <http://www.gnu.org/licenses/>.
 ***/
 
+#pragma once 
+
 #include <stdbool.h>
 
+#define SMACK_FLOOR_LABEL "_"
+#define SMACK_STAR_LABEL  "*"
+
 bool use_smack(void);
+
 int smack_label_path(const char *path, const char *label);
 int smack_label_fd(int fd, const char *label);
 int smack_label_ip_in_fd(int fd, const char *label);
