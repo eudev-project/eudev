@@ -19,9 +19,9 @@
 
 #include <stdbool.h>
 
+#include "macro.h"
 #include "time-util.h"
 
-char* path_get_file_name(const char *p) _pure_;
 int path_get_parent(const char *path, char **parent);
 bool path_is_absolute(const char *p) _pure_;
 char* path_make_absolute(const char *p, const char *prefix);
@@ -29,8 +29,8 @@ char* path_make_absolute_cwd(const char *p);
 char* path_kill_slashes(char *path);
 bool path_equal(const char *a, const char *b) _pure_;
 
-char** path_strv_canonicalize(char **l);
-char** path_strv_canonicalize_uniq(char **l);
+char** path_strv_resolve(char **l, const char *prefix);
+char** path_strv_resolve_uniq(char **l, const char *prefix);
 
 int path_is_mount_point(const char *path, bool allow_symlink);
 bool paths_check_timestamp(const char* const* paths, usec_t *paths_ts_usec, bool update);

@@ -41,6 +41,9 @@
 #define RLIMIT_RTTIME 15
 #endif
 
+/* If RLIMIT_RTTIME is not defined, then we cannot use RLIMIT_NLIMITS as is */
+#define _RLIMIT_MAX (RLIMIT_RTTIME+1 > RLIMIT_NLIMITS ? RLIMIT_RTTIME+1 : RLIMIT_NLIMITS)
+
 #ifndef BTRFS_IOCTL_MAGIC
 #define BTRFS_IOCTL_MAGIC 0x94
 #endif

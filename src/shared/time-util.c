@@ -48,6 +48,34 @@ usec_t timespec_load(const struct timespec *ts) {
                 (usec_t) ts->tv_nsec / NSEC_PER_USEC;
 }
 
+struct timespec *timespec_store(struct timespec *ts, usec_t u)  {
+        assert(ts);
+
+        if (u == USEC_INFINITY) {
+                ts->tv_sec = (time_t) -1;
+                ts->tv_nsec = (long) -1;
+                return ts;
+        }
+
+        ts->tv_sec = (time_t) (u / USEC_PER_SEC);
+        ts->tv_nsec = (long int) ((u % USEC_PER_SEC) * NSEC_PER_USEC);
+
+        return ts;
+}
+struct timeval *timeval_store(struct timeval *tv, usec_t u) {
+        assert(tv);
+
+        if (u == USEC_INFINITY) {
+                tv->tv_sec = (time_t) -1;
+                tv->tv_usec = (suseconds_t) -1;
+        } else {
+                tv->tv_sec = (time_t) (u / USEC_PER_SEC);
+                tv->tv_usec = (suseconds_t) (u % USEC_PER_SEC);
+        }
+
+        return tv;
+}
+
 char *format_timespan(char *buf, size_t l, usec_t t, usec_t accuracy) {
         static const struct {
                 const char *suffix;

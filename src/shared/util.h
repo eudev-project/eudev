@@ -32,6 +32,7 @@
 #include <unistd.h>
 #include <sys/socket.h>
 
+#include "time-util.h"
 #include "missing.h"
 #include "config.h"
 
@@ -127,7 +128,6 @@ char *endswith(const char *s, const char *postfix) _pure_;
 int close_nointr(int fd);
 int safe_close(int fd);
 
-void close_nointr_nofail(int fd);
 
 int safe_atou(const char *s, unsigned *ret_u);
 int safe_atoi(const char *s, int *ret_i);
@@ -158,6 +158,7 @@ bool dirent_is_file_with_suffix(const struct dirent *de, const char *suffix) _pu
 
 bool ignore_file(const char *filename) _pure_;
 
+int dev_urandom(void *p, size_t n);
 void random_bytes(void *p, size_t n);
 
 /* For basic lookup tables with strictly enumerated entries */
@@ -169,7 +170,8 @@ void random_bytes(void *p, size_t n);
         }                                                               \
         scope type name##_from_string(const char *s) {                  \
                 type i;                                                 \
-                assert(s);                                              \
+                if (!s)                                                 \
+                        return (type) -1;                               \
                 for (i = 0; i < (type)ELEMENTSOF(name##_table); i++)    \
                         if (name##_table[i] &&                          \
                             streq(name##_table[i], s))                  \
@@ -267,6 +269,7 @@ const char *signal_to_string(int i) _const_;
 extern int saved_argc;
 extern char **saved_argv;
 
+int fd_wait_for_event(int fd, int event, usec_t timeout);
 int fd_inc_sndbuf(int fd, size_t n);
 
 bool in_initrd(void);
@@ -282,28 +285,24 @@ static inline void freep(void *p) {
         }                                                       \
         struct __useless_struct_to_allow_trailing_semicolon__
 
-static inline void fclosep(FILE **f) {
-        if (*f)
-                fclose(*f);
-}
-
 static inline void closep(int *fd) {
-        if (*fd >= 0)
-                close_nointr_nofail(*fd);
+        safe_close(*fd);
 }
 
-static inline void closedirp(DIR **d) {
-        if (*d)
-                closedir(*d);
+static inline void umaskp(mode_t *u) {
+        umask(*u);
 }
 
+DEFINE_TRIVIAL_CLEANUP_FUNC(FILE*, fclose);
+DEFINE_TRIVIAL_CLEANUP_FUNC(DIR*, closedir);
 #define _cleanup_free_ _cleanup_(freep)
-#define _cleanup_fclose_ _cleanup_(fclosep)
 #define _cleanup_close_ _cleanup_(closep)
+#define _cleanup_umask_ _cleanup_(umaskp)
+#define _cleanup_fclose_ _cleanup_(fclosep)
 #define _cleanup_closedir_ _cleanup_(closedirp)
 
 _malloc_  _alloc_(1, 2) static inline void *malloc_multiply(size_t a, size_t b) {
-        if (_unlikely_(b == 0 || a > ((size_t) -1) / b))
+        if (_unlikely_(b != 0 && a > ((size_t) -1) / b))
                 return NULL;
 
         return malloc(a * b);
@@ -360,7 +359,12 @@ static inline void qsort_safe(void *base, size_t nmemb, size_t size,
 int proc_cmdline(char **ret);
 int getpeercred(int fd, struct ucred *ucred);
 
+int mkostemp_safe(char *pattern, int flags);
+int mkstemp_safe(char *pattern);
+
 union file_handle_union {
         struct file_handle handle;
         char padding[sizeof(struct file_handle) + MAX_HANDLE_SZ];
 };
+
+char *tempfn_xxxxxx(const char *p);

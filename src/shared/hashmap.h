@@ -24,6 +24,7 @@
 #include <stdbool.h>
 
 #include "macro.h"
+#include "util.h"
 
 /* Pretty straightforward hash table implementation. As a minor
  * optimization a NULL hashmap object will be treated as empty hashmap
@@ -73,3 +74,6 @@ char **hashmap_get_strv(Hashmap *h);
 
 #define HASHMAP_FOREACH(e, h, i) \
         for ((i) = ITERATOR_FIRST, (e) = hashmap_iterate((h), &(i), NULL); (e); (e) = hashmap_iterate((h), &(i), NULL))
+
+DEFINE_TRIVIAL_CLEANUP_FUNC(Hashmap*, hashmap_free);
+#define _cleanup_hashmap_free_ _cleanup_(hashmap_freep)

@@ -5,8 +5,7 @@
 /***
   This file is part of systemd.
 
-  Copyright 2010-2012 Lennart Poettering
-  Copyright 2010-2012 Kay Sievers
+  Copyright 2011 Lennart Poettering
 
   systemd is free software; you can redistribute it and/or modify it
   under the terms of the GNU Lesser General Public License as published by
@@ -22,6 +21,4 @@
   along with systemd; If not, see <http://www.gnu.org/licenses/>.
 ***/
 
-#include "macro.h"
-
-int conf_files_list_strv(char ***strv, const char *suffix, const char *root, const char* const* dirs);
+int detect_container(const char **id);

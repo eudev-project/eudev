@@ -68,6 +68,7 @@
 #include "exit-status.h"
 #include "hashmap.h"
 #include "fileio.h"
+#include "virt.h"
 
 int saved_argc = 0;
 char **saved_argv = NULL;
@@ -128,30 +129,21 @@ int close_nointr(int fd) {
 
         assert(fd >= 0);
         r = close(fd);
-
-        /* Just ignore EINTR; a retry loop is the wrong
-         * thing to do on Linux.
-         *
-         * http://lkml.indiana.edu/hypermail/linux/kernel/0509.1/0877.html
-         * https://bugzilla.gnome.org/show_bug.cgi?id=682819
-         * http://utcc.utoronto.ca/~cks/space/blog/unix/CloseEINTR
-         * https://sites.google.com/site/michaelsafyan/software-engineering/checkforeintrwheninvokingclosethinkagain
-         */
-        if (_unlikely_(r < 0 && errno == EINTR))
-                return 0;
-        else if (r >= 0)
+        if (r >= 0)
                 return r;
+        else if (errno == EINTR)
+                /*
+                 * Just ignore EINTR; a retry loop is the wrong
+                 * thing to do on Linux.
+                 *
+                 * http://lkml.indiana.edu/hypermail/linux/kernel/0509.1/0877.html
+                 * https://bugzilla.gnome.org/show_bug.cgi?id=682819
+                 * http://utcc.utoronto.ca/~cks/space/blog/unix/CloseEINTR
+                 * https://sites.google.com/site/michaelsafyan/software-engineering/checkforeintrwheninvokingclosethinkagain
+                 */
+                return 0;
         else
                 return -errno;
-}
-
-void close_nointr_nofail(int fd) {
-        PROTECT_ERRNO;
-
-        /* like close_nointr() but cannot fail, and guarantees errno
-         * is unchanged */
-
-        assert_se(close_nointr(fd) == 0);
 }
 
 int safe_close(int fd) {
@@ -490,6 +482,7 @@ _pure_ static bool ignore_file_allow_backup(const char *filename) {
                 endswith(filename, ".rpmorig") ||
                 endswith(filename, ".dpkg-old") ||
                 endswith(filename, ".dpkg-new") ||
+                endswith(filename, ".dpkg-tmp") ||
                 endswith(filename, ".swp");
 }
 
@@ -497,53 +490,9 @@ bool ignore_file(const char *filename) {
         assert(filename);
 
         if (endswith(filename, "~"))
-                return false;
+                return true;
 
         return ignore_file_allow_backup(filename);
-}
-
-void random_bytes(void *p, size_t n) {
-        static bool srand_called = false;
-        _cleanup_close_ int fd;
-        ssize_t k;
-        uint8_t *q;
-
-        fd = open("/dev/urandom", O_RDONLY|O_CLOEXEC|O_NOCTTY);
-        if (fd < 0)
-                goto fallback;
-
-        k = loop_read(fd, p, n, true);
-        if (k < 0 || (size_t) k != n)
-                goto fallback;
-
-        return;
-
-fallback:
-
-        if (!srand_called) {
-
-#ifdef HAVE_SYS_AUXV_H
-                /* The kernel provides us with a bit of entropy in
-                 * auxv, so let's try to make use of that to seed the
-                 * pseudo-random generator. It's better than
-                 * nothing... */
-
-                void *auxv;
-
-                auxv = (void*) getauxval(AT_RANDOM);
-                if (auxv)
-                        srand(*(unsigned*) auxv);
-                else
-#endif
-                        srand(time(NULL) + gettid());
-
-                srand_called = true;
-        }
-
-        /* If some idiot made /dev/urandom unavailable to us, he'll
-         * get a PRNG instead. */
-        for (q = p; q < (uint8_t*) p + n; q ++)
-                *q = rand();
 }
 
 int open_terminal(const char *name, int mode) {
@@ -582,16 +531,72 @@ int open_terminal(const char *name, int mode) {
 
         r = isatty(fd);
         if (r < 0) {
-                close_nointr_nofail(fd);
+                safe_close(fd);
                 return -errno;
         }
 
         if (!r) {
-                close_nointr_nofail(fd);
+                safe_close(fd);
                 return -ENOTTY;
         }
 
         return fd;
+}
+
+int dev_urandom(void *p, size_t n) {
+        _cleanup_close_ int fd;
+        ssize_t k;
+
+        fd = open("/dev/urandom", O_RDONLY|O_CLOEXEC|O_NOCTTY);
+        if (fd < 0)
+                return errno == ENOENT ? -ENOSYS : -errno;
+
+        k = loop_read(fd, p, n, true);
+        if (k < 0)
+                return (int) k;
+        if ((size_t) k != n)
+                return -EIO;
+
+        return 0;
+}
+
+void random_bytes(void *p, size_t n) {
+        static bool srand_called = false;
+        uint8_t *q;
+        int r;
+
+        r = dev_urandom(p, n);
+        if (r >= 0)
+                return;
+
+        /* If some idiot made /dev/urandom unavailable to us, he'll
+         * get a PRNG instead. */
+
+        if (!srand_called) {
+                unsigned x = 0;
+
+#ifdef HAVE_SYS_AUXV_H
+                /* The kernel provides us with a bit of entropy in
+                 * auxv, so let's try to make use of that to seed the
+                 * pseudo-random generator. It's better than
+                 * nothing... */
+
+                void *auxv;
+
+                auxv = (void*) getauxval(AT_RANDOM);
+                if (auxv)
+                        x ^= *(unsigned*) auxv;
+#endif
+
+                x ^= (unsigned) now(CLOCK_REALTIME);
+                x ^= (unsigned) gettid();
+
+                srand(x);
+                srand_called = true;
+        }
+
+        for (q = p; q < (uint8_t*) p + n; q ++)
+                *q = rand();
 }
 
 _pure_ static int is_temporary_fs(struct statfs *s) {
@@ -599,6 +604,41 @@ _pure_ static int is_temporary_fs(struct statfs *s) {
 
         return F_TYPE_EQUAL(s->f_type, TMPFS_MAGIC) ||
                F_TYPE_EQUAL(s->f_type, RAMFS_MAGIC);
+}
+
+ssize_t loop_read(int fd, void *buf, size_t nbytes, bool do_poll) {
+        uint8_t *p = buf;
+        ssize_t n = 0;
+
+        assert(fd >= 0);
+        assert(buf);
+
+        while (nbytes > 0) {
+                ssize_t k;
+
+                k = read(fd, p, nbytes);
+                if (k < 0 && errno == EINTR)
+                        continue;
+
+                if (k < 0 && errno == EAGAIN && do_poll) {
+
+                        /* We knowingly ignore any return value here,
+                         * and expect that any error/EOF is reported
+                         * via read() */
+
+                        fd_wait_for_event(fd, POLLIN, USEC_INFINITY);
+                        continue;
+                }
+
+                if (k <= 0)
+                        return n > 0 ? n : (k < 0 ? -errno : 0);
+
+                p += k;
+                nbytes -= k;
+                n += k;
+        }
+
+        return n;
 }
 
 int chmod_and_chown(const char *path, mode_t mode, uid_t uid, gid_t gid) {
@@ -680,8 +720,7 @@ bool nulstr_contains(const char*nulstr, const char *needle) {
         return false;
 }
 
-int execute_command(const char *command, char *const argv[])
-{
+int execute_command(const char *command, char *const argv[]) {
 
         pid_t pid;
         int status;
@@ -759,28 +798,20 @@ int flush_fd(int fd) {
 int fopen_temporary(const char *path, FILE **_f, char **_temp_path) {
         FILE *f;
         char *t;
-        const char *fn;
-        size_t k;
         int fd;
 
         assert(path);
         assert(_f);
         assert(_temp_path);
 
-        t = new(char, strlen(path) + 1 + 6 + 1);
+        t = tempfn_xxxxxx(path);
         if (!t)
                 return -ENOMEM;
 
-        fn = path_get_file_name(path);
-        k = fn-path;
-        memcpy(t, path, k);
-        t[k] = '.';
-        stpcpy(stpcpy(t+k+1, fn), "XXXXXX");
-
 #if HAVE_DECL_MKOSTEMP
-        fd = mkostemp(t, O_WRONLY|O_CLOEXEC);
+        fd = mkostemp_safe(t, O_WRONLY|O_CLOEXEC);
 #else
-        fd = mkstemp(t);
+        fd = mkstemp_safe(t);
         fcntl(fd, F_SETFD, FD_CLOEXEC);
 #endif
         if (fd < 0) {
@@ -799,55 +830,6 @@ int fopen_temporary(const char *path, FILE **_f, char **_temp_path) {
         *_temp_path = t;
 
         return 0;
-}
-
-ssize_t loop_read(int fd, void *buf, size_t nbytes, bool do_poll) {
-        uint8_t *p;
-        ssize_t n = 0;
-
-        assert(fd >= 0);
-        assert(buf);
-
-        p = buf;
-
-        while (nbytes > 0) {
-                ssize_t k;
-
-                if ((k = read(fd, p, nbytes)) <= 0) {
-
-                        if (k < 0 && errno == EINTR)
-                                continue;
-
-                        if (k < 0 && errno == EAGAIN && do_poll) {
-                                struct pollfd pollfd = {
-                                        .fd = fd,
-                                        .events = POLLIN,
-                                };
-
-                                if (poll(&pollfd, 1, -1) < 0) {
-                                        if (errno == EINTR)
-                                                continue;
-
-                                        return n > 0 ? n : -errno;
-                                }
-
-                                /* We knowingly ignore the revents value here,
-                                 * and expect that any error/EOF is reported
-                                 * via read()/write()
-                                 */
-
-                                continue;
-                        }
-
-                        return n > 0 ? n : (k < 0 ? -errno : 0);
-                }
-
-                p += k;
-                nbytes -= k;
-                n += k;
-        }
-
-        return n;
 }
 
 char *strjoin(const char *x, ...) {
@@ -908,7 +890,7 @@ char *strjoin(const char *x, ...) {
 }
 
 bool is_main_thread(void) {
-        static __thread int cached = 0;
+        static thread_local int cached = 0;
 
         if (_unlikely_(cached == 0))
                 cached = getpid() == gettid() ? 1 : -1;
@@ -984,7 +966,7 @@ static const char* const sched_policy_table[] = {
 
 DEFINE_STRING_TABLE_LOOKUP_WITH_FALLBACK(sched_policy, int, INT_MAX);
 
-static const char* const rlimit_table[] = {
+static const char* const rlimit_table[_RLIMIT_MAX] = {
         [RLIMIT_CPU] = "LimitCPU",
         [RLIMIT_FSIZE] = "LimitFSIZE",
         [RLIMIT_DATA] = "LimitDATA",
@@ -1053,7 +1035,7 @@ static const char *const __signal_table[] = {
 DEFINE_PRIVATE_STRING_TABLE_LOOKUP(__signal, int);
 
 const char *signal_to_string(int signo) {
-        static __thread char buf[sizeof("RTMIN+")-1 + DECIMAL_STR_MAX(int) + 1];
+        static thread_local char buf[sizeof("RTMIN+")-1 + DECIMAL_STR_MAX(int) + 1];
         const char *name;
 
         name = __signal_to_string(signo);
@@ -1068,26 +1050,46 @@ const char *signal_to_string(int signo) {
         return buf;
 }
 
+int fd_wait_for_event(int fd, int event, usec_t t) {
+
+        struct pollfd pollfd = {
+                .fd = fd,
+                .events = event,
+        };
+
+        struct timespec ts;
+        int r;
+
+        r = ppoll(&pollfd, 1, t == USEC_INFINITY ? NULL : timespec_store(&ts, t), NULL);
+        if (r < 0)
+                return -errno;
+
+        if (r == 0)
+                return 0;
+
+        return pollfd.revents;
+}
+
 int fd_inc_sndbuf(int fd, size_t n) {
         int r, value;
         socklen_t l = sizeof(value);
 
         r = getsockopt(fd, SOL_SOCKET, SO_SNDBUF, &value, &l);
-        if (r >= 0 &&
-            l == sizeof(value) &&
-            (size_t) value >= n*2)
+        if (r >= 0 && l == sizeof(value) && (size_t) value >= n*2)
                 return 0;
 
+        /* If we have the privileges we will ignore the kernel limit. */
+
         value = (int) n;
-        r = setsockopt(fd, SOL_SOCKET, SO_SNDBUF, &value, sizeof(value));
-        if (r < 0)
-                return -errno;
+        if (setsockopt(fd, SOL_SOCKET, SO_SNDBUFFORCE, &value, sizeof(value)) < 0)
+                if (setsockopt(fd, SOL_SOCKET, SO_SNDBUF, &value, sizeof(value)) < 0)
+                        return -errno;
 
         return 1;
 }
 
 bool in_initrd(void) {
-        static __thread int saved = -1;
+        static int saved = -1;
         struct statfs s;
 
         if (saved >= 0)
@@ -1136,9 +1138,8 @@ void *xbsearch_r(const void *key, const void *base, size_t nmemb, size_t size,
 int proc_cmdline(char **ret) {
         int r;
 
-	/* disable containers for now
         if (detect_container(NULL) > 0) {
-                char *buf, *p;
+                char *buf = NULL, *p;
                 size_t sz = 0;
 
                 r = read_full_file("/proc/1/cmdline", &buf, &sz);
@@ -1149,11 +1150,10 @@ int proc_cmdline(char **ret) {
                         if (*p == 0)
                                 *p = ' ';
 
-                *p  = 0;
+                *p = 0;
                 *ret = buf;
                 return 1;
         }
-	*/
 
         r = read_one_line_file("/proc/cmdline", ret);
         if (r < 0)
@@ -1184,4 +1184,55 @@ int getpeercred(int fd, struct ucred *ucred) {
 
         *ucred = u;
         return 0;
+}
+
+/* This is much like like mkostemp() but is subject to umask(). */
+int mkostemp_safe(char *pattern, int flags) {
+        _cleanup_umask_ mode_t u;
+        int fd;
+
+        assert(pattern);
+
+        u = umask(077);
+
+        fd = mkostemp(pattern, flags);
+        if (fd < 0)
+                return -errno;
+
+        return fd;
+}
+
+/* This is much like like mkstemp() but is subject to umask(). */
+int mkstemp_safe(char *pattern) {
+        _cleanup_umask_ mode_t u;
+        int fd;
+
+        assert(pattern);
+
+        u = umask(077);
+
+        fd = mkstemp(pattern);
+        if (fd < 0)
+                return -errno;
+
+        return fd;
+}
+
+char *tempfn_xxxxxx(const char *p) {
+        const char *fn;
+        char *t;
+        size_t k;
+
+        assert(p);
+
+        t = new(char, strlen(p) + 1 + 6 + 1);
+        if (!t)
+                return NULL;
+
+        fn = basename(p);
+        k = fn - p;
+
+        strcpy(stpcpy(stpcpy(mempcpy(t, p, k), "."), fn), "XXXXXX");
+
+        return t;
 }

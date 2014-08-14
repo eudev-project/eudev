@@ -28,6 +28,7 @@
  * for each set use. */
 
 #include "hashmap.h"
+#include "util.h"
 
 typedef struct Set Set;
 

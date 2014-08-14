@@ -62,7 +62,7 @@ void log_close_console(void) {
 
         if (getpid() == 1) {
                 if (console_fd >= 3)
-                        close_nointr_nofail(console_fd);
+                        safe_close(console_fd);
 
                 console_fd = -1;
         }
@@ -84,12 +84,7 @@ static int log_open_console(void) {
 }
 
 void log_close_kmsg(void) {
-
-        if (kmsg_fd < 0)
-                return;
-
-        close_nointr_nofail(kmsg_fd);
-        kmsg_fd = -1;
+        kmsg_fd = safe_close(kmsg_fd);
 }
 
 static int log_open_kmsg(void) {
@@ -105,22 +100,27 @@ static int log_open_kmsg(void) {
 }
 
 void log_close_syslog(void) {
-
-        if (syslog_fd < 0)
-                return;
-
-        close_nointr_nofail(syslog_fd);
-        syslog_fd = -1;
+        syslog_fd = safe_close(syslog_fd);
 }
 
 static int create_log_socket(int type) {
         int fd;
+        struct timeval tv;
 
         fd = socket(AF_UNIX, type|SOCK_CLOEXEC, 0);
         if (fd < 0)
                 return -errno;
 
         fd_inc_sndbuf(fd, SNDBUF_SIZE);
+
+        /* We need a blocking fd here since we'd otherwise lose
+        messages way too early. However, let's not hang forever in the
+        unlikely case of a deadlock. */
+        if (getpid() == 1)
+                timeval_store(&tv, 10 * USEC_PER_MSEC);
+        else
+                timeval_store(&tv, 10 * USEC_PER_SEC);
+        setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
 
         return fd;
 }
@@ -142,7 +142,7 @@ static int log_open_syslog(void) {
         }
 
         if (connect(syslog_fd, &sa.sa, offsetof(struct sockaddr_un, sun_path) + strlen(sa.un.sun_path)) < 0) {
-                close_nointr_nofail(syslog_fd);
+                safe_close(syslog_fd);
 
                 /* Some legacy syslog systems still use stream
                  * sockets. They really shouldn't. But what can we

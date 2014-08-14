@@ -34,6 +34,7 @@
 #include "util.h"
 #include "log.h"
 #include "strv.h"
+#include "mkdir.h"
 #include "path-util.h"
 #include "missing.h"
 
@@ -41,16 +42,8 @@ bool path_is_absolute(const char *p) {
         return p[0] == '/';
 }
 
-char *path_get_file_name(const char *p) {
-        char *r;
-
-        assert(p);
-
-        r = strrchr(p, '/');
-        if (r)
-                return r + 1;
-
-        return (char*) p;
+bool is_path(const char *p) {
+        return !!strchr(p, '/');
 }
 
 int path_get_parent(const char *path, char **_r) {
@@ -124,7 +117,7 @@ char *path_make_absolute_cwd(const char *p) {
         return path_make_absolute(p, cwd);
 }
 
-char **path_strv_canonicalize(char **l) {
+char **path_strv_resolve(char **l, const char *prefix) {
         char **s;
         unsigned k = 0;
         bool enomem = false;
@@ -138,27 +131,62 @@ char **path_strv_canonicalize(char **l) {
 
         STRV_FOREACH(s, l) {
                 char *t, *u;
+                _cleanup_free_ char *orig = NULL;
 
-                t = path_make_absolute_cwd(*s);
-                free(*s);
-                *s = NULL;
-
-                if (!t) {
-                        enomem = true;
+                if (!path_is_absolute(*s)) {
+                        free(*s);
                         continue;
                 }
 
+                if (prefix) {
+                        orig = *s;
+                        t = strappend(prefix, orig);
+                        if (!t) {
+                                enomem = true;
+                                continue;
+                        }
+                } else
+                        t = *s;
+
                 errno = 0;
-                u = realpath(t, 0);
+                u = canonicalize_file_name(t);
                 if (!u) {
-                        if (errno == ENOENT)
-                                u = t;
-                        else {
+                        if (errno == ENOENT) {
+                                if (prefix) {
+                                        u = orig;
+                                        orig = NULL;
+                                        free(t);
+                                } else
+                                        u = t;
+                        } else {
                                 free(t);
-                                if (errno == ENOMEM || !errno)
+                                if (errno == ENOMEM || errno == 0)
                                         enomem = true;
 
                                 continue;
+                        }
+                } else if (prefix) {
+                        char *x;
+
+                        free(t);
+                        x = path_startswith(u, prefix);
+                        if (x) {
+                                /* restore the slash if it was lost */
+                                if (!startswith(x, "/"))
+                                        *(--x) = '/';
+
+                                t = strdup(x);
+                                free(u);
+                                if (!t) {
+                                        enomem = true;
+                                        continue;
+                                }
+                                u = t;
+                        } else {
+                                /* canonicalized path goes outside of
+                                 * prefix, keep the original path instead */
+                                u = orig;
+                                orig = NULL;
                         }
                 } else
                         free(t);
@@ -174,11 +202,12 @@ char **path_strv_canonicalize(char **l) {
         return l;
 }
 
-char **path_strv_canonicalize_uniq(char **l) {
+char **path_strv_resolve_uniq(char **l, const char *prefix) {
+
         if (strv_isempty(l))
                 return l;
 
-        if (!path_strv_canonicalize(l))
+        if (!path_strv_resolve(l, prefix))
                 return NULL;
 
         return strv_uniq(l);
@@ -259,7 +288,7 @@ int path_is_mount_point(const char *t, bool allow_symlink) {
         };
 
         int mount_id, mount_id_parent;
-        char *parent;
+        _cleanup_free_ char *parent = NULL;
         struct stat a, b;
         int r;
 
@@ -272,7 +301,7 @@ int path_is_mount_point(const char *t, bool allow_symlink) {
 
         r = name_to_handle_at(AT_FDCWD, t, &h.handle, &mount_id, allow_symlink ? AT_SYMLINK_FOLLOW : 0);
         if (r < 0) {
-                if (errno == ENOSYS || errno == ENOTSUP)
+                if (IN_SET(errno, ENOSYS, EOPNOTSUPP))
                         /* This kernel or file system does not support
                          * name_to_handle_at(), hence fallback to the
                          * traditional stat() logic */
@@ -290,7 +319,6 @@ int path_is_mount_point(const char *t, bool allow_symlink) {
 
         h.handle.handle_bytes = MAX_HANDLE_SZ;
         r = name_to_handle_at(AT_FDCWD, parent, &h.handle, &mount_id_parent, 0);
-        free(parent);
         if (r < 0) {
                 /* The parent can't do name_to_handle_at() but the
                  * directory we are interested in can? If so, it must
@@ -321,7 +349,6 @@ fallback:
                 return r;
 
         r = lstat(parent, &b);
-        free(parent);
         if (r < 0)
                 return -errno;
 

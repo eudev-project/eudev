@@ -61,4 +61,7 @@ typedef struct dual_timestamp {
 usec_t now(clockid_t clock);
 
 usec_t timespec_load(const struct timespec *ts) _pure_;
+struct timespec *timespec_store(struct timespec *ts, usec_t u);
+
+struct timeval *timeval_store(struct timeval *tv, usec_t u);
 char *format_timespan(char *buf, size_t l, usec_t t, usec_t accuracy);
