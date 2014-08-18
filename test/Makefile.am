@@ -4,7 +4,8 @@ AM_CPPFLAGS = \
 	-include $(top_builddir)/config.h \
 	-DVERSION=\"@VERSION@\" \
 	-I $(top_srcdir)/src/shared \
-	-I $(top_srcdir)/src/libudev
+	-I $(top_srcdir)/src/libudev \
+	-I $(top_srcdir)/src/udev
 
 noinst_PROGRAMS = \
 	test-libudev \
