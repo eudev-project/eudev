@@ -50,17 +50,11 @@ libudev_core_la_SOURCES = \
 	udev-ctrl.c \
 	udev-builtin.c \
 	udev-builtin-btrfs.c \
-	udev-builtin-firmware.c \
 	udev-builtin-hwdb.c \
 	udev-builtin-input_id.c \
 	udev-builtin-net_id.c \
 	udev-builtin-path_id.c \
 	udev-builtin-usb_id.c
-
-if ENABLE_FIRMWARE
-libudev_core_la_SOURCES += \
-	udev-builtin-firmware.c
-endif
 
 include_HEADERS = \
 	udev.h
@@ -88,10 +82,6 @@ libudev_core_la_CFLAGS += $(KMOD_CFLAGS)
 libudev_core_la_LIBADD += $(KMOD_LIBS)
 endif
 endif
-
-libudev_core_la_CPPFLAGS = \
-	$(AM_CPPFLAGS) \
-	-DFIRMWARE_PATH="$(FIRMWARE_PATH)"
 
 #
 # Extras
