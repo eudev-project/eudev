@@ -23,6 +23,11 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 
+#ifdef HAVE_SELINUX
+#include <selinux/selinux.h>
+#include <selinux/label.h>
+#endif
+
 #include "label.h"
 #include "util.h"
 #include "path-util.h"
