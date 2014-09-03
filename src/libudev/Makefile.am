@@ -54,7 +54,8 @@ libudev_la_LDFLAGS = \
 	-Wl,--version-script=$(top_srcdir)/src/libudev/libudev.sym
 
 libudev_la_LIBADD = \
-	$(top_builddir)/src/shared/libudev_shared.la
+	$(top_builddir)/src/shared/libudev_shared.la \
+	$(SELINUX_LIBS)
 
 libudev_private_la_SOURCES = \
 	$(libudev_la_SOURCES) \
