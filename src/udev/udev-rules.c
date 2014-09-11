@@ -87,7 +87,7 @@ static unsigned int rules_add_string(struct udev_rules *rules, const char *s) {
         return strbuf_add_string(rules->strbuf, s, strlen(s));
 }
 
-/* KEY=="", KEY!="", KEY+="", KEY="", KEY:="" */
+/* KEY=="", KEY!="", KEY+="", KEY-="", KEY="", KEY:="" */
 enum operation_type {
         OP_UNSET,
 
@@ -96,6 +96,7 @@ enum operation_type {
         OP_MATCH_MAX,
 
         OP_ADD,
+        OP_REMOVE,
         OP_ASSIGN,
         OP_ASSIGN_FINAL,
 };
@@ -229,6 +230,7 @@ static const char *operation_str(enum operation_type type) {
                 [OP_MATCH_MAX] =        "MATCH_MAX",
 
                 [OP_ADD] =              "add",
+                [OP_REMOVE] =           "remove",
                 [OP_ASSIGN] =           "assign",
                 [OP_ASSIGN_FINAL] =     "assign-final",
 }        ;
@@ -766,7 +768,7 @@ static int get_key(struct udev *udev, char **line, char **key, enum operation_ty
                         break;
                 if (linepos[0] == '=')
                         break;
-                if ((linepos[0] == '+') || (linepos[0] == '!') || (linepos[0] == ':'))
+                if ((linepos[0] == '+') || (linepos[0] == '-') || (linepos[0] == '!') || (linepos[0] == ':'))
                         if (linepos[1] == '=')
                                 break;
         }
@@ -789,6 +791,9 @@ static int get_key(struct udev *udev, char **line, char **key, enum operation_ty
                 linepos += 2;
         } else if (linepos[0] == '+' && linepos[1] == '=') {
                 *op = OP_ADD;
+                linepos += 2;
+        } else if (linepos[0] == '-' && linepos[1] == '=') {
+                *op = OP_REMOVE;
                 linepos += 2;
         } else if (linepos[0] == '=') {
                 *op = OP_ASSIGN;
@@ -1126,6 +1131,10 @@ static int add_rule(struct udev_rules *rules, char *line,
                                 log_error("error parsing ATTR attribute");
                                 goto invalid;
                         }
+                        if (op == OP_REMOVE) {
+                                log_error("invalid ATTR operation");
+                                goto invalid;
+                        }
                         if (op < OP_MATCH_MAX) {
                                 rule_add_key(&rule_tmp, TK_M_ATTR, op, value, attr);
                         } else {
@@ -1138,6 +1147,10 @@ static int add_rule(struct udev_rules *rules, char *line,
                         attr = get_key_attribute(rules->udev, key + strlen("SECLABEL"));
                         if (!attr) {
                                 log_error("error parsing SECLABEL attribute");
+                                goto invalid;
+                        }
+                        if (op == OP_REMOVE) {
+                                log_error("invalid SECLABEL operation");
                                 goto invalid;
                         }
 
@@ -1207,6 +1220,10 @@ static int add_rule(struct udev_rules *rules, char *line,
                                 log_error("error parsing ENV attribute");
                                 goto invalid;
                         }
+                        if (op == OP_REMOVE) {
+                                log_error("invalid ENV operation");
+                                goto invalid;
+                        }
                         if (op < OP_MATCH_MAX) {
                                 if (rule_add_key(&rule_tmp, TK_M_ENV, op, value, attr) != 0)
                                         goto invalid;
@@ -1247,6 +1264,10 @@ static int add_rule(struct udev_rules *rules, char *line,
                 }
 
                 if (streq(key, "PROGRAM")) {
+                        if (op == OP_REMOVE) {
+                                log_error("invalid PROGRAM operation");
+                                goto invalid;
+                        }
                         rule_add_key(&rule_tmp, TK_M_PROGRAM, op, value, NULL);
                         continue;
                 }
@@ -1265,6 +1286,10 @@ static int add_rule(struct udev_rules *rules, char *line,
                         if (attr == NULL) {
                                 log_error("IMPORT{} type missing, ignoring IMPORT %s:%u", filename, lineno);
                                 continue;
+                        }
+                        if (op == OP_REMOVE) {
+                                log_error("invalid IMPORT operation");
+                                goto invalid;
                         }
                         if (streq(attr, "program")) {
                                 /* find known built-in command */
@@ -1321,6 +1346,10 @@ static int add_rule(struct udev_rules *rules, char *line,
                         attr = get_key_attribute(rules->udev, key + strlen("RUN"));
                         if (attr == NULL)
                                 attr = "program";
+                        if (op == OP_REMOVE) {
+                                log_error("invalid RUN operation");
+                                goto invalid;
+                        }
 
                         if (streq(attr, "builtin")) {
                                 enum udev_builtin_cmd cmd = udev_builtin_lookup(value);
@@ -1341,21 +1370,37 @@ static int add_rule(struct udev_rules *rules, char *line,
                 }
 
                 if (streq(key, "WAIT_FOR") || streq(key, "WAIT_FOR_SYSFS")) {
+                        if (op == OP_REMOVE) {
+                                log_error("invalid WAIT_FOR/WAIT_FOR_SYSFS operation");
+                                goto invalid;
+                        }
                         rule_add_key(&rule_tmp, TK_M_WAITFOR, 0, value, NULL);
                         continue;
                 }
 
                 if (streq(key, "LABEL")) {
+                        if (op == OP_REMOVE) {
+                                log_error("invalid LABEL operation");
+                                goto invalid;
+                        }
                         rule_tmp.rule.rule.label_off = rules_add_string(rules, value);
                         continue;
                 }
 
                 if (streq(key, "GOTO")) {
+                        if (op == OP_REMOVE) {
+                                log_error("invalid GOTO operation");
+                                goto invalid;
+                        }
                         rule_add_key(&rule_tmp, TK_A_GOTO, 0, value, NULL);
                         continue;
                 }
 
                 if (startswith(key, "NAME")) {
+                        if (op == OP_REMOVE) {
+                                log_error("invalid NAME operation");
+                                goto invalid;
+                        }
                         if (op < OP_MATCH_MAX) {
                                 rule_add_key(&rule_tmp, TK_M_NAME, op, value, NULL);
                         } else {
@@ -1376,6 +1421,10 @@ static int add_rule(struct udev_rules *rules, char *line,
                 }
 
                 if (streq(key, "SYMLINK")) {
+                        if (op == OP_REMOVE) {
+                                log_error("invalid SYMLINK operation");
+                                goto invalid;
+                        }
                         if (op < OP_MATCH_MAX)
                                 rule_add_key(&rule_tmp, TK_M_DEVLINK, op, value, NULL);
                         else
@@ -1387,6 +1436,11 @@ static int add_rule(struct udev_rules *rules, char *line,
                 if (streq(key, "OWNER")) {
                         uid_t uid;
                         char *endptr;
+
+                        if (op == OP_REMOVE) {
+                                log_error("invalid OWNER operation");
+                                goto invalid;
+                        }
 
                         uid = strtoul(value, &endptr, 10);
                         if (endptr[0] == '\0') {
@@ -1405,6 +1459,11 @@ static int add_rule(struct udev_rules *rules, char *line,
                         gid_t gid;
                         char *endptr;
 
+                        if (op == OP_REMOVE) {
+                                log_error("invalid GROUP operation");
+                                goto invalid;
+                        }
+
                         gid = strtoul(value, &endptr, 10);
                         if (endptr[0] == '\0') {
                                 rule_add_key(&rule_tmp, TK_A_GROUP_ID, op, NULL, &gid);
@@ -1422,6 +1481,11 @@ static int add_rule(struct udev_rules *rules, char *line,
                         mode_t mode;
                         char *endptr;
 
+                        if (op == OP_REMOVE) {
+                                log_error("invalid MODE operation");
+                                goto invalid;
+                        }
+
                         mode = strtol(value, &endptr, 8);
                         if (endptr[0] == '\0')
                                 rule_add_key(&rule_tmp, TK_A_MODE_ID, op, NULL, &mode);
@@ -1433,6 +1497,11 @@ static int add_rule(struct udev_rules *rules, char *line,
 
                 if (streq(key, "OPTIONS")) {
                         const char *pos;
+
+                        if (op == OP_REMOVE) {
+                                log_error("invalid OPTIONS operation");
+                                goto invalid;
+                        }
 
                         pos = strstr(value, "link_priority=");
                         if (pos != NULL) {
@@ -2389,7 +2458,10 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                                 log_error("ignoring invalid tag name '%s'", tag);
                                 break;
                         }
-                        udev_device_add_tag(event->dev, tag);
+                        if (cur->key.op == OP_REMOVE)
+                                udev_device_remove_tag(event->dev, tag);
+                        else
+                                udev_device_add_tag(event->dev, tag);
                         break;
                 }
                 case TK_A_NAME: {
