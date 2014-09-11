@@ -782,7 +782,7 @@ static int rename_netif_dev_fromname_toname(struct udev_device *dev,const char *
         int loop;
 
         if (err == 0) {
-                print_kmsg("renamed network interface %s to %s\n", ifr.ifr_name, ifr.ifr_newname);
+                log_info("renamed network interface %s to %s\n", ifr.ifr_name, ifr.ifr_newname);
                 goto out;
         }
         /* keep trying if the destination interface name already exists */
@@ -802,7 +802,7 @@ static int rename_netif_dev_fromname_toname(struct udev_device *dev,const char *
 
                 err = ioctl(sk, SIOCSIFNAME, &ifr);
                 if (err == 0) {
-                        print_kmsg("renamed network interface %s to %s\n", ifr.ifr_name, ifr.ifr_newname);
+                        log_info("renamed network interface %s to %s\n", ifr.ifr_name, ifr.ifr_newname);
                         break;
                 }
                 err = -errno;
@@ -815,7 +815,7 @@ out:
                 log_error("error changing net interface name %s to %s: %m\n", ifr.ifr_name, ifr.ifr_newname);
 #else
         if (err >= 0) {
-                print_kmsg("renamed network interface %s to %s\n", ifr.ifr_name, ifr.ifr_newname);
+                log_info("renamed network interface %s to %s\n", ifr.ifr_name, ifr.ifr_newname);
         } else {
                 err = -errno;
                 log_error("error changing net interface name %s to %s: %m\n", ifr.ifr_name, ifr.ifr_newname);
