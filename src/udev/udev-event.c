@@ -762,9 +762,6 @@ static int rename_netif_dev_fromname_toname(struct udev_device *dev,const char *
         struct ifreq ifr;
         int err;
 
-        log_debug("changing net interface name from '%s' to '%s'\n",
-                  oldname, newname);
-
         sk = socket(PF_INET, SOCK_DGRAM, 0);
         if (sk < 0) {
                 err = -errno;
@@ -959,8 +956,6 @@ void udev_event_execute_rules(struct udev_event *event,
                         r = rename_netif(event);
 #endif
                         if (r >= 0) {
-                                log_debug("renamed netif to '%s'", finalifname);
-
                                 /* remember old name */
                                 udev_device_add_property(dev, "INTERFACE_OLD", udev_device_get_sysname(dev));
 
