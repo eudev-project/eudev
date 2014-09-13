@@ -620,6 +620,7 @@ static int import_file_into_properties(struct udev_device *dev, const char *file
 
 static int import_program_into_properties(struct udev_event *event,
                                           usec_t timeout_usec,
+                                          usec_t timeout_warn_usec,
                                           const char *program, const sigset_t *sigmask) {
         struct udev_device *dev = event->dev;
         char **envp;
@@ -628,7 +629,7 @@ static int import_program_into_properties(struct udev_event *event,
         int err;
 
         envp = udev_device_get_properties_envp(dev);
-        err = udev_event_spawn(event, timeout_usec, program, envp, sigmask, result, sizeof(result));
+        err = udev_event_spawn(event, timeout_usec, timeout_warn_usec, program, envp, sigmask, result, sizeof(result));
         if (err < 0)
                 return err;
 
@@ -1931,6 +1932,7 @@ int udev_rules_assigning_name_to(struct udev_rules *rules, const char *match_nam
 int udev_rules_apply_to_event(struct udev_rules *rules,
                               struct udev_event *event,
                               usec_t timeout_usec,
+                              usec_t timeout_warn_usec,
                               const sigset_t *sigmask) {
         struct token *cur;
         struct token *rule;
@@ -2139,7 +2141,7 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                                   rules_str(rules, rule->rule.filename_off),
                                   rule->rule.filename_line);
 
-                        if (udev_event_spawn(event, timeout_usec, program, envp, sigmask, result, sizeof(result)) < 0) {
+                        if (udev_event_spawn(event, timeout_usec, timeout_warn_usec, program, envp, sigmask, result, sizeof(result)) < 0) {
                                 if (cur->key.op != OP_NOMATCH)
                                         goto nomatch;
                         } else {
@@ -2175,7 +2177,7 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                                   rules_str(rules, rule->rule.filename_off),
                                   rule->rule.filename_line);
 
-                        if (import_program_into_properties(event, timeout_usec, import, sigmask) != 0)
+                        if (import_program_into_properties(event, timeout_usec, timeout_warn_usec, import, sigmask) != 0)
                                 if (cur->key.op != OP_NOMATCH)
                                         goto nomatch;
                         break;
