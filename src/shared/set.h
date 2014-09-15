@@ -38,7 +38,6 @@ void *set_get(Set *s, void *value);
 bool set_contains(Set *s, void *value);
 
 void *set_iterate(Set *s, Iterator *i);
-void *set_iterate_backwards(Set *s, Iterator *i);
 
 DEFINE_TRIVIAL_CLEANUP_FUNC(Set*, set_free);
 #define _cleanup_set_free_ _cleanup_(set_freep)
