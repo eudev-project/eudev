@@ -27,8 +27,8 @@
 
 /* For now this is not much more than a wrapper around a hashmap */
 
-Set *set_new(hash_func_t hash_func, compare_func_t compare_func) {
-        return MAKE_SET(hashmap_new(hash_func, compare_func));
+Set *set_new(const struct hash_ops *hash_ops) {
+        return MAKE_SET(hashmap_new(hash_ops));
 }
 
 void set_free(Set* s) {
@@ -49,8 +49,4 @@ bool set_contains(Set *s, void *value) {
 
 void *set_iterate(Set *s, Iterator *i) {
         return hashmap_iterate(MAKE_HASHMAP(s), i, NULL);
-}
-
-void *set_iterate_backwards(Set *s, Iterator *i) {
-        return hashmap_iterate_backwards(MAKE_HASHMAP(s), i, NULL);
 }

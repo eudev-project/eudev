@@ -84,7 +84,7 @@ int cg_kill(const char *controller, const char *path, int sig, bool sigcont, boo
          * tasks list, to properly handle forking processes */
 
         if (!s) {
-                s = allocated_set = set_new(trivial_hash_func, trivial_compare_func);
+                s = allocated_set = set_new(NULL);
                 if (!s)
                         return -ENOMEM;
         }

@@ -30,7 +30,7 @@
 
 typedef struct Set Set;
 
-Set *set_new(hash_func_t hash_func, compare_func_t compare_func);
+Set *set_new(const struct hash_ops *hash_ops);
 void set_free(Set* s);
 
 int set_put(Set *s, void *value);
