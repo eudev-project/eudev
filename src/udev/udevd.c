@@ -1131,9 +1131,6 @@ int main(int argc, char *argv[]) {
         udev_set_log_fn(udev, udev_main_log);
         log_set_max_level(udev_get_log_priority(udev));
 
-        log_debug("version %s", VERSION);
-        label_init("/dev");
-
         r = parse_argv(argc, argv);
         if (r <= 0)
                 goto exit;
@@ -1149,6 +1146,8 @@ int main(int argc, char *argv[]) {
                 log_error("root privileges required");
                 goto exit;
         }
+
+        label_init("/dev");
 
         /* set umask before creating any file/directory */
         if(chdir("/")!= 0) {
