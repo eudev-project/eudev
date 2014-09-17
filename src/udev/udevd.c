@@ -1024,6 +1024,20 @@ static void kernel_cmdline_options(struct udev *udev) {
         }
 }
 
+static void help(void) {
+        printf("%s [OPTIONS...]\n\n"
+               "Manages devices.\n\n"
+               "  --daemon\n"
+               "  --debug\n"
+               "  --children-max=<maximum number of workers>\n"
+               "  --exec-delay=<seconds to wait before executing RUN=>\n"
+               "  --event-timeout=<seconds to wait before terminating an event>\n"
+               "  --resolve-names=early|late|never\n"
+               "  --version\n"
+               "  --help\n"
+               , program_invocation_short_name);
+}
+
 int main(int argc, char *argv[]) {
         struct udev *udev;
         sigset_t mask;
@@ -1100,16 +1114,7 @@ int main(int argc, char *argv[]) {
                         }
                         break;
                 case 'h':
-                        printf("Usage: udevd OPTIONS\n"
-                               "  --daemon\n"
-                               "  --debug\n"
-                               "  --children-max=<maximum number of workers>\n"
-                               "  --exec-delay=<seconds to wait before executing RUN=>\n"
-                               "  --event-timeout=<seconds to wait before terminating an event>\n"
-                               "  --resolve-names=early|late|never\n"
-                               "  --version\n"
-                               "  --help\n"
-                               "\n");
+                        help();
                         goto exit;
                 case 'V':
                         printf("%s\n", UDEV_VERSION);
