@@ -1060,6 +1060,7 @@ static int parse_argv(int argc, char *argv[]) {
                 { "version",            no_argument,            NULL, 'V' },
                 {}
         };
+
         int c;
 
         assert(argc >= 0);
@@ -1067,7 +1068,6 @@ static int parse_argv(int argc, char *argv[]) {
 
         while ((c = getopt_long(argc, argv, "c:de:DtN:hV", options, NULL)) >= 0) {
                 int r;
-
 
                 switch (c) {
 
@@ -1138,7 +1138,6 @@ int main(int argc, char *argv[]) {
                 goto exit;
 
         log_set_target(LOG_TARGET_AUTO);
-        log_parse_environment();
         log_open();
 
         udev_set_log_fn(udev, udev_main_log);
@@ -1163,10 +1162,7 @@ int main(int argc, char *argv[]) {
         label_init("/dev");
 
         /* set umask before creating any file/directory */
-        if(chdir("/")!= 0) {
-                log_error("unable to change into directory '/'");
-                goto exit;
-        }
+        chdir("/");
         umask(022);
 
         mkdir("/run/udev", 0755);

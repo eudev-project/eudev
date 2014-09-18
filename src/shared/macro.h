@@ -37,6 +37,10 @@
 #define _public_ __attribute__ ((visibility("default")))
 #define _cleanup_(x) __attribute__((cleanup(x)))
 
+/* Temporarily disable some warnings */
+#define DISABLE_WARNING_DECLARATION_AFTER_STATEMENT                     \
+        _Pragma("GCC diagnostic push");                                 \
+        _Pragma("GCC diagnostic ignored \"-Wdeclaration-after-statement\"")
 
 #define DISABLE_WARNING_FORMAT_NONLITERAL                               \
         _Pragma("GCC diagnostic push");                                 \
@@ -102,6 +106,23 @@ static inline size_t ALIGN_TO(size_t l, size_t ali) {
         do {                                                            \
                 log_assert_failed_unreachable(t, __FILE__, __LINE__, __PRETTY_FUNCTION__); \
         } while (false)
+
+#if defined(static_assert)
+/* static_assert() is sometimes defined in a way that trips up
+ * -Wdeclaration-after-statement, hence let's temporarily turn off
+ * this warning around it. */
+#define assert_cc(expr)                                                 \
+        DISABLE_WARNING_DECLARATION_AFTER_STATEMENT;                    \
+        static_assert(expr, #expr);                                     \
+        REENABLE_WARNING
+#else
+#define assert_cc(expr)                                                 \
+        DISABLE_WARNING_DECLARATION_AFTER_STATEMENT;                    \
+        struct CONCATENATE(_assert_struct_, __LINE__) {                 \
+                char x[(expr) ? 0 : -1];                                \
+        };                                                              \
+        REENABLE_WARNING
+#endif
 
 #define PTR_TO_INT(p) ((int) ((intptr_t) (p)))
 #define INT_TO_PTR(u) ((void *) ((intptr_t) (u)))

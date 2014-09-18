@@ -180,6 +180,34 @@ int unlink_noerrno(const char *path) {
         return 0;
 }
 
+int parse_uid(const char *s, uid_t* ret_uid) {
+        unsigned long ul = 0;
+        uid_t uid;
+        int r;
+
+        assert(s);
+        assert(ret_uid);
+
+        r = safe_atolu(s, &ul);
+        if (r < 0)
+                return r;
+
+        uid = (uid_t) ul;
+
+        if ((unsigned long) uid != ul)
+                return -ERANGE;
+
+        /* Some libc APIs use (uid_t) -1 as special placeholder */
+        if (uid == (uid_t) 0xFFFFFFFF)
+                return -ENXIO;
+
+        /* A long time ago UIDs where 16bit, hence explicitly avoid the 16bit -1 too */
+        if (uid == (uid_t) 0xFFFF)
+                return -ENXIO;
+
+        *ret_uid = uid;
+        return 0;
+}
 int safe_atou(const char *s, unsigned *ret_u) {
         char *x = NULL;
         unsigned long l;
@@ -351,6 +379,69 @@ char *strnappend(const char *s, const char *suffix, size_t b) {
 
 char *strappend(const char *s, const char *suffix) {
         return strnappend(s, suffix, suffix ? strlen(suffix) : 0);
+}
+
+int rmdir_parents(const char *path, const char *stop) {
+        size_t l;
+        int r = 0;
+
+        assert(path);
+        assert(stop);
+
+        l = strlen(path);
+
+        /* Skip trailing slashes */
+        while (l > 0 && path[l-1] == '/')
+                l--;
+
+        while (l > 0) {
+                char *t;
+
+                /* Skip last component */
+                while (l > 0 && path[l-1] != '/')
+                        l--;
+
+                /* Skip trailing slashes */
+                while (l > 0 && path[l-1] == '/')
+                        l--;
+
+                if (l <= 0)
+                        break;
+
+                if (!(t = strndup(path, l)))
+                        return -ENOMEM;
+
+                if (path_startswith(stop, t)) {
+                        free(t);
+                        return 0;
+                }
+
+                r = rmdir(t);
+                free(t);
+
+                if (r < 0)
+                        if (errno != ENOENT)
+                                return -errno;
+        }
+
+        return 0;
+}
+
+int dev_urandom(void *p, size_t n) {
+        _cleanup_close_ int fd;
+        ssize_t k;
+
+        fd = open("/dev/urandom", O_RDONLY|O_CLOEXEC|O_NOCTTY);
+        if (fd < 0)
+                return errno == ENOENT ? -ENOSYS : -errno;
+
+        k = loop_read(fd, p, n, true);
+        if (k < 0)
+                return (int) k;
+        if ((size_t) k != n)
+                return -EIO;
+
+        return 0;
 }
 
 char hexchar(int x) {
@@ -578,6 +669,43 @@ int flush_fd(int fd) {
         }
 }
 
+int fopen_temporary(const char *path, FILE **_f, char **_temp_path) {
+        FILE *f;
+        char *t;
+        int fd;
+
+        assert(path);
+        assert(_f);
+        assert(_temp_path);
+
+        t = tempfn_xxxxxx(path);
+        if (!t)
+                return -ENOMEM;
+
+#if HAVE_DECL_MKOSTEMP
+        fd = mkostemp_safe(t, O_WRONLY|O_CLOEXEC);
+#else
+        fd = mkstemp_safe(t);
+        fcntl(fd, F_SETFD, FD_CLOEXEC);
+#endif
+        if (fd < 0) {
+                free(t);
+                return -errno;
+        }
+
+        f = fdopen(fd, "we");
+        if (!f) {
+                unlink(t);
+                free(t);
+                return -errno;
+        }
+
+        *_f = f;
+        *_temp_path = t;
+
+        return 0;
+}
+
 ssize_t loop_read(int fd, void *buf, size_t nbytes, bool do_poll) {
         uint8_t *p = buf;
         ssize_t n = 0;
@@ -611,23 +739,6 @@ ssize_t loop_read(int fd, void *buf, size_t nbytes, bool do_poll) {
         }
 
         return n;
-}
-
-int dev_urandom(void *p, size_t n) {
-        _cleanup_close_ int fd;
-        ssize_t k;
-
-        fd = open("/dev/urandom", O_RDONLY|O_CLOEXEC|O_NOCTTY);
-        if (fd < 0)
-                return errno == ENOENT ? -ENOSYS : -errno;
-
-        k = loop_read(fd, p, n, true);
-        if (k < 0)
-                return (int) k;
-        if ((size_t) k != n)
-                return -EIO;
-
-        return 0;
 }
 
 void random_bytes(void *p, size_t n) {
@@ -755,39 +866,107 @@ bool nulstr_contains(const char*nulstr, const char *needle) {
         return false;
 }
 
-int fopen_temporary(const char *path, FILE **_f, char **_temp_path) {
-        FILE *f;
-        char *t;
-        int fd;
+int get_user_creds(
+                const char **username,
+                uid_t *uid, gid_t *gid,
+                const char **home,
+                const char **shell) {
 
-        assert(path);
-        assert(_f);
-        assert(_temp_path);
+        struct passwd *p;
+        uid_t u;
 
-        t = tempfn_xxxxxx(path);
-        if (!t)
-                return -ENOMEM;
+        assert(username);
+        assert(*username);
 
-#if HAVE_DECL_MKOSTEMP
-        fd = mkostemp_safe(t, O_WRONLY|O_CLOEXEC);
-#else
-        fd = mkstemp_safe(t);
-        fcntl(fd, F_SETFD, FD_CLOEXEC);
-#endif
-        if (fd < 0) {
-                free(t);
-                return -errno;
+        /* We enforce some special rules for uid=0: in order to avoid
+         * NSS lookups for root we hardcode its data. */
+
+        if (streq(*username, "root") || streq(*username, "0")) {
+                *username = "root";
+
+                if (uid)
+                        *uid = 0;
+
+                if (gid)
+                        *gid = 0;
+
+                if (home)
+                        *home = "/root";
+
+                if (shell)
+                        *shell = "/bin/sh";
+
+                return 0;
         }
 
-        f = fdopen(fd, "we");
-        if (!f) {
-                unlink(t);
-                free(t);
-                return -errno;
+        if (parse_uid(*username, &u) >= 0) {
+                errno = 0;
+                p = getpwuid(u);
+
+                /* If there are multiple users with the same id, make
+                 * sure to leave $USER to the configured value instead
+                 * of the first occurrence in the database. However if
+                 * the uid was configured by a numeric uid, then let's
+                 * pick the real username from /etc/passwd. */
+                if (p)
+                        *username = p->pw_name;
+        } else {
+                errno = 0;
+                p = getpwnam(*username);
         }
 
-        *_f = f;
-        *_temp_path = t;
+        if (!p)
+                return errno > 0 ? -errno : -ESRCH;
+
+        if (uid)
+                *uid = p->pw_uid;
+
+        if (gid)
+                *gid = p->pw_gid;
+
+        if (home)
+                *home = p->pw_dir;
+
+        if (shell)
+                *shell = p->pw_shell;
+
+        return 0;
+}
+
+int get_group_creds(const char **groupname, gid_t *gid) {
+        struct group *g;
+        gid_t id;
+
+        assert(groupname);
+
+        /* We enforce some special rules for gid=0: in order to avoid
+         * NSS lookups for root we hardcode its data. */
+
+        if (streq(*groupname, "root") || streq(*groupname, "0")) {
+                *groupname = "root";
+
+                if (gid)
+                        *gid = 0;
+
+                return 0;
+        }
+
+        if (parse_gid(*groupname, &id) >= 0) {
+                errno = 0;
+                g = getgrgid(id);
+
+                if (g)
+                        *groupname = g->gr_name;
+        } else {
+                errno = 0;
+                g = getgrnam(*groupname);
+        }
+
+        if (!g)
+                return errno > 0 ? -errno : -ESRCH;
+
+        if (gid)
+                *gid = g->gr_gid;
 
         return 0;
 }

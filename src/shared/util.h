@@ -132,6 +132,8 @@ char *endswith(const char *s, const char *postfix) _pure_;
 int close_nointr(int fd);
 int safe_close(int fd);
 
+int parse_uid(const char *s, uid_t* ret_uid);
+#define parse_gid(s, ret_uid) parse_uid(s, ret_uid)
 
 int safe_atou(const char *s, unsigned *ret_u);
 int safe_atoi(const char *s, int *ret_i);
@@ -139,6 +141,31 @@ int safe_atoi(const char *s, int *ret_i);
 int safe_atollu(const char *s, unsigned long long *ret_u);
 int safe_atolli(const char *s, long long int *ret_i);
 
+
+#if __WORDSIZE == 32
+static inline int safe_atolu(const char *s, unsigned long *ret_u) {
+        assert_cc(sizeof(unsigned long) == sizeof(unsigned));
+        return safe_atou(s, (unsigned*) ret_u);
+}
+static inline int safe_atoli(const char *s, long int *ret_u) {
+        assert_cc(sizeof(long int) == sizeof(int));
+        return safe_atoi(s, (int*) ret_u);
+}
+#else
+static inline int safe_atolu(const char *s, unsigned long *ret_u) {
+        assert_cc(sizeof(unsigned long) == sizeof(unsigned long long));
+        return safe_atollu(s, (unsigned long long*) ret_u);
+}
+static inline int safe_atoli(const char *s, long int *ret_u) {
+        assert_cc(sizeof(long int) == sizeof(long long int));
+        return safe_atolli(s, (long long int*) ret_u);
+}
+#endif
+
+static inline int safe_atou64(const char *s, uint64_t *ret_u) {
+        assert_cc(sizeof(uint64_t) == sizeof(unsigned long long));
+        return safe_atollu(s, (unsigned long long*) ret_u);
+}
 const char* split(const char **state, size_t *l, const char *separator, bool quoted);
 
 #define FOREACH_WORD_QUOTED(word, length, s, state)                     \
@@ -152,6 +179,7 @@ char *strnappend(const char *s, const char *suffix, size_t length);
 
 char *truncate_nl(char *s);
 
+int rmdir_parents(const char *path, const char *stop);
 char hexchar(int x) _const_;
 char octchar(int x) _const_;
 
@@ -234,6 +262,9 @@ int null_or_empty_path(const char *fn);
 int null_or_empty_fd(int fd);
 
 bool nulstr_contains(const char*nulstr, const char *needle);
+
+int get_user_creds(const char **username, uid_t *uid, gid_t *gid, const char **home, const char **shell);
+int get_group_creds(const char **groupname, gid_t *gid);
 
 char *strjoin(const char *x, ...) _sentinel_;
 
@@ -338,16 +369,19 @@ static inline void _reset_errno_(int *saved_errno) {
 
 int unlink_noerrno(const char *path);
 
-#define strappenda(a, b)                                \
-        ({                                              \
-                const char *_a_ = (a), *_b_ = (b);      \
-                char *_c_;                              \
-                size_t _x_, _y_;                        \
-                _x_ = strlen(_a_);                      \
-                _y_ = strlen(_b_);                      \
-                _c_ = alloca(_x_ + _y_ + 1);            \
-                strcpy(stpcpy(_c_, _a_), _b_);          \
-                _c_;                                    \
+#define strappenda(a, ...)                                       \
+        ({                                                       \
+                int _len = strlen(a);                            \
+                unsigned _i;                                     \
+                char *_d_, *_p_;                                 \
+                const char *_appendees_[] = { __VA_ARGS__ };     \
+                for (_i = 0; _i < ELEMENTSOF(_appendees_); _i++) \
+                        _len += strlen(_appendees_[_i]);         \
+                _d_ = alloca(_len + 1);                          \
+                _p_ = stpcpy(_d_, a);                            \
+                for (_i = 0; _i < ELEMENTSOF(_appendees_); _i++) \
+                        _p_ = stpcpy(_p_, _appendees_[_i]);      \
+                _d_;                                             \
         })
 
 static inline void qsort_safe(void *base, size_t nmemb, size_t size,
