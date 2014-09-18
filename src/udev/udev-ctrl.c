@@ -176,6 +176,7 @@ int udev_ctrl_get_fd(struct udev_ctrl *uctrl) {
 static inline int accept4_fallback(int sockfd) {
         int fd;
 
+        /* This is racey, but what can we do without accept4? */
         if ((fd = accept(sockfd, NULL, NULL)) >= 0) {
                 fcntl(fd, F_SETFL, O_NONBLOCK);
                 fcntl(fd, F_SETFD, FD_CLOEXEC);

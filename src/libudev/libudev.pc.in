@@ -14,5 +14,4 @@ Name: libudev
 Description: Library to access udev device information
 Version: @UDEV_VERSION@
 Libs: -L${libdir} -ludev
-
 Cflags: -I${includedir}

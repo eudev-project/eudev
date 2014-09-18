@@ -156,7 +156,6 @@ static int label_fix_selinux(const char *path, bool ignore_enoent, bool ignore_e
 
         if (r < 0) {
                 /* Ignore ENOENT in some cases */
-
                 if (ignore_enoent && errno == ENOENT)
                         return 0;
 
