@@ -1165,13 +1165,26 @@ int main(int argc, char *argv[]) {
                 goto exit;
         }
 
-        label_init("/dev");
+        r = label_init("/dev");
+        if (r < 0) {
+                log_error("could not initialize labelling: %s", strerror(-r));
+                goto exit;
+        }
 
         /* set umask before creating any file/directory */
-        chdir("/");
+        r = chdir("/");
+        if (r < 0) {
+                log_error("could not change dir to /: %m");
+                goto exit;
+        }
+
         umask(022);
 
-        mkdir("/run/udev", 0755);
+        r = mkdir("/run/udev", 0755);
+        if (r < 0) {
+                log_error("could not create /run/udev: %m");
+                goto exit;
+        }
 
         dev_setup(NULL);
         static_dev_create_from_modules(udev);
