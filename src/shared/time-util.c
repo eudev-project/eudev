@@ -99,11 +99,8 @@ char *format_timespan(char *buf, size_t l, usec_t t, usec_t accuracy) {
         assert(buf);
         assert(l > 0);
 
-        if (t == USEC_INFINITY)
-                return NULL;
-
-        if (t <= 0) {
-                snprintf(p, l, "0");
+        if (t == USEC_INFINITY || t <= 0) {
+                strncpy(p, t == USEC_INFINITY ? "infinity" : "0", l);
                 p[l-1] = 0;
                 return p;
         }
