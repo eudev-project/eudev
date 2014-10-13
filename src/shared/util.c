@@ -652,43 +652,6 @@ int flush_fd(int fd) {
         }
 }
 
-int fopen_temporary(const char *path, FILE **_f, char **_temp_path) {
-        FILE *f;
-        char *t;
-        int fd;
-
-        assert(path);
-        assert(_f);
-        assert(_temp_path);
-
-        t = tempfn_xxxxxx(path);
-        if (!t)
-                return -ENOMEM;
-
-#if HAVE_DECL_MKOSTEMP
-        fd = mkostemp_safe(t, O_WRONLY|O_CLOEXEC);
-#else
-        fd = mkstemp_safe(t);
-        fcntl(fd, F_SETFD, FD_CLOEXEC);
-#endif
-        if (fd < 0) {
-                free(t);
-                return -errno;
-        }
-
-        f = fdopen(fd, "we");
-        if (!f) {
-                unlink(t);
-                free(t);
-                return -errno;
-        }
-
-        *_f = f;
-        *_temp_path = t;
-
-        return 0;
-}
-
 ssize_t loop_read(int fd, void *buf, size_t nbytes, bool do_poll) {
         uint8_t *p = buf;
         ssize_t n = 0;
@@ -865,6 +828,44 @@ bool nulstr_contains(const char*nulstr, const char *needle) {
 
         return false;
 }
+
+int fopen_temporary(const char *path, FILE **_f, char **_temp_path) {
+        FILE *f;
+        char *t;
+        int fd;
+
+        assert(path);
+        assert(_f);
+        assert(_temp_path);
+
+        t = tempfn_xxxxxx(path);
+        if (!t)
+                return -ENOMEM;
+
+#if HAVE_DECL_MKOSTEMP
+        fd = mkostemp_safe(t, O_WRONLY|O_CLOEXEC);
+#else
+        fd = mkstemp_safe(t);
+        fcntl(fd, F_SETFD, FD_CLOEXEC);
+#endif
+        if (fd < 0) {
+                free(t);
+                return -errno;
+        }
+
+        f = fdopen(fd, "we");
+        if (!f) {
+                unlink(t);
+                free(t);
+                return -errno;
+        }
+
+        *_f = f;
+        *_temp_path = t;
+
+        return 0;
+}
+
 
 int get_user_creds(
                 const char **username,
