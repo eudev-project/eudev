@@ -208,6 +208,7 @@ int parse_uid(const char *s, uid_t* ret_uid) {
         *ret_uid = uid;
         return 0;
 }
+
 int safe_atou(const char *s, unsigned *ret_u) {
         char *x = NULL;
         unsigned long l;
@@ -338,7 +339,6 @@ const char* split(const char **state, size_t *l, const char *separator, bool quo
         return current;
 }
 
-
 char *truncate_nl(char *s) {
         assert(s);
 
@@ -423,23 +423,6 @@ int rmdir_parents(const char *path, const char *stop) {
                         if (errno != ENOENT)
                                 return -errno;
         }
-
-        return 0;
-}
-
-int dev_urandom(void *p, size_t n) {
-        _cleanup_close_ int fd;
-        ssize_t k;
-
-        fd = open("/dev/urandom", O_RDONLY|O_CLOEXEC|O_NOCTTY);
-        if (fd < 0)
-                return errno == ENOENT ? -ENOSYS : -errno;
-
-        k = loop_read(fd, p, n, true);
-        if (k < 0)
-                return (int) k;
-        if ((size_t) k != n)
-                return -EIO;
 
         return 0;
 }
@@ -739,6 +722,23 @@ ssize_t loop_read(int fd, void *buf, size_t nbytes, bool do_poll) {
         }
 
         return n;
+}
+
+int dev_urandom(void *p, size_t n) {
+        _cleanup_close_ int fd;
+        ssize_t k;
+
+        fd = open("/dev/urandom", O_RDONLY|O_CLOEXEC|O_NOCTTY);
+        if (fd < 0)
+                return errno == ENOENT ? -ENOSYS : -errno;
+
+        k = loop_read(fd, p, n, true);
+        if (k < 0)
+                return (int) k;
+        if ((size_t) k != n)
+                return -EIO;
+
+        return 0;
 }
 
 void random_bytes(void *p, size_t n) {
