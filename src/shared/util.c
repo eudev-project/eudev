@@ -599,9 +599,6 @@ int open_terminal(const char *name, int mode) {
                 c++;
         }
 
-        if (fd < 0)
-                return -errno;
-
         r = isatty(fd);
         if (r < 0) {
                 safe_close(fd);
@@ -885,7 +882,6 @@ int fopen_temporary(const char *path, FILE **_f, char **_temp_path) {
 
         return 0;
 }
-
 
 int get_user_creds(
                 const char **username,
