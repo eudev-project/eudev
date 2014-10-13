@@ -829,6 +829,26 @@ bool nulstr_contains(const char*nulstr, const char *needle) {
         return false;
 }
 
+int fd_wait_for_event(int fd, int event, usec_t t) {
+
+        struct pollfd pollfd = {
+                .fd = fd,
+                .events = event,
+        };
+
+        struct timespec ts;
+        int r;
+
+        r = ppoll(&pollfd, 1, t == USEC_INFINITY ? NULL : timespec_store(&ts, t), NULL);
+        if (r < 0)
+                return -errno;
+
+        if (r == 0)
+                return 0;
+
+        return pollfd.revents;
+}
+
 int fopen_temporary(const char *path, FILE **_f, char **_temp_path) {
         FILE *f;
         char *t;
@@ -1188,26 +1208,6 @@ const char *signal_to_string(int signo) {
                 snprintf(buf, sizeof(buf), "%d", signo);
 
         return buf;
-}
-
-int fd_wait_for_event(int fd, int event, usec_t t) {
-
-        struct pollfd pollfd = {
-                .fd = fd,
-                .events = event,
-        };
-
-        struct timespec ts;
-        int r;
-
-        r = ppoll(&pollfd, 1, t == USEC_INFINITY ? NULL : timespec_store(&ts, t), NULL);
-        if (r < 0)
-                return -errno;
-
-        if (r == 0)
-                return 0;
-
-        return pollfd.revents;
 }
 
 int fd_inc_sndbuf(int fd, size_t n) {
