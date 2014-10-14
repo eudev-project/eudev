@@ -276,7 +276,7 @@ static struct hashmap_entry *hash_scan(Hashmap *h, unsigned hash, const void *ke
         return NULL;
 }
 
-static bool resize_buckets(Hashmap *h) {
+static int resize_buckets(Hashmap *h) {
         struct hashmap_entry **n, *i;
         unsigned m;
         uint8_t nkey[HASH_KEY_SIZE];
@@ -284,7 +284,7 @@ static bool resize_buckets(Hashmap *h) {
         assert(h);
 
         if (_likely_(h->n_entries*4 < h->n_buckets*3))
-                return false;
+                return 0;
 
         /* Increase by four */
         m = (h->n_entries+1)*4-1;
@@ -292,7 +292,7 @@ static bool resize_buckets(Hashmap *h) {
         /* If we hit OOM we simply risk packed hashmaps... */
         n = new0(struct hashmap_entry*, m);
         if (!n)
-                return false;
+                return -ENOMEM;
 
         /* Let's use a different randomized hash key for the
          * extension, so that people cannot guess what we are using
@@ -331,7 +331,7 @@ static bool resize_buckets(Hashmap *h) {
 
         memcpy(h->hash_key, nkey, HASH_KEY_SIZE);
 
-        return true;
+        return 1;
 }
 
 static int __hashmap_put(Hashmap *h, const void *key, void *value, unsigned hash) {
@@ -339,7 +339,7 @@ static int __hashmap_put(Hashmap *h, const void *key, void *value, unsigned hash
 
         struct hashmap_entry *e;
 
-        if (resize_buckets(h))
+        if (resize_buckets(h) > 0)
                 hash = bucket_hash(h, key);
 
         if (h->from_pool)
