@@ -142,13 +142,19 @@ char **strv_new(const char *x, ...) {
 
 int strv_push(char ***l, char *value) {
         char **c;
-        unsigned n;
+        unsigned n, m;
 
         if (!value)
                 return 0;
 
         n = strv_length(*l);
-        c = realloc(*l, sizeof(char*) * (n + 2));
+
+        /* increase and check for overflow */
+        m = n + 2;
+        if (m < n)
+                return -ENOMEM;
+
+        c = realloc_multiply(*l, sizeof(char*), m);
         if (!c)
                 return -ENOMEM;
 
