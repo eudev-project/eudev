@@ -22,7 +22,7 @@
 #include <stdarg.h>
 #include <stdbool.h>
 
-#include "macro.h"
+#include "util.h"
 
 void strv_free(char **l);
 DEFINE_TRIVIAL_CLEANUP_FUNC(char**, strv_free);
