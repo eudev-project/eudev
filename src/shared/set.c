@@ -50,3 +50,7 @@ bool set_contains(Set *s, void *value) {
 void *set_iterate(Set *s, Iterator *i) {
         return hashmap_iterate(MAKE_HASHMAP(s), i, NULL);
 }
+
+int set_reserve(Set *s, unsigned entries_add) {
+        return hashmap_reserve(MAKE_HASHMAP(s), entries_add);
+}

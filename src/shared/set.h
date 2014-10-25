@@ -37,6 +37,8 @@ int set_put(Set *s, void *value);
 void *set_get(Set *s, void *value);
 bool set_contains(Set *s, void *value);
 
+int set_reserve(Set *s, unsigned entries_add);
+
 void *set_iterate(Set *s, Iterator *i);
 
 DEFINE_TRIVIAL_CLEANUP_FUNC(Set*, set_free);

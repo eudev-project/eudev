@@ -65,6 +65,7 @@ int hashmap_put(Hashmap *h, const void *key, void *value);
 void *hashmap_get(Hashmap *h, const void *key);
 void *hashmap_get2(Hashmap *h, const void *key, void **rkey);
 bool hashmap_contains(Hashmap *h, const void *key);
+int hashmap_reserve(Hashmap *h, unsigned entries_add);
 
 unsigned hashmap_size(Hashmap *h) _pure_;
 
