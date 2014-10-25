@@ -13,6 +13,7 @@ libudev_shared_la_SOURCES=\
 	hashmap.c \
 	label.c \
 	log.c \
+	mempool.c \
 	mkdir.c \
 	mkdir-label.c \
 	MurmurHash2.c \
@@ -42,6 +43,7 @@ noinst_HEADERS = \
 	label.h \
 	log.h \
 	macro.h \
+	mempool.h \
 	missing.h \
 	mkdir.h \
 	MurmurHash2.h \
