@@ -34,7 +34,7 @@ static int label_mkdir(const char *path, mode_t mode) {
         int r;
 
         if (use_selinux()) {
-                r = label_mkdir_selinux(path, mode);
+                r = mac_selinux_mkdir(path, mode);
                 if (r < 0)
                         return r;
         }
@@ -44,7 +44,7 @@ static int label_mkdir(const char *path, mode_t mode) {
                 if (r < 0 && errno != EEXIST)
                         return -errno;
 
-                r = smack_relabel_in_dev(path);
+                r = mac_smack_relabel_in_dev(path);
                 if (r < 0)
                         return r;
         }
