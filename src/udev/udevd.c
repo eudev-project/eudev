@@ -965,11 +965,11 @@ static void static_dev_create_from_modules(struct udev *udev) {
 
                 strscpyl(filename, sizeof(filename), "/dev/", devname, NULL);
                 mkdir_parents_label(filename, 0755);
-                mac_selinux_context_set(filename, mode);
+                mac_selinux_create_file_prepare(filename, mode);
                 log_debug("mknod '%s' %c%u:%u\n", filename, type, maj, min);
                 if (mknod(filename, mode, makedev(maj, min)) < 0 && errno == EEXIST)
                         utimensat(AT_FDCWD, filename, NULL, 0);
-                mac_selinux_context_clear();
+                mac_selinux_create_file_clear();
         }
 
         fclose(f);
