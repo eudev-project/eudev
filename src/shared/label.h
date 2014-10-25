@@ -19,18 +19,7 @@
 
 #pragma once
 
-#include <sys/types.h>
-#include <stdbool.h>
-#include <sys/socket.h>
-
-int label_init(const char *prefix);
-void label_finish(void);
+#include "selinux-util.h"
+#include "smack-util.h"
 
 int label_fix(const char *path, bool ignore_enoent, bool ignore_erofs);
-
-int label_context_set(const char *path, mode_t mode);
-void label_context_clear(void);
-
-int label_mkdir(const char *path, mode_t mode);
-
-int label_apply(const char *path, const char *label);

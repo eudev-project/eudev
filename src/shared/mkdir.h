@@ -23,7 +23,7 @@
 int mkdir_parents(const char *path, mode_t mode);
 int mkdir_p(const char *path, mode_t mode);
 
-/* selinux versions */
+/* mandatory access control(MAC) versions */
 int mkdir_parents_label(const char *path, mode_t mode);
 
 /* internally used */
