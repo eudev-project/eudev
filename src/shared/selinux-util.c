@@ -21,6 +21,7 @@
 #include <unistd.h>
 #include <malloc.h>
 #include <sys/un.h>
+
 #ifdef HAVE_SELINUX
 #include <selinux/selinux.h>
 #include <selinux/label.h>
@@ -317,7 +318,18 @@ int mac_selinux_create_file_prepare(const char *path, mode_t mode) {
         if (!label_hnd)
                 return 0;
 
-        r = selabel_lookup_raw(label_hnd, &filecon, path, mode);
+        if (path_is_absolute(path))
+                r = selabel_lookup_raw(label_hnd, &filecon, path, mode);
+        else {
+                _cleanup_free_ char *newpath;
+
+                newpath = path_make_absolute_cwd(path);
+                if (!newpath)
+                        return -ENOMEM;
+
+                r = selabel_lookup_raw(label_hnd, &filecon, newpath, mode);
+        }
+
         if (r < 0 && errno != ENOENT)
                 r = -errno;
         else if (r == 0) {
