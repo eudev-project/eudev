@@ -412,4 +412,6 @@ union file_handle_union {
 
 char *tempfn_xxxxxx(const char *p);
 
+int is_dir(const char *path, bool follow);
+
 int execute_command(const char *command, char *const argv[]);

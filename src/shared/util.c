@@ -1373,6 +1373,20 @@ char *tempfn_xxxxxx(const char *p) {
         return t;
 }
 
+int is_dir(const char* path, bool follow) {
+        struct stat st;
+
+        if (follow) {
+                if (stat(path, &st) < 0)
+                        return -errno;
+        } else {
+                if (lstat(path, &st) < 0)
+                        return -errno;
+        }
+
+        return !!S_ISDIR(st.st_mode);
+}
+
 int execute_command(const char *command, char *const argv[]) {
 
         pid_t pid;

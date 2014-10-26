@@ -30,20 +30,6 @@
 #include "path-util.h"
 #include "mkdir.h"
 
-int is_dir(const char* path, bool follow) {
-        struct stat st;
-
-        if (follow) {
-                if (stat(path, &st) < 0)
-                        return -errno;
-        } else {
-                if (lstat(path, &st) < 0)
-                        return -errno;
-        }
-
-        return S_ISDIR(st.st_mode);
-}
-
 int mkdir_parents_internal(const char *prefix, const char *path, mode_t mode, mkdir_func_t _mkdir) {
         const char *p, *e;
         int r;
