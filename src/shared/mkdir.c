@@ -23,12 +23,34 @@
 #include <errno.h>
 #include <stdlib.h>
 #include <stdio.h>
-#include <limits.h>
 
 #include "label.h"
 #include "util.h"
 #include "path-util.h"
 #include "mkdir.h"
+
+int mkdir_safe_internal(const char *path, mode_t mode, uid_t uid, gid_t gid, mkdir_func_t _mkdir) {
+        struct stat st;
+
+        if (_mkdir(path, mode) >= 0)
+                if (chmod_and_chown(path, mode, uid, gid) < 0)
+                        return -errno;
+
+        if (lstat(path, &st) < 0)
+                return -errno;
+
+        if ((st.st_mode & 0007) > (mode & 0007) ||
+            (st.st_mode & 0070) > (mode & 0070) ||
+            (st.st_mode & 0700) > (mode & 0700) ||
+            (uid != (uid_t) -1 && st.st_uid != uid) ||
+            (gid != (gid_t) -1 && st.st_gid != gid) ||
+            !S_ISDIR(st.st_mode)) {
+                errno = EEXIST;
+                return -errno;
+        }
+
+        return 0;
+}
 
 int mkdir_parents_internal(const char *prefix, const char *path, mode_t mode, mkdir_func_t _mkdir) {
         const char *p, *e;
