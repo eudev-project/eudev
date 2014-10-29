@@ -186,12 +186,6 @@ int log_open(void) {
             getpid() == 1 ||
             isatty(STDERR_FILENO) <= 0) {
 
-                if (log_target == LOG_TARGET_AUTO)
-                    if (r >= 0) {
-                        log_close_syslog();
-                        log_close_console();
-                        return r;
-                     }
                 if (log_target == LOG_TARGET_SYSLOG_OR_KMSG ||
                     log_target == LOG_TARGET_SYSLOG) {
                         r = log_open_syslog();
