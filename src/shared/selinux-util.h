@@ -22,6 +22,7 @@
 #include <sys/socket.h>
 #include <stdio.h>
 #include <stdbool.h>
+#include <fcntl.h>
 
 bool mac_selinux_use(void);
 void mac_selinux_retest(void);
