@@ -44,7 +44,7 @@
 
 #ifndef __NR_getrandom
 #  if defined __x86_64__
-#    define __NR_getrandom 278
+#    define __NR_getrandom 318
 #  else
 #    warning "__NR_getrandom unknown for your architecture"
 #    define __NR_getrandom 0xffffffff
