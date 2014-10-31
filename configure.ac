@@ -60,20 +60,20 @@ AC_C_INLINE
 AC_TYPE_MODE_T
 AC_TYPE_PID_T
 AC_CHECK_MEMBERS([struct stat.st_rdev])
-AC_CHECK_DECLS([gettid, name_to_handle_at, accept4, mkostemp], [], [], [[#include <sys/types.h>
+AC_CHECK_DECLS([getrandom, gettid, name_to_handle_at, accept4, mkostemp], [], [], [[#include <sys/types.h>
 #include <unistd.h>
 #include <sys/mount.h>
 #include <fcntl.h>
-#include <sys/socket.h>]])
+#include <sys/socket.h>
+#include <linux/random.h>]])
 
 AC_CHECK_SIZEOF(pid_t)
 AC_CHECK_SIZEOF(uid_t)
 AC_CHECK_SIZEOF(gid_t)
 AC_CHECK_SIZEOF(time_t)
-AC_CHECK_SIZEOF(rlim_t,,[
-       #include <sys/time.h>
-       #include <sys/resource.h>
-])
+AC_CHECK_SIZEOF(rlim_t,,[[
+#include <sys/time.h>
+#include <sys/resource.h>]])
 
 # Checks for library functions.
 AC_FUNC_CHOWN
