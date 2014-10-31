@@ -192,6 +192,7 @@ bool ignore_file(const char *filename) _pure_;
 
 int dev_urandom(void *p, size_t n);
 void random_bytes(void *p, size_t n);
+void initialize_srand(void);
 
 /* For basic lookup tables with strictly enumerated entries */
 #define __DEFINE_STRING_TABLE_LOOKUP(name,type,scope)                   \
