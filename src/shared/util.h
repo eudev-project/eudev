@@ -369,11 +369,31 @@ void *xbsearch_r(const void *key, const void *base, size_t nmemb, size_t size,
                         break;                                  \
                 } else
 
+static inline void *mempset(void *s, int c, size_t n) {
+        memset(s, c, n);
+        return (uint8_t*)s + n;
+}
+
 static inline void _reset_errno_(int *saved_errno) {
         errno = *saved_errno;
 }
 
 #define PROTECT_ERRNO _cleanup_(_reset_errno_) __attribute__((unused)) int _saved_errno_ = errno
+
+static inline unsigned log2u(unsigned x) {
+        assert(x > 0);
+
+        return sizeof(unsigned) * 8 - __builtin_clz(x) - 1;
+}
+
+static inline unsigned log2u_round_up(unsigned x) {
+        assert(x > 0);
+
+        if (x == 1)
+                return 0;
+
+        return log2u(x - 1) + 1;
+}
 
 int unlink_noerrno(const char *path);
 

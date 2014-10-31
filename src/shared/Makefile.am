@@ -19,7 +19,6 @@ libudev_shared_la_SOURCES=\
 	MurmurHash2.c \
 	path-util.c \
 	selinux-util.c \
-	set.c \
 	siphash24.c \
 	smack-util.c \
 	strbuf.c \
@@ -41,6 +40,7 @@ noinst_HEADERS = \
 	hashmap.h \
 	ioprio.h \
 	label.h \
+	list.h \
 	log.h \
 	macro.h \
 	mempool.h \

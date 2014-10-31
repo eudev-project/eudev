@@ -70,6 +70,7 @@ AC_CHECK_DECLS([getrandom, gettid, name_to_handle_at, accept4, mkostemp], [], []
 AC_CHECK_SIZEOF(pid_t)
 AC_CHECK_SIZEOF(uid_t)
 AC_CHECK_SIZEOF(gid_t)
+AC_CHECK_SIZEOF(dev_t)
 AC_CHECK_SIZEOF(time_t)
 AC_CHECK_SIZEOF(rlim_t,,[[
 #include <sys/time.h>
