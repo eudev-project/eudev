@@ -48,10 +48,6 @@ docs/libudev/libudev.prerequisites
 docs/libudev/libudev.signals
 docs/libudev/html/
 docs/libudev/xml/
-man/udev.7
-man/udev.conf.5
-man/udevd.8
-man/udevadm.8
 rule_generator/write_cd_rules
 rule_generator/write_net_rules
 
