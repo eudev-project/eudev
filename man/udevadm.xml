@@ -6,7 +6,7 @@
 <refentry id="udevadm">
   <refentryinfo>
     <title>udevadm</title>
-    <productname>systemd</productname>
+    <productname>eudev</productname>
     <authorgroup>
       <author>
         <contrib>Developer</contrib>

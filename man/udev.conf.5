@@ -4,10 +4,10 @@
 .\" Generator: DocBook XSL Stylesheets v1.78.0 <http://docbook.sf.net/>
 .\"      Date: 10/31/2014
 .\"    Manual: udev.conf
-.\"    Source: systemd
+.\"    Source: eudev
 .\"  Language: English
 .\"
-.TH "UDEV\&.CONF" "5" "" "systemd" "udev.conf"
+.TH "UDEV\&.CONF" "5" "" "eudev" "udev.conf"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -35,7 +35,7 @@ udev.conf \- Configuration for device event managing daemon
 .SH "DESCRIPTION"
 .PP
 
-\fBsystemd-udevd\fR(8)
+\fBudevd\fR(8)
 expects its main configuration file at
 /etc/udev/udev\&.conf\&. It consists of a set of variables allowing the user to override default udev values\&. All empty lines or lines beginning with \*(Aq#\*(Aq are ignored\&. The following variables can be set:
 .PP
@@ -49,12 +49,12 @@ and
 .RE
 .PP
 In addition,
-systemd\-udevd
+udevd
 can be configured by command\-line options and the kernel commandline (see
-\fBsystemd-udevd\fR(8))\&.
+\fBudevd\fR(8))\&.
 .SH "SEE ALSO"
 .PP
 
-\fBsystemd-udevd\fR(8),
+\fBudevd\fR(8),
 \fBudev\fR(7),
 \fBudevadm\fR(8)
