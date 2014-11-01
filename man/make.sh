@@ -1,5 +1,7 @@
 #/bin/sh
 
+set -e
+
 XSLTPROC="/usr/bin/xsltproc"
 
 XSLTPROC_FLAGS="--stringparam man.output.quietly 1 \
