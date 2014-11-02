@@ -118,7 +118,7 @@ _public_ void udev_set_userdata(struct udev *udev, void *userdata)
 _public_ struct udev *udev_new(void)
 {
         struct udev *udev;
-        _cleanup_free_ FILE *f;
+        _cleanup_fclose_ FILE *f = NULL;
 
         udev = new0(struct udev, 1);
         if (udev == NULL)
