@@ -118,7 +118,7 @@ _public_ void udev_set_userdata(struct udev *udev, void *userdata)
 _public_ struct udev *udev_new(void)
 {
         struct udev *udev;
-        FILE *f;
+        _cleanup_free_ FILE *f;
 
         udev = new0(struct udev, 1);
         if (udev == NULL)
@@ -131,7 +131,7 @@ _public_ struct udev *udev_new(void)
         f = fopen( UDEV_CONF_FILE, "re");
         if (f != NULL) {
                 char line[UTIL_LINE_SIZE];
-                int line_nr = 0;
+                unsigned line_nr = 0;
 
                 while (fgets(line, sizeof(line), f)) {
                         size_t len;
@@ -152,7 +152,7 @@ _public_ struct udev *udev_new(void)
                         /* split key/value */
                         val = strchr(key, '=');
                         if (val == NULL) {
-                                udev_err(udev, "missing <key>=<value> in " UDEV_CONF_FILE "[%i]; skip line\n", line_nr);
+                                udev_err(udev, UDEV_CONF_FILE ":%u: missing assignment,  skipping line.\n", line_nr);
                                 continue;
                         }
                         val[0] = '\0';
@@ -184,7 +184,7 @@ _public_ struct udev *udev_new(void)
                         /* unquote */
                         if (val[0] == '"' || val[0] == '\'') {
                                 if (val[len-1] != val[0]) {
-                                        udev_err(udev, "inconsistent quoting in " UDEV_CONF_FILE"[%i]; skip line\n", line_nr);
+                                        udev_err(udev, UDEV_CONF_FILE ":%u: inconsistent quoting, skipping line.\n", line_nr);
                                         continue;
                                 }
                                 val[len-1] = '\0';
@@ -196,7 +196,6 @@ _public_ struct udev *udev_new(void)
                                 continue;
                         }
                 }
-                fclose(f);
         }
 
         return udev;
