@@ -277,7 +277,7 @@ _public_ struct udev_hwdb *udev_hwdb_new(struct udev *udev) {
 
         hwdb->f = fopen(UDEV_HWDB_BIN, "re");
         if (!hwdb->f) {
-                udev_dbg(udev, "error reading " UDEV_HWDB_BIN ": %m");
+                udev_dbg(udev, UDEV_HWDB_BIN "does not exist, please run udevadm hwdb --update");
                 udev_hwdb_unref(hwdb);
                 return NULL;
         }
