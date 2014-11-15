@@ -427,6 +427,115 @@ int rmdir_parents(const char *path, const char *stop) {
         return 0;
 }
 
+int get_process_comm(pid_t pid, char **name) {
+        const char *p;
+        int r;
+
+        assert(name);
+        assert(pid >= 0);
+
+        p = procfs_file_alloca(pid, "comm");
+
+        r = read_one_line_file(p, name);
+        if (r == -ENOENT)
+                return -ESRCH;
+
+        return r;
+}
+
+int get_process_cmdline(pid_t pid, size_t max_length, bool comm_fallback, char **line) {
+        _cleanup_fclose_ FILE *f = NULL;
+        char *r = NULL, *k;
+        const char *p;
+        int c;
+
+        assert(line);
+        assert(pid >= 0);
+
+        p = procfs_file_alloca(pid, "cmdline");
+
+        f = fopen(p, "re");
+        if (!f)
+                return -errno;
+
+        if (max_length == 0) {
+                size_t len = 0, allocated = 0;
+
+                while ((c = getc(f)) != EOF) {
+
+                        if (!GREEDY_REALLOC(r, allocated, len+2)) {
+                                free(r);
+                                return -ENOMEM;
+                        }
+
+                        r[len++] = isprint(c) ? c : ' ';
+                }
+
+                if (len > 0)
+                        r[len-1] = 0;
+
+        } else {
+                bool space = false;
+                size_t left;
+
+                r = new(char, max_length);
+                if (!r)
+                        return -ENOMEM;
+
+                k = r;
+                left = max_length;
+                while ((c = getc(f)) != EOF) {
+
+                        if (isprint(c)) {
+                                if (space) {
+                                        if (left <= 4)
+                                                break;
+
+                                        *(k++) = ' ';
+                                        left--;
+                                        space = false;
+                                }
+
+                                if (left <= 4)
+                                        break;
+
+                                *(k++) = (char) c;
+                                left--;
+                        }  else
+                                space = true;
+                }
+
+                if (left <= 4) {
+                        size_t n = MIN(left-1, 3U);
+                        memcpy(k, "...", n);
+                        k[n] = 0;
+                } else
+                        *k = 0;
+        }
+
+        /* Kernel threads have no argv[] */
+        if (isempty(r)) {
+                _cleanup_free_ char *t = NULL;
+                int h;
+
+                free(r);
+
+                if (!comm_fallback)
+                        return -ENOENT;
+
+                h = get_process_comm(pid, &t);
+                if (h < 0)
+                        return h;
+
+                r = strjoin("[", t, "]", NULL);
+                if (!r)
+                        return -ENOMEM;
+        }
+
+        *line = r;
+        return 0;
+}
+
 char hexchar(int x) {
         static const char table[16] = "0123456789abcdef";
 
@@ -1315,6 +1424,32 @@ void *xbsearch_r(const void *key, const void *base, size_t nmemb, size_t size,
                         return (void *)p;
         }
         return NULL;
+}
+
+void* greedy_realloc(void **p, size_t *allocated, size_t need, size_t size) {
+        size_t a, newalloc;
+        void *q;
+
+        assert(p);
+        assert(allocated);
+
+        if (*allocated >= need)
+                return *p;
+
+        newalloc = MAX(need * 2, 64u / size);
+        a = newalloc * size;
+
+        /* check for overflows */
+        if (a < size * need)
+                return NULL;
+
+        q = realloc(*p, a);
+        if (!q)
+                return NULL;
+
+        *p = q;
+        *allocated = newalloc;
+        return q;
 }
 
 int proc_cmdline(char **ret) {

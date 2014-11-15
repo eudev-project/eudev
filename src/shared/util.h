@@ -180,6 +180,10 @@ char *strnappend(const char *s, const char *suffix, size_t length);
 char *truncate_nl(char *s);
 
 int rmdir_parents(const char *path, const char *stop);
+
+int get_process_comm(pid_t pid, char **name);
+int get_process_cmdline(pid_t pid, size_t max_length, bool comm_fallback, char **line);
+
 char hexchar(int x) _const_;
 char octchar(int x) _const_;
 
@@ -374,6 +378,10 @@ static inline void *mempset(void *s, int c, size_t n) {
         return (uint8_t*)s + n;
 }
 
+
+void* greedy_realloc(void **p, size_t *allocated, size_t need, size_t size);
+#define GREEDY_REALLOC(array, allocated, need)                          \
+        greedy_realloc((void**) &(array), &(allocated), (need), sizeof((array)[0]))
 static inline void _reset_errno_(int *saved_errno) {
         errno = *saved_errno;
 }
@@ -410,6 +418,19 @@ int unlink_noerrno(const char *path);
                 for (_i = 0; _i < ELEMENTSOF(_appendees_); _i++) \
                         _p_ = stpcpy(_p_, _appendees_[_i]);      \
                 _d_;                                             \
+        })
+
+#define procfs_file_alloca(pid, field)                                  \
+        ({                                                              \
+                pid_t _pid_ = (pid);                                    \
+                const char *_r_;                                        \
+                if (_pid_ == 0) {                                       \
+                        _r_ = ("/proc/self/" field);                    \
+                } else {                                                \
+                        _r_ = alloca(strlen("/proc/") + DECIMAL_STR_MAX(pid_t) + 1 + sizeof(field)); \
+                        sprintf((char*) _r_, "/proc/"PID_FMT"/" field, _pid_);                       \
+                }                                                       \
+                _r_;                                                    \
         })
 
 static inline void qsort_safe(void *base, size_t nmemb, size_t size,
