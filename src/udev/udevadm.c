@@ -26,12 +26,6 @@
 
 #include "udev.h"
 
-void udev_main_log(struct udev *udev, int priority,
-                   const char *file, int line, const char *fn,
-                   const char *format, va_list args) {
-        log_metav(priority, file, line, fn, format, args);
-}
-
 static int adm_version(struct udev *udev, int argc, char *argv[]) {
         printf("%s\n", UDEV_VERSION);
         return 0;
@@ -97,7 +91,6 @@ int main(int argc, char *argv[]) {
                 goto out;
 
         log_open();
-        udev_set_log_fn(udev, udev_main_log);
         mac_selinux_init("/dev");
 
         while ((c = getopt_long(argc, argv, "+dhV", options, NULL)) >= 0)
@@ -105,7 +98,6 @@ int main(int argc, char *argv[]) {
 
                 case 'd':
                         log_set_max_level(LOG_DEBUG);
-                        udev_set_log_priority(udev, LOG_DEBUG);
                         break;
 
                 case 'h':

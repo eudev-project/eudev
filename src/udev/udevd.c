@@ -53,12 +53,6 @@
 #include "dev-setup.h"
 #include "fileio.h"
 
-void udev_main_log(struct udev *udev, int priority,
-                   const char *file, int line, const char *fn,
-                   const char *format, va_list args) {
-        log_metav(priority, file, line, fn, format, args);
-}
-
 static struct udev_rules *rules;
 static struct udev_ctrl *udev_ctrl;
 static struct udev_monitor *monitor;
@@ -80,6 +74,7 @@ static sigset_t sigmask_orig;
 static UDEV_LIST(event_list);
 static UDEV_LIST(worker_list);
 static char *udev_cgroup;
+static struct udev_list properties_list;
 static bool udev_exit;
 
 enum event_state {
@@ -636,7 +631,6 @@ static struct udev_ctrl_connection *handle_ctrl_msg(struct udev_ctrl *uctrl) {
         if (i >= 0) {
                 log_debug("udevd message (SET_LOG_LEVEL) received, log_priority=%i", i);
                 log_set_max_level(i);
-                udev_set_log_priority(udev, i);
                 worker_kill(udev);
         }
 
@@ -669,10 +663,10 @@ static struct udev_ctrl_connection *handle_ctrl_msg(struct udev_ctrl *uctrl) {
                                 val = &val[1];
                                 if (val[0] == '\0') {
                                         log_debug("udevd message (ENV) received, unset '%s'", key);
-                                        udev_add_property(udev, key, NULL);
+                                        udev_list_entry_add(&properties_list, key, NULL);
                                 } else {
                                         log_debug("udevd message (ENV) received, set '%s=%s'", key, val);
-                                        udev_add_property(udev, key, val);
+                                        udev_list_entry_add(&properties_list, key, val);
                                 }
                         } else {
                                 log_error("wrong key format '%s'", key);
@@ -1011,7 +1005,6 @@ static void kernel_cmdline_options(struct udev *udev) {
 
                         prio = util_log_priority(value);
                         log_set_max_level(prio);
-                        udev_set_log_priority(udev, prio);
                 } else if ((value = startswith(opt, "udev.children-max="))) {
                         r = safe_atoi(value, &arg_children_max);
                         if (r < 0)
@@ -1146,19 +1139,14 @@ int main(int argc, char *argv[]) {
         log_set_target(LOG_TARGET_AUTO);
         log_open();
 
-        udev_set_log_fn(udev, udev_main_log);
-        log_set_max_level(udev_get_log_priority(udev));
-
         r = parse_argv(argc, argv);
         if (r <= 0)
                 goto exit;
 
         kernel_cmdline_options(udev);
 
-        if (arg_debug) {
+        if (arg_debug)
                 log_set_max_level(LOG_DEBUG);
-                udev_set_log_priority(udev, LOG_DEBUG);
-        }
 
         if (getuid() != 0) {
                 log_error("root privileges required");
@@ -1179,6 +1167,8 @@ int main(int argc, char *argv[]) {
         }
 
         umask(022);
+
+        udev_list_init(udev, &properties_list, true);
 
         r = mkdir("/run/udev", 0755);
         if (r < 0 && errno != EEXIST) {

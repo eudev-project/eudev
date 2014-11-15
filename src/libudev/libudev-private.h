@@ -26,7 +26,6 @@
 
 #include "libudev.h"
 #include "macro.h"
-#include "time-util.h"
 #include "util.h"
 #include "mkdir.h"
 #include "strxcpyx.h"
@@ -34,23 +33,8 @@
 #define READ_END  0
 #define WRITE_END 1
 
-/* avoid (sometimes expensive) calculations of parameters for debug output */
-#define udev_log_cond(udev, prio, arg...) \
-  do { \
-    if (udev_get_log_priority(udev) >= prio) \
-      udev_log(udev, prio, __FILE__, __LINE__, __FUNCTION__, ## arg); \
-  } while (0)
-
-#define udev_dbg(udev, arg...) udev_log_cond(udev, LOG_DEBUG, ## arg)
-#define udev_err(udev, arg...) udev_log_cond(udev, LOG_ERR, ## arg)
-
 /* libudev.c */
-void udev_log(struct udev *udev,
-              int priority, const char *file, int line, const char *fn,
-              const char *format, ...) _printf_(6, 7);
 int udev_get_rules_path(struct udev *udev, char **path[], usec_t *ts_usec[]);
-struct udev_list_entry *udev_add_property(struct udev *udev, const char *key, const char *value);
-struct udev_list_entry *udev_get_properties_list_entry(struct udev *udev);
 
 /* libudev-device.c */
 struct udev_device *udev_device_new(struct udev *udev);

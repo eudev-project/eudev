@@ -102,7 +102,6 @@ static bool device_has_info(struct udev_device *udev_device)
 
 int udev_device_update_db(struct udev_device *udev_device)
 {
-        struct udev *udev = udev_device_get_udev(udev_device);
         bool has_info;
         const char *id;
         char filename[UTIL_PATH_SIZE];
@@ -130,8 +129,8 @@ int udev_device_update_db(struct udev_device *udev_device)
         mkdir_parents(filename_tmp, 0755);
         f = fopen(filename_tmp, "we");
         if (f == NULL) {
-                udev_err(udev, "unable to create temporary db file '%s': %m\n", filename_tmp);
-                return -1;
+                log_debug("unable to create temporary db file '%s': %m\n", filename_tmp);
+                return -errno;
         }
 
         /*
@@ -172,7 +171,7 @@ int udev_device_update_db(struct udev_device *udev_device)
         r = rename(filename_tmp, filename);
         if (r < 0)
                 return -1;
-        udev_dbg(udev, "created %s file '%s' for '%s'\n", has_info ? "db" : "empty",
+        log_debug("created %s file '%s' for '%s'\n", has_info ? "db" : "empty",
              filename, udev_device_get_devpath(udev_device));
         return 0;
 }
