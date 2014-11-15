@@ -46,10 +46,6 @@ static inline int unshare (int x) { return syscall(SYS_unshare, x); }
 #include <linux/sched.h>
 #endif
 
-void udev_main_log(struct udev *udev, int priority,
-                   const char *file, int line, const char *fn,
-                   const char *format, va_list args) {}
-
 static int fake_filesystems(void) {
         static const struct fakefs {
                 const char *src;
