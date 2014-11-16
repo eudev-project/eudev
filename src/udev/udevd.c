@@ -300,9 +300,15 @@ static void worker_new(struct event *event) {
                         }
 
                         /* apply rules, create node, symlinks */
-                        udev_event_execute_rules(udev_event, arg_event_timeout_usec, arg_event_timeout_warn_usec, rules, &sigmask_orig);
+                        udev_event_execute_rules(udev_event,
+                                                 arg_event_timeout_usec, arg_event_timeout_warn_usec,
+                                                 &properties_list,
+                                                 rules,
+                                                 &sigmask_orig);
 
-                        udev_event_execute_run(udev_event, arg_event_timeout_usec, arg_event_timeout_warn_usec, &sigmask_orig);
+                        udev_event_execute_run(udev_event,
+                                               arg_event_timeout_usec, arg_event_timeout_warn_usec,
+                                               &sigmask_orig);
 
                         /* apply/restore inotify watch */
                         if (udev_event->inotify_watch) {

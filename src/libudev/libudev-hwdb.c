@@ -360,6 +360,7 @@ bool udev_hwdb_validate(struct udev_hwdb *hwdb) {
                 return false;
         if (stat("/etc/udev/hwdb.bin", &st) < 0)
                 return true;
+
         if (timespec_load(&hwdb->st.st_mtim) != timespec_load(&st.st_mtim))
                 return true;
         return false;
