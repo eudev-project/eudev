@@ -49,9 +49,15 @@ AC_CHECK_HEADERS(
 )
 
 AC_CHECK_HEADERS(
-	[linux/btrfs.h mtd/mtd-user.h],
+	[mtd/mtd-user.h],
 	[],
 	[AC_MSG_ERROR([*** KERNEL header not found])]
+)
+
+AC_CHECK_HEADERS(
+	[linux/btrfs.h],
+	[],
+	[AC_MSG_WARN([*** KERNEL header not found])]
 )
 
 # Checks for typedefs, structures, and compiler characteristics.
