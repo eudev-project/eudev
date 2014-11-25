@@ -12,6 +12,7 @@ dist_udevrules_DATA = \
 	60-persistent-v4l.rules \
 	61-accelerometer.rules \
 	64-btrfs.rules \
+	70-mouse.rules \
 	75-net-description.rules \
 	75-probe_mtd.rules \
 	75-tty-description.rules \

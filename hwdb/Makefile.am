@@ -9,7 +9,8 @@ dist_udevhwdb_DATA = \
 	20-sdio-classes.hwdb \
 	20-sdio-vendor-model.hwdb \
 	20-usb-classes.hwdb \
-	20-usb-vendor-model.hwdb
+	20-usb-vendor-model.hwdb \
+	70-mouse.hwdb
 
 if ENABLE_KEYMAP
 dist_udevhwdb_DATA += \
