@@ -89,11 +89,13 @@ noreturn void log_assert_failed_unreachable(
 
 
 /* Logging with level */
-#define log_full_errno(level, error, ...)                               \
-        do {                                                            \
-                if (log_get_max_level() >= (level))                     \
-                        log_internal((level), error, __FILE__, __LINE__, __func__, __VA_ARGS__); \
-        } while (false)
+#define log_full_errno(level, error, ...)                                         \
+        ({                                                                        \
+                int _l = (level), _e = (error);                                   \
+                (log_get_max_level() >= _l)                                       \
+                ? log_internal(_l, _e, __FILE__, __LINE__, __func__, __VA_ARGS__) \
+                : -abs(_e); \
+        })
 
 #define log_full(level, ...) log_full_errno(level, 0, __VA_ARGS__)
 
@@ -120,7 +122,6 @@ noreturn void log_assert_failed_unreachable(
 #endif
 
 /* This modifies the buffer passed! */
-//#define log_dump(level, buffer) log_dump_internal(level, 0, __FILE__, __LINE__, __func__, buffer)
 
 #define log_oom() log_oom_internal(__FILE__, __LINE__, __func__)
 
