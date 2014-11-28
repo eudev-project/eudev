@@ -34,7 +34,10 @@ udevadm_SOURCES = \
 	udevadm-settle.c \
 	udevadm-trigger.c \
 	udevadm-test.c \
-	udevadm-test-builtin.c
+	udevadm-test-builtin.c \
+	udevadm-util.c \
+	udevadm-util.h
+
 
 udevadm_LDADD = \
 	libudev-core.la
