@@ -54,24 +54,27 @@ void log_close_console(void);
 
 int log_meta(
                 int level,
+                int error,
                 const char*file,
                 int line,
                 const char *func,
-                const char *format, ...) _printf_(5,6);
+                const char *format, ...) _printf_(6,7);
 
 int log_metav(
                 int level,
+                int error,
                 const char*file,
                 int line,
                 const char *func,
                 const char *format,
-                va_list ap) _printf_(5,0);
+                va_list ap) _printf_(6,0);
 
 int log_oom_internal(
                 const char *file,
                 int line,
                 const char *func);
 
+/* Logging for various assertions */
 noreturn void log_assert_failed(
                 const char *text,
                 const char *file,
@@ -85,17 +88,30 @@ noreturn void log_assert_failed_unreachable(
                 const char *func);
 
 
-#define log_full(level, ...) \
-do { \
-        if (log_get_max_level() >= (level)) \
-                log_meta((level), __FILE__, __LINE__, __func__, __VA_ARGS__); \
-} while (0)
+/* Logging with level */
+#define log_full_errno(level, error, ...)                               \
+        do {                                                            \
+                if (log_get_max_level() >= (level))                     \
+                        log_meta((level), error, __FILE__, __LINE__, __func__, __VA_ARGS__); \
+        } while (false)
 
-#define log_debug(...)   log_full(LOG_DEBUG,   __VA_ARGS__)
-#define log_info(...)    log_full(LOG_INFO,    __VA_ARGS__)
-#define log_notice(...)  log_full(LOG_NOTICE,  __VA_ARGS__)
-#define log_warning(...) log_full(LOG_WARNING, __VA_ARGS__)
-#define log_error(...)   log_full(LOG_ERR,     __VA_ARGS__)
+#define log_full(level, ...) log_full_errno(level, 0, __VA_ARGS__)
+
+/* Normal logging */
+#define log_debug(...)     log_full(LOG_DEBUG,   __VA_ARGS__)
+#define log_info(...)      log_full(LOG_INFO,    __VA_ARGS__)
+#define log_notice(...)    log_full(LOG_NOTICE,  __VA_ARGS__)
+#define log_warning(...)   log_full(LOG_WARNING, __VA_ARGS__)
+#define log_error(...)     log_full(LOG_ERR,     __VA_ARGS__)
+#define log_emergency(...) log_full(getpid() == 1 ? LOG_EMERG : LOG_ERR, __VA_ARGS__)
+
+/* Logging triggered by an errno-like error */
+#define log_debug_errno(error, ...)     log_full_errno(LOG_DEBUG,   error, __VA_ARGS__)
+#define log_info_errno(error, ...)      log_full_errno(LOG_INFO,    error, __VA_ARGS__)
+#define log_notice_errno(error, ...)    log_full_errno(LOG_NOTICE,  error, __VA_ARGS__)
+#define log_warning_errno(error, ...)   log_full_errno(LOG_WARNING, error, __VA_ARGS__)
+#define log_error_errno(error, ...)     log_full_errno(LOG_ERR,     error, __VA_ARGS__)
+#define log_emergency_errno(error, ...) log_full_errno(getpid() == 1 ? LOG_EMERG : LOG_ERR, error, __VA_ARGS__)
 
 #ifdef LOG_TRACE
 #  define log_trace(...) log_debug(__VA_ARGS__)
@@ -103,7 +119,8 @@ do { \
 #  define log_trace(...) do {} while(0)
 #endif
 
-#define log_struct(level, ...) log_struct_internal(level, __FILE__, __LINE__, __func__, __VA_ARGS__)
+/* This modifies the buffer passed! */
+//#define log_dump(level, buffer) log_dump_internal(level, 0, __FILE__, __LINE__, __func__, buffer)
 
 #define log_oom() log_oom_internal(__FILE__, __LINE__, __func__)
 

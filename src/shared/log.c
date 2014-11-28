@@ -102,8 +102,8 @@ void log_close_syslog(void) {
 }
 
 static int create_log_socket(int type) {
-        int fd;
         struct timeval tv;
+        int fd;
 
         fd = socket(AF_UNIX, type|SOCK_CLOEXEC, 0);
         if (fd < 0)
@@ -118,17 +118,19 @@ static int create_log_socket(int type) {
                 timeval_store(&tv, 10 * USEC_PER_MSEC);
         else
                 timeval_store(&tv, 10 * USEC_PER_SEC);
-        (void)setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
+        (void) setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
 
         return fd;
 }
 
 static int log_open_syslog(void) {
-        int r;
-        union sockaddr_union sa = {
+
+        static const union sockaddr_union sa = {
                 .un.sun_family = AF_UNIX,
                 .un.sun_path = "/dev/log",
         };
+
+        int r;
 
         if (syslog_fd >= 0)
                 return 0;
@@ -240,10 +242,11 @@ void log_set_max_level(int level) {
 
 static int write_to_console(
                 int level,
-                const char*file,
+                int error,
+                const char *file,
                 int line,
                 const char *func,
-                const char *object_name,
+                const char *object_field,
                 const char *object,
                 const char *buffer) {
 
@@ -294,15 +297,16 @@ static int write_to_console(
 }
 
 static int write_to_syslog(
-        int level,
-        const char*file,
-        int line,
-        const char *func,
-        const char *object_name,
-        const char *object,
-        const char *buffer) {
+                int level,
+                int error,
+                const char *file,
+                int line,
+                const char *func,
+                const char *object_field,
+                const char *object,
+                const char *buffer) {
 
-        char header_priority[16], header_time[64], header_pid[16];
+        char header_priority[1 + DECIMAL_STR_MAX(int) + 2], header_time[64], header_pid[1 + DECIMAL_STR_MAX(pid_t) + 4];
         struct iovec iovec[5] = {};
         struct msghdr msghdr = {
                 .msg_iov = iovec,
@@ -356,15 +360,16 @@ static int write_to_syslog(
 }
 
 static int write_to_kmsg(
-        int level,
-        const char*file,
-        int line,
-        const char *func,
-        const char *object_name,
-        const char *object,
-        const char *buffer) {
+                int level,
+                int error,
+                const char*file,
+                int line,
+                const char *func,
+                const char *object_field,
+                const char *object,
+                const char *buffer) {
 
-        char header_priority[16], header_pid[16];
+        char header_priority[1 + DECIMAL_STR_MAX(int) + 2], header_pid[1 + DECIMAL_STR_MAX(pid_t) + 4];
         struct iovec iovec[5] = {};
 
         if (kmsg_fd < 0)
@@ -388,45 +393,15 @@ static int write_to_kmsg(
         return 1;
 }
 
-static int log_do_header(char *header, size_t size,
-                         int level,
-                         const char *file, int line, const char *func,
-                         const char *object_name, const char *object) {
-        snprintf(header, size,
-                 "PRIORITY=%i\n"
-                 "SYSLOG_FACILITY=%i\n"
-                 "%s%.*s%s"
-                 "%s%.*i%s"
-                 "%s%.*s%s"
-                 "%s%.*s%s"
-                 "SYSLOG_IDENTIFIER=%s\n",
-                 LOG_PRI(level),
-                 LOG_FAC(level),
-                 file ? "CODE_FILE=" : "",
-                 file ? LINE_MAX : 0, file, /* %.0s means no output */
-                 file ? "\n" : "",
-                 line ? "CODE_LINE=" : "",
-                 line ? 1 : 0, line, /* %.0d means no output too, special case for 0 */
-                 line ? "\n" : "",
-                 func ? "CODE_FUNCTION=" : "",
-                 func ? LINE_MAX : 0, func,
-                 func ? "\n" : "",
-                 object ? object_name : "",
-                 object ? LINE_MAX : 0, object, /* %.0s means no output */
-                 object ? "\n" : "",
-                 program_invocation_short_name);
-        header[size - 1] = '\0';
-        return 0;
-}
-
 static int log_dispatch(
-        int level,
-        const char*file,
-        int line,
-        const char *func,
-        const char *object_name,
-        const char *object,
-        char *buffer) {
+                int level,
+                int error,
+                const char*file,
+                int line,
+                const char *func,
+                const char *object_field,
+                const char *object,
+                char *buffer) {
 
         int r = 0;
 
@@ -455,8 +430,7 @@ static int log_dispatch(
                 if (log_target == LOG_TARGET_SYSLOG_OR_KMSG ||
                     log_target == LOG_TARGET_SYSLOG) {
 
-                        k = write_to_syslog(level, file, line, func,
-                                            object_name, object, buffer);
+                        k = write_to_syslog(level, error, file, line, func, object_field, object, buffer);
                         if (k < 0) {
                                 if (k != -EAGAIN)
                                         log_close_syslog();
@@ -471,8 +445,7 @@ static int log_dispatch(
                      log_target == LOG_TARGET_SYSLOG_OR_KMSG ||
                      log_target == LOG_TARGET_KMSG)) {
 
-                        k = write_to_kmsg(level, file, line, func,
-                                          object_name, object, buffer);
+                        k = write_to_kmsg(level, error, file, line, func, object_field, object, buffer);
                         if (k < 0) {
                                 log_close_kmsg();
                                 log_open_console();
@@ -481,8 +454,7 @@ static int log_dispatch(
                 }
 
                 if (k <= 0) {
-                        k = write_to_console(level, file, line, func,
-                                             object_name, object, buffer);
+                        k = write_to_console(level, error, file, line, func, object_field, object, buffer);
                         if (k < 0)
                                 return k;
                 }
@@ -495,6 +467,7 @@ static int log_dispatch(
 
 int log_metav(
         int level,
+        int error,
         const char*file,
         int line,
         const char *func,
@@ -510,27 +483,34 @@ int log_metav(
         vsnprintf(buffer, sizeof(buffer), format, ap);
         char_array_0(buffer);
 
-        return log_dispatch(level, file, line, func, NULL, NULL, buffer);
+        return log_dispatch(level, error, file, line, func, NULL, NULL, buffer);
 }
 
 int log_meta(
-        int level,
-        const char*file,
-        int line,
-        const char *func,
-        const char *format, ...) {
+                int level,
+                int error,
+                const char*file,
+                int line,
+                const char *func,
+                const char *format, ...) {
 
         int r;
         va_list ap;
 
         va_start(ap, format);
-        r = log_metav(level, file, line, func, format, ap);
+        r = log_metav(level, error, file, line, func, format, ap);
         va_end(ap);
 
         return r;
 }
 
-static void log_assert(int level, const char *text, const char *file, int line, const char *func, const char *format) {
+static void log_assert(
+                int level,
+                const char *text,
+                const char *file,
+                int line,
+                const char *func,
+                const char *format) {
         static char buffer[LINE_MAX];
 
         if (_likely_(LOG_PRI(level) > log_max_level))
@@ -543,7 +523,7 @@ static void log_assert(int level, const char *text, const char *file, int line, 
         char_array_0(buffer);
         log_abort_msg = buffer;
 
-        log_dispatch(level, file, line, func, NULL, NULL, buffer);
+        log_dispatch(level, 0, file, line, func, NULL, NULL, buffer);
 }
 
 noreturn void log_assert_failed(const char *text, const char *file, int line, const char *func) {
@@ -557,7 +537,7 @@ noreturn void log_assert_failed_unreachable(const char *text, const char *file, 
 }
 
 int log_oom_internal(const char *file, int line, const char *func) {
-        log_meta(LOG_ERR, file, line, func, "Out of memory.");
+        log_meta(LOG_ERR, ENOMEM, file, line, func, "Out of memory.");
         return -ENOMEM;
 }
 
