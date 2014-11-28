@@ -52,18 +52,18 @@ void log_close_journal(void);
 void log_close_kmsg(void);
 void log_close_console(void);
 
-int log_meta(
+int log_internal(
                 int level,
                 int error,
-                const char*file,
+                const char *file,
                 int line,
                 const char *func,
                 const char *format, ...) _printf_(6,7);
 
-int log_metav(
+int log_internalv(
                 int level,
                 int error,
-                const char*file,
+                const char *file,
                 int line,
                 const char *func,
                 const char *format,
@@ -92,7 +92,7 @@ noreturn void log_assert_failed_unreachable(
 #define log_full_errno(level, error, ...)                               \
         do {                                                            \
                 if (log_get_max_level() >= (level))                     \
-                        log_meta((level), error, __FILE__, __LINE__, __func__, __VA_ARGS__); \
+                        log_internal((level), error, __FILE__, __LINE__, __func__, __VA_ARGS__); \
         } while (false)
 
 #define log_full(level, ...) log_full_errno(level, 0, __VA_ARGS__)
