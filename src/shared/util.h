@@ -183,6 +183,7 @@ int rmdir_parents(const char *path, const char *stop);
 
 int get_process_comm(pid_t pid, char **name);
 int get_process_cmdline(pid_t pid, size_t max_length, bool comm_fallback, char **line);
+int get_process_environ(pid_t pid, char **environ);
 
 char hexchar(int x) _const_;
 char octchar(int x) _const_;
