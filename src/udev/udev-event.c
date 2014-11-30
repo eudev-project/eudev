@@ -784,7 +784,7 @@ static int rename_netif_dev_fromname_toname(struct udev_device *dev,const char *
         sk = socket(PF_INET, SOCK_DGRAM, 0);
         if (sk < 0) {
                 err = -errno;
-                log_error("error opening socket: %m\n");
+                log_error("error opening socket: %m");
                 return err;
         }
 
@@ -798,11 +798,11 @@ static int rename_netif_dev_fromname_toname(struct udev_device *dev,const char *
         int loop;
 
         if (err == 0) {
-                log_info("renamed network interface %s to %s\n", ifr.ifr_name, ifr.ifr_newname);
+                log_info("renamed network interface %s to %s", ifr.ifr_name, ifr.ifr_newname);
                 goto out;
         }
         /* keep trying if the destination interface name already exists */
-        log_debug("collision on rename of network interface %s to %s , retrying until timeout\n",
+        log_debug("collision on rename of network interface %s to %s , retrying until timeout",
                 ifr.ifr_name, ifr.ifr_newname);
 
         err = -errno;
@@ -818,7 +818,7 @@ static int rename_netif_dev_fromname_toname(struct udev_device *dev,const char *
 
                 err = ioctl(sk, SIOCSIFNAME, &ifr);
                 if (err == 0) {
-                        log_info("renamed network interface %s to %s\n", ifr.ifr_name, ifr.ifr_newname);
+                        log_info("renamed network interface %s to %s", ifr.ifr_name, ifr.ifr_newname);
                         break;
                 }
                 err = -errno;
@@ -828,13 +828,13 @@ static int rename_netif_dev_fromname_toname(struct udev_device *dev,const char *
 
 out:
         if (err < 0)
-                log_error("error changing net interface name %s to %s: %m\n", ifr.ifr_name, ifr.ifr_newname);
+                log_error("error changing net interface name %s to %s: %m", ifr.ifr_name, ifr.ifr_newname);
 #else
         if (err >= 0) {
-                log_info("renamed network interface %s to %s\n", ifr.ifr_name, ifr.ifr_newname);
+                log_info("renamed network interface %s to %s", ifr.ifr_name, ifr.ifr_newname);
         } else {
                 err = -errno;
-                log_error("error changing net interface name %s to %s: %m\n", ifr.ifr_name, ifr.ifr_newname);
+                log_error("error changing net interface name %s to %s: %m", ifr.ifr_name, ifr.ifr_newname);
         }
 #endif
 
@@ -961,9 +961,9 @@ void udev_event_execute_rules(struct udev_event *event,
                                         r = rename_netif_dev_fromname_toname(dev,udev_device_get_sysname(dev),newifname);
                                         if (r == 0) {
                                                 finalifname = newifname;
-                                                log_debug("renamed netif to '%s' for collision avoidance\n", newifname);
+                                                log_debug("renamed netif to '%s' for collision avoidance", newifname);
                                         } else {
-                                                log_error("could not rename netif to '%s' for collision avoidance\n",newifname);
+                                                log_error("could not rename netif to '%s' for collision avoidance",newifname);
                                         }
                                 }
                                 /* rename it now to its final target if its not already there */

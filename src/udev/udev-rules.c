@@ -1420,12 +1420,12 @@ static int add_rule(struct udev_rules *rules, char *line,
                         } else {
                                 if (streq(value, "%k")) {
                                         log_error("NAME=\"%%k\" is ignored, because it breaks kernel supplied names, "
-                                            "please remove it from %s:%u\n", filename, lineno);
+                                            "please remove it from %s:%u", filename, lineno);
                                         continue;
                                 }
                                 if (value[0] == '\0') {
                                         log_debug("NAME=\"\" is ignored, because udev will not delete any device nodes, "
-                                                  "please remove it from %s:%u\n", filename, lineno);
+                                                  "please remove it from %s:%u", filename, lineno);
                                         continue;
                                 }
                                 rule_add_key(&rule_tmp, TK_A_NAME, op, value, NULL);
@@ -1916,9 +1916,9 @@ int udev_rules_assigning_name_to(struct udev_rules *rules, const char *match_nam
                         strscpy(name_str,UTIL_PATH_SIZE,name);
                         count = util_replace_chars(name_str, "/");
                         if (count > 0)
-                                log_debug("%i character(s) replaced\n", count); 
+                                log_debug("%i character(s) replaced", count); 
                         if (streq(name_str,match_name)) {
-                                log_debug("found a match! NAME assigns %s in: %s:%u\n",
+                                log_debug("found a match! NAME assigns %s in: %s:%u",
                                           name,
                                           rules_str(rules, rule->rule.filename_off),
                                           rule->rule.filename_line);
@@ -2518,7 +2518,7 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                         if (major(udev_device_get_devnum(event->dev)) &&
                             (!streq(name_str, udev_device_get_devnode(event->dev) + strlen("/dev/")))) {
                                 log_error("NAME=\"%s\" ignored, kernel device nodes "
-                                    "can not be renamed; please fix it in %s:%u\n", name,
+                                    "can not be renamed; please fix it in %s:%u", name,
                                     rules_str(rules, rule->rule.filename_off), rule->rule.filename_line);
                                 break;
                         }

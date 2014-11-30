@@ -966,7 +966,7 @@ static void static_dev_create_from_modules(struct udev *udev) {
                 strscpyl(filename, sizeof(filename), "/dev/", devname, NULL);
                 mkdir_parents_label(filename, 0755);
                 mac_selinux_create_file_prepare(filename, mode);
-                log_debug("mknod '%s' %c%u:%u\n", filename, type, maj, min);
+                log_debug("mknod '%s' %c%u:%u", filename, type, maj, min);
                 if (mknod(filename, mode, makedev(maj, min)) < 0 && errno == EEXIST)
                         utimensat(AT_FDCWD, filename, NULL, 0);
                 mac_selinux_create_file_clear();
@@ -1233,7 +1233,7 @@ int main(int argc, char *argv[]) {
 
         udev_monitor_set_receive_buffer_size(monitor, 128 * 1024 * 1024);
 
-        log_info("starting version " VERSION "\n");
+        log_info("starting version " VERSION);
 
         udev_builtin_init(udev);
 
