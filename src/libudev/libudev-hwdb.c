@@ -284,14 +284,14 @@ _public_ struct udev_hwdb *udev_hwdb_new(struct udev *udev) {
 
         if (fstat(fileno(hwdb->f), &hwdb->st) < 0 ||
             (size_t)hwdb->st.st_size < offsetof(struct trie_header_f, strings_len) + 8) {
-                log_debug("error reading " UDEV_HWDB_BIN ": %m");
+                log_debug_errno(errno, "error reading " UDEV_HWDB_BIN ": %m");
                 udev_hwdb_unref(hwdb);
                 return NULL;
         }
 
         hwdb->map = mmap(0, hwdb->st.st_size, PROT_READ, MAP_SHARED, fileno(hwdb->f), 0);
         if (hwdb->map == MAP_FAILED) {
-                log_debug("error mapping " UDEV_HWDB_BIN ": %m");
+                log_debug_errno(errno, "error mapping " UDEV_HWDB_BIN ": %m");
                 udev_hwdb_unref(hwdb);
                 return NULL;
         }

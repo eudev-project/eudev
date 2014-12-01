@@ -85,7 +85,7 @@ struct udev_ctrl *udev_ctrl_new_from_fd(struct udev *udev, int fd) {
         if (fd < 0) {
                 uctrl->sock = socket(AF_LOCAL, SOCK_SEQPACKET|SOCK_NONBLOCK|SOCK_CLOEXEC, 0);
                 if (uctrl->sock < 0) {
-                        log_error("error getting socket: %m");
+                        log_error_errno(errno, "error getting socket: %m");
                         udev_ctrl_unref(uctrl);
                         return NULL;
                 }
@@ -95,7 +95,7 @@ struct udev_ctrl *udev_ctrl_new_from_fd(struct udev *udev, int fd) {
         }
         r = setsockopt(uctrl->sock, SOL_SOCKET, SO_PASSCRED, &on, sizeof(on));
         if (r < 0)
-                log_warning("could not set SO_PASSCRED: %m");
+                log_warning_errno(errno, "could not set SO_PASSCRED: %m");
 
         uctrl->saddr.sun_family = AF_LOCAL;
         strscpy(uctrl->saddr.sun_path, sizeof(uctrl->saddr.sun_path), "/run/udev/control");
@@ -119,14 +119,14 @@ int udev_ctrl_enable_receiving(struct udev_ctrl *uctrl) {
 
                 if (err < 0) {
                         err = -errno;
-                        log_error("bind failed: %m");
+                        log_error_errno(errno, "bind failed: %m");
                         return err;
                 }
 
                 err = listen(uctrl->sock, 0);
                 if (err < 0) {
                         err = -errno;
-                        log_error("listen failed: %m");
+                        log_error_errno(errno, "listen failed: %m");
                         return err;
                 }
 
@@ -209,7 +209,7 @@ struct udev_ctrl_connection *udev_ctrl_get_connection(struct udev_ctrl *uctrl) {
 
         if (conn->sock < 0) {
                 if (errno != EINTR)
-                        log_error("unable to receive ctrl connection: %m");
+                        log_error_errno(errno, "unable to receive ctrl connection: %m");
                 goto err;
         }
 
@@ -227,7 +227,7 @@ struct udev_ctrl_connection *udev_ctrl_get_connection(struct udev_ctrl *uctrl) {
         /* enable receiving of the sender credentials in the messages */
         r = setsockopt(conn->sock, SOL_SOCKET, SO_PASSCRED, &on, sizeof(on));
         if (r < 0)
-                log_warning("could not set SO_PASSCRED: %m");
+                log_warning_errno(errno, "could not set SO_PASSCRED: %m");
 
         udev_ctrl_ref(uctrl);
         return conn;
@@ -383,7 +383,7 @@ struct udev_ctrl_msg *udev_ctrl_receive_msg(struct udev_ctrl_connection *conn) {
                         goto err;
                 } else {
                         if (!(pfd[0].revents & POLLIN)) {
-                                log_error("ctrl connection error: %m");
+                                log_error_errno(errno, "ctrl connection error: %m");
                                 goto err;
                         }
                 }
@@ -396,7 +396,7 @@ struct udev_ctrl_msg *udev_ctrl_receive_msg(struct udev_ctrl_connection *conn) {
 
         size = recvmsg(conn->sock, &smsg, 0);
         if (size <  0) {
-                log_error("unable to receive ctrl message: %m");
+                log_error_errno(errno, "unable to receive ctrl message: %m");
                 goto err;
         }
         cmsg = CMSG_FIRSTHDR(&smsg);

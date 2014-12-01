@@ -1603,7 +1603,7 @@ int execute_command(const char *command, char *const argv[]) {
                 return status;
 
         if ((pid = fork()) < 0) {
-                log_error("Failed to fork: %m");
+                log_error_errno(errno, "Failed to fork: %m");
                 return pid;
         }
 
@@ -1611,7 +1611,7 @@ int execute_command(const char *command, char *const argv[]) {
 
                 execvp(command, argv);
 
-                log_error("Failed to execute %s: %m", command);
+                log_error_errno(errno, "Failed to execute %s: %m", command);
                 _exit(EXIT_FAILURE);
         }
         else while (1)
