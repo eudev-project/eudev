@@ -236,4 +236,8 @@ static inline size_t IOVEC_INCREMENT(struct iovec *i, unsigned n, size_t k) {
 #endif
 #endif
 
+#define UID_INVALID ((uid_t) -1)
+#define GID_INVALID ((gid_t) -1)
+#define MODE_INVALID ((mode_t) -1)
+
 #include "log.h"
