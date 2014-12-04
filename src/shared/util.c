@@ -409,7 +409,7 @@ char *truncate_nl(char *s) {
         return s;
 }
 
-int get_process_environ(pid_t pid, char **environ) {
+int get_process_environ(pid_t pid, char **env) {
         _cleanup_fclose_ FILE *f = NULL;
         _cleanup_free_ char *outcome = NULL;
         int c;
@@ -417,7 +417,7 @@ int get_process_environ(pid_t pid, char **environ) {
         size_t allocated = 0, sz = 0;
 
         assert(pid >= 0);
-        assert(environ);
+        assert(env);
 
         p = procfs_file_alloca(pid, "environ");
 
@@ -436,7 +436,7 @@ int get_process_environ(pid_t pid, char **environ) {
         }
 
         outcome[sz] = '\0';
-        *environ = outcome;
+        *env = outcome;
         outcome = NULL;
 
         return 0;
