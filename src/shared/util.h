@@ -458,3 +458,10 @@ char *tempfn_xxxxxx(const char *p);
 int is_dir(const char *path, bool follow);
 
 int execute_command(const char *command, char *const argv[]);
+
+#define INOTIFY_EVENT_MAX (sizeof(struct inotify_event) + NAME_MAX + 1)
+
+#define FOREACH_INOTIFY_EVENT(e, buffer, sz) \
+        for ((e) = (struct inotify_event*) (buffer);    \
+             (uint8_t*) (e) < (uint8_t*) (buffer) + (sz); \
+             (e) = (struct inotify_event*) ((uint8_t*) (e) + sizeof(struct inotify_event) + (e)->len))

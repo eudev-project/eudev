@@ -35,6 +35,7 @@
 #define _likely_(x) (__builtin_expect(!!(x),1))
 #define _unlikely_(x) (__builtin_expect(!!(x),0))
 #define _public_ __attribute__ ((visibility("default")))
+#define _alignas_(x) __attribute__((aligned(__alignof(x))))
 #define _cleanup_(x) __attribute__((cleanup(x)))
 
 /* Temporarily disable some warnings */
