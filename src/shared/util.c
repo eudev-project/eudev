@@ -809,21 +809,25 @@ ssize_t loop_read(int fd, void *buf, size_t nbytes, bool do_poll) {
                 ssize_t k;
 
                 k = read(fd, p, nbytes);
-                if (k < 0 && errno == EINTR)
-                        continue;
+                if (k < 0) {
+                        if (errno == EINTR)
+                                continue;
 
-                if (k < 0 && errno == EAGAIN && do_poll) {
+                        if (errno == EAGAIN && do_poll) {
 
-                        /* We knowingly ignore any return value here,
-                         * and expect that any error/EOF is reported
-                         * via read() */
+                                /* We knowingly ignore any return value here,
+                                 * and expect that any error/EOF is reported
+                                 * via read() */
 
-                        fd_wait_for_event(fd, POLLIN, USEC_INFINITY);
-                        continue;
+                                fd_wait_for_event(fd, POLLIN, USEC_INFINITY);
+                                continue;
+                        }
+
+                        return n > 0 ? n : -errno;
                 }
 
-                if (k <= 0)
-                        return n > 0 ? n : (k < 0 ? -errno : 0);
+                if (k == 0)
+                        return n;
 
                 p += k;
                 nbytes -= k;
