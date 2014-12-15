@@ -1,5 +1,6 @@
 src/udev/udevadm
 src/udev/udevd
+src/udev/systemd-hwdb
 
 *.[oa]
 *.l[oa]

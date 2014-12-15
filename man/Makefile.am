@@ -2,6 +2,7 @@ ACLOCAL_AMFLAGS = -I m4 ${ACLOCAL_FLAGS}
 
 XMLPAGES = \
 	hwdb.xml \
+	systemd-hwdb.xml \
 	udev.xml \
 	udev.conf.xml \
 	udevd.xml \
@@ -20,5 +21,13 @@ MANPAGES = \
 	udevd.8 \
 	udevadm.8
 
+if ENABLE_SYSTEMD_HWDB
+MANPAGES += \
+	systemd-hwdb.8
+endif
+
 dist_man_MANS = \
 	$(MANPAGES)
+
+EXTRA_DIST += \
+	systemd-hwdb.8

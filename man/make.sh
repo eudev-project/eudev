@@ -20,6 +20,7 @@ xslt_proc() {
 
 xslt_proc udev 7
 xslt_proc hwdb 7
+xslt_proc systemd-hwdb 8
 xslt_proc udev.conf 5
 xslt_proc udevd 8
 xslt_proc udevadm 8

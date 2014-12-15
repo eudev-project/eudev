@@ -46,6 +46,19 @@ udevadm_SOURCES = \
 udevadm_LDADD = \
 	libudev-core.la
 
+if ENABLE_SYSTEMD_HWDB
+bin_PROGRAMS += \
+	systemd-hwdb
+
+systemd_hwdb_SOURCES = \
+	systemd-hwdb.c \
+	udevadm-util.c \
+	udevadm-util.h
+
+systemd_hwdb_LDADD = \
+	libudev-core.la
+endif
+
 noinst_LTLIBRARIES = \
         libudev-core.la
 

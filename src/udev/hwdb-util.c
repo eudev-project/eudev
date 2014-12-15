@@ -729,13 +729,31 @@ out:
         return err;
 }
 
-int hwdb_query(struct udev *udev, const char *modalias) {
-        struct udev_hwdb *hwdb;
+int hwdb_query(struct udev *udev, const char *modalias, const char *root) {
+        struct udev_hwdb *hwdb = NULL;
         struct udev_list_entry *entry;
 
         assert(modalias);
 
-        hwdb = udev_hwdb_new(udev);
+        if (!isempty(root)) {
+                /* the locations of hwdb.bin that libudev reads, below root */
+                static const char *const bin_paths[] = {
+                        "/etc/udev/hwdb.bin",
+                        UDEV_LIBEXEC_DIR "/hwdb.bin",
+                };
+                unsigned i;
+
+                for (i = 0; i < ELEMENTSOF(bin_paths) && !hwdb; i++) {
+                        _cleanup_free_ char *hwdb_bin = NULL;
+
+                        hwdb_bin = strjoin(root, bin_paths[i], NULL);
+                        if (!hwdb_bin)
+                                return log_oom();
+
+                        hwdb = udev_hwdb_new_from_path(udev, hwdb_bin);
+                }
+        } else
+                hwdb = udev_hwdb_new(udev);
         if (!hwdb)
                 return -ENOENT;
 

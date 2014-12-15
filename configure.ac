@@ -276,6 +276,14 @@ AC_ARG_ENABLE([hwdb], AS_HELP_STRING([--enable-hwdb],[install hwdb.d files]),[],
 AM_CONDITIONAL(ENABLE_HWDB, [test "x$enable_hwdb" = "xyes"])
 
 # ------------------------------------------------------------------------------
+# systemd-hwdb - the hwdb tool of systemd, for the scripts and packages that call it
+# ------------------------------------------------------------------------------
+AC_ARG_ENABLE([systemd-hwdb],
+	AS_HELP_STRING([--disable-systemd-hwdb], [do not install the systemd-hwdb tool]),
+	[], [enable_systemd_hwdb=yes])
+AM_CONDITIONAL([ENABLE_SYSTEMD_HWDB], [test "x$enable_systemd_hwdb" = xyes])
+
+# ------------------------------------------------------------------------------
 # rule-generator - persistent network and optical device rule generator
 # ------------------------------------------------------------------------------
 AC_ARG_ENABLE([rule-generator],
@@ -363,6 +371,8 @@ AC_MSG_RESULT([
 
 	pkgconfiglibdir:         ${libdir}/pkgconfig
 	sharepkgconfigdir        ${datadir}/pkgconfig
+
+	systemd-hwdb:            ${enable_systemd_hwdb}
 ])
 
 # ------------------------------------------------------------------------------

@@ -1,0 +1,105 @@
+'\" t
+.TH "SYSTEMD\-HWDB" "8" "" "eudev" "systemd-hwdb"
+.\" -----------------------------------------------------------------
+.\" * Define some portability stuff
+.\" -----------------------------------------------------------------
+.\" ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+.\" http://bugs.debian.org/507673
+.\" http://lists.gnu.org/archive/html/groff/2009-02/msg00013.html
+.\" ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+.ie \n(.g .ds Aq \(aq
+.el       .ds Aq '
+.\" -----------------------------------------------------------------
+.\" * set default formatting
+.\" -----------------------------------------------------------------
+.\" disable hyphenation
+.nh
+.\" disable justification (adjust text to left margin only)
+.ad l
+.\" -----------------------------------------------------------------
+.\" * MAIN CONTENT STARTS HERE *
+.\" -----------------------------------------------------------------
+.SH "NAME"
+systemd-hwdb \- hardware database management tool
+.SH "SYNOPSIS"
+.HP \w'\fBsystemd\-hwdb\ \fR\fB[options]\fR\fB\ update\fR\ 'u
+\fBsystemd\-hwdb \fR\fB[options]\fR\fB update\fR
+.HP \w'\fBsystemd\-hwdb\ \fR\fB[options]\fR\fB\ query\ \fR\fB\fImodalias\fR\fR\ 'u
+\fBsystemd\-hwdb \fR\fB[options]\fR\fB query \fR\fB\fImodalias\fR\fR
+.SH "DESCRIPTION"
+.PP
+\fBsystemd\-hwdb\fR
+expects a command and command specific arguments\&. It manages the binary hardware database\&.
+.PP
+eudev provides this command for the scripts and packages that call the command of the same name of systemd\&. It shares the code with
+\fBudevadm hwdb\fR, see
+\fBudevadm\fR(8), and like that, it writes
+hwdb\&.bin
+in the format configured with
+\fIhwdb_format=\fR
+in
+\fBudev.conf\fR(5)\&.
+.SH "OPTIONS"
+.PP
+\fB\-\-usr\fR
+.RS 4
+Generate in the udev library directory, e\&.g\&.
+/usr/lib/udev, instead of
+/etc/udev\&.
+.RE
+.PP
+\fB\-r\fR, \fB\-\-root=\fR\fB\fIPATH\fR\fR
+.RS 4
+Alternate root path in the filesystem\&.
+.RE
+.PP
+\fB\-s\fR, \fB\-\-strict\fR
+.RS 4
+When updating, return non\-zero exit value on any parsing error\&.
+.RE
+.PP
+\fB\-\-version\fR
+.RS 4
+Print a short version string and exit\&.
+.RE
+.PP
+\fB\-h\fR, \fB\-\-help\fR
+.RS 4
+Print a short help text and exit\&.
+.RE
+.SS "systemd\-hwdb [\fIoptions\fR] update"
+.PP
+Update the binary database\&.
+.SS "systemd\-hwdb [\fIoptions\fR] query \fIMODALIAS\fR"
+.PP
+Query database and print result\&.
+.SH "ENVIRONMENT"
+.PP
+\fI$SYSTEMD_HWDB_UPDATE_BYPASS\fR
+.RS 4
+If set to a true value,
+\fBsystemd\-hwdb update\fR
+does nothing and exits successfully, like in systemd\&.
+.RE
+.PP
+\fI$UDEV_HWDB_PATH\fR
+.RS 4
+Additional directories of hwdb files, separated by colons, which are read after the system directories, see
+\fBhwdb\fR(7)\&.
+.RE
+.PP
+\fI$UDEV_HWDB_BIN\fR
+.RS 4
+The
+hwdb\&.bin
+that
+\fBsystemd\-hwdb query\fR
+reads before the ones of the system, unless
+\fB\-\-root=\fR
+is given\&.
+.RE
+.SH "SEE ALSO"
+.PP
+\fBhwdb\fR(7),
+\fBudevadm\fR(8),
+\fBudev.conf\fR(5)
