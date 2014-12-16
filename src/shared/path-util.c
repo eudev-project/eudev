@@ -380,7 +380,7 @@ fallback:
         if (r < 0)
                 return r;
 
-        r = lstat(parent, &b);
+        r = stat(parent, &b);
         if (r < 0)
                 return -errno;
 
