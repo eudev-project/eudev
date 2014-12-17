@@ -112,7 +112,7 @@ char *path_make_absolute_cwd(const char *p) {
         if (!cwd)
                 return NULL;
 
-        return path_make_absolute(p, cwd);
+        return strjoin(cwd, "/", p, NULL);
 }
 
 char **path_strv_resolve(char **l, const char *prefix) {
