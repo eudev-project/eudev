@@ -1603,18 +1603,18 @@ int tempfn_xxxxxx(const char *p, char **ret) {
          *         /foo/bar/waldo
          *
          * Into this:
-         *         /foo/bar/.waldoXXXXXX
+         *         /foo/bar/.#waldoXXXXXX
          */
 
         fn = basename(p);
         if (!filename_is_valid(fn))
                 return -EINVAL;
 
-        t = new(char, strlen(p) + 1 + 6 + 1);
+        t = new(char, strlen(p) + 2 + 6 + 1);
         if (!t)
                 return -ENOMEM;
 
-        strcpy(stpcpy(stpcpy(mempcpy(t, p, fn - p), "."), fn), "XXXXXX");
+        strcpy(stpcpy(stpcpy(mempcpy(t, p, fn - p), ".#"), fn), "XXXXXX");
 
         *ret = path_kill_slashes(t);
         return 0;
