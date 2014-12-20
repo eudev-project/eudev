@@ -30,6 +30,7 @@ _pure_ static inline bool utf8_is_printable(const char* str, size_t length) {
         return utf8_is_printable_newline(str, length, true);
 }
 
+int utf8_encode_unichar(uint16_t c, char *p);
 char *utf16_to_utf8(const void *s, size_t length);
 
 int utf8_encoded_valid_unichar(const char *str);
