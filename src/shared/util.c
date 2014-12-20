@@ -697,7 +697,7 @@ char *xescape(const char *s, const char *bad) {
         return r;
 }
 
-_pure_ static bool ignore_file_allow_backup(const char *filename) {
+_pure_ static bool hidden_file_allow_backup(const char *filename) {
         assert(filename);
 
         return
@@ -714,13 +714,13 @@ _pure_ static bool ignore_file_allow_backup(const char *filename) {
                 endswith(filename, ".swp");
 }
 
-bool ignore_file(const char *filename) {
+bool hidden_file(const char *filename) {
         assert(filename);
 
         if (endswith(filename, "~"))
                 return true;
 
-        return ignore_file_allow_backup(filename);
+        return hidden_file_allow_backup(filename);
 }
 
 int open_terminal(const char *name, int mode) {
@@ -1012,7 +1012,7 @@ bool dirent_is_file_with_suffix(const struct dirent *de, const char *suffix) {
             de->d_type != DT_UNKNOWN)
                 return false;
 
-        if (ignore_file_allow_backup(de->d_name))
+        if (hidden_file_allow_backup(de->d_name))
                 return false;
 
         return endswith(de->d_name, suffix);

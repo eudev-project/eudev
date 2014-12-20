@@ -193,7 +193,7 @@ char *xescape(const char *s, const char *bad);
 
 bool dirent_is_file_with_suffix(const struct dirent *de, const char *suffix) _pure_;
 
-bool ignore_file(const char *filename) _pure_;
+bool hidden_file(const char *filename) _pure_;
 
 int dev_urandom(void *p, size_t n);
 void random_bytes(void *p, size_t n);
