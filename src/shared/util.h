@@ -453,7 +453,7 @@ union file_handle_union {
         char padding[sizeof(struct file_handle) + MAX_HANDLE_SZ];
 };
 
-char *tempfn_xxxxxx(const char *p);
+int tempfn_xxxxxx(const char *p, char **ret);
 
 int is_dir(const char *path, bool follow);
 

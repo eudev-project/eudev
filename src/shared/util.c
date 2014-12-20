@@ -385,7 +385,7 @@ const char* split(const char **state, size_t *l, const char *separator, bool quo
                 *l = strcspn_escaped(current + 1, quotechars);
                 if (current[*l + 1] == '\0' ||
                     (current[*l + 2] && !strchr(separator, current[*l + 2]))) {
-                        /* right quote missing or garbage at the end*/
+                        /* right quote missing or garbage at the end */
                         *state = current;
                         return NULL;
                 }
@@ -1044,15 +1044,15 @@ int fd_wait_for_event(int fd, int event, usec_t t) {
 int fopen_temporary(const char *path, FILE **_f, char **_temp_path) {
         FILE *f;
         char *t;
-        int fd;
+        int r, fd;
 
         assert(path);
         assert(_f);
         assert(_temp_path);
 
-        t = tempfn_xxxxxx(path);
-        if (!t)
-                return -ENOMEM;
+        r = tempfn_xxxxxx(path, &t);
+        if (r < 0)
+                return r;
 
 #if HAVE_DECL_MKOSTEMP
         fd = mkostemp_safe(t, O_WRONLY|O_CLOEXEC);
@@ -1577,7 +1577,8 @@ char *tempfn_xxxxxx(const char *p) {
 
         strcpy(stpcpy(stpcpy(mempcpy(t, p, k), "."), fn), "XXXXXX");
 
-        return t;
+        *ret = t;
+        return 0;
 }
 
 int is_dir(const char* path, bool follow) {
