@@ -354,6 +354,7 @@ _alloc_(2, 3) static inline void *realloc_multiply(void *p, size_t a, size_t b) 
         return realloc(p, a * b);
 }
 
+bool filename_is_valid(const char *p) _pure_;
 /**
  * Check if a string contains any glob patterns.
  */

@@ -1447,6 +1447,26 @@ bool in_initrd(void) {
         return saved;
 }
 
+bool filename_is_valid(const char *p) {
+
+        if (isempty(p))
+                return false;
+
+        if (strchr(p, '/'))
+                return false;
+
+        if (streq(p, "."))
+                return false;
+
+        if (streq(p, ".."))
+                return false;
+
+        if (strlen(p) > FILENAME_MAX)
+                return false;
+
+        return true;
+}
+
 /* hey glibc, APIs with callbacks without a user pointer are so useless */
 void *xbsearch_r(const void *key, const void *base, size_t nmemb, size_t size,
                  int (*compar) (const void *, const void *, void *), void *arg) {
@@ -1565,16 +1585,12 @@ int mkstemp_safe(char *pattern) {
         return fd;
 }
 
-char *tempfn_xxxxxx(const char *p) {
+int tempfn_xxxxxx(const char *p, char **ret) {
         const char *fn;
         char *t;
-        size_t k;
 
         assert(p);
-
-        t = new(char, strlen(p) + 1 + 6 + 1);
-        if (!t)
-                return NULL;
+        assert(ret);
 
         /*
          * Turns this:
@@ -1585,9 +1601,14 @@ char *tempfn_xxxxxx(const char *p) {
          */
 
         fn = basename(p);
-        k = fn - p;
+        if (!filename_is_valid(fn))
+                return -EINVAL;
 
-        strcpy(stpcpy(stpcpy(mempcpy(t, p, k), "."), fn), "XXXXXX");
+        t = new(char, strlen(p) + 1 + 6 + 1);
+        if (!t)
+                return -ENOMEM;
+
+        strcpy(stpcpy(stpcpy(mempcpy(t, p, fn - p), "."), fn), "XXXXXX");
 
         *ret = path_kill_slashes(t);
         return 0;
