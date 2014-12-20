@@ -26,7 +26,7 @@
 #include "util.h"
 #include "strv.h"
 
-void strv_free(char **l) {
+void strv_clear(char **l) {
         char **k;
 
         if (!l)
@@ -35,6 +35,11 @@ void strv_free(char **l) {
         for (k = l; *k; k++)
                 free(*k);
 
+        *l = NULL;
+}
+
+void strv_free(char **l) {
+        strv_clear(l);
         free(l);
 }
 
