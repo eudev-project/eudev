@@ -1576,12 +1576,20 @@ char *tempfn_xxxxxx(const char *p) {
         if (!t)
                 return NULL;
 
+        /*
+         * Turns this:
+         *         /foo/bar/waldo
+         *
+         * Into this:
+         *         /foo/bar/.waldoXXXXXX
+         */
+
         fn = basename(p);
         k = fn - p;
 
         strcpy(stpcpy(stpcpy(mempcpy(t, p, k), "."), fn), "XXXXXX");
 
-        *ret = t;
+        *ret = path_kill_slashes(t);
         return 0;
 }
 
