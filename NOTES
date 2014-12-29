@@ -1,0 +1,8 @@
+
+2014-12-15
+
+	* We did not move builtin-hwdb - port to sd-hwdb:
+	http://cgit.freedesktop.org/systemd/systemd/commit/?id=c532d8a00cacacc6775effb7aadca680b1d39ccd
+
+	* We did not break out hwdb from udevadm:
+	http://cgit.freedesktop.org/systemd/systemd/commit/?id=65eb4378c3e1de25383d8cd606909e64c71edc80
