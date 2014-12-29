@@ -37,7 +37,6 @@
 #include <linux/tiocl.h>
 #include <termios.h>
 #include <stdarg.h>
-#include <sys/inotify.h>
 #include <poll.h>
 #include <ctype.h>
 #include <sys/prctl.h>

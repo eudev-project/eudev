@@ -31,6 +31,7 @@
 #include <stddef.h>
 #include <unistd.h>
 #include <sys/socket.h>
+#include <sys/inotify.h>
 
 #include "time-util.h"
 #include "missing.h"
@@ -463,6 +464,11 @@ int execute_command(const char *command, char *const argv[]);
 #define INOTIFY_EVENT_MAX (sizeof(struct inotify_event) + NAME_MAX + 1)
 
 #define FOREACH_INOTIFY_EVENT(e, buffer, sz) \
-        for ((e) = (struct inotify_event*) (buffer);    \
-             (uint8_t*) (e) < (uint8_t*) (buffer) + (sz); \
+        for ((e) = &buffer.ev;                                \
+             (uint8_t*) (e) < (uint8_t*) (buffer.raw) + (sz); \
              (e) = (struct inotify_event*) ((uint8_t*) (e) + sizeof(struct inotify_event) + (e)->len))
+
+union inotify_event_buffer {
+        struct inotify_event ev;
+        uint8_t raw[INOTIFY_EVENT_MAX];
+};
