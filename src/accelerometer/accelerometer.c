@@ -232,7 +232,7 @@ int main (int argc, char** argv)
         while (1) {
                 int option;
 
-                option = getopt_long(argc, argv, "dxh", options, NULL);
+                option = getopt_long(argc, argv, "dh", options, NULL);
                 if (option == -1)
                         break;
 
