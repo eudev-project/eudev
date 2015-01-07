@@ -82,12 +82,27 @@
 # For mice with switchable resolution, sort by the starred entry.
 
 ##########################################
+# Chicony
+##########################################
+
+# Chicony 2.4G Multimedia Wireless Kit MG-0919
+mouse:usb:v04f2p0963:name:Chicony 2.4G Multimedia Wireless Kit:
+ MOUSE_DPI=1000@142
+
+##########################################
 # Dell
 ##########################################
 
 # Dell USB Laser Mouse
 mouse:usb:v046dpc063:name:DELL DELL USB Laser Mouse:
  MOUSE_DPI=1000@125
+
+##########################################
+# Fujitsu Siemens
+##########################################
+
+mouse:usb:v0461p4d16:name:USB Optical Mouse:
+ MOUSE_DPI=500@125
 
 ##########################################
 # Lenovo
@@ -126,7 +141,7 @@ mouse:usb:v04b3p310c:name:USB Optical Mouse:
 mouse:usb:v046dpc045:name:Logitech USB-PS/2 Optical Mouse:
  MOUSE_DPI=600@125
 
-# Logitech Wirless Mouse M325
+# Logitech Wireless Mouse M325
 mouse:usb:v046dpc52b:name:Logitech Unifying Device. Wireless PID:400a:
  MOUSE_DPI=600@166
 
@@ -166,13 +181,23 @@ mouse:usb:v046dpc52b:name:Logitech Unifying Device. Wireless PID:101d:
 mouse:usb:v046dpc046:name:Logitech USB Optical Mouse:
 # Logitech M100 Optical Mouse
 mouse:usb:v046dpc05a:name:Logitech USB Optical Mouse:
+# Logitech USB Laser Mouse M-U0011-O rebranded as "terra Laser"
+mouse:usb:v046dpc065:name:Logitech USB Laser Mouse:
  MOUSE_DPI=1000@125
+
+# Logitech MK260 Wireless Combo Receiver aka M-R0011
+mouse:usb:v046dpc52e:name:Logitech USB Receiver:
+ MOUSE_DPI=1000@200
 
 # Logitech G700 Laser Mouse (Wired)
 mouse:usb:v046dpc06b:name:Logitech G700 Laser Mouse:
 # Logitech G700 Laser Mouse (Wireless)
 mouse:usb:v046dpc531:name:Logitech USB Receiver:
  MOUSE_DPI=*1000@500 3800@500 500@1000 1500@1000 2000@1000
+
+# Logitech USB Laser Mouse M-UAS144 [LS1 Laser Mouse]
+mouse:usb:v046dpc062:name:Logitech USB Laser Mouse:
+ MOUSE_DPI=1200@125
 
 # Logitech T620 (or, the soap)
 mouse:usb:v046dpc52b:name:Logitech Unifying Device. Wireless PID:4027:
