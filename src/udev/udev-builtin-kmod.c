@@ -154,6 +154,6 @@ const struct udev_builtin udev_builtin_kmod = {
 #ifdef HAVE_LIBKMOD
         .validate = builtin_kmod_validate,
 #endif
-        .help = "kernel module loader",
+        .help = "Kernel module loader",
         .run_once = false,
 };
