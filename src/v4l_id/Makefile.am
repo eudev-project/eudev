@@ -1,5 +1,8 @@
 ACLOCAL_AMFLAGS = -I m4 ${ACLOCAL_FLAGS}
 
+AM_CPPFLAGS = \
+	-I $(top_srcdir)/src/shared
+
 udevlibexec_PROGRAMS = \
 	v4l_id
 
