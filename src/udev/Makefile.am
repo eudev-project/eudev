@@ -54,6 +54,7 @@ libudev_core_la_SOURCES = \
 	udev-builtin.c \
 	udev-builtin-btrfs.c \
 	udev-builtin-hwdb.c \
+	udev-builtin-evdev_id.c \
 	udev-builtin-input_id.c \
 	udev-builtin-net_id.c \
 	udev-builtin-path_id.c \
