@@ -63,7 +63,7 @@
 
 #if SIZEOF_TIME_T == 8
 #  define PRI_TIME PRIu64
-#elif SIZEOF_GID_T == 4
+#elif SIZEOF_TIME_T == 4
 #  define PRI_TIME PRIu32
 #else
 #  error Unknown time_t size
@@ -99,7 +99,7 @@
 #define ANSI_HIGHLIGHT_OFF "\x1B[0m"
 #define ANSI_ERASE_TO_END_OF_LINE "\x1B[K"
 
-size_t page_size(void);
+size_t page_size(void) _pure_;
 #define PAGE_ALIGN(l) ALIGN_TO((l), page_size())
 
 #define streq(a,b) (strcmp((a),(b)) == 0)
@@ -113,6 +113,10 @@ bool streq_ptr(const char *a, const char *b) _pure_;
 
 #define new0(t, n) ((t*) calloc((n), sizeof(t)))
 #define malloc0(n) (calloc((n), 1))
+
+static inline const char* one_zero(bool b) {
+        return b ? "1" : "0";
+}
 
 static inline bool isempty(const char *p) {
         return !p || !p[0];
@@ -143,7 +147,7 @@ int safe_atollu(const char *s, unsigned long long *ret_u);
 int safe_atolli(const char *s, long long int *ret_i);
 
 
-#if __WORDSIZE == 32
+#if LONG_MAX == INT_MAX
 static inline int safe_atolu(const char *s, unsigned long *ret_u) {
         assert_cc(sizeof(unsigned long) == sizeof(unsigned));
         return safe_atou(s, (unsigned*) ret_u);
