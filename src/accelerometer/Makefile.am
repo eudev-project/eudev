@@ -13,4 +13,4 @@ accelerometer_SOURCES = \
 accelerometer_LDADD = \
 	$(top_builddir)/src/libudev/libudev-private.la \
 	$(top_builddir)/src/udev/libudev-core.la \
-	-lm
+	$(LIBM)
