@@ -238,7 +238,7 @@ void initialize_srand(void);
                         if (!s)                                         \
                                 return log_oom();                       \
                 } else {                                                \
-                        r = asprintf(&s, "%u", i);                      \
+                        r = asprintf(&s, "%i", i);                      \
                         if (r < 0)                                      \
                                 return log_oom();                       \
                 }                                                       \
