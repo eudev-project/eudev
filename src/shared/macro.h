@@ -119,7 +119,7 @@ static inline size_t ALIGN_TO(size_t l, size_t ali) {
 #else
 #define assert_cc(expr)                                                 \
         DISABLE_WARNING_DECLARATION_AFTER_STATEMENT;                    \
-        struct CONCATENATE(_assert_struct_, __LINE__) {                 \
+        struct CONCATENATE(_assert_struct_, __COUNTER__) {              \
                 char x[(expr) ? 0 : -1];                                \
         };                                                              \
         REENABLE_WARNING
