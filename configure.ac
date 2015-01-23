@@ -99,7 +99,7 @@ AC_CHECK_FUNCS(
         [AC_MSG_ERROR([*** POSIX function not found])]
 )
 AC_SEARCH_LIBS([clock_gettime], [rt], [], [AC_MSG_ERROR([*** POSIX librt not found])])
-AC_SEARCH_LIBS([sqrt], [m], [], [AC_MSG_ERROR([*** POSIX libm not found])])
+LT_LIB_M
 
 # ------------------------------------------------------------------------------
 
