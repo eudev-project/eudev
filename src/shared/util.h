@@ -461,6 +461,7 @@ union file_handle_union {
         struct file_handle handle;
         char padding[sizeof(struct file_handle) + MAX_HANDLE_SZ];
 };
+#define FILE_HANDLE_INIT { .handle.handle_bytes = MAX_HANDLE_SZ }
 
 int tempfn_xxxxxx(const char *p, char **ret);
 

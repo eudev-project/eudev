@@ -315,10 +315,7 @@ bool path_equal(const char *a, const char *b) {
 
 int path_is_mount_point(const char *t, bool allow_symlink) {
 
-        union file_handle_union h = {
-                .handle.handle_bytes = MAX_HANDLE_SZ
-        };
-
+        union file_handle_union h = FILE_HANDLE_INIT;
         int mount_id = -1, mount_id_parent = -1;
         _cleanup_free_ char *parent = NULL;
         struct stat a, b;
