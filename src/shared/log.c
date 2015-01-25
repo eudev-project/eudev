@@ -255,7 +255,7 @@ static int write_to_console(
         highlight = LOG_PRI(level) <= LOG_ERR && show_color;
 
         if (show_location) {
-                snprintf(location, sizeof(location), "(%s:%u) ", file, line);
+                snprintf(location, sizeof(location), "(%s:%i) ", file, line);
                 char_array_0(location);
                 IOVEC_SET_STRING(iovec[n++], location);
         }
