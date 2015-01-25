@@ -244,13 +244,18 @@ static int write_to_console(
                 const char *object,
                 const char *buffer) {
 
-        char location[64];
-        struct iovec iovec[5] = {};
+        char location[64], prefix[1 + DECIMAL_STR_MAX(int) + 2];
+        struct iovec iovec[6] = {};
         unsigned n = 0;
         bool highlight;
 
         if (console_fd < 0)
                 return 0;
+
+        if (log_target == LOG_TARGET_CONSOLE_PREFIXED) {
+                sprintf(prefix, "<%i>", level);
+                IOVEC_SET_STRING(iovec[n++], prefix);
+        }
 
         highlight = LOG_PRI(level) <= LOG_ERR && show_color;
 
@@ -540,6 +545,7 @@ int log_get_max_level(void) {
 }
 static const char *const log_target_table[] = {
         [LOG_TARGET_CONSOLE] = "console",
+        [LOG_TARGET_CONSOLE_PREFIXED] = "console-prefixed",
         [LOG_TARGET_KMSG] = "kmsg",
         [LOG_TARGET_SYSLOG] = "syslog",
         [LOG_TARGET_SYSLOG_OR_KMSG] = "syslog-or-kmsg",
