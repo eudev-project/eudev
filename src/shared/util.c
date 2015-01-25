@@ -1558,6 +1558,7 @@ int getpeercred(int fd, struct ucred *ucred) {
         return 0;
 }
 
+#if HAVE_DECL_MKOSTEMP
 /* This is much like like mkostemp() but is subject to umask(). */
 int mkostemp_safe(char *pattern, int flags) {
         _cleanup_umask_ mode_t u;
@@ -1573,7 +1574,7 @@ int mkostemp_safe(char *pattern, int flags) {
 
         return fd;
 }
-
+#else
 /* This is much like like mkstemp() but is subject to umask(). */
 int mkstemp_safe(char *pattern) {
         _cleanup_umask_ mode_t u;
@@ -1589,6 +1590,7 @@ int mkstemp_safe(char *pattern) {
 
         return fd;
 }
+#endif
 
 int tempfn_xxxxxx(const char *p, char **ret) {
         const char *fn;

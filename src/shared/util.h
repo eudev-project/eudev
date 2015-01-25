@@ -451,8 +451,11 @@ static inline void qsort_safe(void *base, size_t nmemb, size_t size,
 int proc_cmdline(char **ret);
 int getpeercred(int fd, struct ucred *ucred);
 
+#if HAVE_DECL_MKOSTEMP
 int mkostemp_safe(char *pattern, int flags);
+#else
 int mkstemp_safe(char *pattern);
+#endif
 
 union file_handle_union {
         struct file_handle handle;
