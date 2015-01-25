@@ -38,12 +38,13 @@
 #include "config.h"
 
 #if SIZEOF_PID_T == 4
-#  define PID_FMT "%" PRIi32
+#  define PID_PRI PRIi32
 #elif SIZEOF_PID_T == 2
-#  define PID_FMT "%" PRIi16
+#  define PID_PRI PRIi16
 #else
 #  error Unknown pid_t size
 #endif
+#define PID_FMT "%" PID_PRI
 
 #if SIZEOF_UID_T == 4
 #  define UID_FMT "%" PRIu32
