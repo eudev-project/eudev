@@ -1,4 +1,11 @@
+Newest entries are on top.
+
 2015-02-08
+
+	* We also skip "libudev: private - drop some functions from the internal API"
+	http://cgit.freedesktop.org/systemd/systemd/commit/src/libudev?id=71ef8b3ac49fd8b5cff36ee7efc945a751ab9a09
+	This follows on the privious skipped commit.  Since we did not move the renaming, a
+	residual call to udev_device_set_syspath() remains in udev-event.c.
 
 	* We skip "udev: event - move renaming of udev_device to libudev"
 	http://cgit.freedesktop.org/systemd/systemd/commit/?id=243d182543c7edc3980e1ae41712bb0b96df46bd
