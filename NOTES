@@ -1,3 +1,9 @@
+2015-02-08
+
+	* We skip "udev: event - move renaming of udev_device to libudev"
+	http://cgit.freedesktop.org/systemd/systemd/commit/?id=243d182543c7edc3980e1ae41712bb0b96df46bd
+	The purpose of this commit is to make it easier for the kdbus cut-over later which we
+	will not do.  It also intefers with the ENABLE_RULE_GENERATOR code.
 
 2014-12-15
 
