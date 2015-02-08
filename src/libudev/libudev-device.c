@@ -1922,3 +1922,24 @@ void udev_device_set_db_persist(struct udev_device *udev_device)
 {
         udev_device->db_persist = true;
 }
+
+struct udev_device *udev_device_shallow_clone(struct udev_device *old_device)
+{
+        struct udev_device *device;
+
+        if (old_device == NULL)
+                return NULL;
+
+        device = udev_device_new(old_device->udev);
+        if (!device) {
+                errno = ENOMEM;
+
+                return NULL;
+        }
+
+        udev_device_set_syspath(device, udev_device_get_syspath(old_device));
+        udev_device_set_subsystem(device, udev_device_get_subsystem(old_device));
+        udev_device_set_devnum(device, udev_device_get_devnum(old_device));
+
+        return device;
+}
