@@ -1,6 +1,6 @@
 
 AC_PREREQ([2.68])
-AC_INIT([eudev],[2.1.1],[https://github.com/gentoo/eudev/issues])
+AC_INIT([eudev],[2.2],[https://github.com/gentoo/eudev/issues])
 AC_SUBST(UDEV_VERSION, 217)
 AC_CONFIG_SRCDIR([src/udev/udevd.c])
 
