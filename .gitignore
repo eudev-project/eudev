@@ -48,8 +48,6 @@ docs/libudev/libudev.prerequisites
 docs/libudev/libudev.signals
 docs/libudev/html/
 docs/libudev/xml/
-rule_generator/write_cd_rules
-rule_generator/write_net_rules
 
 src/accelerometer/accelerometer
 src/ata_id/ata_id
