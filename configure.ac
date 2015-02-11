@@ -299,40 +299,20 @@ AM_CONDITIONAL(ENABLE_MANPAGES, [test "x$have_manpages" = "xyes"])
 AC_SUBST(XSLTPROC_FLAGS)
 
 # ------------------------------------------------------------------------------
-
-AC_ARG_ENABLE(modules, [AS_HELP_STRING([--disable-modules], [Disable loadable module support @<:@default=enabled@:>@])], [], [enable_modules=yes])
-AC_ARG_ENABLE(libkmod, [AS_HELP_STRING([--enable-libkmod], [Enable module loading through kmod @<:@default=disabled@:>@])], [], [enable_libkmod=no])
-
-if test "x${enable_modules}" = xyes; then
-
-        AC_DEFINE([HAVE_MODULES], [1], [Define if we support loading modules])
-
-        AS_IF([test "x${enable_libkmod}" = xyes],
-          [AC_CHECK_LIB([kmod], [main],
-            [PKG_CHECK_MODULES(KMOD, [libkmod >= 5])
-             AC_SUBST([LIBKMOD], ["-lkmod"])
-             AC_DEFINE([HAVE_LIBKMOD], [1],
-                       [Define if you have libkmod])
-            ],
-            [AC_MSG_FAILURE(
-               [--enable-libkmod was given, but test for kmod failed])],
-            [-lkmod])])
-
+have_kmod=no
+AC_ARG_ENABLE(kmod, AS_HELP_STRING([--disable-kmod], [disable loadable modules support]))
+if test "x$enable_kmod" != "xno"; then
+        PKG_CHECK_EXISTS([ libkmod ], have_kmod=yes, have_kmod=no)
+        if test "x$have_kmod" = "xyes"; then
+                PKG_CHECK_MODULES(KMOD, [ libkmod >= 15 ],
+                        [AC_DEFINE(HAVE_KMOD, 1, [Define if kmod is available])],
+                        AC_MSG_ERROR([*** kmod version >= 15 not found]))
+        fi
+        if test "x$have_kmod" = xno -a "x$enable_kmod" = xyes; then
+                AC_MSG_ERROR([*** kmod support requested, but libraries not found])
+        fi
 fi
-
-AM_CONDITIONAL([HAVE_MODULES], [test "x${enable_modules}" = xyes])
-AM_CONDITIONAL([HAVE_LIBKMOD], [test "x${enable_libkmod}" = xyes])
-
-
-# ------------------------------------------------------------------------------
-
-AC_ARG_WITH([modprobe],
-            [AS_HELP_STRING([--with-modprobe=modprobe],
-              [specify location of modprobe when -- @<:@default=$sbindir/modprobe@:>@])],
-            [],
-            [with_modprobe="${sbindir}/modprobe"])
-
-AC_SUBST([MODPROBE], ["${with_modprobe}"])
+AM_CONDITIONAL(HAVE_KMOD, [test "$have_kmod" = "yes"])
 
 # ------------------------------------------------------------------------------
 

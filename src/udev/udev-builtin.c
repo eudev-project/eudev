@@ -39,7 +39,7 @@ static const struct udev_builtin *builtins[] = {
 #ifdef ENABLE_KEYMAP
         [UDEV_BUILTIN_KEYBOARD] = &udev_builtin_keyboard,
 #endif
-#ifdef HAVE_MODULES
+#ifdef HAVE_KMOD
         [UDEV_BUILTIN_KMOD] = &udev_builtin_kmod,
 #endif
         [UDEV_BUILTIN_NET_ID] = &udev_builtin_net_id,

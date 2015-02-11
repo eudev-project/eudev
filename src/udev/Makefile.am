@@ -2,7 +2,6 @@ ACLOCAL_AMFLAGS = -I m4 ${ACLOCAL_FLAGS}
 
 AM_CPPFLAGS = \
 	-include $(top_builddir)/config.h \
-	-DMODPROBE=\"$(MODPROBE)\" \
 	-DROOTPREFIX=\"$(rootprefix)\" \
 	-DUDEV_HWDB_DIR=\"$(udevhwdbdir)\" \
 	-DUDEV_HWDB_BIN=\"$(udevhwdbbin)\" \
@@ -77,13 +76,13 @@ libudev_core_la_SOURCES += \
 	udev-builtin-blkid.c
 endif
 
-if HAVE_MODULES
+if HAVE_KMOD
 libudev_core_la_SOURCES += \
 	udev-builtin-kmod.c
-if HAVE_LIBKMOD
-libudev_core_la_CFLAGS += $(KMOD_CFLAGS)
-libudev_core_la_LIBADD += $(KMOD_LIBS)
-endif
+libudev_core_la_CFLAGS += \
+	$(KMOD_CFLAGS)
+libudev_core_la_LIBADD += \
+	$(KMOD_LIBS)
 endif
 
 #

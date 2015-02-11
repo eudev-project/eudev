@@ -27,20 +27,16 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
-
-#ifdef HAVE_LIBKMOD
 #include <libkmod.h>
-#endif
 
 #include "udev.h"
 
 static struct kmod_ctx *ctx = NULL;
 
 static int load_module(struct udev *udev, const char *alias) {
-        int err;
-#ifdef HAVE_LIBKMOD
         struct kmod_list *list = NULL;
         struct kmod_list *l;
+        int err;
 
         err = kmod_module_new_from_lookup(ctx, alias, &list);
         if (err < 0)
@@ -64,24 +60,6 @@ static int load_module(struct udev *udev, const char *alias) {
         }
 
         kmod_module_unref_list(list);
-#else
-
-        /* 
-           These 3 temporaries are needed because argv (below) is a const pointer, not pointer to const
-        */
-        char *tmp_alias = strdup(alias);
-        char *tmp_modprobe = strdup(MODPROBE);
-        char *tmp_bq = strdup("-bq");
-        char *const argv[] = { tmp_modprobe, tmp_bq, tmp_alias, 0 };
-
-        err = execute_command(MODPROBE, argv);
-
-        free(tmp_alias);
-        free(tmp_modprobe);
-        free(tmp_bq);
-#endif
-        /*  both 'kmod_module_new_from_lookup' and 'execute_command' return <0 on error
-		    so it is ok to assign both to 'err' */
         return err;
 }
 
@@ -93,10 +71,8 @@ static int builtin_kmod(struct udev_device *dev, int argc, char *argv[], bool te
         struct udev *udev = udev_device_get_udev(dev);
         int i;
 
-#ifdef HAVE_LIBKMOD
         if (!ctx)
                 return 0;
-#endif
 
         if (argc < 3 || !streq(argv[1], "load")) {
                 log_error("expect: %s load <module>", argv[0]);
@@ -113,7 +89,6 @@ static int builtin_kmod(struct udev_device *dev, int argc, char *argv[], bool te
 
 /* called at udev startup and reload */
 static int builtin_kmod_init(struct udev *udev) {
-#ifdef HAVE_LIBKMOD
         if (ctx)
                 return 0;
 
@@ -124,19 +99,15 @@ static int builtin_kmod_init(struct udev *udev) {
         log_debug("Load module index");
         kmod_set_log_fn(ctx, udev_kmod_log, udev);
         kmod_load_resources(ctx);
-#endif
         return 0;
 }
 
 /* called on udev shutdown and reload request */
 static void builtin_kmod_exit(struct udev *udev) {
-#ifdef HAVE_LIBKMOD
         log_debug("Unload module index");
         ctx = kmod_unref(ctx);
-#endif
 }
 
-#ifdef HAVE_LIBKMOD
 /* called every couple of seconds during event activity; 'true' if config has changed */
 static bool builtin_kmod_validate(struct udev *udev) {
         log_debug("Validate module index");
@@ -144,16 +115,13 @@ static bool builtin_kmod_validate(struct udev *udev) {
                 return false;
         return (kmod_validate_resources(ctx) != KMOD_RESOURCES_OK);
 }
-#endif
 
 const struct udev_builtin udev_builtin_kmod = {
         .name = "kmod",
         .cmd = builtin_kmod,
         .init = builtin_kmod_init,
         .exit = builtin_kmod_exit,
-#ifdef HAVE_LIBKMOD
         .validate = builtin_kmod_validate,
-#endif
         .help = "Kernel module loader",
         .run_once = false,
 };

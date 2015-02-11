@@ -53,8 +53,9 @@ test_device_nodes_LDADD = \
 	$(top_builddir)/src/shared/libudev_shared.la \
 	$(top_builddir)/src/libudev/libudev-private.la
 
-if HAVE_LIBKMOD
-test_udev_LDADD += $(KMOD_LIBS)
+if HAVE_KMOD
+test_udev_LDADD += \
+	$(KMOD_LIBS)
 endif
 
 test_udev_CPPFLAGS = \
