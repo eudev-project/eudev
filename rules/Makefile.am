@@ -5,6 +5,7 @@ dist_udevrules_DATA = \
 	50-udev-default.rules \
 	60-cdrom_id.rules \
 	60-drm.rules \
+	60-keyboard.rules \
 	60-persistent-alsa.rules \
 	60-persistent-input.rules \
 	60-persistent-serial.rules \
@@ -29,11 +30,6 @@ endif
 if HAVE_KMOD
 dist_udevrules_DATA += \
 	80-drivers.rules
-endif
-
-if ENABLE_KEYMAP
-dist_udevrules_DATA += \
-	60-keyboard.rules
 endif
 
 install-data-local:

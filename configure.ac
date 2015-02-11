@@ -227,28 +227,18 @@ AC_CHECK_DECL([unshare],
 
 # ------------------------------------------------------------------------------
 AC_ARG_ENABLE([gudev],
-       AS_HELP_STRING([--disable-gudev], [disable Gobject libudev support @<:@default=enabled@:>@]),
-       [], [enable_gudev=yes])
+        AS_HELP_STRING([--disable-gudev], [disable Gobject libudev support @<:@default=enabled@:>@]),
+        [], [enable_gudev=yes])
 AS_IF([test "x$enable_gudev" = "xyes"], [ PKG_CHECK_MODULES([GLIB], [glib-2.0 >= 2.22.0 gobject-2.0 >= 2.22.0]) ])
 AM_CONDITIONAL([ENABLE_GUDEV], [test "x$enable_gudev" = "xyes"])
 
 # ------------------------------------------------------------------------------
-AC_ARG_ENABLE([keymap],
-        AS_HELP_STRING([--disable-keymap], [disable keymap fixup support @<:@default=enabled@:>@]),
-        [], [enable_keymap=yes])
-
-if test "x$enable_keymap" = "xyes"; then
-        AC_PATH_TOOL(GPERF, gperf)
-        if test -z "$GPERF" ; then
-                AC_MSG_ERROR([*** gperf not found])
-        fi
-        AC_DEFINE([ENABLE_KEYMAP], [1], [Define if we are enabling rule generator])
+AC_PATH_TOOL(GPERF, gperf)
+if test -z "$GPERF" ; then
+        AC_MSG_ERROR([*** gperf not found])
 fi
 
-AM_CONDITIONAL([ENABLE_KEYMAP], [test "x$enable_keymap" = "xyes"])
-
 # ------------------------------------------------------------------------------
-
 GTK_DOC_CHECK([1.18],[--flavour no-tmpl])
 AM_CONDITIONAL([ENABLE_GTK_DOC],[test "x$enable_gtk_doc" = "xyes"])
 

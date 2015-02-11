@@ -100,7 +100,7 @@ EXTRA_DIST = \
 CLEANFILES = \
 	udev.pc
 
-if ENABLE_KEYMAP
+
 AM_CPPFLAGS += \
 	-I $(top_builddir)/src/udev
 
@@ -132,8 +132,6 @@ CLEANFILES += \
 	keyboard-keys-from-name.gperf \
 	keyboard-keys.txt \
 	$(BUILT_SOURCES)
-
-endif
 
 # install udevadm symlink in sbindir
 install-exec-hook:
