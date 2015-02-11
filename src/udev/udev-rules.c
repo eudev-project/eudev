@@ -1420,12 +1420,12 @@ static int add_rule(struct udev_rules *rules, char *line,
                         } else {
                                 if (streq(value, "%k")) {
                                         log_error("NAME=\"%%k\" is ignored, because it breaks kernel supplied names, "
-                                            "please remove it from %s:%u", filename, lineno);
+                                            "please remove it from %s:%u\n", filename, lineno);
                                         continue;
                                 }
                                 if (value[0] == '\0') {
                                         log_debug("NAME=\"\" is ignored, because udev will not delete any device nodes, "
-                                                  "please remove it from %s:%u", filename, lineno);
+                                                  "please remove it from %s:%u\n", filename, lineno);
                                         continue;
                                 }
                                 rule_add_key(&rule_tmp, TK_A_NAME, op, value, NULL);
@@ -2454,7 +2454,7 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                         if (major(udev_device_get_devnum(event->dev)) &&
                             (!streq(name_str, udev_device_get_devnode(event->dev) + strlen("/dev/")))) {
                                 log_error("NAME=\"%s\" ignored, kernel device nodes "
-                                    "can not be renamed; please fix it in %s:%u", name,
+                                    "can not be renamed; please fix it in %s:%u\n", name,
                                     rules_str(rules, rule->rule.filename_off), rule->rule.filename_line);
                                 break;
                         }
@@ -2646,10 +2646,8 @@ int udev_rules_apply_static_dev_perms(struct udev_rules *rules) {
 
                                         strscpyl(tags_dir, sizeof(tags_dir), "/run/udev/static_node-tags/", *t, "/", NULL);
                                         r = mkdir_p(tags_dir, 0755);
-                                        if (r < 0) {
-                                                log_error_errno(r, "failed to create %s: %m", tags_dir);
-                                                return r;
-                                        }
+                                        if (r < 0)
+                                                return log_error_errno(r, "failed to create %s: %m", tags_dir);
 
                                         unescaped_filename = xescape(rules_str(rules, cur->key.value_off), "/.");
 

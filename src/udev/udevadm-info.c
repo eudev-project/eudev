@@ -32,7 +32,6 @@
 #include "udev.h"
 #include "udev-util.h"
 #include "udevadm-util.h"
-#include "util.h"
 
 static bool skip_attribute(const char *name) {
         static const char* const skip[] = {

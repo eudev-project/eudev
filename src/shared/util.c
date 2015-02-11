@@ -55,6 +55,7 @@
 #include <limits.h>
 #include <langinfo.h>
 #include <locale.h>
+#include <libgen.h>
 
 #include "macro.h"
 #include "util.h"

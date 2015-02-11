@@ -1,5 +1,5 @@
 /***
-  This file is part of eudev, forked from systemd.
+  This file is part of systemd.
 
   Copyright 2012 Kay Sievers <kay@vrfy.org>
 
