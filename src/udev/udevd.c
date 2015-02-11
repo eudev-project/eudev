@@ -899,76 +899,6 @@ static void handle_signal(struct udev *udev, int signo) {
         }
 }
 
-static void static_dev_create_from_modules(struct udev *udev) {
-        struct utsname kernel;
-        char modules[UTIL_PATH_SIZE];
-        char buf[4096];
-        FILE *f;
-
-        if (uname(&kernel) < 0) {
-                log_error("uname failed: %m");
-                return;
-        }
-
-        strscpyl(modules, sizeof(modules), ROOTPREFIX "/lib/modules/", kernel.release, "/modules.devname", NULL);
-        f = fopen(modules, "re");
-        if (f == NULL)
-                return;
-
-        while (fgets(buf, sizeof(buf), f) != NULL) {
-                char *s;
-                const char *modname;
-                const char *devname;
-                const char *devno;
-                int maj, min;
-                char type;
-                mode_t mode;
-                char filename[UTIL_PATH_SIZE];
-
-                if (buf[0] == '#')
-                        continue;
-
-                modname = buf;
-                s = strchr(modname, ' ');
-                if (s == NULL)
-                        continue;
-                s[0] = '\0';
-
-                devname = &s[1];
-                s = strchr(devname, ' ');
-                if (s == NULL)
-                        continue;
-                s[0] = '\0';
-
-                devno = &s[1];
-                s = strchr(devno, ' ');
-                if (s == NULL)
-                        s = strchr(devno, '\n');
-                if (s != NULL)
-                        s[0] = '\0';
-                if (sscanf(devno, "%c%u:%u", &type, &maj, &min) != 3)
-                        continue;
-
-                mode  = 0600;
-                if (type == 'c')
-                        mode |= S_IFCHR;
-                else if (type == 'b')
-                        mode |= S_IFBLK;
-                else
-                        continue;
-
-                strscpyl(filename, sizeof(filename), "/dev/", devname, NULL);
-                mkdir_parents_label(filename, 0755);
-                mac_selinux_create_file_prepare(filename, mode);
-                log_debug("mknod '%s' %c%u:%u", filename, type, maj, min);
-                if (mknod(filename, mode, makedev(maj, min)) < 0 && errno == EEXIST)
-                        utimensat(AT_FDCWD, filename, NULL, 0);
-                mac_selinux_create_file_clear();
-        }
-
-        fclose(f);
-}
-
 /*
  * read the kernel command line, in case we need to get into debug mode
  *   udev.log-priority=<level>              syslog priority
@@ -1178,7 +1108,6 @@ int main(int argc, char *argv[]) {
         }
 
         dev_setup(NULL);
-        static_dev_create_from_modules(udev);
 
         /* before opening new files, make sure std{in,out,err} fds are in a sane state */
         if (arg_daemonize) {
