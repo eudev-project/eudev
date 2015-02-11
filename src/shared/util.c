@@ -846,6 +846,24 @@ ssize_t loop_read(int fd, void *buf, size_t nbytes, bool do_poll) {
         return n;
 }
 
+char* dirname_malloc(const char *path) {
+        char *d, *dir, *dir2;
+
+        d = strdup(path);
+        if (!d)
+                return NULL;
+        dir = dirname(d);
+        assert(dir);
+
+        if (dir != d) {
+                dir2 = strdup(dir);
+                free(d);
+                return dir2;
+        }
+
+        return dir;
+}
+
 int dev_urandom(void *p, size_t n) {
         static int have_syscall = -1;
         int r, fd;

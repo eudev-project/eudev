@@ -1988,3 +1988,25 @@ struct udev_device *udev_device_new_from_nulstr(struct udev *udev, char *nulstr,
 
         return device;
 }
+
+int udev_device_rename(struct udev_device *udev_device, const char *name)
+{
+        _cleanup_free_ char *dirname = NULL;
+        char *new_syspath;
+        int r;
+
+        if (udev_device == NULL || name == NULL)
+                return -EINVAL;
+
+        dirname = dirname_malloc(udev_device->syspath);
+        if (!dirname)
+                return -ENOMEM;
+
+        new_syspath = strjoina(dirname, "/", name);
+
+        r = udev_device_set_syspath(udev_device, new_syspath);
+        if (r < 0)
+                return r;
+
+        return 0;
+}
