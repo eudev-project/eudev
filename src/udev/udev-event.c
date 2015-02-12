@@ -771,37 +771,33 @@ out:
         return err;
 }
 
-static int rename_netif_dev_fromname_toname(struct udev_device *dev,const char *oldname,const char *newname) {
+static int rename_netif(struct udev_event *event) {
+        struct udev_device *dev = event->dev;
+        char name[IFNAMSIZ];
+        const char *oldname;
+        int r;
         int sk;
         struct ifreq ifr;
-        int err;
+
+        oldname = udev_device_get_sysname(dev);
+
+        strscpy(name, IFNAMSIZ, event->name);
 
         sk = socket(PF_INET, SOCK_DGRAM, 0);
-        if (sk < 0) {
-                err = -errno;
-                log_error("error opening socket: %m");
-                return err;
-        }
+        if (sk < 0)
+                return log_error_errno(-errno, "error opening socket: %m");
 
         memzero(&ifr, sizeof(struct ifreq));
-
         strscpy(ifr.ifr_name, IFNAMSIZ, oldname);
-        strscpy(ifr.ifr_newname, IFNAMSIZ, newname);
-        err = ioctl(sk, SIOCSIFNAME, &ifr);
+        strscpy(ifr.ifr_newname, IFNAMSIZ, name);
+        r = ioctl(sk, SIOCSIFNAME, &ifr);
+        if (r < 0)
+                return log_error_errno(-errno, "Error changing net interface name '%s' to '%s': %m", oldname, name);
 
-        if (err >= 0) {
-                log_info("renamed network interface %s to %s", ifr.ifr_name, ifr.ifr_newname);
-        } else {
-                err = -errno;
-                log_error("error changing net interface name %s to %s: %m", ifr.ifr_name, ifr.ifr_newname);
-        }
+        log_debug("renamed network interface '%s' to '%s'", oldname, name);
 
         close(sk);
-        return err;
-}
-
-static int rename_netif(struct udev_event *event) {
-        return rename_netif_dev_fromname_toname(event->dev,udev_device_get_sysname(event->dev),event->name);
+        return 0;
 }
 
 void udev_event_execute_rules(struct udev_event *event,
