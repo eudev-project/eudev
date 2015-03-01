@@ -1696,3 +1696,13 @@ int execute_command(const char *command, char *const argv[]) {
 
         }
 }
+
+void cmsg_close_all(struct msghdr *mh) {
+        struct cmsghdr *cmsg;
+
+        assert(mh);
+
+        for (cmsg = CMSG_FIRSTHDR(mh); cmsg; cmsg = CMSG_NXTHDR(mh, cmsg))
+                if (cmsg->cmsg_level == SOL_SOCKET && cmsg->cmsg_type == SCM_RIGHTS)
+                        close_many((int*) CMSG_DATA(cmsg), (cmsg->cmsg_len - CMSG_LEN(0)) / sizeof(int));
+}

@@ -485,3 +485,5 @@ union inotify_event_buffer {
         struct inotify_event ev;
         uint8_t raw[INOTIFY_EVENT_MAX];
 };
+
+void cmsg_close_all(struct msghdr *mh);
