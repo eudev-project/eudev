@@ -24,6 +24,7 @@ libudev_shared_la_SOURCES=\
 	strbuf.c \
 	strv.c \
 	strxcpyx.c  \
+	sysctl-util.c \
 	time-util.c \
 	util.c \
 	utf8.c \
@@ -57,6 +58,7 @@ noinst_HEADERS = \
 	strbuf.h \
 	strv.h \
 	strxcpyx.h \
+	sysctl-util.h \
 	time-util.h \
 	util.h \
 	utf8.h \
