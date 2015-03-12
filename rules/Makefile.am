@@ -4,6 +4,7 @@ dist_udevrules_DATA = \
 	42-usb-hid-pm.rules \
 	50-udev-default.rules \
 	60-cdrom_id.rules \
+	60-block.rules \
 	60-drm.rules \
 	60-keyboard.rules \
 	60-persistent-alsa.rules \
