@@ -138,6 +138,8 @@ char *endswith(const char *s, const char *postfix) _pure_;
 int close_nointr(int fd);
 int safe_close(int fd);
 
+void close_many(const int fds[], unsigned n_fd);
+
 int parse_uid(const char *s, uid_t* ret_uid);
 #define parse_gid(s, ret_uid) parse_uid(s, ret_uid)
 

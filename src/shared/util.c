@@ -232,6 +232,15 @@ int safe_close(int fd) {
         return -1;
 }
 
+void close_many(const int fds[], unsigned n_fd) {
+        unsigned i;
+
+        assert(fds || n_fd <= 0);
+
+        for (i = 0; i < n_fd; i++)
+                safe_close(fds[i]);
+}
+
 int unlink_noerrno(const char *path) {
         PROTECT_ERRNO;
         int r;
