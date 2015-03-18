@@ -21,7 +21,6 @@
 #define _GNU_SOURCE 1
 #endif
 
-#include "mtd_probe.h"
 #include <stdio.h>
 #include <sys/ioctl.h>
 #include <mtd/mtd-user.h>
@@ -30,6 +29,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <stdlib.h>
+#include "mtd_probe.h"
 
 int main(int argc, char** argv)
 {
