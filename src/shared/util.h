@@ -282,6 +282,9 @@ char* dirname_malloc(const char *path);
 
 int chmod_and_chown(const char *path, mode_t mode, uid_t uid, gid_t gid);
 
+int touch_file(const char *path, bool parents, usec_t stamp, uid_t uid, gid_t gid, mode_t mode);
+int touch(const char *path);
+
 bool null_or_empty(struct stat *st) _pure_;
 int null_or_empty_path(const char *fn);
 int null_or_empty_fd(int fd);

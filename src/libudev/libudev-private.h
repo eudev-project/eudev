@@ -45,7 +45,7 @@ gid_t udev_device_get_devnode_gid(struct udev_device *udev_device);
 int udev_device_rename(struct udev_device *udev_device, const char *new_name);
 int udev_device_add_devlink(struct udev_device *udev_device, const char *devlink);
 void udev_device_cleanup_devlinks_list(struct udev_device *udev_device);
-struct udev_list_entry *udev_device_add_property(struct udev_device *udev_device, const char *key, const char *value);
+int udev_device_add_property(struct udev_device *udev_device, const char *key, const char *value);
 void udev_device_add_property_from_string_parse(struct udev_device *udev_device, const char *property);
 int udev_device_add_property_from_string_parse_finish(struct udev_device *udev_device);
 char **udev_device_get_properties_envp(struct udev_device *udev_device);
