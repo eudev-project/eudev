@@ -4,15 +4,15 @@ ACTION=="remove", GOTO="keyboard_end"
 KERNEL!="event*", GOTO="keyboard_end"
 ENV{ID_INPUT_KEY}=="", GOTO="keyboard_end"
 
-# import key mapping for input device
-IMPORT{builtin}="hwdb --lookup-prefix=keyboard:", \
+# skip later rules when we find something for this input device
+IMPORT{builtin}="hwdb --subsystem=input --lookup-prefix=keyboard:", \
   RUN{builtin}+="keyboard", GOTO="keyboard_end"
 
-# import key mapping for AT keyboard from DMI data
-DRIVERS=="atkbd", IMPORT{builtin}="hwdb 'keyboard:$attr{[dmi/id]modalias}'", \
+# AT keyboard matching by the machine's DMI data
+DRIVERS=="atkbd", IMPORT{builtin}="hwdb 'keyboard:atkbd:$attr{[dmi/id]modalias}'", \
   RUN{builtin}+="keyboard", GOTO="keyboard_end"
 
-# import key mapping for platform input device
+# device matching the input device name and the machine's DMI data
 IMPORT{builtin}="hwdb 'keyboard:name:$attr{name}:$attr{[dmi/id]modalias}'", \
   RUN{builtin}+="keyboard", GOTO="keyboard_end"
 
