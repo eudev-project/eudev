@@ -28,6 +28,7 @@ char* path_make_absolute(const char *p, const char *prefix);
 char* path_make_absolute_cwd(const char *p);
 char* path_kill_slashes(char *path);
 char* path_startswith(const char *path, const char *prefix) _pure_;
+int path_compare(const char *a, const char *b) _pure_;
 bool path_equal(const char *a, const char *b) _pure_;
 
 char** path_strv_resolve(char **l, const char *prefix);
