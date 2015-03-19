@@ -202,7 +202,7 @@ struct udev_ctrl_connection *udev_ctrl_get_connection(struct udev_ctrl *uctrl) {
         conn->sock = accept4(uctrl->sock, NULL, NULL, SOCK_CLOEXEC|SOCK_NONBLOCK);
 
         /* Fallback path when accept4() is unavailable */
-        if ( conn->sock < 0 && (errno == ENOSYS || errno == ENOTSUP) )
+        if ( conn->sock < 0 && (errno == ENOSYS || errno == EOPNOTSUPP) )
                 conn->sock = accept4_fallback(uctrl->sock);
 #else
         conn->sock = accept4_fallback(uctrl->sock);
