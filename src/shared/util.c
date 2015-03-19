@@ -70,6 +70,9 @@
 #include "fileio.h"
 #include "virt.h"
 
+/* Put this test here for a lack of better place */
+assert_cc(EAGAIN == EWOULDBLOCK);
+
 int saved_argc = 0;
 char **saved_argv = NULL;
 
