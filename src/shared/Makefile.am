@@ -1,6 +1,7 @@
 ACLOCAL_AMFLAGS = -I m4 ${ACLOCAL_FLAGS}
 
 AM_CPPFLAGS = \
+	-DUDEV_ROOT_RUN=\"$(rootrundir)\" \
 	-include $(top_builddir)/config.h
 
 libudev_shared_la_SOURCES=\

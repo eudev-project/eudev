@@ -16,6 +16,7 @@ endef
 
 AM_CPPFLAGS = \
 	-include $(top_builddir)/config.h \
+	-DUDEV_ROOT_RUN=\"$(rootrundir)\" \
 	-DUDEV_CONF_FILE=\"$(udevconffile)\" \
 	-DUDEV_HWDB_BIN=\"$(udevhwdbbin)\" \
 	-DUDEV_VERSION=$(UDEV_VERSION) \
