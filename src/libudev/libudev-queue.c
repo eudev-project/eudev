@@ -167,7 +167,7 @@ _public_ unsigned long long int udev_queue_get_udev_seqnum(struct udev_queue *ud
  **/
 _public_ int udev_queue_get_udev_is_active(struct udev_queue *udev_queue)
 {
-        return access("/run/udev/control", F_OK) >= 0;
+        return access(UDEV_ROOT_RUN "/udev/control", F_OK) >= 0;
 }
 
 /**
@@ -180,7 +180,7 @@ _public_ int udev_queue_get_udev_is_active(struct udev_queue *udev_queue)
  **/
 _public_ int udev_queue_get_queue_is_empty(struct udev_queue *udev_queue)
 {
-        return access("/run/udev/queue", F_OK) < 0;
+        return access(UDEV_ROOT_RUN "/udev/queue", F_OK) < 0;
 }
 
 /**
@@ -245,7 +245,7 @@ _public_ int udev_queue_get_fd(struct udev_queue *udev_queue) {
         if (fd < 0)
                 return -errno;
 
-        r = inotify_add_watch(fd, "/run/udev" , IN_DELETE);
+        r = inotify_add_watch(fd, UDEV_ROOT_RUN "/udev" , IN_DELETE);
         if (r < 0) {
                 r = -errno;
                 close(fd);

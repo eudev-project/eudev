@@ -63,11 +63,11 @@ int detect_container(const char **id) {
         } else {
 
                 /* Otherwise, PID 1 dropped this information into a
-                 * file in /run. This is better than accessing
+                 * file in UDEV_ROOT_RUN. This is better than accessing
                  * /proc/1/environ, since we don't need CAP_SYS_PTRACE
                  * for that. */
 
-                r = read_one_line_file("/run/systemd/container", &m);
+                r = read_one_line_file(UDEV_ROOT_RUN "/systemd/container", &m);
                 if (r == -ENOENT) {
                         r = 0;
                         goto finish;

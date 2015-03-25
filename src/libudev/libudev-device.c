@@ -610,7 +610,7 @@ static int udev_device_read_db(struct udev_device *udev_device)
         if (id == NULL)
                 return -1;
 
-        strscpyl(filename, sizeof(filename), "/run/udev/data/", id, NULL);
+        strscpyl(filename, sizeof(filename), UDEV_ROOT_RUN "/udev/data/", id, NULL);
 
         f = fopen(filename, "re");
         if (f == NULL)
