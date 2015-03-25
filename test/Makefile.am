@@ -2,6 +2,7 @@ ACLOCAL_AMFLAGS = -I m4 ${ACLOCAL_FLAGS}
 
 AM_CPPFLAGS = \
 	-include $(top_builddir)/config.h \
+	-DUDEV_ROOT_RUN=\"$(rootrundir)\" \
 	-DVERSION=\"@VERSION@\" \
 	-I $(top_srcdir)/src/shared \
 	-I $(top_srcdir)/src/libudev \

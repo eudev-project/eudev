@@ -135,6 +135,15 @@ AC_ARG_WITH(
         [with_rootlibexecdir=${with_rootlibdir}/udev]
 )
 
+AC_ARG_WITH(
+        [rootrundir],
+        [AS_HELP_STRING(
+                [--with-rootrundir=DIR],
+                [Configurable path for /run])],
+        [],
+        [with_rootrundir=/run]
+)
+
 AC_ARG_ENABLE(
         [split-usr],
         [AS_HELP_STRING(
@@ -179,6 +188,8 @@ AC_SUBST([libgudev_includedir],[${includedir}/gudev-1.0/gudev])
 # introspection paths
 AC_SUBST([girdir], [${datadir}/gir-1.0])
 AC_SUBST([typelibsdir], [${libdir}/girepository-1.0])
+
+AC_SUBST([rootrundir],[${with_rootrundir}])
 
 # ------------------------------------------------------------------------------
 
@@ -348,6 +359,7 @@ AC_MSG_RESULT([
         rootlibdir:              ${rootlibdir}
         rootlibexecdir:          ${rootlibexecdir}
         datarootdir:             ${datarootdir}
+        rootrundir:              ${rootrundir}
 
         udevconfdir:             ${udevconfdir}
         udevconffile:            ${udevconffile}

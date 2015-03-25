@@ -912,13 +912,13 @@ static void event_queue_update(void) {
         int r;
 
         if (!udev_list_node_is_empty(&event_list)) {
-                r = touch("/run/udev/queue");
+                r = touch(UDEV_ROOT_RUN "/udev/queue");
                 if (r < 0)
-                        log_warning_errno(r, "could not touch /run/udev/queue: %m");
+                        log_warning_errno(r, "could not touch " UDEV_ROOT_RUN "/udev/queue: %m");
         } else {
-                r = unlink("/run/udev/queue");
+                r = unlink(UDEV_ROOT_RUN "/udev/queue");
                 if (r < 0 && errno != ENOENT)
-                        log_warning("could not unlink /run/udev/queue: %m");
+                        log_warning("could not unlink " UDEV_ROOT_RUN "/udev/queue: %m");
         }
 }
 
@@ -1124,9 +1124,9 @@ int main(int argc, char *argv[]) {
 
         udev_list_init(udev, &properties_list, true);
 
-        r = mkdir("/run/udev", 0755);
+        r = mkdir(UDEV_ROOT_RUN "/udev", 0755);
         if (r < 0 && errno != EEXIST) {
-                log_error_errno(errno, "could not create /run/udev: %m");
+                log_error_errno(errno, "could not create " UDEV_ROOT_RUN "/udev: %m");
                 goto exit;
         }
 
@@ -1241,10 +1241,10 @@ int main(int argc, char *argv[]) {
         inotify_add_watch(fd_inotify, UDEV_CONF_DIR "/rules.d",
                           IN_DELETE | IN_MOVE | IN_CLOSE_WRITE);
 
-        if (access("/run/udev/rules.d", F_OK) < 0) {
-                mkdir_p("/run/udev/rules.d", 0755);
+        if (access(UDEV_ROOT_RUN "/udev/rules.d", F_OK) < 0) {
+                mkdir_p(UDEV_ROOT_RUN "/udev/rules.d", 0755);
         }
-        inotify_add_watch(fd_inotify, "/run/udev/rules.d",
+        inotify_add_watch(fd_inotify, UDEV_ROOT_RUN "/udev/rules.d",
                           IN_DELETE | IN_MOVE | IN_CLOSE_WRITE);
 
         udev_watch_restore(udev);
@@ -1477,7 +1477,7 @@ int main(int argc, char *argv[]) {
         rc = EXIT_SUCCESS;
 exit:
         udev_ctrl_cleanup(udev_ctrl);
-        unlink("/run/udev/queue");
+        unlink(UDEV_ROOT_RUN "/udev/queue");
 exit_daemonize:
         if (fd_ep >= 0)
                 close(fd_ep);

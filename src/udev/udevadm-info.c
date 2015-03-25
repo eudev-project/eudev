@@ -225,33 +225,33 @@ static void cleanup_dir(DIR *dir, mode_t mask, int depth) {
 static void cleanup_db(struct udev *udev) {
         DIR *dir;
 
-        unlink("/run/udev/queue.bin");
+        unlink(UDEV_ROOT_RUN "/udev/queue.bin");
 
-        dir = opendir("/run/udev/data");
+        dir = opendir(UDEV_ROOT_RUN "/udev/data");
         if (dir != NULL) {
                 cleanup_dir(dir, S_ISVTX, 1);
                 closedir(dir);
         }
 
-        dir = opendir("/run/udev/links");
+        dir = opendir(UDEV_ROOT_RUN "/udev/links");
         if (dir != NULL) {
                 cleanup_dir(dir, 0, 2);
                 closedir(dir);
         }
 
-        dir = opendir("/run/udev/tags");
+        dir = opendir(UDEV_ROOT_RUN "/udev/tags");
         if (dir != NULL) {
                 cleanup_dir(dir, 0, 2);
                 closedir(dir);
         }
 
-        dir = opendir("/run/udev/static_node-tags");
+        dir = opendir(UDEV_ROOT_RUN "/udev/static_node-tags");
         if (dir != NULL) {
                 cleanup_dir(dir, 0, 2);
                 closedir(dir);
         }
 
-        dir = opendir("/run/udev/watch");
+        dir = opendir(UDEV_ROOT_RUN "/udev/watch");
         if (dir != NULL) {
                 cleanup_dir(dir, 0, 1);
                 closedir(dir);

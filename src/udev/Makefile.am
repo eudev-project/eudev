@@ -6,6 +6,7 @@ AM_CPPFLAGS = \
 	-DUDEV_HWDB_DIR=\"$(udevhwdbdir)\" \
 	-DUDEV_HWDB_BIN=\"$(udevhwdbbin)\" \
 	-DUDEV_CONF_DIR=\"$(udevconfdir)\" \
+	-DUDEV_ROOT_RUN=\"$(rootrundir)\" \
 	-DUDEV_RULES_DIR=\"$(udevrulesdir)\" \
 	-DUDEV_LIBEXEC_DIR=\"$(udevlibexecdir)\" \
 	-DUDEV_VERSION=\"$(UDEV_VERSION)\" \
