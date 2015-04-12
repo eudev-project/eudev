@@ -666,7 +666,8 @@ char *cescape(const char *s) {
 
         assert(s);
 
-        /* Does C style string escaping. */
+        /* Does C style string escaping. May be reversed with
+         * cunescape(). */
 
         r = new(char, strlen(s)*4 + 1);
         if (!r)
@@ -686,7 +687,7 @@ char *xescape(const char *s, const char *bad) {
 
         /* Escapes all chars in bad, in addition to \ and all special
          * chars, in \xFF style escaping. May be reversed with
-         * cunescape. */
+         * cunescape(). */
 
         r = new(char, strlen(s) * 4 + 1);
         if (!r)
