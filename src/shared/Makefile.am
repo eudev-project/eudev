@@ -39,6 +39,7 @@ noinst_HEADERS = \
 	dev-setup.h \
 	exit-status.h \
 	fileio.h \
+	formats-util.h \
 	hashmap.h \
 	ioprio.h \
 	label.h \
