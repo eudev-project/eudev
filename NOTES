@@ -1,5 +1,11 @@
 Newest entries are on top.
 
+2015-04-12
+
+	* We did not reduce libudev's device by a thin wrapper around sd-device
+	http://cgit.freedesktop.org/systemd/systemd/commit/?id=f4ac4d1a82e2c468761fffa333323841ad886221
+
+
 2014-12-15
 
 	* We did not move builtin-hwdb - port to sd-hwdb:
