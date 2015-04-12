@@ -24,7 +24,7 @@
 
 #include "util.h"
 
-void strv_free(char **l);
+char **strv_free(char **l);
 DEFINE_TRIVIAL_CLEANUP_FUNC(char**, strv_free);
 #define _cleanup_strv_free_ _cleanup_(strv_freep)
 
