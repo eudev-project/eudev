@@ -142,3 +142,7 @@ static inline int name_to_handle_at(int fd, const char *name, struct file_handle
         return syscall(__NR_name_to_handle_at, fd, name, handle, mnt_id, flags);
 }
 #endif
+
+#ifndef INPUT_PROP_POINTING_STICK
+#define INPUT_PROP_POINTING_STICK 0x05
+#endif
