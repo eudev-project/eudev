@@ -34,6 +34,7 @@ bool path_equal(const char *a, const char *b) _pure_;
 char** path_strv_resolve(char **l, const char *prefix);
 char** path_strv_resolve_uniq(char **l, const char *prefix);
 
+int fd_is_mount_point(int fd);
 int path_is_mount_point(const char *path, bool allow_symlink);
 bool paths_check_timestamp(const char* const* paths, usec_t *paths_ts_usec, bool update);
 
