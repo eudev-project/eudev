@@ -50,7 +50,7 @@
 #include "utf8.h"
 #include "util.h"
 
-static inline bool is_unicode_valid(uint32_t ch) {
+bool unichar_is_valid(uint32_t ch) {
 
         if (ch >= 0x110000) /* End of unicode space */
                 return false;
@@ -64,7 +64,7 @@ static inline bool is_unicode_valid(uint32_t ch) {
         return true;
 }
 
-static bool is_unicode_control(uint32_t ch) {
+static bool unichar_is_control(uint32_t ch) {
 
         /*
           0 to ' '-1 is the C0 range.
@@ -154,7 +154,7 @@ bool utf8_is_printable_newline(const char* str, size_t length, bool newline) {
 
                 val = utf8_encoded_to_unichar((const char*) p);
                 if (val < 0 ||
-                    is_unicode_control(val) ||
+                    unichar_is_control(val) ||
                     (!newline && val == '\n'))
                         return false;
 
@@ -190,6 +190,7 @@ char *ascii_is_valid(const char *str) {
  *          occupy.
  */
 size_t utf8_encode_unichar(char *out_utf8, uint32_t g) {
+
         if (g < (1 << 7)) {
                 if (out_utf8)
                         out_utf8[0] = g & 0x7f;
@@ -215,9 +216,9 @@ size_t utf8_encode_unichar(char *out_utf8, uint32_t g) {
                         out_utf8[3] = 0x80 | (g & 0x3f);
                 }
                 return 4;
-        } else {
-                return 0;
         }
+
+        return 0;
 }
 
 char *utf16_to_utf8(const void *s, size_t length) {
@@ -308,7 +309,7 @@ int utf8_encoded_valid_unichar(const char *str) {
                 return -EINVAL;
 
         /* check if value has valid range */
-        if (!is_unicode_valid(unichar))
+        if (!unichar_is_valid(unichar))
                 return -EINVAL;
 
         return len;
