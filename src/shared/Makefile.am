@@ -20,6 +20,7 @@ libudev_shared_la_SOURCES=\
 	MurmurHash2.c \
 	path-util.c \
 	process-util.c \
+	random-util.c \
 	selinux-util.c \
 	siphash24.c \
 	smack-util.c \
@@ -53,6 +54,7 @@ noinst_HEADERS = \
 	MurmurHash2.h \
 	path-util.h \
 	process-util.h \
+	random-util.h \
 	selinux-util.h \
 	set.h \
 	siphash24.h \

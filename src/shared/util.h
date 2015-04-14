@@ -160,10 +160,6 @@ bool dirent_is_file_with_suffix(const struct dirent *de, const char *suffix) _pu
 
 bool hidden_file(const char *filename) _pure_;
 
-int dev_urandom(void *p, size_t n);
-void random_bytes(void *p, size_t n);
-void initialize_srand(void);
-
 /* For basic lookup tables with strictly enumerated entries */
 #define _DEFINE_STRING_TABLE_LOOKUP_TO_STRING(name,type,scope)          \
         scope const char *name##_to_string(type i) {                    \
@@ -234,6 +230,7 @@ int flush_fd(int fd);
 int fopen_temporary(const char *path, FILE **_f, char **_temp_path);
 
 ssize_t loop_read(int fd, void *buf, size_t nbytes, bool do_poll);
+int loop_read_exact(int fd, void *buf, size_t nbytes, bool do_poll);
 
 char* dirname_malloc(const char *path);
 

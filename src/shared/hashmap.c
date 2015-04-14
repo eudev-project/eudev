@@ -33,6 +33,7 @@
 #include "strv.h"
 #include "list.h"
 #include "mempool.h"
+#include "random-util.h"
 
 /*
  * Implementation of hashmaps.
