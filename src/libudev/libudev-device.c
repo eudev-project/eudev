@@ -1158,6 +1158,9 @@ static int udev_device_read_uevent_file(struct udev_device *udev_device)
         if (!filename)
                 return -ENOMEM;
         r = read_full_file(filename, &uevent, NULL);
+        if (r == -EACCES)
+                /* empty uevent files may be write-only */
+                return 0;
         if (r < 0)
                 return r;
         udev_device->uevent_loaded = true;
