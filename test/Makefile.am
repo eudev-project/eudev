@@ -10,9 +10,7 @@ AM_CPPFLAGS = \
 
 noinst_PROGRAMS = \
 	test-libudev \
-	test-udev \
-	test-utf8 \
-	test-device_nodes
+	test-udev
 
 test_libudev_SOURCES = \
 	test-libudev.c
@@ -33,26 +31,6 @@ test_udev_LDADD = \
 	$(top_builddir)/src/udev/libudev-core.la \
 	$(BLKID_LIBS) \
 	$(SELINUX_LIBS)
-
-test_utf8_SOURCES = \
-	test-utf8.c
-
-test_utf8_CFLAGS = \
-	$(AM_CFLAGS)
-
-test_utf8_LDADD = \
-	$(top_builddir)/src/shared/libudev_shared.la \
-	$(top_builddir)/src/libudev/libudev-private.la
-
-test_device_nodes_SOURCES = \
-	test-device-nodes.c
-
-test_device_nodes_CFLAGS = \
-	$(AM_CFLAGS)
-
-test_device_nodes_LDADD = \
-	$(top_builddir)/src/shared/libudev_shared.la \
-	$(top_builddir)/src/libudev/libudev-private.la
 
 if HAVE_KMOD
 test_udev_LDADD += \

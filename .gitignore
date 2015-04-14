@@ -72,6 +72,10 @@ src/udev/keyboard-keys.txt
 test/test-libudev
 test/test-udev
 test/test
-test/test-device_nodes
-test/test-utf8
 test-driver
+
+test/rules-test.sh.log
+test/rules-test.sh.trs
+test/test-suite.log
+test/udev-test.pl.log
+test/udev-test.pl.trs
