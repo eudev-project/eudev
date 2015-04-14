@@ -24,6 +24,7 @@
 #endif
 
 #include "util.h"
+#include "process-util.h"
 #include "path-util.h"
 #include "fileio.h"
 #include "smack-util.h"

@@ -25,6 +25,7 @@
 
 #include "cgroup-util.h"
 #include "set.h"
+#include "process-util.h"
 #include "path-util.h"
 
 int cg_enumerate_processes(const char *controller, const char *path, FILE **_f) {

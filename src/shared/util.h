@@ -149,14 +149,11 @@ char *truncate_nl(char *s);
 
 int rmdir_parents(const char *path, const char *stop);
 
-int get_process_comm(pid_t pid, char **name);
-int get_process_cmdline(pid_t pid, size_t max_length, bool comm_fallback, char **line);
-int get_process_environ(pid_t pid, char **environ);
-
 char hexchar(int x) _const_;
 char octchar(int x) _const_;
 
 char *cescape(const char *s);
+size_t cescape_char(char c, char *buf);
 char *xescape(const char *s, const char *bad);
 
 bool dirent_is_file_with_suffix(const struct dirent *de, const char *suffix) _pure_;
@@ -395,19 +392,6 @@ int unlink_noerrno(const char *path);
                         _p_ = stpcpy(_p_, _appendees_[_i_]);            \
                 *_p_ = 0;                                               \
                 _d_;                                                    \
-        })
-
-#define procfs_file_alloca(pid, field)                                  \
-        ({                                                              \
-                pid_t _pid_ = (pid);                                    \
-                const char *_r_;                                        \
-                if (_pid_ == 0) {                                       \
-                        _r_ = ("/proc/self/" field);                    \
-                } else {                                                \
-                        _r_ = alloca(strlen("/proc/") + DECIMAL_STR_MAX(pid_t) + 1 + sizeof(field)); \
-                        sprintf((char*) _r_, "/proc/"PID_FMT"/" field, _pid_);                       \
-                }                                                       \
-                _r_;                                                    \
         })
 
 static inline void qsort_safe(void *base, size_t nmemb, size_t size,

@@ -22,6 +22,7 @@
 #include <unistd.h>
 
 #include "util.h"
+#include "process-util.h"
 #include "virt.h"
 #include "fileio.h"
 
