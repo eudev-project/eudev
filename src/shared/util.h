@@ -50,16 +50,6 @@
 
 #define FORMAT_BYTES_MAX 8
 
-#define ANSI_HIGHLIGHT_ON "\x1B[1;39m"
-#define ANSI_RED_ON "\x1B[31m"
-#define ANSI_HIGHLIGHT_RED_ON "\x1B[1;31m"
-#define ANSI_GREEN_ON "\x1B[32m"
-#define ANSI_HIGHLIGHT_GREEN_ON "\x1B[1;32m"
-#define ANSI_HIGHLIGHT_YELLOW_ON "\x1B[1;33m"
-#define ANSI_HIGHLIGHT_BLUE_ON "\x1B[1;34m"
-#define ANSI_HIGHLIGHT_OFF "\x1B[0m"
-#define ANSI_ERASE_TO_END_OF_LINE "\x1B[K"
-
 size_t page_size(void) _pure_;
 #define PAGE_ALIGN(l) ALIGN_TO((l), page_size())
 
@@ -222,8 +212,6 @@ bool hidden_file(const char *filename) _pure_;
                 return (type) -1;                                       \
         }                                                               \
         struct __useless_struct_to_allow_trailing_semicolon__
-
-int open_terminal(const char *name, int mode);
 
 int flush_fd(int fd);
 
