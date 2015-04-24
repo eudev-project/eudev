@@ -854,6 +854,7 @@ static void handle_signal(struct udev *udev, int signo) {
                         pid_t pid;
                         int status;
                         struct udev_list_node *loop, *tmp;
+                        bool found = false;
 
                         pid = waitpid(-1, &status, WNOHANG);
                         if (pid <= 0)
@@ -864,6 +865,8 @@ static void handle_signal(struct udev *udev, int signo) {
 
                                 if (worker->pid != pid)
                                         continue;
+                                else
+                                        found = true;
 
                                 if (WIFEXITED(status)) {
                                         if (WEXITSTATUS(status) == 0)
@@ -900,6 +903,9 @@ static void handle_signal(struct udev *udev, int signo) {
                                 worker_unref(worker);
                                 break;
                         }
+
+                        if (!found)
+                                log_warning("worker ["PID_FMT"] is unknown, ignoring", pid);
                 }
                 break;
         case SIGHUP:
