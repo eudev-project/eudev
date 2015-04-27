@@ -171,7 +171,6 @@ static void worker_list_cleanup(struct udev *udev) {
 
 static void worker_spawn(struct event *event) {
         struct udev *udev = event->udev;
-        struct worker *worker;
         struct udev_monitor *worker_monitor;
         pid_t pid;
 
@@ -182,15 +181,6 @@ static void worker_spawn(struct event *event) {
         /* allow the main daemon netlink address to send devices to the worker */
         udev_monitor_allow_unicast_sender(worker_monitor, monitor);
         udev_monitor_enable_receiving(worker_monitor);
-
-        worker = new0(struct worker, 1);
-        if (worker == NULL) {
-                udev_monitor_unref(worker_monitor);
-                return;
-        }
-        /* worker + event reference */
-        worker->refcount = 2;
-        worker->udev = udev;
 
         pid = fork();
         switch (pid) {
@@ -205,7 +195,6 @@ static void worker_spawn(struct event *event) {
                 dev = event->dev;
                 event->dev = NULL;
 
-                free(worker);
                 worker_list_cleanup(udev);
                 event_queue_cleanup(udev, EVENT_UNDEF);
                 udev_monitor_unref(monitor);
@@ -387,10 +376,21 @@ out:
         case -1:
                 udev_monitor_unref(worker_monitor);
                 event->state = EVENT_QUEUED;
-                free(worker);
                 log_error_errno(errno, "fork of child failed: %m");
                 break;
         default:
+        {
+                struct worker *worker;
+
+                worker = new0(struct worker, 1);
+                if (!worker) {
+                        udev_monitor_unref(worker_monitor);
+                        return;
+                }
+
+                /* worker + event reference */
+                worker->refcount = 2;
+                worker->udev = udev;
                 /* close monitor, but keep address around */
                 udev_monitor_disconnect(worker_monitor);
                 worker->monitor = worker_monitor;
@@ -404,6 +404,7 @@ out:
                 children++;
                 log_debug("seq %llu forked new worker ["PID_FMT"]", udev_device_get_seqnum(event->dev), pid);
                 break;
+        }
         }
 }
 
