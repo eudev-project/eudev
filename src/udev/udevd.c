@@ -182,8 +182,7 @@ static int worker_new(struct worker **ret, struct udev *udev, struct udev_monito
         if (!worker)
                 return -ENOMEM;
 
-        /* worker + event reference */
-        worker->refcount = 2;
+        worker->refcount = 1;
         worker->udev = udev_ref(udev);
         /* close monitor, but keep address around */
         udev_monitor_disconnect(worker_monitor);
@@ -195,6 +194,15 @@ static int worker_new(struct worker **ret, struct udev *udev, struct udev_monito
         *ret = worker;
 
         return 0;
+}
+
+static void worker_attach_event(struct worker *worker, struct event *event) {
+        worker->state = WORKER_RUNNING;
+        worker->event_start_usec = now(CLOCK_MONOTONIC);
+        worker->event_warned = false;
+        worker->event = event;
+        event->state = EVENT_RUNNING;
+        worker_ref(worker);
 }
 
 static void worker_spawn(struct event *event) {
@@ -413,11 +421,8 @@ out:
                 if (r < 0)
                         return;
 
-                worker->state = WORKER_RUNNING;
-                worker->event_start_usec = now(CLOCK_MONOTONIC);
-                worker->event_warned = false;
-                worker->event = event;
-                event->state = EVENT_RUNNING;
+                worker_attach_event(worker, event);
+
                 log_debug("seq %llu forked new worker ["PID_FMT"]", udev_device_get_seqnum(event->dev), pid);
                 break;
         }
@@ -442,12 +447,7 @@ static void event_run(struct event *event) {
                         worker->state = WORKER_KILLED;
                         continue;
                 }
-                worker_ref(worker);
-                worker->event = event;
-                worker->state = WORKER_RUNNING;
-                worker->event_start_usec = now(CLOCK_MONOTONIC);
-                worker->event_warned = false;
-                event->state = EVENT_RUNNING;
+                worker_attach_event(worker, event);
                 return;
         }
 
