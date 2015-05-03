@@ -602,6 +602,7 @@ static void worker_returned(int fd_worker) {
                 ssize_t size;
                 struct ucred *ucred = NULL;
                 struct udev_list_node *loop;
+                bool found = false;
 
                 memzero(&iovec, sizeof(struct iovec));
                 iovec.iov_base = &msg;
@@ -643,6 +644,8 @@ static void worker_returned(int fd_worker) {
 
                         if (worker->pid != ucred->pid)
                                 continue;
+                        else
+                                found = true;
 
                         /* worker returned */
                         if (worker->event) {
@@ -655,6 +658,9 @@ static void worker_returned(int fd_worker) {
                         worker_unref(worker);
                         break;
                 }
+
+                if (!found)
+                        log_warning("unknown worker ["PID_FMT"] returned", ucred->pid);
         }
 }
 
