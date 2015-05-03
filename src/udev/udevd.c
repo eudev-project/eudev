@@ -592,24 +592,26 @@ static void event_queue_cleanup(struct udev *udev, enum event_state match_type) 
 static void worker_returned(int fd_worker) {
         for (;;) {
                 struct worker_message msg;
-                struct iovec iovec = {
-                        .iov_base = &msg,
-                        .iov_len = sizeof(msg),
-                };
+                struct iovec iovec;
                 union {
                         struct cmsghdr cmsghdr;
                         uint8_t buf[CMSG_SPACE(sizeof(struct ucred))];
                 } control = {};
-                struct msghdr msghdr = {
-                        .msg_iov = &iovec,
-                        .msg_iovlen = 1,
-                        .msg_control = &control,
-                        .msg_controllen = sizeof(control),
-                };
+                struct msghdr msghdr;
                 struct cmsghdr *cmsg;
                 ssize_t size;
                 struct ucred *ucred = NULL;
                 struct udev_list_node *loop;
+
+                memzero(&iovec, sizeof(struct iovec));
+                iovec.iov_base = &msg;
+                iovec.iov_len = sizeof(msg);
+
+                memzero(&msghdr, sizeof(struct msghdr));
+                msghdr.msg_iov = &iovec;
+                msghdr.msg_iovlen = 1;
+                msghdr.msg_control = &control;
+                msghdr.msg_controllen = sizeof(control);
 
                 size = recvmsg(fd_worker, &msghdr, MSG_DONTWAIT);
                 if (size < 0) {
