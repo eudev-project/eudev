@@ -224,6 +224,8 @@ char* dirname_malloc(const char *path);
 
 int chmod_and_chown(const char *path, mode_t mode, uid_t uid, gid_t gid);
 
+#define xsprintf(buf, fmt, ...) assert_se((size_t) snprintf(buf, ELEMENTSOF(buf), fmt, __VA_ARGS__) < ELEMENTSOF(buf))
+
 int touch_file(const char *path, bool parents, usec_t stamp, uid_t uid, gid_t gid, mode_t mode);
 int touch(const char *path);
 
