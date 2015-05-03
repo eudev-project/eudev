@@ -4,6 +4,7 @@ Newest entries are on top.
 
 	* We did not reduce libudev's enumerate to a thin wrapper around sd-device:
 	http://cgit.freedesktop.org/systemd/systemd/commit/?id=c32eb440bab953a0169cd207dfef5cad16dfb340
+	http://cgit.freedesktop.org/systemd/systemd/commit/?id=dee5e0b6c29ca22cbf67d28fbee195d70b0dde72
 
 2015-04-12
 
