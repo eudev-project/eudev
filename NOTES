@@ -1,5 +1,10 @@
 Newest entries are on top.
 
+2015-05-04
+
+	* We skipped udevd: fix REMOVE handling
+	http://cgit.freedesktop.org/systemd/systemd/commit/?id=107f2e2526d476c6cc9b81a690391c111027d641
+
 2015-05-03
 
 	* We did not reduce libudev's enumerate to a thin wrapper around sd-device:
