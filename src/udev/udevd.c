@@ -56,6 +56,7 @@
 
 static struct udev_rules *rules;
 static struct udev_ctrl *udev_ctrl;
+static struct udev_ctrl_connection *udev_ctrl_conn;
 static struct udev_monitor *monitor;
 static int worker_watch[2] = { -1, -1 };
 static int fd_signal = -1;
@@ -495,7 +496,7 @@ static int event_queue_insert(struct udev_device *dev) {
         return 0;
 }
 
-static void worker_kill(struct udev *udev) {
+static void worker_kill(void) {
         struct worker *worker;
         Iterator i;
 
@@ -674,26 +675,27 @@ static void worker_returned(int fd_worker) {
 }
 
 /* receive the udevd message from userspace */
-static struct udev_ctrl_connection *handle_ctrl_msg(struct udev_ctrl *uctrl) {
-        struct udev *udev = udev_ctrl_get_udev(uctrl);
-        struct udev_ctrl_connection *ctrl_conn;
-        struct udev_ctrl_msg *ctrl_msg = NULL;
+static void handle_ctrl_msg(struct udev_ctrl *uctrl) {
+        _cleanup_udev_ctrl_connection_unref_ struct udev_ctrl_connection *ctrl_conn = NULL;
+        _cleanup_udev_ctrl_msg_unref_ struct udev_ctrl_msg *ctrl_msg = NULL;
         const char *str;
         int i;
 
+        assert(uctrl);
+
         ctrl_conn = udev_ctrl_get_connection(uctrl);
-        if (ctrl_conn == NULL)
-                goto out;
+        if (!ctrl_conn)
+                return;
 
         ctrl_msg = udev_ctrl_receive_msg(ctrl_conn);
-        if (ctrl_msg == NULL)
-                goto out;
+        if (!ctrl_msg)
+                return;
 
         i = udev_ctrl_get_set_log_level(ctrl_msg);
         if (i >= 0) {
                 log_debug("udevd message (SET_LOG_LEVEL) received, log_priority=%i", i);
                 log_set_max_level(i);
-                worker_kill(udev);
+                worker_kill();
         }
 
         if (udev_ctrl_get_stop_exec_queue(ctrl_msg) > 0) {
@@ -735,7 +737,7 @@ static struct udev_ctrl_connection *handle_ctrl_msg(struct udev_ctrl *uctrl) {
                         }
                         free(key);
                 }
-                worker_kill(udev);
+                worker_kill();
         }
 
         i = udev_ctrl_get_set_children_max(ctrl_msg);
@@ -751,11 +753,10 @@ static struct udev_ctrl_connection *handle_ctrl_msg(struct udev_ctrl *uctrl) {
                 log_debug("udevd message (EXIT) received");
                 udev_exit = true;
                 /* keep reference to block the client until we exit */
-                udev_ctrl_connection_ref(ctrl_conn);
+                udev_ctrl_conn = udev_ctrl_connection_ref(ctrl_conn);
         }
-out:
-        udev_ctrl_msg_unref(ctrl_msg);
-        return udev_ctrl_connection_unref(ctrl_conn);
+
+        return;
 }
 
 static int synthesize_change(struct udev_device *dev) {
@@ -1120,7 +1121,6 @@ int main(int argc, char *argv[]) {
         struct epoll_event ep_signal = { .events = EPOLLIN };
         struct epoll_event ep_netlink = { .events = EPOLLIN };
         struct epoll_event ep_worker = { .events = EPOLLIN };
-        struct udev_ctrl_connection *ctrl_conn = NULL;
         int r = 0, one = 1;
 
         udev = udev_new();
@@ -1349,7 +1349,7 @@ int main(int argc, char *argv[]) {
 
                         /* discard queued events and kill workers */
                         event_queue_cleanup(udev, EVENT_QUEUED);
-                        worker_kill(udev);
+                        worker_kill();
 
                         /* exit after all has cleaned up */
                         if (udev_list_node_is_empty(&event_list) && hashmap_isempty(workers))
@@ -1389,7 +1389,7 @@ int main(int argc, char *argv[]) {
                         /* kill idle workers */
                         if (udev_list_node_is_empty(&event_list)) {
                                 log_debug("cleanup idle workers");
-                                worker_kill(udev);
+                                worker_kill();
                         }
 
                         /* check for hanging events */
@@ -1446,7 +1446,7 @@ int main(int argc, char *argv[]) {
 
                 /* reload requested, HUP signal received, rules changed, builtin changed */
                 if (reload) {
-                        worker_kill(udev);
+                        worker_kill();
                         rules = udev_rules_unref(rules);
                         udev_builtin_exit(udev);
                         reload = false;
@@ -1521,7 +1521,7 @@ int main(int argc, char *argv[]) {
                  * exit.
                  */
                 if (is_ctrl)
-                        ctrl_conn = handle_ctrl_msg(udev_ctrl);
+                        handle_ctrl_msg(udev_ctrl);
         }
 
 exit:
@@ -1541,7 +1541,7 @@ exit_daemonize:
         if (worker_watch[WRITE_END] >= 0)
                 close(worker_watch[WRITE_END]);
         udev_monitor_unref(monitor);
-        udev_ctrl_connection_unref(ctrl_conn);
+        udev_ctrl_connection_unref(udev_ctrl_conn);
         udev_ctrl_unref(udev_ctrl);
         mac_selinux_finish();
         udev_unref(udev);
