@@ -1515,10 +1515,6 @@ int main(int argc, char *argv[]) {
                  * This needs to be after the inotify handling, to make sure,
                  * that the ping is send back after the possibly generated
                  * "change" events by the inotify device node watch.
-                 *
-                 * A single time we may receive a client connection which we need to
-                 * keep open to block the client. It will be closed right before we
-                 * exit.
                  */
                 if (is_ctrl)
                         handle_ctrl_msg(udev_ctrl);
