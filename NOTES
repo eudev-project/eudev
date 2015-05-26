@@ -1,13 +1,19 @@
 Newest entries are on top.
 
+2015-05-26
+
+	* We skipped 'udevd: move to sd-event-style event handlers' since the sd_event_source structure
+	is not part of eudev.
+	http://cgit.freedesktop.org/systemd/systemd/commit/?id=e82e8fa5b19243177e178ed78c2480505eda5e03
+
 2015-05-04
 
-	* We skipped udevd: fix REMOVE handling
+	* We skipped 'udevd: fix REMOVE handling'
 	http://cgit.freedesktop.org/systemd/systemd/commit/?id=107f2e2526d476c6cc9b81a690391c111027d641
 
 2015-05-03
 
-	* We did not reduce libudev's enumerate to a thin wrapper around sd-device:
+	* We did not reduce libudev's enumerate to a thin wrapper around sd-device.
 	http://cgit.freedesktop.org/systemd/systemd/commit/?id=c32eb440bab953a0169cd207dfef5cad16dfb340
 	http://cgit.freedesktop.org/systemd/systemd/commit/?id=dee5e0b6c29ca22cbf67d28fbee195d70b0dde72
 
