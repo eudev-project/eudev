@@ -674,6 +674,20 @@ static void worker_returned(int fd_worker) {
         }
 }
 
+static void event_queue_update(void) {
+        int r;
+
+        if (!udev_list_node_is_empty(&event_list)) {
+                r = touch("/run/udev/queue");
+                if (r < 0)
+                        log_warning_errno(r, "could not touch /run/udev/queue: %m");
+        } else {
+                r = unlink("/run/udev/queue");
+                if (r < 0 && errno != ENOENT)
+                        log_warning("could not unlink /run/udev/queue: %m");
+        }
+}
+
 /* receive the udevd message from userspace */
 static void handle_ctrl_msg(struct udev_ctrl *uctrl) {
         _cleanup_udev_ctrl_connection_unref_ struct udev_ctrl_connection *ctrl_conn = NULL;
@@ -746,8 +760,13 @@ static void handle_ctrl_msg(struct udev_ctrl *uctrl) {
                 arg_children_max = i;
         }
 
-        if (udev_ctrl_get_ping(ctrl_msg) > 0)
+        if (udev_ctrl_get_ping(ctrl_msg) > 0) {
                 log_debug("udevd message (SYNC) received");
+                /* tell settle that we are busy or idle, this needs to be before the
+                 * PING handling
+                 */
+                event_queue_update();
+        }
 
         if (udev_ctrl_get_exit(ctrl_msg) > 0) {
                 log_debug("udevd message (EXIT) received");
@@ -952,20 +971,6 @@ static void handle_signal(struct udev *udev, int signo) {
         case SIGHUP:
                 reload = true;
                 break;
-        }
-}
-
-static void event_queue_update(void) {
-        int r;
-
-        if (!udev_list_node_is_empty(&event_list)) {
-                r = touch(UDEV_ROOT_RUN "/udev/queue");
-                if (r < 0)
-                        log_warning_errno(r, "could not touch " UDEV_ROOT_RUN "/udev/queue: %m");
-        } else {
-                r = unlink(UDEV_ROOT_RUN "/udev/queue");
-                if (r < 0 && errno != ENOENT)
-                        log_warning("could not unlink " UDEV_ROOT_RUN "/udev/queue: %m");
         }
 }
 
@@ -1505,11 +1510,6 @@ int main(int argc, char *argv[]) {
                          */
                         continue;
                 }
-
-                /* tell settle that we are busy or idle, this needs to be before the
-                 * PING handling
-                 */
-                event_queue_update();
 
                 /*
                  * This needs to be after the inotify handling, to make sure,
