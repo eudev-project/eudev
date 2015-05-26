@@ -140,7 +140,9 @@ char *truncate_nl(char *s);
 int rmdir_parents(const char *path, const char *stop);
 
 char hexchar(int x) _const_;
+int unhexchar(char c) _const_;
 char octchar(int x) _const_;
+int unoctchar(char c) _const_;
 
 char *cescape(const char *s);
 size_t cescape_char(char c, char *buf);
@@ -390,6 +392,7 @@ static inline void qsort_safe(void *base, size_t nmemb, size_t size,
 }
 
 int proc_cmdline(char **ret);
+int parse_proc_cmdline(int (*parse_word)(const char *key, const char *value));
 int getpeercred(int fd, struct ucred *ucred);
 
 #if HAVE_DECL_MKOSTEMP
@@ -407,6 +410,13 @@ union file_handle_union {
 int tempfn_xxxxxx(const char *p, char **ret);
 
 int is_dir(const char *path, bool follow);
+
+typedef enum UnquoteFlags {
+        UNQUOTE_RELAX     = 1,
+        UNQUOTE_CUNESCAPE = 2,
+} UnquoteFlags;
+
+int unquote_first_word(const char **p, char **ret, UnquoteFlags flags);
 
 int execute_command(const char *command, char *const argv[]);
 
