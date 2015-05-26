@@ -52,6 +52,7 @@
 #include "cgroup-util.h"
 #include "dev-setup.h"
 #include "fileio.h"
+#include "hashmap.h"
 
 static struct udev_rules *rules;
 static struct udev_ctrl *udev_ctrl;
@@ -72,7 +73,7 @@ static usec_t arg_event_timeout_usec = 180 * USEC_PER_SEC;
 static usec_t arg_event_timeout_warn_usec = 180 * USEC_PER_SEC / 3;
 static sigset_t sigmask_orig;
 static UDEV_LIST(event_list);
-static UDEV_LIST(worker_list);
+Hashmap *workers;
 static char *udev_cgroup;
 static struct udev_list properties_list;
 static bool udev_exit;
@@ -151,7 +152,7 @@ static void worker_free(struct worker *worker) {
         if (!worker)
                 return;
 
-        udev_list_node_remove(&worker->node);
+        hashmap_remove(workers, UINT_TO_PTR(worker->pid));
         udev_monitor_unref(worker->monitor);
         udev_unref(worker->udev);
         event_free(worker->event);
@@ -161,18 +162,20 @@ static void worker_free(struct worker *worker) {
         free(worker);
 }
 
-static void worker_list_cleanup(struct udev *udev) {
-        struct udev_list_node *loop, *tmp;
+static void workers_free(void) {
+        struct worker *worker;
+        Iterator i;
 
-        udev_list_node_foreach_safe(loop, tmp, &worker_list) {
-                struct worker *worker = node_to_worker(loop);
-
+        HASHMAP_FOREACH(worker, workers, i)
                 worker_free(worker);
-        }
+
+        hashmap_free(workers);
+        workers = NULL;
 }
 
 static int worker_new(struct worker **ret, struct udev *udev, struct udev_monitor *worker_monitor, pid_t pid) {
-        struct worker *worker;
+        _cleanup_free_ struct worker *worker = NULL;
+        int r;
 
         assert(ret);
         assert(udev);
@@ -189,10 +192,19 @@ static int worker_new(struct worker **ret, struct udev *udev, struct udev_monito
         udev_monitor_disconnect(worker_monitor);
         worker->monitor = udev_monitor_ref(worker_monitor);
         worker->pid = pid;
-        udev_list_node_append(&worker->node, &worker_list);
+
+        r = hashmap_ensure_allocated(&workers, NULL);
+        if (r < 0)
+                return r;
+
+        r = hashmap_put(workers, UINT_TO_PTR(pid), worker);
+        if (r < 0)
+                return r;
+
         children++;
 
         *ret = worker;
+        worker = NULL;
 
         return 0;
 }
@@ -237,7 +249,7 @@ static void worker_spawn(struct event *event) {
                 dev = event->dev;
                 event->dev = NULL;
 
-                worker_list_cleanup(udev);
+                workers_free();
                 event_queue_cleanup(udev, EVENT_UNDEF);
                 udev_monitor_unref(monitor);
                 udev_ctrl_unref(udev_ctrl);
@@ -434,10 +446,10 @@ out:
 }
 
 static void event_run(struct event *event) {
-        struct udev_list_node *loop;
+        struct worker *worker;
+        Iterator i;
 
-        udev_list_node_foreach(loop, &worker_list) {
-                struct worker *worker = node_to_worker(loop);
+        HASHMAP_FOREACH(worker, workers, i) {
                 ssize_t count;
 
                 if (worker->state != WORKER_IDLE)
@@ -493,11 +505,10 @@ static int event_queue_insert(struct udev_device *dev) {
 }
 
 static void worker_kill(struct udev *udev) {
-        struct udev_list_node *loop;
+        struct worker *worker;
+        Iterator i;
 
-        udev_list_node_foreach(loop, &worker_list) {
-                struct worker *worker = node_to_worker(loop);
-
+        HASHMAP_FOREACH(worker, workers, i) {
                 if (worker->state == WORKER_KILLED)
                         continue;
 
@@ -620,8 +631,7 @@ static void worker_returned(int fd_worker) {
                 struct cmsghdr *cmsg;
                 ssize_t size;
                 struct ucred *ucred = NULL;
-                struct udev_list_node *loop;
-                bool found = false;
+                struct worker *worker;
 
                 memzero(&iovec, sizeof(struct iovec));
                 iovec.iov_base = &msg;
@@ -658,25 +668,17 @@ static void worker_returned(int fd_worker) {
                 }
 
                 /* lookup worker who sent the signal */
-                udev_list_node_foreach(loop, &worker_list) {
-                        struct worker *worker = node_to_worker(loop);
-
-                        if (worker->pid != ucred->pid)
-                                continue;
-                        else
-                                found = true;
-
-                        if (worker->state != WORKER_KILLED)
-                                worker->state = WORKER_IDLE;
-
-                        /* worker returned */
-                        event_free(worker->event);
-
-                        break;
+                worker = hashmap_get(workers, UINT_TO_PTR(ucred->pid));
+                if (!worker) {
+                        log_debug("worker ["PID_FMT"] returned, but is no longer tracked", ucred->pid);
+                        continue;
                 }
 
-                if (!found)
-                        log_debug("worker ["PID_FMT"] returned, but is no longer tracked", ucred->pid);
+                if (worker->state != WORKER_KILLED)
+                        worker->state = WORKER_IDLE;
+
+                /* worker returned */
+                event_free(worker->event);
         }
 }
 
@@ -911,57 +913,48 @@ static void handle_signal(struct udev *udev, int signo) {
                 for (;;) {
                         pid_t pid;
                         int status;
-                        struct udev_list_node *loop, *tmp;
-                        bool found = false;
+                        struct worker *worker;
 
                         pid = waitpid(-1, &status, WNOHANG);
                         if (pid <= 0)
                                 break;
 
-                        udev_list_node_foreach_safe(loop, tmp, &worker_list) {
-                                struct worker *worker = node_to_worker(loop);
-
-                                if (worker->pid != pid)
-                                        continue;
-                                else
-                                        found = true;
-
-                                if (WIFEXITED(status)) {
-                                        if (WEXITSTATUS(status) == 0)
-                                                log_debug("worker ["PID_FMT"] exited", pid);
-                                        else
-                                                log_warning("worker ["PID_FMT"] exited with return code %i", pid, WEXITSTATUS(status));
-                                } else if (WIFSIGNALED(status)) {
-                                        log_warning("worker ["PID_FMT"] terminated by signal %i (%s)",
-                                                    pid, WTERMSIG(status), strsignal(WTERMSIG(status)));
-                                } else if (WIFSTOPPED(status)) {
-                                        log_info("worker ["PID_FMT"] stopped", pid);
-                                        break;
-                                } else if (WIFCONTINUED(status)) {
-                                        log_info("worker ["PID_FMT"] continued", pid);
-                                        break;
-                                } else {
-                                        log_warning("worker ["PID_FMT"] exit with status 0x%04x", pid, status);
-                                }
-
-                                if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
-                                        if (worker->event) {
-                                                log_error("worker ["PID_FMT"] failed while handling '%s'", pid, worker->event->devpath);
-                                                /* delete state from disk */
-                                                udev_device_delete_db(worker->event->dev);
-                                                udev_device_tag_index(worker->event->dev, NULL, false);
-                                                /* forward kernel event without amending it */
-                                                udev_monitor_send_device(monitor, NULL, worker->event->dev_kernel);
-                                        }
-                                }
-
-                                worker_free(worker);
-
-                                break;
+                        worker = hashmap_get(workers, UINT_TO_PTR(pid));
+                        if (!worker) {
+                                log_warning("worker ["PID_FMT"] is unknown, ignoring", pid);
+                                continue;
                         }
 
-                        if (!found)
-                                log_warning("worker ["PID_FMT"] is unknown, ignoring", pid);
+                        if (WIFEXITED(status)) {
+                                if (WEXITSTATUS(status) == 0)
+                                        log_debug("worker ["PID_FMT"] exited", pid);
+                                else
+                                        log_warning("worker ["PID_FMT"] exited with return code %i", pid, WEXITSTATUS(status));
+                        } else if (WIFSIGNALED(status)) {
+                                log_warning("worker ["PID_FMT"] terminated by signal %i (%s)",
+                                            pid, WTERMSIG(status), strsignal(WTERMSIG(status)));
+                        } else if (WIFSTOPPED(status)) {
+                                log_info("worker ["PID_FMT"] stopped", pid);
+                                continue;
+                        } else if (WIFCONTINUED(status)) {
+                                log_info("worker ["PID_FMT"] continued", pid);
+                                continue;
+                        } else {
+                                log_warning("worker ["PID_FMT"] exit with status 0x%04x", pid, status);
+                        }
+
+                        if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
+                                if (worker->event) {
+                                        log_error("worker ["PID_FMT"] failed while handling '%s'", pid, worker->event->devpath);
+                                        /* delete state from disk */
+                                        udev_device_delete_db(worker->event->dev);
+                                        udev_device_tag_index(worker->event->dev, NULL, false);
+                                        /* forward kernel event without amending it */
+                                        udev_monitor_send_device(monitor, NULL, worker->event->dev_kernel);
+                                }
+                        }
+
+                        worker_free(worker);
                 }
                 break;
         case SIGHUP:
@@ -1278,7 +1271,6 @@ int main(int argc, char *argv[]) {
         log_debug("set children_max to %u", arg_children_max);
 
         udev_list_node_init(&event_list);
-        udev_list_node_init(&worker_list);
 
         fd_inotify = udev_watch_init(udev);
         if (fd_inotify < 0) {
@@ -1394,7 +1386,8 @@ int main(int argc, char *argv[]) {
                         continue;
 
                 if (fdcount == 0) {
-                        struct udev_list_node *loop;
+                        struct worker *worker;
+                        Iterator j;
 
                         /* timeout */
                         if (udev_exit) {
@@ -1409,8 +1402,7 @@ int main(int argc, char *argv[]) {
                         }
 
                         /* check for hanging events */
-                        udev_list_node_foreach(loop, &worker_list) {
-                                struct worker *worker = node_to_worker(loop);
+                        HASHMAP_FOREACH(worker, workers, j) {
                                 struct event *event = worker->event;
                                 usec_t ts;
 
@@ -1547,7 +1539,7 @@ exit:
 exit_daemonize:
         if (fd_ep >= 0)
                 close(fd_ep);
-        worker_list_cleanup(udev);
+        workers_free();
         event_queue_cleanup(udev, EVENT_UNDEF);
         udev_rules_unref(rules);
         udev_builtin_exit(udev);
