@@ -1183,7 +1183,7 @@ int main(int argc, char *argv[]) {
                 goto exit;
         }
 
-        dev_setup(NULL);
+        dev_setup(NULL, UID_INVALID, GID_INVALID);
 
         /* before opening new files, make sure std{in,out,err} fds are in a sane state */
         if (arg_daemonize) {
