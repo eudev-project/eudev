@@ -6,6 +6,8 @@ Newest entries are on top.
 	http://cgit.freedesktop.org/systemd/systemd/commit/?id=a8389097c0cd91720424b25ee5c6825b4f69cb6a
 	* We skip 'udevd: pass a Manager objcet to event handlers'
 	http://cgit.freedesktop.org/systemd/systemd/commit/?id=c0c6806bf9b3faacdbd0effa153fe1b058c4cd4e
+	* We skip 'udevd: queue - update queue state when events are queued/freed'
+	http://cgit.freedesktop.org/systemd/systemd/commit/?id=cb49a4f2dd53184ab787bcad69bcc9b8177d2e6e
 
 2015-05-26
 
