@@ -221,6 +221,7 @@ int fopen_temporary(const char *path, FILE **_f, char **_temp_path);
 
 ssize_t loop_read(int fd, void *buf, size_t nbytes, bool do_poll);
 int loop_read_exact(int fd, void *buf, size_t nbytes, bool do_poll);
+int loop_write(int fd, const void *buf, size_t nbytes, bool do_poll);
 
 char* dirname_malloc(const char *path);
 
