@@ -4,6 +4,8 @@ Newest entries are on top.
 
 	* We skip 'udevd: explicitly read out uevents we create ourselves'
 	http://cgit.freedesktop.org/systemd/systemd/commit/?id=a8389097c0cd91720424b25ee5c6825b4f69cb6a
+	* We skip 'udevd: pass a Manager objcet to event handlers'
+	http://cgit.freedesktop.org/systemd/systemd/commit/?id=c0c6806bf9b3faacdbd0effa153fe1b058c4cd4e
 
 2015-05-26
 
