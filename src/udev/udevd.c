@@ -1254,7 +1254,9 @@ int main(int argc, char *argv[]) {
                         r = log_error_errno(errno, "fork of daemon failed: %m");
                         goto exit;
                 default:
-                        goto exit_daemonize;
+                        mac_selinux_finish();
+                        log_close();
+                        _exit(EXIT_SUCCESS);
                 }
 
                 setsid();
@@ -1530,7 +1532,7 @@ int main(int argc, char *argv[]) {
 exit:
         udev_ctrl_cleanup(udev_ctrl);
         unlink(UDEV_ROOT_RUN "/udev/queue");
-exit_daemonize:
+
         if (fd_ep >= 0)
                 close(fd_ep);
         workers_free();
