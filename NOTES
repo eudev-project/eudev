@@ -8,6 +8,10 @@ Newest entries are on top.
 	http://cgit.freedesktop.org/systemd/systemd/commit/?id=c0c6806bf9b3faacdbd0effa153fe1b058c4cd4e
 	* We skip 'udevd: queue - update queue state when events are queued/freed'
 	http://cgit.freedesktop.org/systemd/systemd/commit/?id=cb49a4f2dd53184ab787bcad69bcc9b8177d2e6e
+	* We skip 'udevd: move file descriptors to Manager'
+	http://cgit.freedesktop.org/systemd/systemd/commit/?id=e237d8cb0e5488eef311ca1eafe48e8a2248b04c
+	* We skip 'udevd: init/exit the builtins in manager_new/free'
+	http://cgit.freedesktop.org/systemd/systemd/commit/?id=b2d21d9318497517519956ab9994f2303aa0223e
 
 2015-05-26
 
