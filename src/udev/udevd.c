@@ -641,8 +641,11 @@ static void worker_returned(int fd_worker) {
 
                 size = recvmsg(fd_worker, &msghdr, MSG_DONTWAIT);
                 if (size < 0) {
-                        if (errno == EAGAIN || errno == EINTR)
-                                return;
+                        if (errno == EINTR)
+                                continue;
+                        else if (errno == EAGAIN)
+                                /* nothing more to read */
+                                break;
 
                         log_error_errno(errno, "failed to receive message: %m");
                         return;
