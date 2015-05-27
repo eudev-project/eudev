@@ -386,10 +386,11 @@ int unlink_noerrno(const char *path);
 
 static inline void qsort_safe(void *base, size_t nmemb, size_t size,
                               int (*compar)(const void *, const void *)) {
-        if (nmemb) {
-                assert(base);
-                qsort(base, nmemb, size, compar);
-        }
+       if (nmemb <= 1)
+               return;
+
+        assert(base);
+        qsort(base, nmemb, size, compar);
 }
 
 int proc_cmdline(char **ret);
