@@ -150,3 +150,11 @@ static inline int name_to_handle_at(int fd, const char *name, struct file_handle
 #ifndef INPUT_PROP_ACCELEROMETER
 #define INPUT_PROP_ACCELEROMETER  0x06
 #endif
+
+#ifndef O_PATH
+#define O_PATH    010000000
+#endif
+
+#ifndef AT_EMPTY_PATH
+#define AT_EMPTY_PATH 0x1000
+#endif
