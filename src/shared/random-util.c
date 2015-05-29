@@ -23,7 +23,6 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <time.h>
-#include <sys/auxv.h>
 #include <linux/random.h>
 
 #include "random-util.h"
