@@ -2,7 +2,7 @@
 .\"     Title: udev
 .\"    Author: Greg Kroah-Hartmann <greg@kroah.com>
 .\" Generator: DocBook XSL Stylesheets v1.78.0 <http://docbook.sf.net/>
-.\"      Date: 11/07/2014
+.\"      Date: 05/30/2015
 .\"    Manual: udev
 .\"    Source: udev
 .\"  Language: English
@@ -131,9 +131,10 @@ Match the subsystem of the event device\&.
 Match the driver name of the event device\&. Only set this key for devices which are bound to a driver at the time the event is generated\&.
 .RE
 .PP
-\fIATTR{\fR\fI\fIfilename\fR\fR\fI}\fR
+\fIATTR{\fR\fI\fIfilename\fR\fR\fI}\fR, \fISYSCTL{\fR\fI\fIkernel parameter\fR\fR\fI}\fR
 .RS 4
 Match sysfs attribute values of the event device\&. Trailing whitespace in the attribute values is ignored unless the specified match value itself contains trailing whitespace\&.
+Match a kernel parameter value\&.
 .RE
 .PP
 \fIKERNELS\fR
@@ -272,6 +273,11 @@ Applies the specified Linux Security Module label to the device node\&.
 \fIATTR{\fR\fI\fIkey\fR\fR\fI}\fR
 .RS 4
 The value that should be written to a sysfs attribute of the event device\&.
+.RE
+.PP
+\fISYSCTL{\fR\fI\fIkernel parameter\fR\fR\fI}\fR
+.RS 4
+The value that should be written to kernel parameter\&.
 .RE
 .PP
 \fIENV{\fR\fI\fIkey\fR\fR\fI}\fR
@@ -566,6 +572,37 @@ The content of all hwdb files is read by
 \fBudevadm\fR(8)
 and compiled to a binary database located at
 /etc/udev/hwdb\&.bin\&. During runtime only the binary database is used\&.
+.SH "HARDWARE DATABASE FILES"
+.PP
+The hwdb files are read from the files located in the system hwdb directory
+/usr/lib/udev/hwdb\&.d, the volatile runtime directory
+/run/udev/hwdb\&.d
+and the local administration directory
+/etc/udev/hwdb\&.d\&. All hwdb files are collectively sorted and processed in lexical order, regardless of the directories in which they live\&. However, files with identical filenames replace each other\&. Files in
+/etc
+have the highest priority, files in
+/run
+take precedence over files with the same name in
+/usr/lib\&. This can be used to override a system\-supplied hwdb file with a local file if needed; a symlink in
+/etc
+with the same name as a hwdb file in
+/usr/lib, pointing to
+/dev/null, disables the hwdb file entirely\&. hwdb files must have the extension
+\&.hwdb; other extensions are ignored\&.
+.PP
+The hwdb file contains data records consisting of matches and associated key\-value pairs\&. Every record in the hwdb starts with one or more match string, specifying a shell glob to compare the database lookup string against\&. Multiple match lines are specified in additional consecutive lines\&. Every match line is compared indivdually, they are combined by OR\&. Every match line must start at the first character of the line\&.
+.PP
+The match lines are followed by one or more key\-value pair lines, which are recognized by a leading space character\&. The key name and value are separated by
+=\&. An empty line signifies the end of a record\&. Lines beginning with
+#
+are ignored\&.
+.PP
+The content of all hwdb files is read by
+\fBudevadm\fR(8)
+and compiled to a binary database located at
+/etc/udev/hwdb\&.bin, or alternatively
+/usr/lib/udev/hwdb\&.bin
+if you want ship the compiled database in an immutable image\&. During runtime only the binary database is used\&.
 .SH "SEE ALSO"
 .PP
 
