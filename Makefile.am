@@ -4,7 +4,6 @@ DISTCHECK_CONFIGURE_FLAGS=--enable-gtk-doc
 SUBDIRS = \
 	src \
 	rules \
-	hwdb \
 	docs \
 	test
 
@@ -12,3 +11,9 @@ if ENABLE_MANPAGES
 SUBDIRS += \
 	man
 endif
+
+if ENABLE_HWDB
+SUBDIRS += \
+	hwdb
+endif
+

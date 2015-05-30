@@ -281,6 +281,11 @@ AM_CONDITIONAL(HAVE_KMOD, [test "$have_kmod" = "yes"])
 
 # ------------------------------------------------------------------------------
 
+AC_ARG_ENABLE([hwdb], AS_HELP_STRING([--enable-hwdb],[install hwdb.d files]),[],[enable_hwdb=yes])
+AM_CONDITIONAL(ENABLE_HWDB, [test "x$enable_hwdb" = "xyes"])
+
+# ------------------------------------------------------------------------------
+
 AC_CONFIG_FILES([Makefile
                  docs/Makefile
                  docs/gudev/Makefile
