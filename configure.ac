@@ -259,44 +259,8 @@ AS_IF([test "x$enable_gtk_doc" = "xyes" -a "x$XSLTPROC" = x], [
 
 # ------------------------------------------------------------------------------
 
-AC_ARG_VAR([XML_CATALOG_FILES],[Used to find Docbook catalog (to build man pages)])
-AC_ARG_ENABLE([manpages], AS_HELP_STRING([--disable-manpages], [disable manpages]))
-
-if test "x$enable_manpages" != "xno" -a "x$XSLTPROC" != "x"; then
-        AC_MSG_CHECKING([for local Docbook stylesheets])
-        $XSLTPROC --nonet http://docbook.sourceforge.net/release/xsl/current/xhtml/docbook.xsl >/dev/null 2>&1 << END
-<?xml version="1.0" encoding='ISO-8859-1'?>
-<!DOCTYPE book PUBLIC "-//OASIS//DTD DocBook XML V4.1.2//EN" "http://www.oasis-open.org/docbook/xml/4.1.2/docbookx.dtd">
-<book id="test">
-</book>
-END
-        if test "$?" = 0; then
-                docbook_ok=yes
-                XSLTPROC_FLAGS=--nonet
-                AC_MSG_RESULT(${docbook_ok})
-        else 
-                AC_MSG_RESULT([no])
-		        AC_MSG_CHECKING([for Docbook stylesheets via internet(use '--disable-manpages' flag to omit)])
-                $XSLTPROC http://docbook.sourceforge.net/release/xsl/current/xhtml/docbook.xsl >/dev/null 2>&1 << END
-<?xml version="1.0" encoding='ISO-8859-1'?>
-<!DOCTYPE book PUBLIC "-//OASIS//DTD DocBook XML V4.1.2//EN" "http://www.oasis-open.org/docbook/xml/4.1.2/docbookx.dtd">
-<book id="test">
-</book>
-END
-                if test "$?" = 0; then
-                       docbook_ok=yes
-                       XSLTPROC_FLAGS=
-                else
-			           docbook_ok=no
-			    fi
-                AC_MSG_RESULT(${docbook_ok})
-        fi
-		
-        AS_IF([test "x${docbook_ok}" = "xyes"],[have_manpages=yes], [
-		       AC_MSG_WARN([Manpages requested but docbook not enabled. Manpages disabled!])
-        ])
-fi	
-AM_CONDITIONAL(ENABLE_MANPAGES, [test "x$have_manpages" = "xyes"])
+AC_ARG_ENABLE([manpages], AS_HELP_STRING([--disable-manpages],[disable manpages]),[],[enable_manpages=no])
+AM_CONDITIONAL(ENABLE_MANPAGES, [test "x$enable_manpages" = "xyes"])
 AC_SUBST(XSLTPROC_FLAGS)
 
 # ------------------------------------------------------------------------------
