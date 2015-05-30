@@ -256,12 +256,12 @@ AM_CONDITIONAL([ENABLE_GTK_DOC],[test "x$enable_gtk_doc" = "xyes"])
 AS_IF([test "x$enable_gtk_doc" = "xyes" -a "x$XSLTPROC" = x], [
         AC_MSG_ERROR([*** GTK doc requested but xsltproc not found])
 ])
+AC_SUBST(XSLTPROC_FLAGS)
 
 # ------------------------------------------------------------------------------
 
 AC_ARG_ENABLE([manpages], AS_HELP_STRING([--disable-manpages],[disable manpages]),[],[enable_manpages=no])
 AM_CONDITIONAL(ENABLE_MANPAGES, [test "x$enable_manpages" = "xyes"])
-AC_SUBST(XSLTPROC_FLAGS)
 
 # ------------------------------------------------------------------------------
 have_kmod=no
