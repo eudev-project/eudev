@@ -18,7 +18,8 @@ dist_udevrules_DATA = \
 	70-touchpad.rules \
 	75-net-description.rules \
 	75-probe_mtd.rules \
-	78-sound-card.rules
+	78-sound-card.rules \
+	80-net-name-slot.rules
 
 if HAVE_BLKID
 dist_udevrules_DATA += \
