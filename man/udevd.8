@@ -39,7 +39,9 @@ The behavior of the daemon can be configured using
 .PP
 \fB\-d\fR, \fB\-\-daemon\fR
 .RS 4
-Detach and run in the background\&.
+Detach and run in the background\&. Unless the log level is
+debug, standard input, output and error are connected to
+/dev/null\&.
 .RE
 .PP
 \fB\-D\fR, \fB\-\-debug\fR

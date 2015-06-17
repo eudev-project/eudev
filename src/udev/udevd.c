@@ -2009,6 +2009,22 @@ int main(int argc, char *argv[]) {
         if (arg_daemonize) {
                 pid_t pid;
 
+                /* connect /dev/null to stdin, stdout, stderr */
+                if (log_get_max_level() < LOG_DEBUG) {
+                        int fd;
+
+                        fd = open("/dev/null", O_RDWR|O_NOCTTY|O_CLOEXEC);
+                        if (fd < 0)
+                                log_warning_errno(errno, "Failed to redirect standard streams to /dev/null: %m");
+                        else {
+                                (void) dup2(fd, STDIN_FILENO);
+                                (void) dup2(fd, STDOUT_FILENO);
+                                (void) dup2(fd, STDERR_FILENO);
+                                if (fd > STDERR_FILENO)
+                                        close(fd);
+                        }
+                }
+
                 pid = fork();
                 switch (pid) {
                 case 0:
@@ -2036,18 +2052,6 @@ int main(int argc, char *argv[]) {
         if (f != NULL) {
                 fprintf(f, "<30>udevd[%u]: starting eudev-" VERSION "\n", getpid());
                 fclose(f);
-        }
-
-        if (!arg_debug) {
-                int fd;
-
-                fd = open("/dev/null", O_RDWR);
-                if (fd >= 0) {
-                        dup2(fd, STDIN_FILENO);
-                        dup2(fd, STDOUT_FILENO);
-                        dup2(fd, STDERR_FILENO);
-                        close(fd);
-                }
         }
 
         fd_inotify = udev_watch_init(udev);
