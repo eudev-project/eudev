@@ -1277,6 +1277,18 @@ int main(int argc, char *argv[]) {
 
         udev_list_node_init(&event_list);
 
+        if (!arg_debug) {
+                int fd;
+
+                fd = open("/dev/null", O_RDWR);
+                if (fd >= 0) {
+                        dup2(fd, STDIN_FILENO);
+                        dup2(fd, STDOUT_FILENO);
+                        dup2(fd, STDERR_FILENO);
+                        close(fd);
+                }
+        }
+
         fd_inotify = udev_watch_init(udev);
         if (fd_inotify < 0) {
                 r = log_error_errno(ENOMEM, "error initializing inotify");
