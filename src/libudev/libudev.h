@@ -88,6 +88,7 @@ struct udev_device *udev_device_get_parent(struct udev_device *udev_device);
 struct udev_device *udev_device_get_parent_with_subsystem_devtype(struct udev_device *udev_device,
                                                                   const char *subsystem, const char *devtype);
 /* retrieve device properties */
+int udev_device_read_db(struct udev_device *udev_device);
 const char *udev_device_get_devpath(struct udev_device *udev_device);
 const char *udev_device_get_subsystem(struct udev_device *udev_device);
 const char *udev_device_get_devtype(struct udev_device *udev_device);

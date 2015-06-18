@@ -37,7 +37,6 @@
 #include "libudev-private.h"
 
 static int udev_device_read_uevent_file(struct udev_device *udev_device);
-static int udev_device_read_db(struct udev_device *udev_device);
 static int udev_device_set_devnode(struct udev_device *udev_device, const char *devnode);
 static struct udev_list_entry *udev_device_add_property_internal(struct udev_device *udev_device, const char *key, const char *value);
 
@@ -594,7 +593,7 @@ _public_ const char *udev_device_get_property_value(struct udev_device *udev_dev
         return udev_list_entry_get_value(list_entry);
 }
 
-static int udev_device_read_db(struct udev_device *udev_device)
+int udev_device_read_db(struct udev_device *udev_device)
 {
         char filename[UTIL_PATH_SIZE];
         char line[UTIL_LINE_SIZE];
