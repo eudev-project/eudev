@@ -124,6 +124,6 @@ int mkdir_p_internal(const char *prefix, const char *path, mode_t mode, mkdir_fu
         return 0;
 }
 
-int mkdir_p(const char *path, mode_t mode) {
+int udev_mkdir_p(const char *path, mode_t mode) {
         return mkdir_p_internal(NULL, path, mode, mkdir);
 }

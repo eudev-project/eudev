@@ -1301,7 +1301,7 @@ int main(int argc, char *argv[]) {
                           IN_DELETE | IN_MOVE | IN_CLOSE_WRITE);
 
         if (access(UDEV_ROOT_RUN "/udev/rules.d", F_OK) < 0) {
-                mkdir_p(UDEV_ROOT_RUN "/udev/rules.d", 0755);
+                udev_mkdir_p(UDEV_ROOT_RUN "/udev/rules.d", 0755);
         }
         inotify_add_watch(fd_inotify, UDEV_ROOT_RUN "/udev/rules.d",
                           IN_DELETE | IN_MOVE | IN_CLOSE_WRITE);

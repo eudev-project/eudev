@@ -2682,7 +2682,7 @@ int udev_rules_apply_static_dev_perms(struct udev_rules *rules) {
                                         _cleanup_free_ char *unescaped_filename = NULL;
 
                                         strscpyl(tags_dir, sizeof(tags_dir), UDEV_ROOT_RUN "/udev/static_node-tags/", *t, "/", NULL);
-                                        r = mkdir_p(tags_dir, 0755);
+                                        r = udev_mkdir_p(tags_dir, 0755);
                                         if (r < 0)
                                                 return log_error_errno(r, "failed to create %s: %m", tags_dir);
 

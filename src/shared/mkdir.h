@@ -21,7 +21,7 @@
 #include <sys/types.h>
 
 int mkdir_parents(const char *path, mode_t mode);
-int mkdir_p(const char *path, mode_t mode);
+int udev_mkdir_p(const char *path, mode_t mode);
 
 /* mandatory access control(MAC) versions */
 int mkdir_parents_label(const char *path, mode_t mode);
