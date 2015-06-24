@@ -1,7 +1,6 @@
 ACLOCAL_AMFLAGS = -I m4 ${ACLOCAL_FLAGS}
 
 dist_udevrules_DATA = \
-	42-usb-hid-pm.rules \
 	50-udev-default.rules \
 	60-block.rules \
 	60-cdrom_id.rules \
