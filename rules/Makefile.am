@@ -14,7 +14,6 @@ dist_udevrules_DATA = \
 	61-accelerometer.rules \
 	64-btrfs.rules \
 	70-mouse.rules \
-	70-touchpad.rules \
 	75-net-description.rules \
 	75-probe_mtd.rules \
 	78-sound-card.rules \

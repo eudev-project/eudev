@@ -13,4 +13,4 @@ dist_udevhwdb_DATA = \
 	60-evdev.hwdb \
 	60-keyboard.hwdb \
 	70-mouse.hwdb \
-	70-touchpad.hwdb
+	70-pointingstick.hwdb
