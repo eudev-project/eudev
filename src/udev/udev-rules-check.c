@@ -716,13 +716,6 @@ void udev_rules_check_token(struct udev_rules_check *c, const char *base, const 
                 add_token(c, type, false, op, value, NULL, false, false, false);
                 c->current.has_other = true;
 
-        } else if (STR_IN_SET(base, "WAIT_FOR", "WAIT_FOR_SYSFS")) {
-                /* eudev only, systemd does not have these keys. */
-                if (attr || op == CHECK_OP_REMOVE)
-                        return;
-
-                c->current.has_other = true;
-
         } else if (streq(base, "LABEL")) {
                 /* An attribute or a wrong operator is reported by the parser. */
                 if (attr || op != CHECK_OP_ASSIGN)

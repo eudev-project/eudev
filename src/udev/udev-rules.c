@@ -230,7 +230,6 @@ enum token_type {
         TK_M_TAG,                       /* val */
         TK_M_SUBSYSTEM,                 /* val */
         TK_M_DRIVER,                    /* val */
-        TK_M_WAITFOR,                   /* val */
         TK_M_ATTR,                      /* val, attr */
         TK_M_SYSCTL,                    /* val, attr */
 
@@ -555,7 +554,6 @@ static const char *token_str(enum token_type type) {
                 [TK_M_TAG] =                    "M TAG",
                 [TK_M_SUBSYSTEM] =              "M SUBSYSTEM",
                 [TK_M_DRIVER] =                 "M DRIVER",
-                [TK_M_WAITFOR] =                "M WAITFOR",
                 [TK_M_ATTR] =                   "M ATTR",
                 [TK_M_SYSCTL] =                 "M SYSCTL",
 
@@ -635,7 +633,6 @@ static void dump_token(struct udev_rules *rules, struct token *token) {
         case TK_M_KERNEL:
         case TK_M_SUBSYSTEM:
         case TK_M_DRIVER:
-        case TK_M_WAITFOR:
         case TK_M_DEVLINK:
         case TK_M_NAME:
         case TK_M_KERNELS:
@@ -1182,41 +1179,6 @@ static int import_parent_into_properties(struct udev_event *event, struct udev_r
         return n;
 }
 
-#define WAIT_LOOP_PER_SECOND                50
-static int wait_for_file(struct udev_device *dev, const char *file, int timeout) {
-        char filepath[UTIL_PATH_SIZE];
-        char devicepath[UTIL_PATH_SIZE];
-        struct stat stats;
-        int loop = timeout * WAIT_LOOP_PER_SECOND;
-
-        /* a relative path is a device attribute */
-        devicepath[0] = '\0';
-        if (file[0] != '/') {
-                strscpyl(devicepath, sizeof(devicepath), udev_device_get_syspath(dev), NULL);
-                strscpyl(filepath, sizeof(filepath), devicepath, "/", file, NULL);
-                file = filepath;
-        }
-
-        while (--loop) {
-                const struct timespec duration = { 0, 1000 * 1000 * 1000 / WAIT_LOOP_PER_SECOND };
-
-                /* lookup file */
-                if (stat(file, &stats) == 0) {
-                        log_debug("file '%s' appeared after %i loops", file, (timeout * WAIT_LOOP_PER_SECOND) - loop-1);
-                        return 0;
-                }
-                /* make sure, the device did not disappear in the meantime */
-                if (devicepath[0] != '\0' && stat(devicepath, &stats) != 0) {
-                        log_debug("device disappeared while waiting for '%s'", file);
-                        return -2;
-                }
-                log_debug("wait for '%s' for %i mseconds", file, 1000 / WAIT_LOOP_PER_SECOND);
-                nanosleep(&duration, NULL);
-        }
-        log_debug("waiting for '%s' failed", file);
-        return -1;
-}
-
 static int attr_subst_subdir(char *attr, size_t len) {
         bool found = false;
 
@@ -1463,7 +1425,6 @@ static int rule_add_key(struct rule_tmp *rule_tmp, enum token_type type,
         case TK_M_KERNEL:
         case TK_M_SUBSYSTEM:
         case TK_M_DRIVER:
-        case TK_M_WAITFOR:
         case TK_M_DEVLINK:
         case TK_M_NAME:
         case TK_M_KERNELS:
@@ -1789,8 +1750,8 @@ static int add_rule(struct udev_rules *rules, char *line,
                  * attribute of the keys that need one. TEST and RUN check theirs below. */
                 if (attr && STR_IN_SET(key, "ACTION", "DEVPATH", "KERNEL", "SUBSYSTEM", "DRIVER",
                                        "KERNELS", "SUBSYSTEMS", "DRIVERS", "TAGS", "TAG", "PROGRAM",
-                                       "RESULT", "WAIT_FOR", "WAIT_FOR_SYSFS", "LABEL", "GOTO",
-                                       "NAME", "SYMLINK", "OWNER", "GROUP", "MODE", "OPTIONS")) {
+                                       "RESULT", "LABEL", "GOTO", "NAME", "SYMLINK", "OWNER", "GROUP",
+                                       "MODE", "OPTIONS")) {
                         log_rule_invalid_attr(key);
                         goto invalid;
                 }
@@ -2117,15 +2078,6 @@ static int add_rule(struct udev_rules *rules, char *line,
                                 goto invalid;
                         }
 
-                        continue;
-                }
-
-                if (streq(key, "WAIT_FOR") || streq(key, "WAIT_FOR_SYSFS")) {
-                        if (op == OP_REMOVE) {
-                                log_rule_invalid_op(key);
-                                goto invalid;
-                        }
-                        rule_add_key(&rule_tmp, TK_M_WAITFOR, 0, value, NULL);
                         continue;
                 }
 
@@ -2884,16 +2836,6 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                         if (match_key(rules, cur, udev_device_get_driver(event->dev)) != 0)
                                 goto nomatch;
                         break;
-                case TK_M_WAITFOR: {
-                        char filename[UTIL_PATH_SIZE];
-                        int found;
-
-                        udev_event_apply_format(event, rules_str(rules, cur->key.value_off), filename, sizeof(filename), false, properties_list);
-                        found = (wait_for_file(event->dev, filename, 10) == 0);
-                        if (!found && (cur->key.op != OP_NOMATCH))
-                                goto nomatch;
-                        break;
-                }
                 case TK_M_ATTR:
                         if (match_attr(rules, event->dev, event, cur) != 0)
                                 goto nomatch;

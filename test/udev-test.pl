@@ -1783,6 +1783,17 @@ KERNEL=="sda", OWNER="4294967296", SYMLINK+="bad"
 EOF
         },
         {
+                desc            => "WAIT_FOR and WAIT_FOR_SYSFS are invalid keys",
+                devpath         => "/devices/pci0000:00/0000:00:1f.2/host0/target0:0:0/0:0:0:0/block/sda",
+                exp_name        => "found",
+                not_exp_name    => "bad",
+                rules           => <<EOF
+KERNEL=="sda", WAIT_FOR="uevent", SYMLINK+="bad"
+KERNEL=="sda", WAIT_FOR_SYSFS="uevent", SYMLINK+="bad"
+KERNEL=="sda", SYMLINK+="found"
+EOF
+        },
+        {
                 desc            => "TEST with an invalid mode is an error",
                 devpath         => "/devices/pci0000:00/0000:00:1f.2/host0/target0:0:0/0:0:0:0/block/sda",
                 exp_name        => "found",
