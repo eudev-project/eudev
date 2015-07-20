@@ -722,7 +722,8 @@ static struct udev_device *udev_device_new(struct udev *udev)
         if (udev == NULL) {
                 errno = EINVAL;
                 return NULL;
-        }
+        } else if (!subsystem)
+                errno = ENODATA;
 
         udev_device = new0(struct udev_device, 1);
         if (udev_device == NULL) {
