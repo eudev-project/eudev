@@ -1,5 +1,11 @@
 Newest entries are on top.
 
+2015-07-20
+
+	* We skip 'udevd: manager - move a few global variables into the Manager object' since
+	we did not move to struct Manager.
+	http://cgit.freedesktop.org/systemd/systemd/commit/?id=ecb17862ad969cc15e94f95d0255b51ba3e588e1
+
 2015-05-27
 
 	* We skip 'udevd: explicitly read out uevents we create ourselves'
