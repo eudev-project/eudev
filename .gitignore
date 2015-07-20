@@ -49,7 +49,6 @@ docs/libudev/libudev.signals
 docs/libudev/html/
 docs/libudev/xml/
 
-src/accelerometer/accelerometer
 src/ata_id/ata_id
 src/cdrom_id/cdrom_id
 src/collect/collect

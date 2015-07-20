@@ -7,7 +7,6 @@ SUBDIRS = \
 
 # Helper programs
 SUBDIRS += \
-	accelerometer \
 	ata_id \
 	cdrom_id \
 	collect \

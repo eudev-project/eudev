@@ -296,7 +296,6 @@ AC_CONFIG_FILES([Makefile
                  man/Makefile
                  rules/Makefile
                  src/Makefile
-                 src/accelerometer/Makefile
                  src/ata_id/Makefile
                  src/cdrom_id/Makefile
                  src/collect/Makefile
