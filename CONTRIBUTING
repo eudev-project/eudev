@@ -137,16 +137,9 @@ number.
 by doing
 
 	autogen.sh
-	./configure --enable-gtk-doc
+	./configure
 	make
 	make dist
 
-TODO: The build system needs to be tweaked so that --enable-gtk-doc is not needed
-and one can directly run "make dist" instead of "make; make dist".  Make sure
-the tarball is correctly named to match the tag.  If it isn't you need to
-fix configure.ac and retag.
-
 
 9. TODO: coding style for C, python, perl and autotool stuff.
-
-

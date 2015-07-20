@@ -28,27 +28,6 @@ m4/ltsugar.m4
 m4/ltversion.m4
 m4/lt~obsolete.m4
 
-docs/gudev/version.xml
-docs/gudev/*.txt
-docs/gudev/*.stamp
-docs/gudev/gudev.args
-docs/gudev/gudev.hierarchy
-docs/gudev/gudev.interfaces
-docs/gudev/gudev.prerequisites
-docs/gudev/gudev.signals
-docs/gudev/html/
-docs/gudev/xml/
-docs/libudev/version.xml
-docs/libudev/*.txt
-docs/libudev/*.stamp
-docs/libudev/libudev.args
-docs/libudev/libudev.hierarchy
-docs/libudev/libudev.interfaces
-docs/libudev/libudev.prerequisites
-docs/libudev/libudev.signals
-docs/libudev/html/
-docs/libudev/xml/
-
 src/ata_id/ata_id
 src/cdrom_id/cdrom_id
 src/collect/collect
@@ -78,3 +57,5 @@ test/rules-test.sh.trs
 test/test-suite.log
 test/udev-test.pl.log
 test/udev-test.pl.trs
+
+eudev-*.tar.gz

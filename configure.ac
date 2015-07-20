@@ -250,16 +250,6 @@ if test -z "$GPERF" ; then
 fi
 
 # ------------------------------------------------------------------------------
-GTK_DOC_CHECK([1.18],[--flavour no-tmpl])
-AM_CONDITIONAL([ENABLE_GTK_DOC],[test "x$enable_gtk_doc" = "xyes"])
-
-AS_IF([test "x$enable_gtk_doc" = "xyes" -a "x$XSLTPROC" = x], [
-        AC_MSG_ERROR([*** GTK doc requested but xsltproc not found])
-])
-AC_SUBST(XSLTPROC_FLAGS)
-
-# ------------------------------------------------------------------------------
-
 AC_ARG_ENABLE([manpages], AS_HELP_STRING([--disable-manpages],[disable manpages]),[],[enable_manpages=no])
 AM_CONDITIONAL(ENABLE_MANPAGES, [test "x$enable_manpages" = "xyes"])
 
@@ -287,11 +277,6 @@ AM_CONDITIONAL(ENABLE_HWDB, [test "x$enable_hwdb" = "xyes"])
 # ------------------------------------------------------------------------------
 
 AC_CONFIG_FILES([Makefile
-                 docs/Makefile
-                 docs/gudev/Makefile
-                 docs/gudev/version.xml
-                 docs/libudev/Makefile
-                 docs/libudev/version.xml
                  hwdb/Makefile
                  man/Makefile
                  rules/Makefile
