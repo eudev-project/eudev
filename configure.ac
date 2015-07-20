@@ -182,9 +182,6 @@ AC_SUBST([udevrulesdir],[${udevlibexecdir}/rules.d])
 AC_SUBST([pkgconfiglibdir], [${libdir}/pkgconfig])
 AC_SUBST([sharepkgconfigdir],[${datadir}/pkgconfig])
 
-# gudev paths
-AC_SUBST([libgudev_includedir],[${includedir}/gudev-1.0/gudev])
-
 # introspection paths
 AC_SUBST([girdir], [${datadir}/gir-1.0])
 AC_SUBST([typelibsdir], [${libdir}/girepository-1.0])
@@ -237,13 +234,6 @@ AC_CHECK_DECL([unshare],
         [#include <sched.h>])
 
 # ------------------------------------------------------------------------------
-AC_ARG_ENABLE([gudev],
-        AS_HELP_STRING([--disable-gudev], [disable Gobject libudev support @<:@default=enabled@:>@]),
-        [], [enable_gudev=yes])
-AS_IF([test "x$enable_gudev" = "xyes"], [ PKG_CHECK_MODULES([GLIB], [glib-2.0 >= 2.22.0 gobject-2.0 >= 2.22.0]) ])
-AM_CONDITIONAL([ENABLE_GUDEV], [test "x$enable_gudev" = "xyes"])
-
-# ------------------------------------------------------------------------------
 AC_PATH_TOOL(GPERF, gperf)
 if test -z "$GPERF" ; then
         AC_MSG_ERROR([*** gperf not found])
@@ -287,8 +277,6 @@ AC_CONFIG_FILES([Makefile
                  src/mtd_probe/Makefile
                  src/scsi_id/Makefile
                  src/v4l_id/Makefile
-                 src/gudev/Makefile
-                 src/gudev/gudev-1.0.pc
                  src/shared/Makefile
                  src/libudev/Makefile
                  src/libudev/libudev.pc
@@ -325,8 +313,6 @@ AC_MSG_RESULT([
 
         pkgconfiglibdir:         ${libdir}/pkgconfig
         sharepkgconfigdir        ${datadir}/pkgconfig
-
-        libgudev_includedir      ${includedir}/gudev-1.0/gudev
 
         girdir                   ${datadir}/gir-1.0
         typelibsdir              ${libdir}/girepository-1.0

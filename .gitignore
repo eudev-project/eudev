@@ -35,13 +35,6 @@ src/mtd_probe/mtd_probe
 src/scsi_id/scsi_id
 src/v4l_id/v4l_id
 
-src/gudev/gudevenumtypes.c
-src/gudev/gudevenumtypes.h
-src/gudev/gudevmarshal.c
-src/gudev/gudevmarshal.h
-src/gudev/GUdev-1.0.gir
-src/gudev/GUdev-1.0.typelib
-
 src/udev/keyboard-keys-from-name.gperf
 src/udev/keyboard-keys-from-name.h
 src/udev/keyboard-keys-to-name.h
