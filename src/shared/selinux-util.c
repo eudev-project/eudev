@@ -31,6 +31,7 @@
 #include "strv.h"
 #include "path-util.h"
 #include "selinux-util.h"
+#include "missing.h"
 
 #ifdef HAVE_SELINUX
 DEFINE_TRIVIAL_CLEANUP_FUNC(security_context_t, freecon);

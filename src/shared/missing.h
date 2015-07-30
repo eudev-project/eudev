@@ -158,3 +158,14 @@ static inline int name_to_handle_at(int fd, const char *name, struct file_handle
 #ifndef AT_EMPTY_PATH
 #define AT_EMPTY_PATH 0x1000
 #endif
+
+#if !HAVE_DECL_STRNDUPA
+#define strndupa(s, n) \
+  ({ \
+    const char *__old = (s); \
+    size_t __len = strnlen(__old, (n)); \
+    char *__new = (char *)alloca(__len + 1); \
+    __new[__len] = '\0'; \
+    (char *)memcpy(__new, __old, __len); \
+  })
+#endif
