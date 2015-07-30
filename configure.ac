@@ -223,6 +223,9 @@ else
 fi
 AC_SUBST(sushell)
 
+# selinux-util.c uses struct mallinfo which is not available for all C libraries (musl).
+AC_CHECK_FUNCS([mallinfo])
+
 # ------------------------------------------------------------------------------
 
 AC_CHECK_DECL([unshare],
