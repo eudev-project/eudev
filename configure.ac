@@ -66,8 +66,9 @@ AC_C_INLINE
 AC_TYPE_MODE_T
 AC_TYPE_PID_T
 AC_CHECK_MEMBERS([struct stat.st_rdev])
-AC_CHECK_DECLS([getrandom, gettid, name_to_handle_at, accept4, mkostemp], [], [], [[#include <sys/types.h>
+AC_CHECK_DECLS([getrandom, gettid, name_to_handle_at, accept4, mkostemp, strndupa], [], [], [[#include <sys/types.h>
 #include <unistd.h>
+#include <string.h>
 #include <sys/mount.h>
 #include <fcntl.h>
 #include <sys/socket.h>
@@ -222,6 +223,9 @@ else
         sushell=/bin/bash
 fi
 AC_SUBST(sushell)
+
+# selinux-util.c uses struct mallinfo which is not available for all C libraries (musl).
+AC_CHECK_FUNCS([mallinfo])
 
 # ------------------------------------------------------------------------------
 

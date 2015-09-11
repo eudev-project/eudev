@@ -31,6 +31,7 @@
 #include "strv.h"
 #include "path-util.h"
 #include "selinux-util.h"
+#include "missing.h"
 
 #ifdef HAVE_SELINUX
 DEFINE_TRIVIAL_CLEANUP_FUNC(security_context_t, freecon);
@@ -67,7 +68,10 @@ int mac_selinux_init(const char *prefix) {
 
 #ifdef HAVE_SELINUX
         usec_t before_timestamp, after_timestamp;
+
+#ifdef HAVE_MALLINFO
         struct mallinfo before_mallinfo, after_mallinfo;
+#endif
 
         if (!mac_selinux_use())
                 return 0;
@@ -75,7 +79,10 @@ int mac_selinux_init(const char *prefix) {
         if (label_hnd)
                 return 0;
 
+#ifdef HAVE_MALLINFO
         before_mallinfo = mallinfo();
+#endif
+
         before_timestamp = now(CLOCK_MONOTONIC);
 
         if (prefix) {
@@ -92,9 +99,14 @@ int mac_selinux_init(const char *prefix) {
                 r = security_getenforce() == 1 ? -errno : 0;
         } else  {
                 char timespan[FORMAT_TIMESPAN_MAX];
+
+#ifdef HAVE_MALLINFO
                 int l;
+#endif
 
                 after_timestamp = now(CLOCK_MONOTONIC);
+
+#ifdef HAVE_MALLINFO
                 after_mallinfo = mallinfo();
 
                 l = after_mallinfo.uordblks > before_mallinfo.uordblks ? after_mallinfo.uordblks - before_mallinfo.uordblks : 0;
@@ -102,6 +114,10 @@ int mac_selinux_init(const char *prefix) {
                 log_debug("Successfully loaded SELinux database in %s, size on heap is %iK.",
                           format_timespan(timespan, sizeof(timespan), after_timestamp - before_timestamp, 0),
                           (l+1023)/1024);
+#else
+                log_debug("Successfully loaded SELinux database in %s",
+                          format_timespan(timespan, sizeof(timespan), after_timestamp - before_timestamp, 0));
+#endif
         }
 #endif
 
