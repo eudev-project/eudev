@@ -1134,7 +1134,6 @@ int main(int argc, char *argv[]) {
         struct epoll_event ep_netlink = { .events = EPOLLIN };
         struct epoll_event ep_worker = { .events = EPOLLIN };
         int r = 0, one = 1;
-        bool found = false;
 
         udev = udev_new();
         if (!udev) {
@@ -1426,8 +1425,6 @@ int main(int argc, char *argv[]) {
 
                                 if (worker->state != WORKER_RUNNING)
                                         continue;
-                                else
-                                        found = true;
 
                                 assert(event);
 
@@ -1494,9 +1491,6 @@ int main(int argc, char *argv[]) {
                                 if (event_queue_insert(dev) < 0)
                                         udev_device_unref(dev);
                         }
-
-                        if (!found)
-                                log_warning("worker ["PID_FMT"] is unknown, ignoring", getpid());
                 }
 
                 /* start new events */
