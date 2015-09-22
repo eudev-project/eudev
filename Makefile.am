@@ -15,3 +15,7 @@ SUBDIRS += \
 	hwdb
 endif
 
+if ENABLE_RULE_GENERATOR
+SUBDIRS += \
+	rule_generator
+endif

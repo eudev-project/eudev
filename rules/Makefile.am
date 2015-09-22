@@ -15,8 +15,12 @@ dist_udevrules_DATA = \
 	70-mouse.rules \
 	75-net-description.rules \
 	75-probe_mtd.rules \
-	78-sound-card.rules \
+	78-sound-card.rules
+
+if !ENABLE_RULE_GENERATOR
+dist_udevrules_DATA += \
 	80-net-name-slot.rules
+endif
 
 if HAVE_BLKID
 dist_udevrules_DATA += \
