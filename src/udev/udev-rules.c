@@ -2755,3 +2755,69 @@ finish:
 
         return r;
 }
+
+#ifdef ENABLE_RULE_GENERATOR
+/* function to return the count of rules that assign NAME= to a value matching arg#2 - returns 0,1 */
+int udev_rules_assigning_name_to(struct udev_rules *rules, const char *match_name)
+{
+        struct token *cur;
+        struct token *rule;
+        enum escape_type esc = ESCAPE_UNSET;
+        bool name_final = false;
+
+        if (rules->tokens == NULL)
+                return 0;
+
+        /* loop through token list, match, run actions or forward to next rule */
+        cur = &rules->tokens[0];
+        rule = cur;
+        for (;;) {
+                dump_token(rules, cur);
+                switch (cur->type) {
+                case TK_RULE:
+                        /* current rule */
+                        rule = cur;
+                        if (!rule->rule.can_set_name)
+                                goto nomatch;
+                        break;
+                case TK_M_SUBSYSTEM:
+                        if (match_key(rules, cur, "net") != 0)
+                                goto nomatch;
+                        break;
+                case TK_M_ACTION:
+                        if (match_key(rules, cur, "add") != 0)
+                                goto nomatch;
+                        break;
+                case TK_A_NAME: {
+                        const char *name  = rules_str(rules, cur->key.value_off);
+                        char name_str[UTIL_PATH_SIZE];
+                        int count;
+
+                        strscpy(name_str,UTIL_PATH_SIZE,name);
+                        count = util_replace_chars(name_str, "/");
+                        if (count > 0)
+                                log_debug("%i character(s) replaced\n", count); 
+                        if (streq(name_str,match_name)) {
+                                log_debug("found a match! NAME assigns %s in: %s:%u\n",
+                                          name,
+                                          rules_str(rules, rule->rule.filename_off),
+                                          rule->rule.filename_line);
+                                return 1; /* no need to find more than one */
+                        }
+
+                        /* skip to next rule */
+                        goto nomatch;
+                }
+                case TK_END:
+                        return 0;
+                }
+
+                cur++;
+                continue;
+        nomatch:
+                /* fast-forward to next rule */
+                cur = rule + rule->rule.token_count;
+        }
+}
+#endif
+
