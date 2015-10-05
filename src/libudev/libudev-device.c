@@ -956,10 +956,46 @@ _public_ struct udev_device *udev_device_new_from_device_id(struct udev *udev, c
  *
  * Returns: a new udev device, or #NULL, if it does not exist
  **/
-_public_ struct udev_device *udev_device_new_from_subsystem_sysname(struct udev *udev, const char *subsystem, const char *sysname)
+/* Checks that a name does not contain "." or ".." path components, or duplicated or
+ * leading slashes, so that it cannot be used to escape the directories in /sys. */
+static bool name_is_normalized(const char *p)
+{
+        if (isempty(p))
+                return false;
+
+        if (streq(p, ".") || streq(p, ".."))
+                return false;
+
+        if (startswith(p, "../") || endswith(p, "/..") || strstr(p, "/../"))
+                return false;
+
+        if (startswith(p, "./") || endswith(p, "/.") || strstr(p, "/./"))
+                return false;
+
+        if (p[0] == '/' || strstr(p, "//"))
+                return false;
+
+        return true;
+}
+
+_public_ struct udev_device *udev_device_new_from_subsystem_sysname(struct udev *udev, const char *subsystem, const char *sysname_in)
 {
         char path[UTIL_PATH_SIZE];
+        char sysname[UTIL_PATH_SIZE];
         struct stat statbuf;
+        char *p;
+
+        if (subsystem == NULL || sysname_in == NULL ||
+            !name_is_normalized(subsystem) || !name_is_normalized(sysname_in)) {
+                errno = EINVAL;
+                return NULL;
+        }
+
+        /* translate sysname back to sysfs filename */
+        strscpy(sysname, sizeof(sysname), sysname_in);
+        for (p = sysname; *p != '\0'; p++)
+                if (*p == '/')
+                        *p = '!';
 
         if (streq(subsystem, "subsystem")) {
                 strscpyl(path, sizeof(path), "/sys/subsystem/", sysname, NULL);
