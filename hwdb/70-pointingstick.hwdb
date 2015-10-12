@@ -32,10 +32,11 @@
 # where /dev/input/eventXX is the pointingstick in question. If in
 # doubt, simply use /dev/input/event* to reload all input rules.
 #
-# If your changes are generally applicable, open a bug report on
-#   http://bugs.freedesktop.org/enter_bug.cgi?product=systemd
-# and include your new rules, a description of the device, and the
-# output of
+# If your changes are generally applicable, preferably send them as a pull
+# request to
+#   https://github.com/systemd/systemd
+# or create a bug report on https://github.com/systemd/systemd/issues and
+# include your new rules, a description of the device, and the output of
 #   udevadm info /dev/input/eventXX
 # (or /dev/input/event*).
 #
@@ -87,6 +88,8 @@ evdev:name:*DualPoint Stick:dmi:bvn*:bvr*:bd*:svnDellInc.:pnLatitudeE6400*:pvr*
 # Lenovo
 #########################################
 
+# Lenovo Thinkpad X230
+evdev:name:TPPS/2 IBM TrackPoint:dmi:bvn*:bvr*:bd*:svnLENOVO:pn*:pvrThinkPadX230:*
 # Lenovo Thinkpad X230 tablet
 evdev:name:TPPS/2 IBM TrackPoint:dmi:bvn*:bvr*:bd*:svnLENOVO:pn*:pvrThinkPadX230Tablet:*
 # Lenovo Thinkpad X240
@@ -95,6 +98,10 @@ evdev:name:TPPS/2 IBM TrackPoint:dmi:bvn*:bvr*:bd*:svnLENOVO:pn*:pvrThinkPadX240
 evdev:name:TPPS/2 IBM TrackPoint:dmi:bvn*:bvr*:bd*:svnLENOVO:pn*:pvrThinkPadT440s:*
 # Lenovo Thinkpad T540p
 evdev:name:TPPS/2 IBM TrackPoint:dmi:bvn*:bvr*:bd*:svnLENOVO:pn*:pvrThinkPadT540p:*
+# Lenovo Thinkpad T550 / W550s
+evdev:name:TPPS/2 IBM TrackPoint:dmi:bvn*:bvr*:bd*:svnLENOVO:pn*:pvrThinkPadT550:*
+# Lenovo Thinkpad X1 Carbon 3rd gen
+evdev:name:TPPS/2 IBM TrackPoint:dmi:bvn*:bvr*:bd*:svnLENOVO:pn*:pvrThinkPadX1Carbon3rd:*
   POINTINGSTICK_SENSITIVITY=200
   POINTINGSTICK_CONST_ACCEL=1.0
 

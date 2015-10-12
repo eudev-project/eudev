@@ -20,10 +20,11 @@
 # where /dev/input/eventXX is the device in question. If in
 # doubt, simply use /dev/input/event* to reload all input rules.
 #
-# If your changes are generally applicable, open a bug report on
-#   http://bugs.freedesktop.org/enter_bug.cgi?product=systemd
-# and include your new rules, a description of the device, and the
-# output of
+# If your changes are generally applicable, preferably send them as a pull
+# request to
+#   https://github.com/systemd/systemd
+# or create a bug report on https://github.com/systemd/systemd/issues and
+# include your new rules, a description of the device, and the output of
 #   udevadm info /dev/input/eventXX
 # (or /dev/input/event*).
 #
@@ -42,6 +43,11 @@
 #########################################
 # Apple
 #########################################
+
+#  Macbook2,1 (late 2006), single-button touchpad
+evdev:input:b0003v05ACp021B*
+ EVDEV_ABS_00=256:1471:12
+ EVDEV_ABS_01=256:831:12
 
 # Macbook5,1 (unibody), aka wellspring3
 evdev:input:b0003v05ACp0236*
@@ -72,16 +78,26 @@ evdev:input:b0003v05ACp0254*
 
 # MacbookPro10,1 (unibody, June 2012)
 evdev:input:b0003v05ACp0259*
-evdev:input:b0003v05ACp025a*
-evdev:input:b0003v05ACp025b*
+evdev:input:b0003v05ACp025A*
+evdev:input:b0003v05ACp025B*
 # MacbookPro10,2 (unibody, October 2012)
 evdev:input:b0003v05ACp0259*
-evdev:input:b0003v05ACp025a*
-evdev:input:b0003v05ACp025b*
+evdev:input:b0003v05ACp025A*
+evdev:input:b0003v05ACp025B*
  EVDEV_ABS_00=::94
  EVDEV_ABS_01=::92
  EVDEV_ABS_35=::94
  EVDEV_ABS_36=::92
+
+#########################################
+# ASUS
+#########################################
+# Asus K52JT
+evdev:name:ETPS/2 Elantech Touchpad:dmi:bvn*:bvr*:bd*:svnASUSTeKComputerInc.:pnK52JT:*
+ EVDEV_ABS_00=::18
+ EVDEV_ABS_01=::16
+ EVDEV_ABS_35=::18
+ EVDEV_ABS_36=::16
 
 #########################################
 # Google
@@ -102,3 +118,12 @@ evdev:name:Atmel maXTouch Touch*:dmi:bvn*:bvr*:bd*:svnGOOGLE:pnSamus*
 evdev:name:SynPS/2 Synaptics TouchPad:dmi:*svnLENOVO*:pn*ThinkPad*X230*
  EVDEV_ABS_01=::100
  EVDEV_ABS_36=::100
+
+#########################################
+# Dell
+#########################################
+
+# Dell Vostro 1510
+evdev:name:AlpsPS/2 ALPS GlidePoint*:dmi:bvn*:bvr*:bd*:svnDellInc.:pnVostro1510*
+ EVDEV_ABS_00=::14
+ EVDEV_ABS_01=::18
