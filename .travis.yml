@@ -5,7 +5,7 @@ compiler:
 before_install:
  - sudo apt-get update -qq
  - sudo apt-get install autotools-dev automake autoconf libtool gtk-doc-tools gperf
-script: ./autogen.sh && ./configure --enable-gtk-doc && make V=1 && make distcheck
+script: ./autogen.sh && ./configure && make V=1 distcheck
 notifications:
   irc:
     channels:
