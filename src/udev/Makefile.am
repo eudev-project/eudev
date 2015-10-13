@@ -150,7 +150,7 @@ nodist_libudev_core_la_SOURCES = \
 
 keyboard-keys.txt: Makefile
 	$(AM_V_at)f="$@"; case $$f in */*) $(MKDIR_P) "$${f%/*}"; esac
-	$(AM_V_GEN)$(CPP) $(CFLAGS) $(AM_CPPFLAGS) $(CPPFLAGS) -dM -include linux/input.h - < /dev/null | $(AWK) '/^#define[ \t]+(KEY|BTN)_[^ ]+[ \t]+[0-9]/ { if ($$2 != "KEY_MAX") { print $$2 } }' | sed 's/^KEY_COFFEE$$/KEY_SCREENLOCK/' > $@
+	$(AM_V_GEN)$(CPP) $(CFLAGS) $(AM_CPPFLAGS) $(CPPFLAGS) -dM -include linux/input.h - < /dev/null | $(AWK) '/^#define[ \t]+(KEY|BTN)_[^ ]+[ \t]+[0-9K]/ { if ($$2 != "KEY_MAX") { print $$2 } }' > $@
 
 keyboard-keys-from-name.gperf: keyboard-keys.txt Makefile
 	$(AM_V_GEN)$(AWK) 'BEGIN{ print "struct key { const char* name; unsigned short id; };"; print "%null-strings"; print "%%";} /^BTN_/{ print tolower($$1) ", " $$1 } !/^BTN_/{ print tolower(substr($$1 ,5)) ", " $$1 }' keyboard-keys.txt > $@
