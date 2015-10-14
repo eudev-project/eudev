@@ -146,8 +146,7 @@ libudev_core_la_SOURCES += \
 	udev-builtin-keyboard.c
 
 nodist_libudev_core_la_SOURCES = \
-	keyboard-keys-from-name.h \
-	keyboard-keys-to-name.h
+	keyboard-keys-from-name.h
 
 keyboard-keys.txt: Makefile
 	$(AM_V_at)f="$@"; case $$f in */*) $(MKDIR_P) "$${f%/*}"; esac
@@ -158,9 +157,6 @@ keyboard-keys-from-name.gperf: keyboard-keys.txt Makefile
 
 keyboard-keys-from-name.h: keyboard-keys-from-name.gperf Makefile
 	$(AM_V_GPERF)$(GPERF) -L ANSI-C -t -N keyboard_lookup_key -H hash_key_name -p -C < keyboard-keys-from-name.gperf > $@
-
-keyboard-keys-to-name.h: keyboard-keys.txt Makefile
-	$(AM_V_GEN)$(AWK) 'BEGIN{ print "const char* const key_names[KEY_CNT] = { "} { print "[" $$1 "] = \"" $$1 "\"," } END{print "};"}' keyboard-keys.txt > $@
 
 
 BUILT_SOURCES = \

@@ -42,7 +42,6 @@ src/fido_id/fido_id
 
 src/udev/keyboard-keys-from-name.gperf
 src/udev/keyboard-keys-from-name.h
-src/udev/keyboard-keys-to-name.h
 src/udev/keyboard-keys.txt
 
 test/test-json-writer

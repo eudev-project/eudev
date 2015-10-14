@@ -29,7 +29,6 @@
 #include "udev.h"
 
 #include "keyboard-keys-from-name.h"
-#include "keyboard-keys-to-name.h"
 
 static int install_force_release(struct udev_device *dev, const unsigned *release, unsigned release_count) {
         struct udev_device *atkbd;
