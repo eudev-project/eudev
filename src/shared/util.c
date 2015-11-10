@@ -623,12 +623,24 @@ int safe_atou(const char *s, unsigned *ret_u) {
         assert(s);
         assert(ret_u);
 
+        /* strtoul() is happy to parse negative values, and silently
+         * converts them to unsigned values without generating an
+         * error. We want a clean error, hence let's look for the "-"
+         * prefix on our own, and generate an error. But let's do so
+         * only after strtoul() validated that the string is clean
+         * otherwise, so that we return EINVAL preferably over
+         * ERANGE. */
+
+        s += strspn(s, WHITESPACE);
+
         errno = 0;
         l = strtoul(s, &x, 0);
-
-        if (!x || x == s || *x || errno)
-                return errno > 0 ? -errno : -EINVAL;
-
+        if (errno != 0)
+                return -errno;
+        if (!x || x == s || *x)
+                return -EINVAL;
+        if (s[0] == '-')
+                return -ERANGE;
         if ((unsigned long) (unsigned) l != l)
                 return -ERANGE;
 
@@ -722,10 +734,10 @@ int safe_atoi(const char *s, int *ret_i) {
 
         errno = 0;
         l = strtol(s, &x, 0);
-
-        if (!x || x == s || *x || errno)
-                return errno > 0 ? -errno : -EINVAL;
-
+        if (errno != 0)
+                return -errno;
+        if (!x || x == s || *x)
+                return -EINVAL;
         if ((long) (int) l != l)
                 return -ERANGE;
 
@@ -939,11 +951,16 @@ int safe_atollu(const char *s, long long unsigned *ret_llu) {
         assert(s);
         assert(ret_llu);
 
+        s += strspn(s, WHITESPACE);
+
         errno = 0;
         l = strtoull(s, &x, 0);
-
-        if (!x || x == s || *x || errno)
-                return errno ? -errno : -EINVAL;
+        if (errno != 0)
+                return -errno;
+        if (!x || x == s || *x)
+                return -EINVAL;
+        if (*s == '-')
+                return -ERANGE;
 
         *ret_llu = l;
         return 0;
@@ -996,9 +1013,10 @@ int safe_atolli(const char *s, long long int *ret_lli) {
 
         errno = 0;
         l = strtoll(s, &x, 0);
-
-        if (!x || x == s || *x || errno)
-                return errno ? -errno : -EINVAL;
+        if (errno != 0)
+                return -errno;
+        if (!x || x == s || *x)
+                return -EINVAL;
 
         *ret_lli = l;
         return 0;
