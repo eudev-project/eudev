@@ -703,13 +703,6 @@
         </varlistentry>
 
         <varlistentry>
-          <term><option>$root</option>, <option>%r</option></term>
-          <listitem>
-            <para>The udev_root value.</para>
-          </listitem>
-        </varlistentry>
-
-        <varlistentry>
           <term><option>$sys</option>, <option>%S</option></term>
           <listitem>
             <para>The sysfs mount point.</para>
