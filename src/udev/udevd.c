@@ -1125,6 +1125,7 @@ static int parse_argv(int argc, char *argv[]) {
 int main(int argc, char *argv[]) {
         struct udev *udev;
         sigset_t mask;
+        FILE *f;
         int fd_ctrl = -1;
         int fd_netlink = -1;
         int fd_worker = -1;
@@ -1276,6 +1277,12 @@ int main(int argc, char *argv[]) {
         log_debug("set children_max to %u", arg_children_max);
 
         udev_list_node_init(&event_list);
+
+        f = fopen("/dev/kmsg", "w");
+        if (f != NULL) {
+                fprintf(f, "<30>udevd[%u]: starting eudev-" VERSION "\n", getpid());
+                fclose(f);
+        }
 
         if (!arg_debug) {
                 int fd;
