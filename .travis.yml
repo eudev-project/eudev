@@ -4,7 +4,7 @@ compiler:
   - clang
 before_install:
  - sudo apt-get update -qq
- - sudo apt-get install autotools-dev automake autoconf libtool gtk-doc-tools gperf
+ - sudo apt-get install autotools-dev automake autoconf libtool gperf
 script: ./autogen.sh && ./configure && make V=1 distcheck
 notifications:
   irc:
