@@ -25,8 +25,7 @@
 #   https://github.com/systemd/systemd
 # or create a bug report on https://github.com/systemd/systemd/issues and
 # include your new rules, a description of the device, and the output of
-#   udevadm info /dev/input/eventXX
-# (or /dev/input/event*).
+#   udevadm info /dev/input/eventXX.
 #
 # Allowed properties are:
 #    EVDEV_ABS_<axis>=<min>:<max>:<res>:<fuzz>:<flat>
@@ -100,6 +99,29 @@ evdev:name:ETPS/2 Elantech Touchpad:dmi:bvn*:bvr*:bd*:svnASUSTeKComputerInc.:pnK
  EVDEV_ABS_36=::16
 
 #########################################
+# Dell
+#########################################
+
+# Dell Vostro 1510
+evdev:name:AlpsPS/2 ALPS GlidePoint*:dmi:bvn*:bvr*:bd*:svnDellInc.:pnVostro1510*
+ EVDEV_ABS_00=::14
+ EVDEV_ABS_01=::18
+
+# Dell Inspiron N5040
+evdev:name:AlpsPS/2 ALPS DualPoint TouchPad:dmi:bvn*:bvr*:bd*:svnDellInc.:pnInspironN5040*
+ EVDEV_ABS_00=25:2000:22
+ EVDEV_ABS_01=0:1351:28
+ EVDEV_ABS_35=25:2000:22
+ EVDEV_ABS_36=0:1351:28
+
+# Dell Latitude E6220
+evdev:name:AlpsPS/2 ALPS DualPoint TouchPad:dmi:bvn*:bvr*:bd*:svnDellInc.:pnLatitudeE6220*
+ EVDEV_ABS_00=76:1815:22
+ EVDEV_ABS_01=131:1330:30
+ EVDEV_ABS_35=76:1815:22
+ EVDEV_ABS_36=131:1330:30
+
+#########################################
 # Google
 #########################################
 
@@ -111,8 +133,40 @@ evdev:name:Atmel maXTouch Touch*:dmi:bvn*:bvr*:bd*:svnGOOGLE:pnSamus*
  EVDEV_ABS_36=::10
 
 #########################################
+# HP
+#########################################
+
+# HP Pavilion dm4
+evdev:name:SynPS/2 Synaptics TouchPad*:dmi:*svnHewlett-Packard:pnHPPaviliondm4*
+ EVDEV_ABS_00=1360:5563:47
+ EVDEV_ABS_01=1269:4618:61
+ EVDEV_ABS_35=1360:5563:47
+ EVDEV_ABS_36=1269:4618:61
+
+#########################################
 # Lenovo
 #########################################
+
+# Lenovo P50
+evdev:name:SynPS/2 Synaptics TouchPad:dmi:*svnLENOVO*:pn*ThinkPad*P50*
+ EVDEV_ABS_00=::44
+ EVDEV_ABS_01=::67
+ EVDEV_ABS_35=::44
+ EVDEV_ABS_36=::67
+
+# Lenovo T460
+evdev:name:SynPS/2 Synaptics TouchPad:dmi:*svnLENOVO*:pn*ThinkPad*T460*
+ EVDEV_ABS_00=1266:5677:44
+ EVDEV_ABS_01=1093:4832:65
+ EVDEV_ABS_35=1266:5677:44
+ EVDEV_ABS_36=1093:4832:65
+
+# Lenovo T510
+evdev:name:SynPS/2 Synaptics TouchPad:dmi:*svnLENOVO*:pn*ThinkPad*T510*
+ EVDEV_ABS_00=778:6239:72
+ EVDEV_ABS_01=841:5330:100
+ EVDEV_ABS_35=778:6239:72
+ EVDEV_ABS_36=841:5330:100
 
 # Lenovo X230 series
 evdev:name:SynPS/2 Synaptics TouchPad:dmi:*svnLENOVO*:pn*ThinkPad*X230*
@@ -120,10 +174,12 @@ evdev:name:SynPS/2 Synaptics TouchPad:dmi:*svnLENOVO*:pn*ThinkPad*X230*
  EVDEV_ABS_36=::100
 
 #########################################
-# Dell
+# Samsung
 #########################################
 
-# Dell Vostro 1510
-evdev:name:AlpsPS/2 ALPS GlidePoint*:dmi:bvn*:bvr*:bd*:svnDellInc.:pnVostro1510*
- EVDEV_ABS_00=::14
- EVDEV_ABS_01=::18
+# Samsung 305V4
+evdev:name:ETPS/2 Elantech Touchpad:dmi:*svnSAMSUNGELECTRONICSCO.,LTD.:pn305V4A/305V5A*
+ EVDEV_ABS_00=0:2480:28
+ EVDEV_ABS_01=0:1116:24
+ EVDEV_ABS_35=0:2480:28
+ EVDEV_ABS_36=0:1116:24
