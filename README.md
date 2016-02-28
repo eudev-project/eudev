@@ -25,3 +25,5 @@ Committers (alphabetical order by last name):
     Tony Vroon          (chainsaw)          <tony@linx.net>
     Richard Yao         (ryao)              <ryao@gentoo.org>
 
+## Build status
+[![Build Status](https://travis-ci.org/gentoo/eudev.svg?branch=master)](https://travis-ci.org/gentoo/eudev)
