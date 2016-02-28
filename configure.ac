@@ -36,7 +36,6 @@ AC_PROG_LN_S
 AC_PROG_MAKE_SET
 
 AC_PATH_PROG([M4], [m4])
-AC_PATH_PROG([XSLTPROC], [xsltproc])
 
 # Checks for header files.
 AC_CHECK_HEADERS(
