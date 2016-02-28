@@ -1,7 +1,6 @@
 #!/bin/sh
 
-export WANT_AUTOMAKE=1.13
-autoreconf -f -i
+autoreconf -f -i -s
 
 cd man
 ./make.sh

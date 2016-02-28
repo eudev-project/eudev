@@ -1,4 +1,3 @@
-
 AC_PREREQ([2.68])
 AC_INIT([eudev],[3.1.5],[https://github.com/gentoo/eudev/issues])
 AC_SUBST(UDEV_VERSION, 220)
@@ -11,7 +10,7 @@ AC_PREFIX_DEFAULT([/usr])
 AC_CONFIG_MACRO_DIR([m4])
 AC_CONFIG_HEADERS([config.h])
 
-AM_INIT_AUTOMAKE([foreign 1.13])
+AM_INIT_AUTOMAKE([foreign 1.11])
 AM_SILENT_RULES([yes])
 
 LT_PREREQ(2.2)
