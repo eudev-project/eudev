@@ -1091,6 +1091,21 @@ bool nulstr_contains(const char*nulstr, const char *needle) {
         return false;
 }
 
+
+static inline int ppoll_fallback(struct pollfd *fds, nfds_t nfds, const struct timespec *timeout_ts, const sigset_t *sigmask) {
+        int ready, timeout;
+        sigset_t origmask;
+
+        timeout = (timeout_ts == NULL) ? -1 : (timeout_ts->tv_sec * 1000 + timeout_ts->tv_nsec / 1000000);
+
+        /* This is racey, but what can we do without ppoll? */
+        sigprocmask(SIG_SETMASK, sigmask, &origmask);
+        ready = poll(fds, nfds, timeout);
+        sigprocmask(SIG_SETMASK, &origmask, NULL);
+
+	return ready;
+}
+
 int fd_wait_for_event(int fd, int event, usec_t t) {
 
         struct pollfd pollfd = {
@@ -1101,7 +1116,12 @@ int fd_wait_for_event(int fd, int event, usec_t t) {
         struct timespec ts;
         int r;
 
+#ifdef HAVE_DECL_PPOLL
         r = ppoll(&pollfd, 1, t == USEC_INFINITY ? NULL : timespec_store(&ts, t), NULL);
+#else
+        /* Fallback path when ppoll() is unavailable */
+        r = ppoll_fallback(&pollfd, 1, t == USEC_INFINITY ? NULL : timespec_store(&ts, t), NULL);
+#endif
         if (r < 0)
                 return -errno;
 

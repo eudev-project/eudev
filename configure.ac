@@ -64,13 +64,17 @@ AC_C_INLINE
 AC_TYPE_MODE_T
 AC_TYPE_PID_T
 AC_CHECK_MEMBERS([struct stat.st_rdev])
-AC_CHECK_DECLS([getrandom, gettid, name_to_handle_at, accept4, mkostemp, strndupa], [], [], [[#include <sys/types.h>
-#include <unistd.h>
+AC_CHECK_DECLS([getrandom, gettid, name_to_handle_at, accept4, mkostemp, ppoll, strndupa], [], [],
+[[#include <fcntl.h>
+#include <linux/random.h>
+#include <poll.h>
+#include <signal.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/mount.h>
-#include <fcntl.h>
 #include <sys/socket.h>
-#include <linux/random.h>]])
+#include <sys/types.h>
+#include <unistd.h>]])
 
 AC_CHECK_SIZEOF(pid_t)
 AC_CHECK_SIZEOF(uid_t)
