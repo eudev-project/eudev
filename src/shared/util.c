@@ -1116,7 +1116,7 @@ int fd_wait_for_event(int fd, int event, usec_t t) {
         struct timespec ts;
         int r;
 
-#ifdef HAVE_DECL_PPOLL
+#if HAVE_DECL_PPOLL
         r = ppoll(&pollfd, 1, t == USEC_INFINITY ? NULL : timespec_store(&ts, t), NULL);
 #else
         /* Fallback path when ppoll() is unavailable */
