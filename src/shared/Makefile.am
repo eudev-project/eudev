@@ -9,7 +9,6 @@ libudev_shared_la_SOURCES=\
 	conf-files.c \
 	device-nodes.c \
 	dev-setup.c \
-	exit-status.c \
 	fileio.c \
 	hashmap.c \
 	label.c \
@@ -40,7 +39,6 @@ noinst_HEADERS = \
 	def.h \
 	device-nodes.h \
 	dev-setup.h \
-	exit-status.h \
 	fileio.h \
 	formats-util.h \
 	hashmap.h \
