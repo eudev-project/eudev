@@ -62,7 +62,6 @@
 #include "strv.h"
 #include "mkdir.h"
 #include "path-util.h"
-#include "exit-status.h"
 #include "hashmap.h"
 #include "fileio.h"
 #include "utf8.h"
@@ -1958,45 +1957,6 @@ finish:
         s = NULL;
 
         return 1;
-}
-
-int execute_command(const char *command, char *const argv[]) {
-
-        pid_t pid;
-        int status;
-
-        if ((status = access(command, X_OK)) != 0)
-                return status;
-
-        if ((pid = fork()) < 0) {
-                log_error_errno(errno, "Failed to fork: %m");
-                return pid;
-        }
-
-        if (pid == 0) {
-
-                execvp(command, argv);
-
-                log_error_errno(errno, "Failed to execute %s: %m", command);
-                _exit(EXIT_FAILURE);
-        }
-        else while (1)
-        {
-                siginfo_t si;
-
-                int r = waitid(P_PID, pid, &si, WEXITED);
-
-                if (!is_clean_exit(si.si_code, si.si_status, NULL)) {
-                        if (si.si_code == CLD_EXITED)
-                                log_error("%s exited with exit status %i.", command, si.si_status);
-                        else
-                                log_error("%s terminated by signal %s.", command, signal_to_string(si.si_status));
-                } else
-                        log_debug("%s exited successfully.", command);
-
-                return si.si_status;
-
-        }
 }
 
 void cmsg_close_all(struct msghdr *mh) {

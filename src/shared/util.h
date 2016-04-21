@@ -420,8 +420,6 @@ typedef enum UnquoteFlags {
 
 int unquote_first_word(const char **p, char **ret, UnquoteFlags flags);
 
-int execute_command(const char *command, char *const argv[]);
-
 #define INOTIFY_EVENT_MAX (sizeof(struct inotify_event) + NAME_MAX + 1)
 
 #define FOREACH_INOTIFY_EVENT(e, buffer, sz) \
