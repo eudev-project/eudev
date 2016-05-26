@@ -5,7 +5,6 @@ AM_CPPFLAGS = \
 	-include $(top_builddir)/config.h
 
 libudev_shared_la_SOURCES=\
-	cgroup-util.c \
 	conf-files.c \
 	device-nodes.c \
 	dev-setup.c \
@@ -34,7 +33,6 @@ libudev_shared_la_SOURCES=\
 	virt.c
 
 noinst_HEADERS = \
-	cgroup-util.h \
 	conf-files.h \
 	def.h \
 	device-nodes.h \

@@ -49,7 +49,6 @@
 #include "udev.h"
 #include "udev-util.h"
 #include "def.h"
-#include "cgroup-util.h"
 #include "dev-setup.h"
 #include "fileio.h"
 #include "hashmap.h"
@@ -74,7 +73,6 @@ static usec_t arg_event_timeout_warn_usec = 180 * USEC_PER_SEC / 3;
 static sigset_t sigmask_orig;
 static UDEV_LIST(event_list);
 Hashmap *workers;
-static char *udev_cgroup;
 static struct udev_list properties_list;
 static bool udev_exit;
 
@@ -1393,10 +1391,6 @@ int main(int argc, char *argv[]) {
                 } else if (udev_list_node_is_empty(&event_list) && hashmap_isempty(workers)) {
                         /* we are idle */
                         timeout = -1;
-
-                        /* cleanup possible left-over processes in our cgroup */
-                        if (udev_cgroup)
-                                cg_kill(SYSTEMD_CGROUP_CONTROLLER, udev_cgroup, SIGKILL, false, true, NULL);
                 } else {
                         /* kill idle or hanging workers */
                         timeout = 3 * MSEC_PER_SEC;
