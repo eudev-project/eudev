@@ -174,10 +174,19 @@ int main(int argc, char *argv[]) {
         }
 
         r = parse_argv(argc, argv);
-        if (r > 0)
-                r = dispatch_verb(udev, argc, argv);
+        if (r <= 0)
+                goto finish;
+
+        /* The full SELinux database, to label hwdb.bin, which fails in enforcing mode, like
+         * systemd's mac_init(). */
+        r = mac_selinux_init(NULL);
+        if (r < 0)
+                goto finish;
+
+        r = dispatch_verb(udev, argc, argv);
 
 finish:
+        mac_selinux_finish();
         free(arg_root);
         udev_unref(udev);
         log_close();

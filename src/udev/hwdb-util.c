@@ -26,6 +26,8 @@
 #include "util.h"
 #include "strbuf.h"
 #include "conf-files.h"
+#include "label.h"
+#include "mkdir.h"
 
 #include "udev.h"
 #include "hwdb-util.h"
@@ -729,12 +731,16 @@ int hwdb_update(struct udev *udev, const char *root, const char *hwdb_bin, bool 
         log_debug("strings dedup'ed: %8zu bytes (%8zu)",
                   trie->strings->dedup_len, trie->strings->dedup_count);
 
-        mkdir_parents(hwdb_bin, 0755);
+        mkdir_parents_label(hwdb_bin, 0755);
         err = trie_store(trie, hwdb_bin);
         if (err < 0) {
                 log_error_errno(err, "Failure writing database %s: %m", hwdb_bin);
                 goto out;
         }
+
+        err = label_fix(hwdb_bin, false, false);
+        if (err < 0)
+                goto out;
 
         err = strict ? ret : 0;
 out:
