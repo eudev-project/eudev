@@ -88,16 +88,120 @@ size_t page_size(void) {
         return pgsz;
 }
 
-uint64_t physical_memory(void) {
-        long sc;
+/* Like cg_get_root_path() of systemd: the cgroup of PID 1 in the unified hierarchy (cgroup v2), without a
+ * trailing "/init.scope". */
+static int cg_get_root_path(char **ret) {
+        _cleanup_fclose_ FILE *f = NULL;
+        int r;
 
-        /* We return this as uint64_t in case we are running as 32bit process on a 64bit kernel with huge amounts of
-         * memory. */
+        assert(ret);
+
+        f = fopen("/proc/1/cgroup", "re");
+        if (!f)
+                return errno == ENOENT ? -ESRCH : -errno;
+
+        for (;;) {
+                _cleanup_free_ char *line = NULL;
+                char *e, *path;
+
+                r = read_line(f, LONG_LINE_MAX, &line);
+                if (r < 0)
+                        return r;
+                if (r == 0)
+                        return -ENODATA;
+
+                e = startswith(line, "0:");
+                if (!e)
+                        continue;
+
+                e = strchr(e, ':');
+                if (!e)
+                        continue;
+
+                path = strdup(e + 1);
+                if (!path)
+                        return -ENOMEM;
+
+                /* Refuse cgroup paths from outside our cgroup namespace */
+                if (startswith(path, "/../")) {
+                        free(path);
+                        return -EUNATCH;
+                }
+
+                /* Truncate suffix indicating the process is a zombie */
+                e = endswith(path, " (deleted)");
+                if (e)
+                        *e = 0;
+
+                e = endswith(path, "/init.scope");
+                if (e)
+                        *e = 0;
+
+                *ret = path;
+                return 0;
+        }
+}
+
+uint64_t physical_memory(void) {
+        _cleanup_free_ char *root = NULL, *p = NULL, *value = NULL;
+        uint64_t mem, lim;
+        size_t ps;
+        long sc;
+        int r;
+
+        /* We return this as uint64_t in case we are running as 32-bit process on a 64-bit kernel with huge amounts of
+         * memory.
+         *
+         * In order to support containers nicely that have a configured memory limit we'll take the minimum of the
+         * physically reported amount of memory and the limit configured for the root cgroup, if there is any. */
 
         sc = sysconf(_SC_PHYS_PAGES);
         assert(sc > 0);
 
-        return (uint64_t) sc * (uint64_t) page_size();
+        ps = page_size();
+        /* Physical page count times page size cannot realistically overflow uint64_t, but make this obvious. */
+        assert((uint64_t) sc <= UINT64_MAX / ps);
+        mem = (uint64_t) sc * (uint64_t) ps;
+
+        r = cg_get_root_path(&root);
+        if (r < 0) {
+                log_debug_errno(r, "Failed to determine root cgroup, ignoring cgroup memory limit: %m");
+                return mem;
+        }
+
+        p = strjoin("/sys/fs/cgroup/", root, "/memory.max", NULL);
+        if (!p) {
+                log_oom_debug();
+                return mem;
+        }
+
+        r = read_one_line_file(p, &value);
+        if (r == -ENOENT) /* Field does not exist on the system's top-level cgroup, hence don't
+                           * complain. (Note that it might exist on our own root though, if we live
+                           * in a cgroup namespace, hence check anyway instead of not even
+                           * trying.) */
+                return mem;
+        if (r < 0) {
+                log_debug_errno(r, "Failed to read memory.max cgroup attribute, ignoring cgroup memory limit: %m");
+                return mem;
+        }
+
+        if (streq(value, "max"))
+                return mem;
+
+        r = safe_atou64(value, &lim);
+        if (r < 0) {
+                log_debug_errno(r, "Failed to parse cgroup memory limit '%s', ignoring: %m", value);
+                return mem;
+        }
+        if (lim == UINT64_MAX)
+                return mem;
+
+        /* Make sure the limit is a multiple of our own page size */
+        lim /= ps;
+        lim *= ps;
+
+        return MIN(mem, lim);
 }
 
 int cpus_in_affinity_mask(void) {
