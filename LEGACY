@@ -1,9 +1,0 @@
-Legacy branches:
-
-v1.X	- preserves the old userland firmware loading code
-	- preserves everything v2.X preserves
-
-v2.X	- preserves the older rules generator code
-	- preserves the old static nodes created from modules code
-	- preserves the the old modprobe alt to kmod code
-
