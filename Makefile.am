@@ -159,12 +159,7 @@ dist_doc_DATA = \
 EXTRA_DIST += \
 	README.md \
 	autogen.sh \
-	.dir-locals.el \
-	.editorconfig \
-	.vimrc \
-	.ycm_extra_conf.py \
-	.travis.yml \
-	.mailmap
+	.vimrc
 
 # ------------------------------------------------------------------------------
 
@@ -242,8 +237,7 @@ EXTRA_DIST += \
 	tools/make-man-index.py \
 	tools/make-man-rules.py \
 	tools/make-directive-index.py \
-	tools/xml_helper.py \
-	man/glib-event-glue.c
+	tools/xml_helper.py
 
 # ------------------------------------------------------------------------------
 noinst_LTLIBRARIES += \
@@ -452,13 +446,14 @@ audit_list_includes = -include linux/audit.h -include missing.h
 
 # ------------------------------------------------------------------------------
 libsystemd_internal_la_SOURCES = \
+	src/systemd/_sd-common.h \
 	src/systemd/sd-event.h \
 	src/systemd/sd-netlink.h \
 	src/systemd/sd-id128.h \
 	src/systemd/sd-daemon.h \
 	src/systemd/sd-hwdb.h \
 	src/systemd/sd-device.h \
-	src/libsystemd/libsystemd.sym \
+	src/systemd/sd-messages.h \
 	src/libsystemd/sd-event/sd-event.c \
 	src/libsystemd/sd-netlink/sd-netlink.c \
 	src/libsystemd/sd-netlink/netlink-internal.h \
@@ -727,8 +722,7 @@ test-sys-distclean:
 EXTRA_DIST += \
 	test/sys.tar.xz \
 	test/udev-test.pl \
-	test/rule-syntax-check.py \
-	test/mocks/fsck
+	test/rule-syntax-check.py
 
 # ------------------------------------------------------------------------------
 ata_id_SOURCES = \
