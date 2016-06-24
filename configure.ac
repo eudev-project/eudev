@@ -19,11 +19,9 @@
 
 AC_PREREQ([2.64])
 
-AC_INIT([systemd],
-        [230],
-        [http://github.com/systemd/systemd/issues],
-        [systemd],
-        [http://www.freedesktop.org/wiki/Software/systemd])
+AC_INIT([eudev],
+        [4.0],
+        [https://bugs.gentoo.org])
 
 AC_CONFIG_SRCDIR([src/udev/udevd.c])
 AC_CONFIG_MACRO_DIR([m4])
