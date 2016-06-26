@@ -2382,6 +2382,24 @@ int udev_device_remove_devlink(struct udev_device *udev_device, const char *devl
         return 1;
 }
 
+/* For the devices of the "drivers" pseudo-subsystem, i.e. /sys/bus/SUBSYSTEM/drivers/DRIVER, the real
+ * subsystem: the path component before "/drivers/". */
+static char *device_get_drivers_subsystem(struct udev_device *udev_device)
+{
+        const char *devpath = udev_device->devpath, *drivers, *p;
+
+        drivers = strstr(devpath, "/drivers/");
+        if (!drivers)
+                return NULL;
+
+        for (p = drivers; p > devpath && p[-1] != '/'; p--)
+                ;
+        if (p == drivers)
+                return NULL;
+
+        return strndup(p, drivers - p);
+}
+
 const char *udev_device_get_id_filename(struct udev_device *udev_device)
 {
         if (udev_device->id_filename == NULL) {
@@ -2409,7 +2427,18 @@ const char *udev_device_get_id_filename(struct udev_device *udev_device)
                         if (sysname == NULL)
                                 return NULL;
                         sysname = &sysname[1];
-                        if (asprintf(&udev_device->id_filename, "+%s:%s", udev_device_get_subsystem(udev_device), sysname) < 0)
+
+                        if (streq(udev_device_get_subsystem(udev_device), "drivers")) {
+                                _cleanup_free_ char *subsystem = NULL;
+
+                                /* the 'drivers' pseudo-subsystem is special, and needs the real subsystem
+                                 * encoded as well */
+                                subsystem = device_get_drivers_subsystem(udev_device);
+                                if (!subsystem)
+                                        return NULL;
+                                if (asprintf(&udev_device->id_filename, "+drivers:%s:%s", subsystem, sysname) < 0)
+                                        udev_device->id_filename = NULL;
+                        } else if (asprintf(&udev_device->id_filename, "+%s:%s", udev_device_get_subsystem(udev_device), sysname) < 0)
                                 udev_device->id_filename = NULL;
                 }
         }
