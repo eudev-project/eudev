@@ -21,8 +21,6 @@
 #  along with systemd; If not, see <http://www.gnu.org/licenses/>.
 
 ACLOCAL_AMFLAGS = -I m4 ${ACLOCAL_FLAGS}
-#AM_MAKEFLAGS = --no-print-directory
-#AUTOMAKE_OPTIONS = color-tests parallel-tests
 
 LIBUDEV_CURRENT=7
 LIBUDEV_REVISION=4
@@ -37,21 +35,8 @@ udevlibexecdir=$(prefix)/lib/udev
 udevrulesdir=$(udevlibexecdir)/rules.d
 udevhwdbdir=$(udevlibexecdir)/hwdb.d
 
-EXTRA_DIST =
-noinst_DATA =
-noinst_LTLIBRARIES =
-BUILT_SOURCES =
-include_HEADERS =
-lib_LTLIBRARIES =
-pkgconfiglib_DATA =
-dist_udevrules_DATA =
-pkgconfigdata_DATA =
-tests =
-manual_tests =
-check_DATA =
-
-noinst_PROGRAMS = $(manual_tests) $(tests) $(unsafe_tests)
-TESTS = $(tests) $(unsafe_tests)
+noinst_PROGRAMS = $(tests)
+TESTS = $(tests)
 
 in_files = $(filter %.in,$(EXTRA_DIST))
 in_in_files = $(filter %.in.in, $(in_files))
@@ -152,7 +137,7 @@ AM_V_RM = $(AM_V_RM_$(V))
 AM_V_RM_ = $(AM_V_RM_$(AM_DEFAULT_VERBOSITY))
 AM_V_RM_0 = @echo "  RM      " $@;
 
-EXTRA_DIST += \
+EXTRA_DIST = \
 	LICENSE.LGPL2.1 \
 	LICENSE.GPL2 \
 	README.md \
@@ -175,6 +160,8 @@ HTML_FILES = \
 	${XML_FILES:.xml=.html}
 HTML_ALIAS = \
 	${patsubst %.1,%.html,${patsubst %.3,%.html,${patsubst %.5,%.html,${patsubst %.7,%.html,${patsubst %.8,%.html,$(MANPAGES_ALIAS)}}}}}
+
+noinst_DATA = 
 
 if ENABLE_MANPAGES
 man_MANS = \
@@ -238,7 +225,7 @@ EXTRA_DIST += \
 	tools/xml_helper.py
 
 # ------------------------------------------------------------------------------
-noinst_LTLIBRARIES += \
+noinst_LTLIBRARIES = \
 	libbasic.la
 
 libbasic_la_SOURCES = \
@@ -413,7 +400,7 @@ libshared_la_LIBADD = \
 	$(LIBIDN_LIBS)
 
 # ------------------------------------------------------------------------------
-BUILT_SOURCES += \
+BUILT_SOURCES = \
 	$(gperf_gperf_m4_sources:-gperf.gperf.m4=-gperf.c) \
 	$(gperf_gperf_m4_sources:-gperf.gperf.m4=-gperf-nulstr.c) \
 	$(gperf_gperf_sources:-gperf.gperf=-gperf.c) \
@@ -483,10 +470,10 @@ noinst_LTLIBRARIES += \
 	libsystemd-internal.la
 
 # ------------------------------------------------------------------------------
-include_HEADERS += \
+include_HEADERS = \
 	src/libudev/libudev.h
 
-lib_LTLIBRARIES += \
+lib_LTLIBRARIES = \
 	libudev.la
 
 libudev_la_SOURCES =\
@@ -511,7 +498,7 @@ libudev_la_LDFLAGS = \
 libudev_la_LIBADD = \
 	libsystemd-internal.la
 
-pkgconfiglib_DATA += \
+pkgconfiglib_DATA = \
 	src/libudev/libudev.pc
 
 EXTRA_DIST += \
@@ -528,7 +515,7 @@ libudev_internal_la_SOURCES =\
 INSTALL_DIRS += \
 	$(sysconfdir)/udev/rules.d
 
-dist_udevrules_DATA += \
+dist_udevrules_DATA = \
 	rules/50-udev-default.rules \
 	rules/60-block.rules \
 	rules/60-drm.rules \
@@ -548,11 +535,10 @@ udevconfdir = $(sysconfdir)/udev
 dist_udevconf_DATA = \
 	src/udev/udev.conf
 
-pkgconfigdata_DATA += \
+pkgconfigdata_DATA = \
 	src/udev/udev.pc
 
 EXTRA_DIST += \
-	rules/99-systemd.rules.in \
 	src/udev/udev.pc.in
 
 bin_PROGRAMS = \
@@ -684,10 +670,8 @@ TESTS += \
 TESTS += \
 	test/rule-syntax-check.py
 
-tests += \
-	test-libudev
-
-manual_tests += \
+tests = \
+	test-libudev \
 	test-udev
 
 test_libudev_SOURCES = \
@@ -704,7 +688,7 @@ test_udev_LDADD = \
 	$(BLKID_LIBS) \
 	$(KMOD_LIBS)
 
-check_DATA += \
+check_DATA = \
 	test/sys
 
 # packed sysfs test tree
@@ -729,7 +713,7 @@ ata_id_SOURCES = \
 ata_id_LDADD = \
 	libshared.la
 
-udevlibexec_PROGRAMS += \
+udevlibexec_PROGRAMS = \
 	ata_id
 
 # ------------------------------------------------------------------------------
