@@ -152,11 +152,9 @@ AM_V_RM = $(AM_V_RM_$(V))
 AM_V_RM_ = $(AM_V_RM_$(AM_DEFAULT_VERBOSITY))
 AM_V_RM_0 = @echo "  RM      " $@;
 
-dist_doc_DATA = \
-	LICENSE.LGPL2.1 \
-	LICENSE.GPL2
-
 EXTRA_DIST += \
+	LICENSE.LGPL2.1 \
+	LICENSE.GPL2 \
 	README.md \
 	autogen.sh \
 	.vimrc
