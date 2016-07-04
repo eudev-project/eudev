@@ -558,7 +558,7 @@ EXTRA_DIST += \
 bin_PROGRAMS = \
 	udevadm
 
-udevlibexec_PROGRAMS = \
+sbin_PROGRAMS = \
 	udevd
 
 noinst_LTLIBRARIES += \
