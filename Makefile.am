@@ -35,7 +35,7 @@ udevlibexecdir=$(prefix)/lib/udev
 udevrulesdir=$(udevlibexecdir)/rules.d
 udevhwdbdir=$(udevlibexecdir)/hwdb.d
 
-noinst_PROGRAMS = $(tests)
+noinst_PROGRAMS = $(tests) $(manual_tests)
 TESTS = $(tests)
 
 in_files = $(filter %.in,$(EXTRA_DIST))
@@ -671,7 +671,9 @@ TESTS += \
 	test/rule-syntax-check.py
 
 tests = \
-	test-libudev \
+	test-libudev
+
+manual_tests = \
 	test-udev
 
 test_libudev_SOURCES = \
