@@ -529,7 +529,7 @@ dist_udevrules_DATA = \
 	rules/70-mouse.rules \
 	rules/75-net-description.rules \
 	rules/78-sound-card.rules \
-	rules/80-net-setup-link.rules
+	rules/80-net-name-slot.rules
 
 udevconfdir = $(sysconfdir)/udev
 dist_udevconf_DATA = \
