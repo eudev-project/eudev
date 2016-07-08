@@ -122,6 +122,15 @@ static int adm_hwdb(struct udev *udev, int argc, char *argv[]) {
                         rc = EXIT_FAILURE;
                         goto out;
                 }
+
+                /* udevadm loads the SELinux database only for /dev, load all of it to label
+                 * hwdb.bin, like systemd-hwdb. */
+                mac_selinux_finish();
+                if (mac_selinux_init(NULL) < 0) {
+                        rc = EXIT_FAILURE;
+                        goto out;
+                }
+
                 if (hwdb_update(udev, root, hwdb_bin, strict) < 0)
                         rc = EXIT_FAILURE;
         }
