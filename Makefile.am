@@ -152,14 +152,10 @@ MANPAGES_ALIAS =
 include Makefile-man.am
 
 .PHONY: man update-man-list
-man: $(MANPAGES) $(MANPAGES_ALIAS) $(HTML_FILES) $(HTML_ALIAS)
+man: $(MANPAGES) $(MANPAGES_ALIAS)
 
 XML_FILES = \
 	${patsubst %.1,%.xml,${patsubst %.3,%.xml,${patsubst %.5,%.xml,${patsubst %.7,%.xml,${patsubst %.8,%.xml,$(MANPAGES)}}}}}
-HTML_FILES = \
-	${XML_FILES:.xml=.html}
-HTML_ALIAS = \
-	${patsubst %.1,%.html,${patsubst %.3,%.html,${patsubst %.5,%.html,${patsubst %.7,%.html,${patsubst %.8,%.html,$(MANPAGES_ALIAS)}}}}}
 
 noinst_DATA = 
 
@@ -167,35 +163,16 @@ if ENABLE_MANPAGES
 man_MANS = \
 	$(MANPAGES) \
 	$(MANPAGES_ALIAS)
-
-noinst_DATA += \
-	$(HTML_FILES) \
-	$(HTML_ALIAS)
 endif
 
 CLEANFILES += \
-	$(man_MANS) \
-	$(HTML_FILES) \
-	$(HTML_ALIAS)
+	$(man_MANS)
 
 docs/html/man:
 	$(AM_V_at)$(MKDIR_P) $(dir $@)
 	$(AM_V_LN)$(LN_S) -f ../../man $@
 
-man/index.html: man/systemd.index.html
-	$(AM_V_LN)$(LN_S) -f systemd.index.html $@
-
-if HAVE_PYTHON
-noinst_DATA += \
-	man/index.html
-endif
-
-CLEANFILES += \
-	man/index.html
-
 XML_GLOB = $(wildcard $(top_srcdir)/man/*.xml)
-NON_INDEX_XML_FILES = $(filter-out man/systemd.index.xml,$(XML_FILES))
-SOURCE_XML_FILES = ${patsubst %,$(top_srcdir)/%,$(filter-out man/systemd.directives.xml,$(NON_INDEX_XML_FILES))}
 
 # This target should only be run manually. It recreates Makefile-man.am
 # file in the source directory based on all man/*.xml files. Run it after
@@ -205,20 +182,8 @@ update-man-list: $(top_srcdir)/tools/make-man-rules.py $(XML_GLOB) man/custom-en
 	$(AM_V_at)mv $(top_srcdir)/Makefile-man.tmp $(top_srcdir)/Makefile-man.am
 	@echo "Makefile-man.am has been regenerated"
 
-man/systemd.index.xml: $(top_srcdir)/tools/make-man-index.py $(NON_INDEX_XML_FILES)
-	$(AM_V_at)$(MKDIR_P) $(dir $@)
-	$(AM_V_GEN)$(PYTHON) $< $@ $(filter-out $<,$^)
-
-man/systemd.directives.xml: $(top_srcdir)/tools/make-directive-index.py man/custom-entities.ent $(SOURCE_XML_FILES)
-	$(AM_V_at)$(MKDIR_P) $(dir $@)
-	$(AM_V_GEN)$(PYTHON) $< $@ $(SOURCE_XML_FILES)
-
-CLEANFILES += \
-	man/systemd.index.xml \
-	man/systemd.directives.xml
-
 EXTRA_DIST += \
-	$(filter-out man/systemd.directives.xml man/systemd.index.xml,$(XML_FILES)) \
+	$(XML_FILES) \
 	tools/make-man-index.py \
 	tools/make-man-rules.py \
 	tools/make-directive-index.py \
@@ -850,9 +815,6 @@ XSLT = $(if $(XSLTPROC), $(XSLTPROC), xsltproc)
 XSLTPROC_PROCESS_MAN = \
 	$(AM_V_XSLT)$(XSLT) -o $@ $(XSLTPROC_FLAGS) $(srcdir)/man/custom-man.xsl $<
 
-XSLTPROC_PROCESS_HTML = \
-	$(AM_V_XSLT)$(XSLT) -o $@ $(XSLTPROC_FLAGS) $(srcdir)/man/custom-html.xsl $<
-
 man/%.1: man/%.xml man/custom-man.xsl man/custom-entities.ent
 	$(XSLTPROC_PROCESS_MAN)
 
@@ -867,9 +829,6 @@ man/%.7: man/%.xml man/custom-man.xsl man/custom-entities.ent
 
 man/%.8: man/%.xml man/custom-man.xsl man/custom-entities.ent
 	$(XSLTPROC_PROCESS_MAN)
-
-man/%.html: man/%.xml man/custom-html.xsl man/custom-entities.ent
-	$(XSLTPROC_PROCESS_HTML)
 
 define html-alias
 	$(AM_V_LN)$(LN_S) -f $(notdir $<) $@
