@@ -101,7 +101,7 @@ int read_full_stream(FILE *f, char **contents, size_t *size) {
         if (S_ISREG(st.st_mode)) {
 
                 /* Safety check */
-                if (st.st_size > 4*1024*1024)
+                if (st.st_size > READ_FULL_BYTES_MAX)
                         return -E2BIG;
 
                 /* Start with the right file size, but be prepared for
@@ -116,26 +116,31 @@ int read_full_stream(FILE *f, char **contents, size_t *size) {
                 char *t;
                 size_t k;
 
-                t = realloc(buf, n+1);
+                t = realloc(buf, n + 1);
                 if (!t)
                         return -ENOMEM;
 
                 buf = t;
                 k = fread(buf + l, 1, n - l, f);
+                if (k > 0)
+                        l += k;
 
-                if (k <= 0) {
-                        if (ferror(f))
-                                return -errno;
+                if (ferror(f))
+                        return -errno;
 
+                if (feof(f))
                         break;
-                }
 
-                l += k;
-                n *= 2;
+                /* We aren't expecting fread() to return a short read outside
+                 * of (error && eof), assert buffer is full and enlarge buffer.
+                 */
+                assert(l == n);
 
                 /* Safety check */
-                if (n > 4*1024*1024)
+                if (n >= READ_FULL_BYTES_MAX)
                         return -E2BIG;
+
+                n = MIN(n * 2, READ_FULL_BYTES_MAX);
         }
 
         buf[l] = 0;
