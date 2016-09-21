@@ -69,3 +69,13 @@ struct trie_value_entry_f {
         le64_t key_off;
         le64_t value_off;
 } _packed_;
+
+/* v2 extends v1 with filename and line-number */
+struct trie_value_entry2_f {
+        le64_t key_off;
+        le64_t value_off;
+        le64_t filename_off;
+        le32_t line_number;
+        le16_t file_priority;
+        le16_t padding;
+} _packed_;

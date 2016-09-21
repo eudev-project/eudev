@@ -22,6 +22,7 @@
 #include <errno.h>
 #include <string.h>
 #include <inttypes.h>
+#include <limits.h>
 #include <ctype.h>
 #include <stdlib.h>
 #include <fnmatch.h>
@@ -145,7 +146,13 @@ static const struct trie_node_f *node_lookup_f(struct udev_hwdb *hwdb, const str
         return NULL;
 }
 
-static int hwdb_add_property(struct udev_hwdb *hwdb, const char *key, const char *value) {
+static int hwdb_add_property(struct udev_hwdb *hwdb, const struct trie_value_entry_f *entry) {
+        struct udev_list_entry *list_entry;
+        const char *key;
+        size_t entry_off;
+
+        key = trie_string(hwdb, entry->key_off);
+
         /*
          * Silently ignore all properties which do not start with a
          * space; future extensions might use additional prefixes.
@@ -153,8 +160,61 @@ static int hwdb_add_property(struct udev_hwdb *hwdb, const char *key, const char
         if (key[0] != ' ')
                 return 0;
 
-        if (udev_list_entry_add(&hwdb->properties_list, key+1, value) == NULL)
+        key++;
+
+        /* the offset of the entry is remembered in the list entry, to be
+         * able to compare the origin of duplicate properties */
+        entry_off = (const char *)entry - hwdb->map;
+
+        if (le64toh(hwdb->head->value_entry_size) >= sizeof(struct trie_value_entry2_f) &&
+            entry_off <= INT_MAX) {
+                const struct trie_value_entry2_f *old, *entry2;
+
+                entry2 = (const struct trie_value_entry2_f *)entry;
+                list_entry = udev_list_entry_get_by_name(udev_list_get_entry(&hwdb->properties_list), key);
+                if (list_entry && udev_list_entry_get_num(list_entry) > 0) {
+                        /* On duplicates, we order by filename priority and line-number.
+                         *
+                         * v2 of the format had 64 bits for the line number.
+                         * v3 reuses top 32 bits of line_number to store the priority.
+                         * We check the top bits — if they are zero we have v2 format.
+                         * This means that v2 clients will print wrong line numbers with
+                         * v3 data.
+                         *
+                         * For v3 data: we compare the priority (of the source file)
+                         * and the line number.
+                         *
+                         * For v2 data: we rely on the fact that the filenames in the hwdb
+                         * are added in the order of priority (higher later), because they
+                         * are *processed* in the order of priority. So we compare the
+                         * indices to determine which file had higher priority. Comparing
+                         * the strings alphabetically would be useless, because those are
+                         * full paths, and e.g. /usr/lib would sort after /etc, even
+                         * though it has lower priority. This is not reliable because of
+                         * suffix compression, but should work for the most common case of
+                         * /usr/lib/udev/hwbd.d and /etc/udev/hwdb.d, and is better than
+                         * not doing the comparison at all.
+                         */
+                        bool lower;
+
+                        old = (const struct trie_value_entry2_f *)(hwdb->map + udev_list_entry_get_num(list_entry));
+                        if (le16toh(entry2->file_priority) == 0)
+                                lower = le64toh(entry2->filename_off) < le64toh(old->filename_off) ||
+                                        (entry2->filename_off == old->filename_off &&
+                                         le32toh(entry2->line_number) < le32toh(old->line_number));
+                        else
+                                lower = le16toh(entry2->file_priority) < le16toh(old->file_priority) ||
+                                        (entry2->file_priority == old->file_priority &&
+                                         le32toh(entry2->line_number) < le32toh(old->line_number));
+                        if (lower)
+                                return 0;
+                }
+        }
+
+        list_entry = udev_list_entry_add(&hwdb->properties_list, key, trie_string(hwdb, entry->value_off));
+        if (list_entry == NULL)
                 return -ENOMEM;
+        udev_list_entry_set_num(list_entry, entry_off <= INT_MAX ? (int)entry_off : 0);
         return 0;
 }
 
@@ -181,8 +241,7 @@ static int trie_fnmatch_f(struct udev_hwdb *hwdb, const struct trie_node_f *node
 
         if (le64toh(node->values_count) && fnmatch(linebuf_get(buf), search, 0) == 0)
                 for (i = 0; i < le64toh(node->values_count); i++) {
-                        err = hwdb_add_property(hwdb, trie_string(hwdb, trie_node_value(hwdb, node, i)->key_off),
-                                                trie_string(hwdb, trie_node_value(hwdb, node, i)->value_off));
+                        err = hwdb_add_property(hwdb, trie_node_value(hwdb, node, i));
                         if (err < 0)
                                 return err;
                 }
@@ -247,8 +306,7 @@ static int trie_search_f(struct udev_hwdb *hwdb, const char *search) {
                         size_t n;
 
                         for (n = 0; n < le64toh(node->values_count); n++) {
-                                err = hwdb_add_property(hwdb, trie_string(hwdb, trie_node_value(hwdb, node, n)->key_off),
-                                                        trie_string(hwdb, trie_node_value(hwdb, node, n)->value_off));
+                                err = hwdb_add_property(hwdb, trie_node_value(hwdb, node, n));
                                 if (err < 0)
                                         return err;
                         }
