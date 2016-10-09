@@ -1,9 +1,13 @@
 ACLOCAL_AMFLAGS = -I m4 ${ACLOCAL_FLAGS}
 
 SUBDIRS = \
-	src \
+	src
+
+if ENABLE_PROGRAMS
+SUBDIRS += \
 	rules \
 	test
+endif
 
 if ENABLE_MANPAGES
 SUBDIRS += \

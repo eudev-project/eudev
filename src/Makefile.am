@@ -2,11 +2,13 @@ ACLOCAL_AMFLAGS = -I m4
 
 SUBDIRS = \
 	shared \
-	libudev \
+	libudev
+
+PROGRAMS_SUBDIRS = \
 	udev
 
 # Helper programs
-SUBDIRS += \
+PROGRAMS_SUBDIRS += \
 	ata_id \
 	cdrom_id \
 	collect \
@@ -14,6 +16,10 @@ SUBDIRS += \
 	v4l_id
 
 if ENABLE_MTD_PROBE
-SUBDIRS += \
+PROGRAMS_SUBDIRS += \
 	mtd_probe
+endif
+
+if ENABLE_PROGRAMS
+SUBDIRS += $(PROGRAMS_SUBDIRS)
 endif
