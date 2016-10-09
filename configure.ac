@@ -197,6 +197,12 @@ GOBJECT_INTROSPECTION_CHECK([1.31.1])
 AM_CONDITIONAL([HAVE_INTROSPECTION], [test "$enable_introspection" = "yes"])
 
 # ------------------------------------------------------------------------------
+AC_ARG_ENABLE([programs],
+        AS_HELP_STRING([--disable-programs], [disable programs (udevd, udevadm and helpers)]),
+        [], [enable_programs="yes"])
+AM_CONDITIONAL([ENABLE_PROGRAMS], [test "x$enable_programs" = "xyes"])
+
+# ------------------------------------------------------------------------------
 have_blkid=no
 AC_ARG_ENABLE(blkid, AS_HELP_STRING([--disable-blkid], [Disable optional blkid support]))
 if test "x$enable_blkid" != "xno"; then
