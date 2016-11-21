@@ -18,6 +18,7 @@
 
 #pragma once
 
+#include <sys/sysmacros.h>
 #include <sys/types.h>
 #include <sys/param.h>
 #include <signal.h>

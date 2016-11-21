@@ -21,6 +21,7 @@
 #define _LIBUDEV_H_
 
 #include <stdarg.h>
+#include <sys/sysmacros.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 
