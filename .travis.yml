@@ -4,7 +4,7 @@ compiler:
   - clang
 before_install:
  - sudo apt-get update -qq
- - sudo apt-get install autotools-dev automake autoconf libtool gperf xsltproc
+ - sudo apt-get install autotools-dev automake autoconf libtool gperf xsltproc docbook-xsl
 script: ./autogen.sh && ./configure && make V=1 distcheck
 notifications:
   irc:
