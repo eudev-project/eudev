@@ -155,7 +155,7 @@ _public_ struct udev *udev_new(void) {
 
                         /* unquote */
                         if (val[0] == '"' || val[0] == '\'') {
-                                if (val[len-1] != val[0]) {
+                                if (len == 1 || val[len-1] != val[0]) {
                                         log_debug(UDEV_CONF_FILE ":%u: inconsistent quoting, skipping line.", line_nr);
                                         continue;
                                 }
