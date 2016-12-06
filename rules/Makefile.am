@@ -10,6 +10,7 @@ dist_udevrules_DATA = \
 	60-persistent-input.rules \
 	60-persistent-storage-tape.rules \
 	60-persistent-v4l.rules \
+	60-sensor.rules \
 	60-serial.rules \
 	64-btrfs.rules \
 	70-mouse.rules \
