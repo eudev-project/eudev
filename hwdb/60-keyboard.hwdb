@@ -4,7 +4,7 @@
 # scan codes to add to the AT keyboard's 'force-release' list.
 #
 # The lookup keys are composed in:
-#   60-keyboard.rules
+#   60-evdev.rules
 #
 # Note: The format of the "evdev:" prefix match key is a
 # contract between the rules file and the hardware data, it might
@@ -42,11 +42,18 @@
 #
 # To debug key presses and access scan code mapping data of
 # an input device use the commonly available tool: evtest(1).
+
+# A device with a fixed keyboard layout that must not be changed by
+# the desktop environment may specify that layout as:
+#   XKB_FIXED_LAYOUT="us"
+#   XKB_FIXED_VARIANT=""
+# Examples of such devices: the Yubikey or other key-code generating
+# devices.
 #
 # To update this file, create a new file
 #   /etc/udev/hwdb.d/70-keyboard.hwdb
 # and add your rules there. To load the new rules execute (as root):
-#   udevadm hwdb --update
+#   systemd-hwdb update
 #   udevadm trigger /dev/input/eventXX
 # where /dev/input/eventXX is the keyboard in question. If in
 # doubt, simply use /dev/input/event* to reload all input rules.
@@ -416,7 +423,7 @@ evdev:atkbd:dmi:bvn*:bvr*:bd*:svnHewlett-Packard*:pnHP*Pavilion*dv7*Notebook*PC:
  KEYBOARD_KEY_94=reserved
 
 # Pavilion x360 13 (Prevents random airplane mode activation)
- evdev:atkbd:dmi:bvn*:bvr*:bd*:svnHewlett-Packard*:pn*[pP][aA][vV][iI][lL][iI][oO][nN]*13*x360*:pvr*
+evdev:atkbd:dmi:bvn*:bvr*:bd*:svnHewlett-Packard*:pn*[pP][aA][vV][iI][lL][iI][oO][nN]*13*x360*:pvr*
  KEYBOARD_KEY_d7=unknown
 
 # Elitebook
@@ -1244,3 +1251,18 @@ evdev:atkbd:dmi:bvn*:bvr*:bd*:svnDIXONSP:pnDIXON*:pvr*
  KEYBOARD_KEY_a0=!                                      # mute
  KEYBOARD_KEY_ae=!                                      # volume down
  KEYBOARD_KEY_b0=!                                      # volume up
+
+###########################################################
+# Fixed layout devices
+###########################################################
+
+# Yubico Yubico Yubikey II"
+evdev:input:b0003v1050p0010*
+# Yubico Yubikey NEO OTP+CCID
+evdev:input:b0003v1050p0111*
+# Yubico Yubikey NEO OTP+U2F+CCID
+evdev:input:b0003v1050p0116*
+# OKE Electron Company USB barcode reader
+evdev:input:b0003v05FEp1010*
+ XKB_FIXED_LAYOUT="us"
+ XKB_FIXED_VARIANT=""

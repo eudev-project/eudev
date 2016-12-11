@@ -15,7 +15,7 @@
 # To add local entries, create a new file
 #   /etc/udev/hwdb.d/61-evdev-local.hwdb
 # and add your rules there. To load the new rules execute (as root):
-#   udevadm hwdb --update
+#   systemd-hwdb update
 #   udevadm trigger /dev/input/eventXX
 # where /dev/input/eventXX is the device in question. If in
 # doubt, simply use /dev/input/event* to reload all input rules.
@@ -183,6 +183,13 @@ evdev:name:SynPS/2 Synaptics TouchPad*:dmi:*svnHewlett-Packard:pnHPPaviliondm4*
  EVDEV_ABS_01=1269:4618:61
  EVDEV_ABS_35=1360:5563:47
  EVDEV_ABS_36=1269:4618:61
+
+# HP Pavilion dv7
+evdev:name:SynPS/2 Synaptics TouchPad*:dmi:*svnHewlett-Packard:pnHPPaviliondv7*
+ EVDEV_ABS_00=1068:5805:44
+ EVDEV_ABS_01=1197:4890:57
+ EVDEV_ABS_35=1068:5805:44
+ EVDEV_ABS_36=1197:4890:57
 
 #########################################
 # Lenovo
