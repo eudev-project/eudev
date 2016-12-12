@@ -155,6 +155,35 @@ environment variable of
 takes precedence over both, unless its value starts with
 :\&.
 .RE
+.PP
+For testing, the kernel command line can be replaced by the value of the
+\fI$UDEV_PROC_CMDLINE\fR
+environment variable of
+\fBudevd\fR
+and
+\fBudevadm\fR, when it is set, even to an empty string\&. It applies to the options described here, to the
+\fInet\&.ifnames=\fR
+option used by
+80\-net\-name\-slot\&.rules, and to
+\fIIMPORT{cmdline}\fR
+in the rules in general, e\&.g\&.:
+.sp
+.if n \{\
+.RS 4
+.\}
+.nf
+UDEV_PROC_CMDLINE="net\&.naming_scheme=v250" udevadm test\-builtin net_id /sys/class/net/eth0
+UDEV_PROC_CMDLINE="net\&.ifnames=0" udevadm test /sys/class/net/eth0
+.fi
+.if n \{\
+.RE
+.\}
+.PP
+For compatibility with systemd,
+\fI$SYSTEMD_PROC_CMDLINE\fR
+is used the same way when
+\fI$UDEV_PROC_CMDLINE\fR
+is not set\&.
 .SH "SEE ALSO"
 .PP
 \fBudev.conf\fR(5),

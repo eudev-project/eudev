@@ -202,6 +202,18 @@
     </variablelist>
     <!-- when adding entries here, consider also adding them
          in kernel-command-line.xml -->
+
+    <para>For testing, the kernel command line can be replaced by the value of the
+    <varname>$UDEV_PROC_CMDLINE</varname> environment variable of
+    <command>udevd</command> and <command>udevadm</command>, when it is set, even to
+    an empty string. It applies to the options described here, to the
+    <varname>net.ifnames=</varname> option used by
+    <filename>80-net-name-slot.rules</filename>, and to
+    <varname>IMPORT{cmdline}</varname> in the rules in general, e.g.:</para>
+    <programlisting>UDEV_PROC_CMDLINE="net.naming_scheme=v250" udevadm test-builtin net_id /sys/class/net/eth0
+UDEV_PROC_CMDLINE="net.ifnames=0" udevadm test /sys/class/net/eth0</programlisting>
+    <para>For compatibility with systemd, <varname>$SYSTEMD_PROC_CMDLINE</varname>
+    is used the same way when <varname>$UDEV_PROC_CMDLINE</varname> is not set.</para>
  </refsect1>
 
   <refsect1>

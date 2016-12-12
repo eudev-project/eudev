@@ -100,6 +100,7 @@ AC_CHECK_FUNCS(
 	[AC_MSG_ERROR([*** POSIX function not found])]
 )
 AC_CHECK_FUNCS([explicit_bzero])
+AC_CHECK_FUNCS([secure_getenv])
 AC_SEARCH_LIBS([clock_gettime], [rt], [], [AC_MSG_ERROR([*** POSIX librt not found])])
 LT_LIB_M
 

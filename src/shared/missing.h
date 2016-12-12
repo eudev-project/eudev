@@ -194,3 +194,7 @@ static inline int name_to_handle_at(int fd, const char *name, struct file_handle
 #define BTN_DPAD_UP 0x220
 #define BTN_DPAD_RIGHT 0x223
 #endif
+
+#ifndef HAVE_SECURE_GETENV
+#define secure_getenv(name) getenv(name)
+#endif

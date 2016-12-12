@@ -491,7 +491,10 @@ Import a single property specified as the assigned value from the current device
 cmdline
 .RS 4
 Import a single property from the kernel command line\&. For simple flags the value of the property is set to
-1\&.
+1\&. For testing, the kernel command line can be replaced with the
+\fI$UDEV_PROC_CMDLINE\fR
+environment variable, see
+\fBudevd\fR(8)\&.
 .RE
 .PP
 parent

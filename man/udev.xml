@@ -602,7 +602,10 @@
                 <term><literal>cmdline</literal></term>
                 <listitem>
                   <para>Import a single property from the kernel command line. For simple flags
-                  the value of the property is set to <literal>1</literal>.</para>
+                  the value of the property is set to <literal>1</literal>. For testing, the
+                  kernel command line can be replaced with the
+                  <varname>$UDEV_PROC_CMDLINE</varname> environment variable, see
+                  <citerefentry><refentrytitle>udevd</refentrytitle><manvolnum>8</manvolnum></citerefentry>.</para>
                 </listitem>
               </varlistentry>
               <varlistentry>

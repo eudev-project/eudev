@@ -2315,7 +2315,25 @@ void* greedy_realloc(void **p, size_t *allocated, size_t need, size_t size) {
 }
 
 int proc_cmdline(char **ret) {
+        const char *e;
+
         assert(ret);
+
+        /* For testing purposes it is sometimes useful to be able to override what we consider /proc/cmdline to be.
+         * eudev: $UDEV_PROC_CMDLINE takes precedence over $SYSTEMD_PROC_CMDLINE. */
+        e = secure_getenv("UDEV_PROC_CMDLINE");
+        if (!e)
+                e = secure_getenv("SYSTEMD_PROC_CMDLINE");
+        if (e) {
+                char *m;
+
+                m = strdup(e);
+                if (!m)
+                        return -ENOMEM;
+
+                *ret = m;
+                return 0;
+        }
 
         if (detect_container(NULL) > 0)
                 return get_process_cmdline(1, 0, false, ret);
