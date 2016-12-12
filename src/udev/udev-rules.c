@@ -687,10 +687,27 @@ static int import_program_into_properties(struct udev_event *event,
         return 0;
 }
 
+static bool relaxed_equal_char(char a, char b) {
+        return a == b ||
+                (a == '_' && b == '-') ||
+                (a == '-' && b == '_');
+}
+
+static const char *proc_cmdline_key_startswith(const char *s, const char *prefix) {
+        /* Much like startswith(), but considers "-" and "_" the same */
+
+        for (; *prefix != 0; s++, prefix++)
+                if (!relaxed_equal_char(*s, *prefix))
+                        return NULL;
+
+        return s;
+}
+
 /* Looks for a specific key on the kernel command line. A parameter beginning with the "key" string
  * followed by "=" is searched, and the value following this is returned in "value". If the key is
  * found as a separate word (i.e. not followed by "="), this is also accepted, and "value" is
- * returned as NULL. Returns > 0 if the key is found, 0 if not. */
+ * returned as NULL. When comparing the key, "-" and "_" are considered equivalent. Returns > 0 if
+ * the key is found, 0 if not. */
 static int proc_cmdline_get_key(const char *key, char **value) {
         _cleanup_free_ char *line = NULL, *ret = NULL;
         bool found = false;
@@ -722,7 +739,7 @@ static int proc_cmdline_get_key(const char *key, char **value) {
                 if (!in_initrd() && startswith(word, "rd."))
                         continue;
 
-                e = startswith(word, key);
+                e = proc_cmdline_key_startswith(word, key);
                 if (!e)
                         continue;
 
