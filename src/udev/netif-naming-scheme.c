@@ -53,26 +53,6 @@ const NamingScheme* naming_scheme_from_name(const char *name) {
         return NULL;
 }
 
-static bool relaxed_equal_char(char a, char b) {
-        return a == b ||
-                (a == '_' && b == '-') ||
-                (a == '-' && b == '_');
-}
-
-static bool proc_cmdline_key_streq(const char *x, const char *y) {
-        /* Much like streq(), but considers "_" and "-" equivalent */
-
-        for (;;) {
-                if (!relaxed_equal_char(*x, *y))
-                        return false;
-
-                if (*x == 0)
-                        return true;
-
-                x++, y++;
-        }
-}
-
 static char *cmdline_naming_scheme = NULL;
 
 static int parse_proc_cmdline_item(const char *key, const char *value) {

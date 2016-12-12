@@ -593,6 +593,10 @@ static inline void qsort_safe(void *base, size_t nmemb, size_t size,
 }
 
 int proc_cmdline(char **ret);
+/* Like streq(), but considers "-" and "_" the same, for the keys of the kernel command line */
+bool proc_cmdline_key_streq(const char *x, const char *y);
+/* Warns and returns true if the key has no value */
+bool proc_cmdline_value_missing(const char *key, const char *value);
 int proc_cmdline_get_key(const char *key, char **value);
 int proc_cmdline_get_bool(const char *key, bool *ret);
 int parse_proc_cmdline(int (*parse_word)(const char *key, const char *value));

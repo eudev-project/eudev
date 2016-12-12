@@ -1549,32 +1549,65 @@ static void handle_signal(struct udev *udev __attribute__((unused)), int signo) 
 
 /*
  * read the kernel command line, in case we need to get into debug mode
- *   udev.log-priority=<level>                 syslog priority
+ *   udev.log_priority=<level>                 syslog priority
  *   udev.trace[=<bool>]                       trace logging, with debug level
- *   udev.children-max=<number of workers>     events are fully serialized if set to 1
- *   udev.exec-delay=<number of seconds>       delay execution of every executed program
- *   udev.event-timeout=<number of seconds>    seconds to wait before terminating an event
+ *   udev.children_max=<number of workers>     events are fully serialized if set to 1
+ *   udev.exec_delay=<number of seconds>       delay execution of every executed program
+ *   udev.event_timeout=<number of seconds>    seconds to wait before terminating an event
+ * "-" and "_" are the same in the keys, e.g. udev.children-max= is udev.children_max=.
  */
 static int parse_proc_cmdline_item(const char *key, const char *value) {
-        int r;
+        int r = 0;
 
         assert(key);
 
+        /* Like PROC_CMDLINE_STRIP_RD_PREFIX of systemd; parse_proc_cmdline() passes the parameters starting
+         * with "rd." only in an initrd. */
         if (startswith(key, "rd."))
                 key += strlen("rd.");
 
-        if (startswith(key, "udev."))
-                key += strlen("udev.");
-        else
-                return 0;
+        if (proc_cmdline_key_streq(key, "udev.log_priority")) {
 
-        if (streq(key, "trace")) {
+                if (proc_cmdline_value_missing(key, value))
+                        return 0;
+
+                r = util_log_priority(value);
+                if (r >= 0)
+                        config_by_kernel.log_level = r;
+                else if (r != -ERANGE)
+                        r = -EINVAL; /* not an errno from log_level_from_string() */
+
+        } else if (proc_cmdline_key_streq(key, "udev.event_timeout")) {
+
+                if (proc_cmdline_value_missing(key, value))
+                        return 0;
+
+                r = safe_atou64(value, &config_by_kernel.timeout_usec);
+                if (r >= 0)
+                        config_by_kernel.timeout_usec *= USEC_PER_SEC;
+
+        } else if (proc_cmdline_key_streq(key, "udev.children_max")) {
+
+                if (proc_cmdline_value_missing(key, value))
+                        return 0;
+
+                r = safe_atou(value, &config_by_kernel.children_max);
+
+        } else if (proc_cmdline_key_streq(key, "udev.exec_delay")) {
+
+                if (proc_cmdline_value_missing(key, value))
+                        return 0;
+
+                r = safe_atoi(value, &config_by_kernel.exec_delay);
+
+        } else if (proc_cmdline_key_streq(key, "udev.trace")) {
+
                 if (!value)
                         arg_trace = true;
                 else {
                         r = parse_boolean(value);
                         if (r < 0)
-                                log_warning("invalid udev.trace ignored: %s", value);
+                                log_warning_errno(r, "Failed to parse udev.trace argument, ignoring: %s", value);
                         else
                                 arg_trace = r;
                 }
@@ -1582,32 +1615,8 @@ static int parse_proc_cmdline_item(const char *key, const char *value) {
                 return 0;
         }
 
-        if (!value)
-                return 0;
-
-        if (streq(key, "log-priority")) {
-                int prio;
-
-                prio = util_log_priority(value);
-                if (prio < 0)
-                        log_warning("invalid udev.log-priority ignored: %s", value);
-                else
-                        config_by_kernel.log_level = prio;
-        } else if (streq(key, "children-max")) {
-                r = safe_atou(value, &config_by_kernel.children_max);
-                if (r < 0)
-                        log_warning("invalid udev.children-max ignored: %s", value);
-        } else if (streq(key, "exec-delay")) {
-                r = safe_atoi(value, &config_by_kernel.exec_delay);
-                if (r < 0)
-                        log_warning("invalid udev.exec-delay ignored: %s", value);
-        } else if (streq(key, "event-timeout")) {
-                r = safe_atou64(value, &config_by_kernel.timeout_usec);
-                if (r < 0)
-                        log_warning("invalid udev.event-timeout ignored: %s", value);
-                else
-                        config_by_kernel.timeout_usec *= USEC_PER_SEC;
-        }
+        if (r < 0)
+                log_warning_errno(r, "Failed to parse \"%s=%s\", ignoring: %m", key, value);
 
         return 0;
 }

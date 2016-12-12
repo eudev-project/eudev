@@ -73,7 +73,7 @@
         <term><option>-D</option>, <option>--debug</option></term>
         <listitem>
           <para>Print debug messages to standard error. The log level
-          set with <varname>udev.log-priority=</varname> on the kernel
+          set with <varname>udev.log_priority=</varname> on the kernel
           command line takes precedence over it.</para>
         </listitem>
       </varlistentry>
@@ -153,9 +153,12 @@
       <filename>/.modloop</filename> (mkinitfs of Alpine Linux). The detection
       can be overridden with the <varname>$SYSTEMD_IN_INITRD</varname>
       environment variable, set to a boolean value.</para>
+      <para>In the names of the parameters, "-" and "_" are the same, e.g.
+      <varname>udev.children-max=</varname> is the same as
+      <varname>udev.children_max=</varname>.</para>
       <varlistentry>
-        <term><varname>udev.log-priority=</varname></term>
-        <term><varname>rd.udev.log-priority=</varname></term>
+        <term><varname>udev.log_priority=</varname></term>
+        <term><varname>rd.udev.log_priority=</varname></term>
         <listitem>
           <para>Set the log level. It takes precedence over
           <varname>udev_log=</varname> in
@@ -169,13 +172,13 @@
         <term><varname>udev.trace[=<replaceable>BOOL</replaceable>]</varname></term>
         <term><varname>rd.udev.trace[=<replaceable>BOOL</replaceable>]</varname></term>
         <listitem>
-          <para>Enable/disable trace logging. When enabled, <varname>udev.log-priority=</varname> will be
+          <para>Enable/disable trace logging. When enabled, <varname>udev.log_priority=</varname> will be
           ignored, and <literal>debug</literal> level is assumed.</para>
         </listitem>
       </varlistentry>
       <varlistentry>
-        <term><varname>udev.children-max=</varname></term>
-        <term><varname>rd.udev.children-max=</varname></term>
+        <term><varname>udev.children_max=</varname></term>
+        <term><varname>rd.udev.children_max=</varname></term>
         <listitem>
           <para>Limit the number of events executed in parallel. It takes
           precedence over <option>--children-max=</option>, unless it is
@@ -183,8 +186,8 @@
         </listitem>
       </varlistentry>
       <varlistentry>
-        <term><varname>udev.exec-delay=</varname></term>
-        <term><varname>rd.udev.exec-delay=</varname></term>
+        <term><varname>udev.exec_delay=</varname></term>
+        <term><varname>rd.udev.exec_delay=</varname></term>
         <listitem>
           <para>Delay the execution of <varname>RUN</varname> instructions by the given
           number of seconds. This option might be useful when
@@ -194,8 +197,8 @@
         </listitem>
       </varlistentry>
       <varlistentry>
-        <term><varname>udev.event-timeout=</varname></term>
-        <term><varname>rd.udev.event-timeout=</varname></term>
+        <term><varname>udev.event_timeout=</varname></term>
+        <term><varname>rd.udev.event_timeout=</varname></term>
         <listitem>
           <para>Wait for events to finish up to the given number
           of seconds. This option might be useful if events are

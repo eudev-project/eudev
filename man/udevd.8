@@ -45,7 +45,7 @@ Detach and run in the background\&.
 \fB\-D\fR, \fB\-\-debug\fR
 .RS 4
 Print debug messages to standard error\&. The log level set with
-\fIudev\&.log\-priority=\fR
+\fIudev\&.log_priority=\fR
 on the kernel command line takes precedence over it\&.
 .RE
 .PP
@@ -110,7 +110,12 @@ exists, and one of the files that such initrd generators put into the initrd exi
 \fI$SYSTEMD_IN_INITRD\fR
 environment variable, set to a boolean value\&.
 .PP
-\fIudev\&.log\-priority=\fR, \fIrd\&.udev\&.log\-priority=\fR
+In the names of the parameters, "\-" and "_" are the same, e\&.g\&.
+\fIudev\&.children\-max=\fR
+is the same as
+\fIudev\&.children_max=\fR\&.
+.PP
+\fIudev\&.log_priority=\fR, \fIrd\&.udev\&.log_priority=\fR
 .RS 4
 Set the log level\&. It takes precedence over
 \fIudev_log=\fR
@@ -125,19 +130,19 @@ takes precedence over it\&.
 \fIudev\&.trace[=\fR\fI\fIBOOL\fR\fR\fI]\fR, \fIrd\&.udev\&.trace[=\fR\fI\fIBOOL\fR\fR\fI]\fR
 .RS 4
 Enable/disable trace logging\&. When enabled,
-\fIudev\&.log\-priority=\fR
+\fIudev\&.log_priority=\fR
 will be ignored, and
 debug
 level is assumed\&.
 .RE
 .PP
-\fIudev\&.children\-max=\fR, \fIrd\&.udev\&.children\-max=\fR
+\fIudev\&.children_max=\fR, \fIrd\&.udev\&.children_max=\fR
 .RS 4
 Limit the number of events executed in parallel\&. It takes precedence over
 \fB\-\-children\-max=\fR, unless it is 0\&.
 .RE
 .PP
-\fIudev\&.exec\-delay=\fR, \fIrd\&.udev\&.exec\-delay=\fR
+\fIudev\&.exec_delay=\fR, \fIrd\&.udev\&.exec_delay=\fR
 .RS 4
 Delay the execution of
 \fIRUN\fR
@@ -145,7 +150,7 @@ instructions by the given number of seconds\&. This option might be useful when 
 \fB\-\-exec\-delay=\fR, unless it is 0\&.
 .RE
 .PP
-\fIudev\&.event\-timeout=\fR, \fIrd\&.udev\&.event\-timeout=\fR
+\fIudev\&.event_timeout=\fR, \fIrd\&.udev\&.event_timeout=\fR
 .RS 4
 Wait for events to finish up to the given number of seconds\&. This option might be useful if events are terminated due to kernel drivers taking too long to initialize\&. It takes precedence over
 \fB\-\-event\-timeout=\fR, unless it is 0\&.

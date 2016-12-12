@@ -2608,6 +2608,31 @@ static bool relaxed_equal_char(char a, char b) {
                 (a == '-' && b == '_');
 }
 
+bool proc_cmdline_key_streq(const char *x, const char *y) {
+        /* Much like streq(), but considers "_" and "-" equivalent */
+
+        for (;;) {
+                if (!relaxed_equal_char(*x, *y))
+                        return false;
+
+                if (*x == 0)
+                        return true;
+
+                x++, y++;
+        }
+}
+
+bool proc_cmdline_value_missing(const char *key, const char *value) {
+        assert(key);
+
+        if (!value) {
+                log_warning("Missing argument for %s= kernel command line switch, ignoring.", key);
+                return true;
+        }
+
+        return false;
+}
+
 static const char *proc_cmdline_key_startswith(const char *s, const char *prefix) {
         /* Much like startswith(), but considers "-" and "_" the same */
 
