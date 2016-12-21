@@ -16,7 +16,6 @@ dist_udevrules_DATA = \
 	70-mouse.rules \
 	70-touchpad.rules \
 	75-net-description.rules \
-	75-probe_mtd.rules \
 	78-sound-card.rules
 
 if !ENABLE_RULE_GENERATOR
@@ -32,6 +31,11 @@ endif
 if HAVE_KMOD
 dist_udevrules_DATA += \
 	80-drivers.rules
+endif
+
+if ENABLE_MTD_PROBE
+dist_udevrules_DATA += \
+	75-probe_mtd.rules
 endif
 
 install-data-local:
