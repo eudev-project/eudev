@@ -284,6 +284,14 @@ fi
 AM_CONDITIONAL([ENABLE_RULE_GENERATOR], [test "x$enable_rule_generator" = xyes])
 
 # ------------------------------------------------------------------------------
+# mtd_probe - autoloads FTL module for mtd devices
+# ------------------------------------------------------------------------------
+AC_ARG_ENABLE([mtd_probe],
+	AS_HELP_STRING([--disable-mtd_probe], [disable MTD support]),
+	[], [enable_mtd_probe=yes])
+AM_CONDITIONAL([ENABLE_MTD_PROBE], [test "x$enable_mtd_probe" = xyes])
+
+# ------------------------------------------------------------------------------
 
 AC_CONFIG_FILES([Makefile
                  hwdb/Makefile
