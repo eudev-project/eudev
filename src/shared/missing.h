@@ -171,3 +171,11 @@ static inline int name_to_handle_at(int fd, const char *name, struct file_handle
     (char *)memcpy(__new, __old, __len); \
   })
 #endif
+
+#ifndef BTN_TRIGGER_HAPPY
+#define BTN_TRIGGER_HAPPY 0x2c0
+#endif
+
+#ifndef INPUT_PROP_MAX
+#define INPUT_PROP_MAX 0x1f
+#endif
