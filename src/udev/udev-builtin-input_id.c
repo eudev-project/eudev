@@ -32,6 +32,7 @@
 
 #include "udev.h"
 #include "util.h"
+#include "missing.h"
 
 /* we must use this kernel-compatible implementation */
 #define BITS_PER_LONG (sizeof(unsigned long) * 8)
