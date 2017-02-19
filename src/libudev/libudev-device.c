@@ -1592,83 +1592,77 @@ out:
  **/
 _public_ int udev_device_set_sysattr_value(struct udev_device *udev_device, const char *sysattr, char *value)
 {
-        struct udev_device *dev;
         char path[UTIL_PATH_SIZE];
-        struct stat statbuf;
-        int fd;
-        ssize_t size, value_len;
-        int ret = 0;
+        _cleanup_free_ char *v = NULL;
+        struct udev_list_entry *list_entry;
+        ssize_t size;
+        size_t len;
+        int fd, r;
 
         if (udev_device == NULL)
                 return -EINVAL;
-        dev = udev_device;
         if (sysattr == NULL)
                 return -EINVAL;
-        if (value == NULL) {
-                struct udev_list_entry *list_entry;
 
+        if (value == NULL) {
+                /* remove the cached value */
                 list_entry = udev_list_get_entry(&udev_device->sysattr_value_list);
                 list_entry = udev_list_entry_get_by_name(list_entry, sysattr);
                 if (list_entry != NULL)
                         udev_list_entry_delete(list_entry);
-                goto out;
-        } else
-                value_len = strlen(value);
-
-        strscpyl(path, sizeof(path), udev_device_get_syspath(dev), "/", sysattr, NULL);
-        if (lstat(path, &statbuf) != 0) {
-                udev_list_entry_add(&dev->sysattr_value_list, sysattr, NULL);
-                ret = -ENXIO;
-                goto out;
+                return 0;
         }
 
-        if (S_ISLNK(statbuf.st_mode)) {
-                ret = -EINVAL;
-                goto out;
-        }
+        strscpyl(path, sizeof(path), udev_device_get_syspath(udev_device), "/", sysattr, NULL);
 
-        /* skip directories */
-        if (S_ISDIR(statbuf.st_mode)) {
-                ret = -EISDIR;
-                goto out;
-        }
+        len = strlen(value);
 
-        /* skip non-readable files */
-        if ((statbuf.st_mode & S_IRUSR) == 0) {
-                ret = -EACCES;
-                goto out;
-        }
+        /* drop trailing newlines */
+        while (len > 0 && value[len - 1] == '\n')
+                len--;
 
-        /* Value is limited to 4k */
-        if (value_len > 4096) {
-                ret = -EINVAL;
-                goto out;
-        }
-        util_remove_trailing_chars(value, '\n');
+        /* value length is limited to 4k */
+        if (len > 4096)
+                return -EINVAL;
 
-        /* write attribute value */
-        fd = open(path, O_WRONLY|O_CLOEXEC);
+        v = strndup(value, len);
+        if (v == NULL)
+                return -ENOMEM;
+
+        /* Do not check the permissions of the attribute, write-only attributes like "remove" are
+         * fine. Let the kernel do it and propagate the error. */
+        fd = open(path, O_WRONLY|O_CLOEXEC|O_NOFOLLOW);
         if (fd < 0) {
-                ret = -errno;
-                goto out;
+                r = errno == ELOOP ? -EINVAL : -errno;
+                goto fail;
         }
-        size = write(fd, value, value_len);
+        size = write(fd, v, len);
+        if (size < 0)
+                r = -errno;
+        else if ((size_t) size != len)
+                r = -EIO;
+        else
+                r = 0;
         close(fd);
-        if (size < 0) {
-                ret = -errno;
-                goto out;
-        }
-        if (size < value_len) {
-                ret = -EIO;
-                goto out;
-        }
+        if (r < 0)
+                goto fail;
 
-        /* wrote a valid value, store it in cache and return it */
-        udev_list_entry_add(&dev->sysattr_value_list, sysattr, value);
-out:
-        if (dev != udev_device)
-                udev_device_unref(dev);
-        return ret;
+        /* Do not cache action string written into uevent file. */
+        if (streq(sysattr, "uevent"))
+                return 0;
+
+        /* wrote a valid value, store it in cache */
+        if (udev_list_entry_add(&udev_device->sysattr_value_list, sysattr, v) == NULL)
+                return -ENOMEM;
+        return 0;
+
+fail:
+        /* On failure, clear cache entry, as we do not know how it fails. */
+        list_entry = udev_list_get_entry(&udev_device->sysattr_value_list);
+        list_entry = udev_list_entry_get_by_name(list_entry, sysattr);
+        if (list_entry != NULL)
+                udev_list_entry_delete(list_entry);
+        return r;
 }
 
 static int udev_device_sysattr_list_read(struct udev_device *udev_device)
