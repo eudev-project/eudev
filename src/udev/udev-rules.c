@@ -1963,7 +1963,18 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                         const char *value;
 
                         value = udev_device_get_property_value(event->dev, key_name);
-                        if (value == NULL)
+
+                        /* check global properties */
+                        if (!value && properties_list) {
+                                struct udev_list_entry *list_entry;
+
+                                list_entry = udev_list_get_entry(properties_list);
+                                list_entry = udev_list_entry_get_by_name(list_entry, key_name);
+                                if (list_entry != NULL)
+                                        value = udev_list_entry_get_value(list_entry);
+                        }
+
+                        if (!value)
                                 value = "";
                         if (match_key(rules, cur, value))
                                 goto nomatch;
