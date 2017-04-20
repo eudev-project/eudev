@@ -1,6 +1,6 @@
 ACLOCAL_AMFLAGS = -I m4 ${ACLOCAL_FLAGS}
 
-dist_udevhwdb_DATA = \
+dist_udevlibexechwdb_DATA = \
 	20-OUI.hwdb \
 	20-acpi-vendor.hwdb \
 	20-bluetooth-vendor-product.hwdb \
