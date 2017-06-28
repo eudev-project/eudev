@@ -468,7 +468,6 @@ static int builtin_blkid(struct udev_device *dev, int argc, char *argv[], enum u
         _cleanup_blkid_free_probe_ blkid_probe pr = NULL;
         const char *data;
         const char *name;
-        const char *prtype = NULL;
         const char *root_partition;
         bool is_gpt = false;
         int nvals;
@@ -529,8 +528,7 @@ static int builtin_blkid(struct udev_device *dev, int argc, char *argv[], enum u
 #ifdef BLKID_SUBLKS_FSINFO
                 BLKID_SUBLKS_FSINFO |
 #endif
-                BLKID_SUBLKS_USAGE | BLKID_SUBLKS_VERSION |
-                BLKID_SUBLKS_BADCSUM);
+                BLKID_SUBLKS_USAGE | BLKID_SUBLKS_VERSION);
 
         if (noraid)
                 blkid_probe_filter_superblocks_usage(pr, BLKID_FLTR_NOTIN, BLKID_USAGE_RAID);
@@ -552,15 +550,6 @@ static int builtin_blkid(struct udev_device *dev, int argc, char *argv[], enum u
         err = probe_superblocks(pr);
         if (err < 0) {
                 log_debug_errno(err, "Failed to probe superblocks of %s: %m", udev_device_get_devnode(dev));
-                goto out;
-        }
-        if (blkid_probe_has_value(pr, "SBBADCSUM")) {
-                if (!blkid_probe_lookup_value(pr, "TYPE", &prtype, NULL))
-                        log_warning("incorrect %s checksum on %s",
-                                    prtype, udev_device_get_devnode(dev));
-                else
-                        log_warning("incorrect checksum on %s",
-                                    udev_device_get_devnode(dev));
                 goto out;
         }
 
