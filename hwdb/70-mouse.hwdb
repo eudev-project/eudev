@@ -50,6 +50,8 @@
 #    MOUSE_WHEEL_CLICK_ANGLE_HORIZONTAL
 #    MOUSE_WHEEL_CLICK_COUNT
 #    MOUSE_WHEEL_CLICK_COUNT_HORIZONTAL
+#    MOUSE_WHEEL_TILT_HORIZONTAL
+#    MOUSE_WHEEL_TILT_VERTICAL
 #
 #########################################
 #         ID_INPUT_TRACKBALL            #
@@ -134,6 +136,26 @@
 # MOUSE_WHEEL_CLICK_COUNT_HORIZONTAL works the same way but also follows the
 # rules of MOUSE_WHEEL_CLICK_ANGLE_HORIZONTAL.
 
+#########################################
+#    MOUSE_WHEEL_TILT_HORIZONTAL        #
+#    MOUSE_WHEEL_TILT_VERTICAL          #
+#########################################
+#
+# Indicates that the respective axis is not a mouse wheel rotation but a
+# tilt along that axis. Wheel tilt is most commonly used for horizontal
+# scroll wheel emulation on mice with only a single vertical wheel.
+#
+# The vertical and horizontal Axes are independently marked as tilt axes,
+# for example it is permitted to have a MOUSE_WHEEL_CLICK_COUNT or
+# MOUSE_WHEEL_CLICK_ANGLE for the vertical axis and mark the horizontal axis
+# marked as as MOUSE_WHEEL_TILT_HORIZONTAL.
+#
+# It is a bug to have either CLICK_COUNT or CLICK_ANGLE set on the same axis
+# as WHEEL_TILT. Applications should give priority to WHEEL_TILT and ignore
+# other settings.
+#
+# This is a flag only, permitted values: 0 or 1
+
 #
 # Sort by brand, type (usb, bluetooth), DPI, frequency.
 # For mice with switchable resolution, sort by the starred entry.
@@ -192,6 +214,26 @@ mouse:usb:v0461p4d16:name:USB Optical Mouse:
  MOUSE_DPI=500@125
 
 ##########################################
+# Future Technology Devices International
+##########################################
+
+# SNES Mouse plugged into a Retrode 2
+mouse:usb:v0403p97c1:name:Retrode SNES Mouse:
+ MOUSE_DPI=235@126
+
+##########################################
+# Generic
+##########################################
+
+# FM-901 Wireless Mouse
+mouse:usb:v1ea7p000b:name:2.4G RF Mouse:
+ MOUSE_DPI=*800@125 1600@125
+
+# WK-727
+mouse:usb:v04d9p0499:name:*
+ MOUSE_DPI=800@125
+
+##########################################
 # HandShoe Mouse
 ##########################################
 
@@ -220,6 +262,18 @@ mouse:usb:v0458p0133:name:Mouse Laser Mouse:
 mouse:usb:v093ap2510:name:PixArt USB Optical Mouse:
 mouse:usb:v093ap2510:name:PIXART USB OPTICAL MOUSE:
  MOUSE_DPI=1000@125
+
+# HP X1200 Optical Mouse
+mouse:usb:v03f0p0641:name:PixArt HP X1200 USB Optical Mouse:
+ MOUSE_DPI=1100@125
+
+##########################################
+# IBM
+##########################################
+
+# IBM USB Travel Mouse (MO32BO)
+mouse:usb:v04b3p3107:name:*
+ MOUSE_DPI=800@125
 
 ##########################################
 # Lenovo
@@ -268,6 +322,10 @@ mouse:usb:v046dpc03e:name:Logitech USB-PS/2 Optical Mouse:
 # Logitech TrackMan Marble Wheel USB
 mouse:usb:v046dpc401:name:Logitech USB-PS/2 Trackball:
  MOUSE_DPI=400@125
+
+# Logitech Cordless MouseMan Optical M-RM63
+mouse:usb:v046dpc501:name:Logitech USB Receiver:
+ MOUSE_DPI=800@63
 
 # Lenovo USB mouse model MO28UOL
 mouse:usb:v04b3p310c:name:USB Optical Mouse:
@@ -346,6 +404,10 @@ mouse:usb:v046dpc24c:name:Logitech G400s Optical Gaming Mouse:
 mouse:usb:v046dpc07e:name:Logitech Gaming Mouse G402:
  MOUSE_DPI=400@1000 *800@1000 1600@1000 3200@1000
 
+# Logitech G502 Proteus Spectrum
+mouse:usb:v046dpc332:name:Logitech Gaming Mouse G502:
+ MOUSE_DPI=1200@1000 *2400@1000 3200@1000 6400@1000
+
 # Logitech B605 Wireless Mouse (also M505)
 mouse:usb:v046dp101d:name:Logitech B605:
 mouse:usb:v046dp101d:name:Logitech M505:
@@ -388,6 +450,10 @@ mouse:usb:v046dp4041:name:Logitech MX Master:
 mouse:usb:v046dpc52e:name:Logitech USB Receiver:
  MOUSE_DPI=1000@200
 
+# Logitech G100s Optical Gaming Mouse
+mouse:usb:v046dpc247:name:Logitech G100s Optical Gaming Mouse:
+ MOUSE_DPI=*1000@500 1750@500 2500@500
+
 # Logitech G700 Laser Mouse (Wired)
 mouse:usb:v046dpc06b:name:Logitech G700 Laser Mouse:
 # Logitech G700 Laser Mouse (Wireless)
@@ -415,6 +481,10 @@ mouse:usb:v046dpc52b:name:Logitech Unifying Device. Wireless PID:4026:
 # Logitech G500 Mouse
 mouse:usb:v046dpc068:name:Logitech G500:
  MOUSE_DPI=*1600@500 2600@500 3600@500
+
+# Logitech TrackMan Wheel (USB)
+mouse:usb:v046dpc404:name:Logitech Trackball:
+ MOUSE_DPI=300@125
 
 # Logitech MX1000 Laser Cordless Mouse
 mouse:bluetooth:v046dpb003:name:Logitech MX1000 mouse:
@@ -464,6 +534,10 @@ mouse:bluetooth:v045ep0702:name:Microsoft  Wireless Laser Mouse 8000:
 mouse:bluetooth:v045ep07f3:name:Arc Touch Mouse SE:
  MOUSE_DPI=1000@2000
 
+# Microsoft Surface Mouse
+mouse:bluetooth:v0000p0000:name:Surface Mouse:
+ MOUSE_DPI=2000@2000
+
 ##########################################
 # Mionix
 ##########################################
@@ -490,11 +564,23 @@ mouse:bluetooth:v056ep0061:name:Laser  BTmouse:
  MOUSE_DPI=*800@333 1600@333
 
 ##########################################
+# P-Active
+##########################################
+
+# P-Active Wireless Mouse PA-27K2
+mouse:usb:v0425p0101:name:G-Tech CHINA    USB Wireless Mouse & KeyBoard V1.01  :
+ MOUSE_DPI=800@125
+
+##########################################
 # Razer
 ##########################################
 
 # Razer Abyssus
 mouse:usb:v1532p0042:name:Razer Razer Abyssus:
+ MOUSE_DPI=3500@1000
+
+# Razer DeathAdder Black Edition
+mouse:usb:v1532p0029:name:Razer Razer DeathAdder:
  MOUSE_DPI=3500@1000
 
 ##########################################

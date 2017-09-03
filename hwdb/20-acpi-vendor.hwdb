@@ -6,6 +6,9 @@
 #
 # With various additions from other sources
 
+acpi:3GVR*:
+ ID_VENDOR_FROM_DATABASE=VR Technology Holdings Limited
+
 acpi:3NOD*:
  ID_VENDOR_FROM_DATABASE=Shenzhen three Connaught Information Technology Co., Ltd. (3nod Group)
 
@@ -39,6 +42,9 @@ acpi:ATML*:
 acpi:AUTH*:
  ID_VENDOR_FROM_DATABASE=AuthenTec
 
+acpi:BOOT*:
+ ID_VENDOR_FROM_DATABASE=Coreboot Project
+
 acpi:BOSC*:
  ID_VENDOR_FROM_DATABASE=Robert Bosch GmbH
 
@@ -68,6 +74,9 @@ acpi:ELAN*:
 
 acpi:ESSX*:
  ID_VENDOR_FROM_DATABASE=Everest Semiconductor Co., Ltd.
+
+acpi:EXAR*:
+ ID_VENDOR_FROM_DATABASE=Exar Corporation
 
 acpi:FRSC*:
  ID_VENDOR_FROM_DATABASE=Freescale, Inc
@@ -137,6 +146,9 @@ acpi:MCHP*:
 
 acpi:MIPI*:
  ID_VENDOR_FROM_DATABASE=MIPI Alliance
+
+acpi:MRVL*:
+ ID_VENDOR_FROM_DATABASE=Marvell Technology Group Ltd.
 
 acpi:MSAY*:
  ID_VENDOR_FROM_DATABASE=Microsoft Corporation
@@ -948,6 +960,9 @@ acpi:BBH*:
 acpi:BBL*:
  ID_VENDOR_FROM_DATABASE=Brain Boxes Limited
 
+acpi:BBX*:
+ ID_VENDOR_FROM_DATABASE=Black Box Corporation
+
 acpi:BCC*:
  ID_VENDOR_FROM_DATABASE=Beaver Computer Corporaton
 
@@ -1322,6 +1337,9 @@ acpi:CHO*:
 
 acpi:CHP*:
  ID_VENDOR_FROM_DATABASE=CH Products
+
+acpi:CHR*:
+ ID_VENDOR_FROM_DATABASE=christmann informationstechnik + medien GmbH & Co. KG
 
 acpi:CHS*:
  ID_VENDOR_FROM_DATABASE=Agentur Chairos
@@ -1947,6 +1965,9 @@ acpi:DPL*:
 acpi:DPM*:
  ID_VENDOR_FROM_DATABASE=ADPM Synthesis sas
 
+acpi:DPN*:
+ ID_VENDOR_FROM_DATABASE=Shanghai Lexiang Technology Limited
+
 acpi:DPS*:
  ID_VENDOR_FROM_DATABASE=Digital Processing Systems
 
@@ -1982,6 +2003,9 @@ acpi:DSD*:
 
 acpi:DSI*:
  ID_VENDOR_FROM_DATABASE=Digitan Systems Inc
+
+acpi:DSJ*:
+ ID_VENDOR_FROM_DATABASE=VR Technology Holdings Limited
 
 acpi:DSM*:
  ID_VENDOR_FROM_DATABASE=DSM Digital Services GmbH
@@ -2712,6 +2736,9 @@ acpi:GFN*:
 acpi:GGL*:
  ID_VENDOR_FROM_DATABASE=Google Inc.
 
+acpi:GGT*:
+ ID_VENDOR_FROM_DATABASE=G2TOUCH KOREA
+
 acpi:GIC*:
  ID_VENDOR_FROM_DATABASE=General Inst. Corporation
 
@@ -3089,6 +3116,9 @@ acpi:HYC*:
 
 acpi:HYD*:
  ID_VENDOR_FROM_DATABASE=Hydis Technologies.Co.,LTD
+
+acpi:HYL*:
+ ID_VENDOR_FROM_DATABASE=Shanghai Chai Ming Huang Info&Tech Co, Ltd
 
 acpi:HYO*:
  ID_VENDOR_FROM_DATABASE=HYC CO., LTD.
@@ -3488,6 +3518,9 @@ acpi:IVI*:
 
 acpi:IVM*:
  ID_VENDOR_FROM_DATABASE=Iiyama North America
+
+acpi:IVR*:
+ ID_VENDOR_FROM_DATABASE=Inlife-Handnet Co., Ltd.
 
 acpi:IVS*:
  ID_VENDOR_FROM_DATABASE=Intevac Photonics Inc.
@@ -4518,6 +4551,9 @@ acpi:MVM*:
 acpi:MVN*:
  ID_VENDOR_FROM_DATABASE=Meta Company
 
+acpi:MVR*:
+ ID_VENDOR_FROM_DATABASE=MediCapture, Inc.
+
 acpi:MVS*:
  ID_VENDOR_FROM_DATABASE=Microvision
 
@@ -5208,6 +5244,9 @@ acpi:PMD*:
 acpi:PMM*:
  ID_VENDOR_FROM_DATABASE=Point Multimedia System
 
+acpi:PMS*:
+ ID_VENDOR_FROM_DATABASE=Pabian Embedded Systems
+
 acpi:PMT*:
  ID_VENDOR_FROM_DATABASE=Promate Electronic Co., Ltd.
 
@@ -5225,6 +5264,9 @@ acpi:PNR*:
 
 acpi:PNS*:
  ID_VENDOR_FROM_DATABASE=PanaScope
+
+acpi:PNT*:
+ ID_VENDOR_FROM_DATABASE=HOYA Corporation PENTAX Lifecare Division
 
 acpi:PNX*:
  ID_VENDOR_FROM_DATABASE=Phoenix Technologies, Ltd.
@@ -5366,6 +5408,9 @@ acpi:PVN*:
 
 acpi:PVP*:
  ID_VENDOR_FROM_DATABASE=Klos Technologies, Inc.
+
+acpi:PVR*:
+ ID_VENDOR_FROM_DATABASE=Pimax Tech. CO., LTD
 
 acpi:PXC*:
  ID_VENDOR_FROM_DATABASE=Phoenix Contact
@@ -6399,6 +6444,9 @@ acpi:TCD*:
 acpi:TCE*:
  ID_VENDOR_FROM_DATABASE=Century Corporation
 
+acpi:TCF*:
+ ID_VENDOR_FROM_DATABASE=Televic Conference
+
 acpi:TCH*:
  ID_VENDOR_FROM_DATABASE=Interaction Systems, Inc
 
@@ -6473,6 +6521,9 @@ acpi:TEK*:
 
 acpi:TEL*:
  ID_VENDOR_FROM_DATABASE=Promotion and Display Technology Ltd.
+
+acpi:TEN*:
+ ID_VENDOR_FROM_DATABASE=Tencent
 
 acpi:TER*:
  ID_VENDOR_FROM_DATABASE=TerraTec Electronic GmbH
@@ -6554,6 +6605,9 @@ acpi:TLK*:
 
 acpi:TLL*:
  ID_VENDOR_FROM_DATABASE=Thinklogical
+
+acpi:TLN*:
+ ID_VENDOR_FROM_DATABASE=Techlogix Networx
 
 acpi:TLS*:
  ID_VENDOR_FROM_DATABASE=Teleste Educational OY
@@ -6681,6 +6735,9 @@ acpi:TRM*:
 acpi:TRN*:
  ID_VENDOR_FROM_DATABASE=Datacommunicatie Tron B.V.
 
+acpi:TRP*:
+ ID_VENDOR_FROM_DATABASE=TRAPEZE GROUP
+
 acpi:TRS*:
  ID_VENDOR_FROM_DATABASE=Torus Systems Ltd
 
@@ -6779,6 +6836,9 @@ acpi:TVD*:
 
 acpi:TVI*:
  ID_VENDOR_FROM_DATABASE=Truevision
+
+acpi:TVL*:
+ ID_VENDOR_FROM_DATABASE=Total Vision LTD
 
 acpi:TVM*:
  ID_VENDOR_FROM_DATABASE=Taiwan Video & Monitor Corporation
