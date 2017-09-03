@@ -481,7 +481,7 @@ int main(int argc, char *argv[])
                 disk_identify_fixup_string(identify.byte,  27, 40); /* model */
                 disk_identify_fixup_uint16(identify.byte,  0);      /* configuration */
                 disk_identify_fixup_uint16(identify.byte,  75);     /* queue depth */
-                disk_identify_fixup_uint16(identify.byte,  75);     /* SATA capabilities */
+                disk_identify_fixup_uint16(identify.byte,  76);     /* SATA capabilities */
                 disk_identify_fixup_uint16(identify.byte,  82);     /* command set supported */
                 disk_identify_fixup_uint16(identify.byte,  83);     /* command set supported */
                 disk_identify_fixup_uint16(identify.byte,  84);     /* command set supported */
@@ -492,6 +492,10 @@ int main(int argc, char *argv[])
                 disk_identify_fixup_uint16(identify.byte,  90);     /* time required for enhanced SECURITY ERASE UNIT */
                 disk_identify_fixup_uint16(identify.byte,  91);     /* current APM values */
                 disk_identify_fixup_uint16(identify.byte,  94);     /* current AAM value */
+                disk_identify_fixup_uint16(identify.byte, 108);     /* WWN */
+                disk_identify_fixup_uint16(identify.byte, 109);     /* WWN */
+                disk_identify_fixup_uint16(identify.byte, 110);     /* WWN */
+                disk_identify_fixup_uint16(identify.byte, 111);     /* WWN */
                 disk_identify_fixup_uint16(identify.byte, 128);     /* device lock function */
                 disk_identify_fixup_uint16(identify.byte, 217);     /* nominal media rotation rate */
                 memcpy(&id, identify.byte, sizeof id);
@@ -645,10 +649,20 @@ int main(int argc, char *argv[])
                  * All other values are reserved.
                  */
                 word = identify.wyde[108];
-                if ((word & 0xf000) == 0x5000)
-                        printf("ID_WWN=0x%1$"PRIu64"x\n"
-                               "ID_WWN_WITH_EXTENSION=0x%1$"PRIu64"x\n",
-                               identify.octa[108/4]);
+                if ((word & 0xf000) == 0x5000) {
+                        uint64_t wwwn;
+
+                        wwwn   = identify.wyde[108];
+                        wwwn <<= 16;
+                        wwwn  |= identify.wyde[109];
+                        wwwn <<= 16;
+                        wwwn  |= identify.wyde[110];
+                        wwwn <<= 16;
+                        wwwn  |= identify.wyde[111];
+                        printf("ID_WWN=0x%1$" PRIx64 "\n"
+                               "ID_WWN_WITH_EXTENSION=0x%1$" PRIx64 "\n",
+                               wwwn);
+                }
 
                 /* from Linux's include/linux/ata.h */
                 if (identify.wyde[0] == 0x848a ||
