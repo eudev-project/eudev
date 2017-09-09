@@ -97,8 +97,10 @@ static struct udev_monitor *udev_monitor_new(struct udev *udev)
         struct udev_monitor *udev_monitor;
 
         udev_monitor = new0(struct udev_monitor, 1);
-        if (udev_monitor == NULL)
+        if (udev_monitor == NULL) {
+                errno = ENOMEM;
                 return NULL;
+        }
         udev_monitor->refcount = 1;
         udev_monitor->udev = udev;
         udev_list_init(udev, &udev_monitor->filter_subsystem_list, false);
@@ -168,8 +170,10 @@ struct udev_monitor *udev_monitor_new_from_netlink_fd(struct udev *udev, const c
         struct udev_monitor *udev_monitor;
         unsigned int group;
 
-        if (udev == NULL)
+        if (udev == NULL) {
+                errno = EINVAL;
                 return NULL;
+        }
 
         if (name == NULL)
                 group = UDEV_MONITOR_NONE;
@@ -193,8 +197,10 @@ struct udev_monitor *udev_monitor_new_from_netlink_fd(struct udev *udev, const c
                         group = UDEV_MONITOR_UDEV;
         } else if (streq(name, "kernel"))
                 group = UDEV_MONITOR_KERNEL;
-        else
+        else {
+                errno = EINVAL;
                 return NULL;
+        }
 
         udev_monitor = udev_monitor_new(udev);
         if (udev_monitor == NULL)
@@ -203,8 +209,11 @@ struct udev_monitor *udev_monitor_new_from_netlink_fd(struct udev *udev, const c
         if (fd < 0) {
                 udev_monitor->sock = socket(PF_NETLINK, SOCK_RAW|SOCK_CLOEXEC|SOCK_NONBLOCK, NETLINK_KOBJECT_UEVENT);
                 if (udev_monitor->sock < 0) {
+                        int e = errno;
+
                         log_debug_errno(errno, "error getting socket: %m");
                         free(udev_monitor);
+                        errno = e;
                         return NULL;
                 }
         } else {
@@ -427,29 +436,36 @@ int udev_monitor_allow_unicast_sender(struct udev_monitor *udev_monitor, struct 
  */
 _public_ int udev_monitor_enable_receiving(struct udev_monitor *udev_monitor)
 {
-        int err = 0;
         const int on = 1;
+        int r;
 
-        udev_monitor_filter_update(udev_monitor);
+        if (udev_monitor == NULL)
+                return -EINVAL;
+
+        r = udev_monitor_filter_update(udev_monitor);
+        if (r < 0) {
+                log_debug_errno(r, "Failed to update filter: %m");
+                return r;
+        }
 
         if (!udev_monitor->bound) {
-                err = bind(udev_monitor->sock,
-                           &udev_monitor->snl.sa, sizeof(struct sockaddr_nl));
-                if (err == 0)
-                        udev_monitor->bound = true;
+                if (bind(udev_monitor->sock, &udev_monitor->snl.sa, sizeof(struct sockaddr_nl)) < 0) {
+                        r = -errno;
+                        log_debug_errno(errno, "Failed to bind udev monitor socket to event source: %m");
+                        return r;
+                }
+
+                udev_monitor->bound = true;
         }
 
-        if (err >= 0)
-                monitor_set_nl_address(udev_monitor);
-        else {
-                log_debug_errno(errno, "bind failed: %m");
-                return -errno;
-        }
+        monitor_set_nl_address(udev_monitor);
 
         /* enable receiving of sender credentials */
-        err = setsockopt(udev_monitor->sock, SOL_SOCKET, SO_PASSCRED, &on, sizeof(on));
-        if (err < 0)
-                log_debug_errno(errno, "setting SO_PASSCRED failed: %m");
+        if (setsockopt(udev_monitor->sock, SOL_SOCKET, SO_PASSCRED, &on, sizeof(on)) < 0) {
+                r = -errno;
+                log_debug_errno(errno, "Failed to set socket option SO_PASSCRED: %m");
+                return r;
+        }
 
         return 0;
 }
@@ -468,7 +484,14 @@ _public_ int udev_monitor_set_receive_buffer_size(struct udev_monitor *udev_moni
 {
         if (udev_monitor == NULL)
                 return -EINVAL;
-        return setsockopt(udev_monitor->sock, SOL_SOCKET, SO_RCVBUFFORCE, &size, sizeof(size));
+
+        /* SO_RCVBUFFORCE needs CAP_NET_ADMIN, fall back to SO_RCVBUF which is limited by
+         * net.core.rmem_max */
+        if (setsockopt(udev_monitor->sock, SOL_SOCKET, SO_RCVBUFFORCE, &size, sizeof(size)) < 0 &&
+            setsockopt(udev_monitor->sock, SOL_SOCKET, SO_RCVBUF, &size, sizeof(size)) < 0)
+                return -errno;
+
+        return 0;
 }
 
 int udev_monitor_disconnect(struct udev_monitor *udev_monitor)
@@ -626,8 +649,10 @@ _public_ struct udev_device *udev_monitor_receive_device(struct udev_monitor *ud
         bool is_initialized = false;
 
 retry:
-        if (udev_monitor == NULL)
+        if (udev_monitor == NULL) {
+                errno = EINVAL;
                 return NULL;
+        }
         iov.iov_base = &buf;
         iov.iov_len = sizeof(buf);
         memzero(&smsg, sizeof(struct msghdr));
@@ -647,6 +672,7 @@ retry:
 
         if (buflen < 32 || (smsg.msg_flags & MSG_TRUNC)) {
                 log_debug("invalid message length");
+                errno = EINVAL;
                 return NULL;
         }
 
@@ -655,12 +681,14 @@ retry:
                 if (udev_monitor->snl_trusted_sender.nl.nl_pid == 0 ||
                     snl.nl.nl_pid != udev_monitor->snl_trusted_sender.nl.nl_pid) {
                         log_debug("unicast netlink message ignored");
+                        errno = EAGAIN;
                         return NULL;
                 }
         } else if (snl.nl.nl_groups == UDEV_MONITOR_KERNEL) {
                 if (snl.nl.nl_pid > 0) {
                         log_debug("multicast kernel netlink message from PID %"PRIu32" ignored",
                                   snl.nl.nl_pid);
+                        errno = EAGAIN;
                         return NULL;
                 }
         }
@@ -668,12 +696,14 @@ retry:
         cmsg = CMSG_FIRSTHDR(&smsg);
         if (cmsg == NULL || cmsg->cmsg_type != SCM_CREDENTIALS) {
                 log_debug("no sender credentials received, message ignored");
+                errno = EAGAIN;
                 return NULL;
         }
 
         cred = (struct ucred *)CMSG_DATA(cmsg);
         if (cred->uid != 0) {
                 log_debug("sender uid="UID_FMT", message ignored", cred->uid);
+                errno = EAGAIN;
                 return NULL;
         }
 
@@ -682,12 +712,14 @@ retry:
                 if (buf.nlh.magic != htonl(UDEV_MONITOR_MAGIC)) {
                         log_debug("unrecognized message signature (%x != %x)",
                                  buf.nlh.magic, htonl(UDEV_MONITOR_MAGIC));
+                        errno = EAGAIN;
                         return NULL;
                 }
                 /* avoid 32-bit overflow of properties_off + 32 */
                 if ((uint64_t) buf.nlh.properties_off + 32 > (uint64_t) buflen) {
                         log_debug("message smaller than expected (%u > %zd)",
                                   buf.nlh.properties_off+32, buflen);
+                        errno = EAGAIN;
                         return NULL;
                 }
 
@@ -700,12 +732,14 @@ retry:
                 bufpos = strnlen(buf.raw, buflen) + 1;
                 if ((size_t)bufpos < sizeof("a@/d") || bufpos >= buflen) {
                         log_debug("invalid message length");
+                        errno = EAGAIN;
                         return NULL;
                 }
 
                 /* check message header */
                 if (strstr(buf.raw, "@/") == NULL) {
                         log_debug("unrecognized message header");
+                        errno = EAGAIN;
                         return NULL;
                 }
         }
@@ -732,6 +766,8 @@ retry:
                 rc = poll(pfd, 1, 0);
                 if (rc > 0)
                         goto retry;
+
+                errno = EAGAIN;
                 return NULL;
         }
 
