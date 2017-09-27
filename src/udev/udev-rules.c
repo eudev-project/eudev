@@ -672,6 +672,62 @@ static int import_program_into_properties(struct udev_event *event,
         return 0;
 }
 
+/* Looks for a specific key on the kernel command line. A parameter beginning with the "key" string
+ * followed by "=" is searched, and the value following this is returned in "value". If the key is
+ * found as a separate word (i.e. not followed by "="), this is also accepted, and "value" is
+ * returned as NULL. Returns > 0 if the key is found, 0 if not. */
+static int proc_cmdline_get_key(const char *key, char **value) {
+        _cleanup_free_ char *line = NULL, *ret = NULL;
+        bool found = false;
+        const char *p;
+        int r;
+
+        assert(value);
+
+        if (isempty(key))
+                return -EINVAL;
+
+        r = proc_cmdline(&line);
+        if (r < 0)
+                return r;
+
+        p = line;
+        for (;;) {
+                _cleanup_free_ char *word = NULL;
+                const char *e;
+
+                r = unquote_first_word(&p, &word, UNQUOTE_RELAX);
+                if (r < 0)
+                        return r;
+                if (r == 0)
+                        break;
+
+                /* Automatically filter out arguments that are intended only for the initrd, if we are not in the
+                 * initrd. */
+                if (!in_initrd() && startswith(word, "rd."))
+                        continue;
+
+                e = startswith(word, key);
+                if (!e)
+                        continue;
+
+                if (*e == '=') {
+                        free(ret);
+                        ret = strdup(e+1);
+                        if (!ret)
+                                return -ENOMEM;
+
+                        found = true;
+                } else if (*e == 0)
+                        found = true;
+        }
+
+        *value = ret;
+        ret = NULL;
+
+        return found;
+}
+
 static int import_parent_into_properties(struct udev_device *dev, const char *filter) {
         struct udev_device *dev_parent;
         struct udev_list_entry *list_entry;
@@ -2264,39 +2320,26 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                         break;
                 }
                 case TK_M_IMPORT_CMDLINE: {
-                        FILE *f;
+                        _cleanup_free_ char *value = NULL;
                         bool imported = false;
+                        const char *key;
+                        int r;
 
-                        f = fopen("/proc/cmdline", "re");
-                        if (f != NULL) {
-                                char cmdline[4096];
+                        key = rules_str(rules, cur->key.value_off);
 
-                                if (fgets(cmdline, sizeof(cmdline), f) != NULL) {
-                                        const char *key = rules_str(rules, cur->key.value_off);
-                                        char *pos;
+                        r = proc_cmdline_get_key(key, &value);
+                        if (r < 0)
+                                log_debug_errno(r, "Failed to read %s from /proc/cmdline, ignoring: %m", key);
+                        else if (r > 0) {
+                                imported = true;
 
-                                        pos = strstr(cmdline, key);
-                                        if (pos != NULL) {
-                                                pos += strlen(key);
-                                                if (pos[0] == '\0' || isspace(pos[0])) {
-                                                        /* we import simple flags as 'FLAG=1' */
-                                                        udev_device_add_property(event->dev, key, "1");
-                                                        imported = true;
-                                                } else if (pos[0] == '=') {
-                                                        const char *value;
-
-                                                        pos++;
-                                                        value = pos;
-                                                        while (pos[0] != '\0' && !isspace(pos[0]))
-                                                                pos++;
-                                                        pos[0] = '\0';
-                                                        udev_device_add_property(event->dev, key, value);
-                                                        imported = true;
-                                                }
-                                        }
-                                }
-                                fclose(f);
+                                if (value)
+                                        udev_device_add_property(event->dev, key, value);
+                                else
+                                        /* we import simple flags as 'FLAG=1' */
+                                        udev_device_add_property(event->dev, key, "1");
                         }
+
                         if (!imported && cur->key.op != OP_NOMATCH)
                                 goto nomatch;
                         break;
