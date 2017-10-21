@@ -27,6 +27,7 @@
 #include <getopt.h>
 #include <fcntl.h>
 #include <sys/epoll.h>
+#include <sys/sysmacros.h>
 
 #include "libudev.h"
 #include "udev-util.h"

@@ -28,6 +28,7 @@
 #include <dirent.h>
 #include <fnmatch.h>
 #include <time.h>
+#include <sys/sysmacros.h>
 
 #include "udev.h"
 #include "path-util.h"

@@ -45,6 +45,7 @@
 #include <sys/ioctl.h>
 #include <sys/inotify.h>
 #include <sys/utsname.h>
+#include <sys/sysmacros.h>
 
 #include "udev.h"
 #include "udev-util.h"

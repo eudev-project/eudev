@@ -32,6 +32,7 @@
 #include <sys/ioctl.h>
 #include <sys/socket.h>
 #include <linux/sockios.h>
+#include <sys/sysmacros.h>
 
 #include "libudev.h"
 #include "libudev-private.h"

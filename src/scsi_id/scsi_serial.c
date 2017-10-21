@@ -36,6 +36,7 @@
 #include <scsi/sg.h>
 #include <linux/types.h>
 #include <linux/bsg.h>
+#include <sys/sysmacros.h>
 
 #include "libudev.h"
 #include "libudev-private.h"
