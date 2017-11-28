@@ -108,13 +108,21 @@ doing
 Then push it to your public repo.
 
 
-4. Open an issue at
+4.a Open an issue at (using GitHub)
 
 	https://github.com/gentoo/eudev/issues?state=open
 
 And request a pull of your clean commit.  A team member will review it,
 discuss it and commit it to master or reject it.
 
+
+4.b Send to mailing list (using git format-patch)
+Make sure you are subscribe on the mailing list. If you do not, send an email to
+	eudev+subscribe@lists.gentoo.org
+and follow instructions.
+
+When sending patches to mailing list, use
+	git send-email --to eudev@lists.gentoo.org 0001-foo-bar.patch
 
 5. eudev is a peer-reviewed project.  So even team members must ask another
 team member to sign-off and commit your work.  The only exception are trivial
