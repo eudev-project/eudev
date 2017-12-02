@@ -1726,7 +1726,7 @@ int tempfn_xxxxxx(const char *p, char **ret) {
          *         /foo/bar/.#waldoXXXXXX
          */
 
-        fn = basename(p);
+        fn = basename((char*)p);
         if (!filename_is_valid(fn))
                 return -EINVAL;
 
