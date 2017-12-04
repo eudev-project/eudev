@@ -31,13 +31,6 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-# debug, if UDEV_LOG=<debug>
-if [ -n "$UDEV_LOG" ]; then
-	if [ "$UDEV_LOG" -ge 7 ]; then
-		set -x
-	fi
-fi
-
 RULES_FILE='@udevconfdir@/rules.d/70-persistent-net.rules'
 
 . @udevlibexecdir@/rule_generator.functions
