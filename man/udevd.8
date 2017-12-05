@@ -45,35 +45,35 @@ The behavior of the daemon can be configured using
 \fBudevadm control\fR\&.
 .SH "OPTIONS"
 .PP
-\fB\-\-daemon\fR
-.RS 4
+\fB\-d\fR,\fB\-\-daemon\fR
+.RS 5
 Detach and run in the background\&.
 .RE
 .PP
-\fB\-\-debug\fR
-.RS 4
+\fB\-D\fR, \fB\-\-debug\fR
+.RS 5
 Print debug messages to standard error\&.
 .RE
 .PP
-\fB\-\-children\-max=\fR
-.RS 4
+\fB\-c\fR, \fB\-\-children\-max=\fR
+.RS 5
 Limit the number of events executed in parallel\&.
 .RE
 .PP
-\fB\-\-exec\-delay=\fR
-.RS 4
+\fB\-e\fR, \fB\-\-exec\-delay=\fR
+.RS 5
 Delay the execution of
 \fIRUN\fR
 instructions by the given number of seconds\&. This option might be useful when debugging system crashes during coldplug caused by loading non\-working kernel modules\&.
 .RE
 .PP
-\fB\-\-event\-timeout=\fR
-.RS 4
+\fB\-t\fR, \fB\-\-event\-timeout=\fR
+.RS 5
 Set the number of seconds to wait for events to finish\&. After this time the event will be terminated\&. The default is 30 seconds\&.
 .RE
 .PP
-\fB\-\-resolve\-names=\fR
-.RS 4
+\fB\-N\fR, \fB\-\-resolve\-names=\fR
+.RS 5
 Specify when udevd should resolve names of users and groups\&. When set to
 \fBearly\fR
 (the default), names will be resolved when the rules are parsed\&. When set to
@@ -81,8 +81,8 @@ Specify when udevd should resolve names of users and groups\&. When set to
 \fBnever\fR, names will never be resolved and all devices will be owned by root\&.
 .RE
 .PP
-\fB\-\-help\fR
-.RS 4
+\fB\-h\fR, \fB\-\-help\fR
+.RS 5
 .RE
 .SH "KERNEL COMMAND LINE"
 .PP
