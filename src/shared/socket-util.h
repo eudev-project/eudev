@@ -17,6 +17,8 @@
   along with systemd; If not, see <http://www.gnu.org/licenses/>.
 ***/
 
+#pragma once
+
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <sys/un.h>

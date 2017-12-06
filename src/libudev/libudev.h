@@ -17,8 +17,7 @@
   along with systemd; If not, see <http://www.gnu.org/licenses/>.
 ***/
 
-#ifndef _LIBUDEV_H_
-#define _LIBUDEV_H_
+#pragma once
 
 #include <stdarg.h>
 #include <sys/sysmacros.h>
@@ -204,6 +203,4 @@ int udev_util_encode_string(const char *str, char *str_enc, size_t len);
 
 #ifdef __cplusplus
 } /* extern "C" */
-#endif
-
 #endif

@@ -1,5 +1,4 @@
-#ifndef IOPRIO_H
-#define IOPRIO_H
+#pragma once
 
 /* This is minimal version of Linux' linux/ioprio.h header file, which
  * is licensed GPL2 */
@@ -16,5 +15,3 @@ enum {
         IOPRIO_CLASS_BE,
         IOPRIO_CLASS_IDLE,
 };
-
-#endif

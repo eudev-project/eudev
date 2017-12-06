@@ -17,8 +17,7 @@
   along with systemd; If not, see <http://www.gnu.org/licenses/>.
 ***/
 
-#ifndef _LIBUDEV_PRIVATE_H_
-#define _LIBUDEV_PRIVATE_H_
+#pragma once
 
 #include <signal.h>
 #include <stdint.h>
@@ -150,5 +149,3 @@ uint64_t util_string_bloom64(const char *str);
 
 /* libudev-util-private.c */
 int util_resolve_subsys_kernel(struct udev *udev, const char *string, char *result, size_t maxsize, int read_value);
-
-#endif

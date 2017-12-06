@@ -17,8 +17,7 @@
   along with systemd; If not, see <http://www.gnu.org/licenses/>.
 ***/
 
-#ifndef _LIBUDEV_HWDB_DEF_H_
-#define _LIBUDEV_HWDB_DEF_H_
+#pragma once
 
 #include "sparse-endian.h"
 
@@ -70,5 +69,3 @@ struct trie_value_entry_f {
         le64_t key_off;
         le64_t value_off;
 } _packed_;
-
-#endif
