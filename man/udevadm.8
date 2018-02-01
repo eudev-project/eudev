@@ -232,6 +232,14 @@ Trigger events for devices with a matching device path\&. This options can be sp
 Trigger events for all children of a given device\&.
 .RE
 .PP
+\fB\-w\fR, \fB\-\-settle\fR
+.RS 4
+Apart from triggering events, also waits for those events to finish\&. Note that this is different from calling
+\fBudevadm settle\fR\&.
+\fBudevadm settle\fR
+waits for all events to finish\&. This option only waits for events triggered by the same command to finish\&.
+.RE
+.PP
 \fB\-h\fR, \fB\-\-help\fR
 .RS 4
 Print help text\&.
