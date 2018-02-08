@@ -570,7 +570,7 @@ static int cd_profiles(struct udev *udev, int fd)
         log_debug("GET CONFIGURATION: size of features buffer 0x%04x", len);
 
         if (len > sizeof(features)) {
-                log_debug("can not get features in a single query, truncating");
+                log_debug("cannot get features in a single query, truncating");
                 len = sizeof(features);
         } else if (len <= 8)
                 len = sizeof(features);
@@ -592,7 +592,7 @@ static int cd_profiles(struct udev *udev, int fd)
         log_debug("GET CONFIGURATION: size of features buffer 0x%04x", len);
 
         if (len > sizeof(features)) {
-                log_debug("can not get features in a single query, truncating");
+                log_debug("cannot get features in a single query, truncating");
                 len = sizeof(features);
         }
 
