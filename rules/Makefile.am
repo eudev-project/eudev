@@ -6,6 +6,7 @@ dist_udevrules_DATA = \
 	60-cdrom_id.rules \
 	60-drm.rules \
 	60-evdev.rules \
+	60-input-id.rules \
 	60-persistent-alsa.rules \
 	60-persistent-input.rules \
 	60-persistent-storage-tape.rules \
@@ -13,6 +14,7 @@ dist_udevrules_DATA = \
 	60-sensor.rules \
 	60-serial.rules \
 	64-btrfs.rules \
+	70-joystick.rules \
 	70-mouse.rules \
 	70-touchpad.rules \
 	75-net-description.rules \
