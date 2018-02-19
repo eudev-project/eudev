@@ -47,6 +47,7 @@
 evdev:input:b0003v05ACp021B*
 # Macbook4,1
 evdev:input:b0003v05ACp0229*
+evdev:input:b0003v05ACp022A*
  EVDEV_ABS_00=256:1471:12
  EVDEV_ABS_01=256:831:12
 
@@ -93,6 +94,11 @@ evdev:input:b0003v05ACp025B*
 #########################################
 # ASUS
 #########################################
+
+# Asus F3Sg
+evdev:name:SynPS/2 Synaptics TouchPad:dmi:*svnASUSTeKComputerInc.:pnF3Sg:*
+ EVDEV_ABS_00=0:6143:136
+ EVDEV_ABS_01=1103:5856:61
 
 # Asus VivoBook E402SA
 evdev:name:Elan Touchpad:dmi:*svnASUSTeKCOMPUTERINC.:pnE402SA*
@@ -161,10 +167,10 @@ evdev:name:AlpsPS/2 ALPS DualPoint TouchPad:dmi:bvn*:bvr*:bd*:svnDellInc.:pnLati
 
 # Dell Latitude E7470
 evdev:name:AlpsPS/2 ALPS DualPoint TouchPad:dmi:bvn*:bvr*:bd*:svnDellInc.:pnLatitudeE7470*
- EVDEV_ABS_00=39:5856:59
- EVDEV_ABS_01=10:1532:29
- EVDEV_ABS_35=39:5856:59
- EVDEV_ABS_36=10:1532:29
+ EVDEV_ABS_00=29:2930:30
+ EVDEV_ABS_01=26:1533:29
+ EVDEV_ABS_35=29:2930:30
+ EVDEV_ABS_36=26:1533:29
 
 # Dell Precision 5510
 evdev:name:SynPS/2 Synaptics TouchPad:dmi:bvn*:bvr*:bd*:svnDellInc.:pnPrecision5510*
@@ -408,6 +414,17 @@ evdev:name:SynPS/2 Synaptics TouchPad:dmi:*svnSystem76:pnGalagoPro:pvrgalp2:*
 evdev:name:AlpsPS/2 ALPS DualPoint TouchPad:dmi:*svnTOSHIBA:pnTECRAM11*
  EVDEV_ABS_00=90:962:11
  EVDEV_ABS_01=51:681:14
+
+#########################################
+# Razer
+#########################################
+
+# Razer Blade Stealth (2016)
+evdev:name:Synaptics TM2438-005:dmi:*svnRazer:pnBladeStealth*
+ EVDEV_ABS_00=0:4064:29
+ EVDEV_ABS_01=0:2405:37
+ EVDEV_ABS_35=0:4064:29
+ EVDEV_ABS_36=0:2405:37
 
 #########################################
 # Waltop
