@@ -11,7 +11,6 @@ SUBSYSTEM=="rtc", ATTR{hctosys}=="1", SYMLINK+="rtc"
 SUBSYSTEM=="rtc", KERNEL=="rtc0", SYMLINK+="rtc", OPTIONS+="link_priority=-100"
 
 SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", IMPORT{builtin}="usb_id", IMPORT{builtin}="hwdb --subsystem=usb"
-SUBSYSTEM=="input", ENV{ID_INPUT}=="", IMPORT{builtin}="input_id"
 ENV{MODALIAS}!="", IMPORT{builtin}="hwdb --subsystem=$env{SUBSYSTEM}"
 
 ACTION!="add", GOTO="default_end"
@@ -23,7 +22,7 @@ SUBSYSTEM=="tty", KERNEL=="sclp_line[0-9]*", GROUP="tty", MODE="0620"
 SUBSYSTEM=="tty", KERNEL=="ttysclp[0-9]*", GROUP="tty", MODE="0620"
 SUBSYSTEM=="tty", KERNEL=="3270/tty[0-9]*", GROUP="tty", MODE="0620"
 SUBSYSTEM=="vc", KERNEL=="vcs*|vcsa*", GROUP="tty"
-KERNEL=="tty[A-Z]*[0-9]|pppox[0-9]*|ircomm[0-9]*|noz[0-9]*|rfcomm[0-9]*", GROUP="dialout"
+KERNEL=="tty[A-Z]*[0-9]|ttymxc[0-9]*|pppox[0-9]*|ircomm[0-9]*|noz[0-9]*|rfcomm[0-9]*", GROUP="dialout"
 
 SUBSYSTEM=="mem", KERNEL=="mem|kmem|port", GROUP="kmem", MODE="0640"
 
@@ -32,10 +31,13 @@ SUBSYSTEM=="input", KERNEL=="js[0-9]*", MODE="0664"
 
 SUBSYSTEM=="video4linux", GROUP="video"
 SUBSYSTEM=="graphics", GROUP="video"
-SUBSYSTEM=="drm", GROUP="video"
+SUBSYSTEM=="drm", KERNEL!="renderD*", GROUP="video"
 SUBSYSTEM=="dvb", GROUP="video"
 SUBSYSTEM=="media", GROUP="video"
 SUBSYSTEM=="cec", GROUP="video"
+
+SUBSYSTEM=="drm", KERNEL=="renderD*", GROUP="render", MODE="@GROUP_RENDER_MODE@"
+SUBSYSTEM=="kfd", GROUP="render", MODE="@GROUP_RENDER_MODE@"
 
 SUBSYSTEM=="sound", GROUP="audio", \
   OPTIONS+="static_node=snd/seq", OPTIONS+="static_node=snd/timer"
@@ -75,5 +77,10 @@ KERNEL=="rfkill", MODE="0664"
 KERNEL=="tun", MODE="0666", OPTIONS+="static_node=net/tun"
 
 KERNEL=="fuse", MODE="0666", OPTIONS+="static_node=fuse"
+
+# The static_node is required on s390x and ppc (they are using MODULE_ALIAS)
+KERNEL=="kvm", GROUP="kvm", MODE="@DEV_KVM_MODE@", OPTIONS+="static_node=kvm"
+
+SUBSYSTEM=="ptp", ATTR{clock_name}=="KVM virtual PTP", SYMLINK += "ptp_kvm"
 
 LABEL="default_end"
