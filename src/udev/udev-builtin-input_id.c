@@ -42,6 +42,17 @@
 #define LONG(x) ((x)/BITS_PER_LONG)
 #define test_bit(bit, array)    ((array[LONG(bit)] >> OFF(bit)) & 1)
 
+struct range {
+        unsigned start;
+        unsigned end;
+};
+
+/* key code ranges above BTN_MISC (start is inclusive, stop is exclusive)*/
+static const struct range high_key_blocks[] = {
+        { KEY_OK, BTN_DPAD_UP },
+        { KEY_ALS_TOGGLE, BTN_TRIGGER_HAPPY }
+};
+
 static inline int abs_size_mm(const struct input_absinfo *absinfo) {
         /* Resolution is defined to be in units/mm for ABS_X/Y */
         return (absinfo->maximum - absinfo->minimum) / absinfo->resolution;
@@ -112,7 +123,8 @@ static void get_cap_mask(struct udev_device *dev,
 
         if (test) {
                 /* printf pattern with the right unsigned long number of hex chars */
-                snprintf(text, sizeof(text), "  bit %%4u: %%0%zulX\n", 2 * sizeof(unsigned long));
+                snprintf(text, sizeof(text), "  bit %%4u: %%0%zulX\n",
+                         2 * sizeof(unsigned long));
                 log_debug("%s decoded bit map:", attr);
                 val = bitmask_size / sizeof (unsigned long);
                 /* skip over leading zeros */
@@ -262,13 +274,16 @@ static bool test_key(struct udev_device *dev,
                 found |= bitmask_key[i];
                 log_debug("test_key: checking bit block %lu for any keys; found=%i", (unsigned long)i*BITS_PER_LONG, found > 0);
         }
-        /* If there are no keys in the lower block, check the higher block */
+        /* If there are no keys in the lower block, check the higher blocks */
         if (!found) {
-                for (i = KEY_OK; i < BTN_TRIGGER_HAPPY; ++i) {
-                        if (test_bit(i, bitmask_key)) {
-                                log_debug("test_key: Found key %x in high block", i);
-                                found = 1;
-                                break;
+                unsigned block;
+                for (block = 0; block < (sizeof(high_key_blocks) / sizeof(struct range)); ++block) {
+                        for (i = high_key_blocks[block].start; i < high_key_blocks[block].end; ++i) {
+                                if (test_bit(i, bitmask_key)) {
+                                        log_debug("test_key: Found key %x in high block", i);
+                                        found = 1;
+                                        break;
+                                }
                         }
                 }
         }
@@ -323,6 +338,9 @@ static int builtin_input_id(struct udev_device *dev, int argc, char *argv[], boo
                 if (!is_pointer && !is_key && test_bit(EV_REL, bitmask_ev) &&
                     (test_bit(REL_WHEEL, bitmask_rel) || test_bit(REL_HWHEEL, bitmask_rel)))
                         udev_builtin_add_property(dev, test, "ID_INPUT_KEY", "1");
+                if (test_bit(EV_SW, bitmask_ev))
+                        udev_builtin_add_property(dev, test, "ID_INPUT_SWITCH", "1");
+
         }
 
         devnode = udev_device_get_devnode(dev);
