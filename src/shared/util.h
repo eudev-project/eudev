@@ -157,6 +157,11 @@ static inline int safe_atou64_full(const char *s, unsigned base, uint64_t *ret_u
         assert_cc(sizeof(uint64_t) == sizeof(unsigned long long));
         return safe_atollu_full(s, base, (unsigned long long*) ret_u);
 }
+
+static inline int safe_atoi64(const char *s, int64_t *ret_i) {
+        assert_cc(sizeof(int64_t) == sizeof(long long int));
+        return safe_atolli(s, (long long int*) ret_i);
+}
 const char* split(const char **state, size_t *l, const char *separator, bool quoted);
 
 #define FOREACH_WORD_QUOTED(word, length, s, state)                     \

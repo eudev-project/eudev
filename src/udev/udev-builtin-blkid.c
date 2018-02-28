@@ -479,7 +479,7 @@ static int builtin_blkid(struct udev_device *dev, int argc, char *argv[], enum u
         dev_t backing_devno = 0;
 
         static const struct option options[] = {
-                { "offset", optional_argument, NULL, 'o' },
+                { "offset", required_argument, NULL, 'o' },
                 { "hint",   required_argument, NULL, 'H' },
                 { "noraid", no_argument, NULL, 'R' },
                 {}
@@ -492,7 +492,7 @@ static int builtin_blkid(struct udev_device *dev, int argc, char *argv[], enum u
         for (;;) {
                 int option;
 
-                option = getopt_long(argc, argv, "oH:R", options, NULL);
+                option = getopt_long(argc, argv, "o:H:R", options, NULL);
                 if (option == -1)
                         break;
 
@@ -514,7 +514,15 @@ static int builtin_blkid(struct udev_device *dev, int argc, char *argv[], enum u
                         /* fall through */
 #endif
                 case 'o':
-                        offset = strtoull(optarg, NULL, 0);
+                        r = safe_atoi64(optarg, &offset);
+                        if (r < 0) {
+                                log_error_errno(r, "Failed to parse '%s' as an integer: %m", optarg);
+                                return EXIT_FAILURE;
+                        }
+                        if (offset < 0) {
+                                log_error("Invalid offset %"PRIi64".", offset);
+                                return EXIT_FAILURE;
+                        }
                         break;
                 case 'R':
                         noraid = true;
