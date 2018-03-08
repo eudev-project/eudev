@@ -1,8 +1,8 @@
 '\" t
 .\"     Title: udev
 .\"    Author: Greg Kroah-Hartmann <greg@kroah.com>
-.\" Generator: DocBook XSL Stylesheets v1.79.0 <http://docbook.sf.net/>
-.\"      Date: 12/11/2016
+.\" Generator: DocBook XSL Stylesheets v1.79.1 <http://docbook.sf.net/>
+.\"      Date: 03/08/2018
 .\"    Manual: udev
 .\"    Source: udev
 .\"  Language: English
@@ -538,35 +538,6 @@ The
 $
 character itself\&.
 .RE
-.SH "HARDWARE DATABASE FILES"
-.PP
-The hwdb files are read from the files located in the system hwdb directory
-/lib/udev/hwdb\&.d, the volatile runtime directory
-/run/udev/hwdb\&.d
-and the local administration directory
-/etc/udev/hwdb\&.d\&. All hwdb files are collectively sorted and processed in lexical order, regardless of the directories in which they live\&. However, files with identical filenames replace each other\&. Files in
-/etc
-have the highest priority, files in
-/run
-take precedence over files with the same name in
-/lib\&. This can be used to override an hwdb file with a local file if needed; a symlink in
-/etc
-with the same name as a hwdb file in
-/lib, pointing to
-/dev/null, disables the hwdb file entirely\&. hwdb files must have the extension
-\&.hwdb; other extensions are ignored\&.
-.PP
-The hwdb file contains data records consisting of matches and associated key\-value pairs\&. Every record in the hwdb starts with one or more match string, specifying a shell glob to compare the database lookup string against\&. Multiple match lines are specified in additional consecutive lines\&. Every match line is compared indivdually, they are combined by OR\&. Every match line must start at the first character of the line\&.
-.PP
-The match lines are followed by one or more key\-value pair lines, which are recognized by a leading space character\&. The key name and value are separated by
-=\&. An empty line signifies the end of a record\&. Lines beginning with
-#
-are ignored\&.
-.PP
-The content of all hwdb files is read by
-\fBudevadm\fR(8)
-and compiled to a binary database located at
-/etc/udev/hwdb\&.bin\&. During runtime only the binary database is used\&.
 .SH "HARDWARE DATABASE FILES"
 .PP
 The hwdb files are read from the files located in the system hwdb directory
