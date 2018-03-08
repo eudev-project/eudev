@@ -62,28 +62,28 @@
   <refsect1><title>Options</title>
     <variablelist>
       <varlistentry>
-        <term><option>--daemon</option></term>
+        <term><option>-d</option>, <option>--daemon</option></term>
         <listitem>
           <para>Detach and run in the background.</para>
         </listitem>
       </varlistentry>
 
       <varlistentry>
-        <term><option>--debug</option></term>
+        <term><option>-D</option>, <option>--debug</option></term>
         <listitem>
           <para>Print debug messages to standard error.</para>
         </listitem>
       </varlistentry>
 
       <varlistentry>
-        <term><option>--children-max=</option></term>
+        <term><option>-c</option>, <option>--children-max=</option></term>
         <listitem>
           <para>Limit the number of events executed in parallel.</para>
         </listitem>
       </varlistentry>
 
       <varlistentry>
-        <term><option>--exec-delay=</option></term>
+        <term><option>-e</option>, <option>--exec-delay=</option></term>
         <listitem>
           <para>Delay the execution of <varname>RUN</varname>
           instructions by the given number of seconds. This option
@@ -94,7 +94,7 @@
       </varlistentry>
 
       <varlistentry>
-        <term><option>--event-timeout=</option></term>
+        <term><option>-t</option>, <option>--event-timeout=</option></term>
         <listitem>
           <para>Set the number of seconds to wait for events to finish. After
           this time the event will be terminated. The default is 30 seconds.</para>
@@ -102,7 +102,7 @@
       </varlistentry>
 
       <varlistentry>
-        <term><option>--resolve-names=</option></term>
+        <term><option>-N</option>, <option>--resolve-names=</option></term>
         <listitem>
           <para>Specify when udevd should resolve names of users and groups.
           When set to <option>early</option> (the default), names will be
@@ -114,7 +114,7 @@
       </varlistentry>
 
       <varlistentry>
-        <term><option>--help</option></term>
+        <term><option>-h</option>, <option>--help</option></term>
 
       </varlistentry>
     </variablelist>

@@ -1,8 +1,8 @@
 '\" t
 .\"     Title: udevd
 .\"    Author: Kay Sievers <kay@vrfy.org>
-.\" Generator: DocBook XSL Stylesheets v1.79.0 <http://docbook.sf.net/>
-.\"      Date: 12/11/2016
+.\" Generator: DocBook XSL Stylesheets v1.79.1 <http://docbook.sf.net/>
+.\"      Date: 03/08/2018
 .\"    Manual: udevd
 .\"    Source: eudev
 .\"  Language: English
@@ -45,35 +45,35 @@ The behavior of the daemon can be configured using
 \fBudevadm control\fR\&.
 .SH "OPTIONS"
 .PP
-\fB\-d\fR,\fB\-\-daemon\fR
-.RS 5
+\fB\-d\fR, \fB\-\-daemon\fR
+.RS 4
 Detach and run in the background\&.
 .RE
 .PP
 \fB\-D\fR, \fB\-\-debug\fR
-.RS 5
+.RS 4
 Print debug messages to standard error\&.
 .RE
 .PP
 \fB\-c\fR, \fB\-\-children\-max=\fR
-.RS 5
+.RS 4
 Limit the number of events executed in parallel\&.
 .RE
 .PP
 \fB\-e\fR, \fB\-\-exec\-delay=\fR
-.RS 5
+.RS 4
 Delay the execution of
 \fIRUN\fR
 instructions by the given number of seconds\&. This option might be useful when debugging system crashes during coldplug caused by loading non\-working kernel modules\&.
 .RE
 .PP
 \fB\-t\fR, \fB\-\-event\-timeout=\fR
-.RS 5
+.RS 4
 Set the number of seconds to wait for events to finish\&. After this time the event will be terminated\&. The default is 30 seconds\&.
 .RE
 .PP
 \fB\-N\fR, \fB\-\-resolve\-names=\fR
-.RS 5
+.RS 4
 Specify when udevd should resolve names of users and groups\&. When set to
 \fBearly\fR
 (the default), names will be resolved when the rules are parsed\&. When set to
@@ -82,7 +82,7 @@ Specify when udevd should resolve names of users and groups\&. When set to
 .RE
 .PP
 \fB\-h\fR, \fB\-\-help\fR
-.RS 5
+.RS 4
 .RE
 .SH "KERNEL COMMAND LINE"
 .PP
