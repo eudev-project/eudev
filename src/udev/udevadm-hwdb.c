@@ -600,6 +600,7 @@ static int import_file(struct udev *udev, struct trie *trie, const char *filenam
 static void help(void) {
         printf("Usage: udevadm hwdb OPTIONS\n"
                "  -u,--update          update the hardware database\n"
+               "  -s,--strict          when updating, return non-zero exit value on any parsing error\n"
                "  -o,--output=.../hwdb.bin generate in .../hwdb.bin instead of /etc/udev/hwdb.bin\n"
                "  --usr                generate in " UDEV_LIBEXEC_DIR " instead of /etc/udev\n"
                "  -t,--test=MODALIAS   query database and print result\n"
@@ -620,6 +621,7 @@ static int adm_hwdb(struct udev *udev, int argc, char *argv[]) {
 
         static const struct option options[] = {
                 { "update", no_argument,       NULL, 'u' },
+                { "strict", no_argument,       NULL, 's' },
                 { "usr",    no_argument,       NULL, ARG_USR },
                 { "output", required_argument, NULL, 'o' },
                 { "test",   required_argument, NULL, 't' },
@@ -630,6 +632,7 @@ static int adm_hwdb(struct udev *udev, int argc, char *argv[]) {
         const char *test = NULL;
         const char *root = "";
         bool update = false;
+        bool strict = false;
         struct trie *trie = NULL;
         int err, c, format;
         int rc = EXIT_SUCCESS;
@@ -640,10 +643,13 @@ static int adm_hwdb(struct udev *udev, int argc, char *argv[]) {
                 goto out;
         }
 
-        while ((c = getopt_long(argc, argv, "uo:t:r:h", options, NULL)) >= 0)
+        while ((c = getopt_long(argc, argv, "uso:t:r:h", options, NULL)) >= 0)
                 switch(c) {
                 case 'u':
                         update = true;
+                        break;
+                case 's':
+                        strict = true;
                         break;
                 case ARG_USR:
                         free(hwdb_bin);
@@ -763,7 +769,8 @@ static int adm_hwdb(struct udev *udev, int argc, char *argv[]) {
                         }
 
                         log_debug("reading file '%s' -> '%s'", *f, path_in_root);
-                        import_file(udev, trie, *f, path_in_root, file_priority++);
+                        if (import_file(udev, trie, *f, path_in_root, file_priority++) < 0 && strict)
+                                rc = EXIT_FAILURE;
                 }
                 strv_free(files);
 

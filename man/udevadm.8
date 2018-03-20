@@ -364,6 +364,11 @@ path environment variable, and store it in
 /etc/udev/hwdb\&.bin\&. This should be done after any update to the source files; it will not be called automatically\&. The running udev daemon will detect a new database on its own and does not need to be notified about it\&.
 .RE
 .PP
+\fB\-s\fR, \fB\-\-strict\fR
+.RS 4
+When updating, return non\-zero exit value on any parsing error in the source files\&. The database is still created\&.
+.RE
+.PP
 \fB\-\-usr\fR
 .RS 4
 Put the compiled database into
