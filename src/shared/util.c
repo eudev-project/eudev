@@ -616,38 +616,6 @@ bool gid_is_system(gid_t gid) {
         return gid <= acquire_ugid_allocation_range()->system_gid_max;
 }
 
-int safe_atou(const char *s, unsigned *ret_u) {
-        char *x = NULL;
-        unsigned long l;
-
-        assert(s);
-        assert(ret_u);
-
-        /* strtoul() is happy to parse negative values, and silently
-         * converts them to unsigned values without generating an
-         * error. We want a clean error, hence let's look for the "-"
-         * prefix on our own, and generate an error. But let's do so
-         * only after strtoul() validated that the string is clean
-         * otherwise, so that we return EINVAL preferably over
-         * ERANGE. */
-
-        s += strspn(s, WHITESPACE);
-
-        errno = 0;
-        l = strtoul(s, &x, 0);
-        if (errno > 0)
-                return -errno;
-        if (!x || x == s || *x != 0)
-                return -EINVAL;
-        if (s[0] == '-')
-                return -ERANGE;
-        if ((unsigned long) (unsigned) l != l)
-                return -ERANGE;
-
-        *ret_u = (unsigned) l;
-        return 0;
-}
-
 static const char *mangle_base(const char *s, unsigned *base) {
         const char *k;
 

@@ -121,7 +121,6 @@ bool uid_is_system(uid_t uid);
 bool gid_is_system(gid_t gid);
 int parse_mode(const char *s, mode_t *ret);
 
-int safe_atou(const char *s, unsigned *ret_u);
 int safe_atoi(const char *s, int *ret_i);
 int parse_boolean(const char *v) _pure_;
 int strverscmp_improved(const char *a, const char *b);
@@ -136,6 +135,10 @@ int secure_getenv_bool(const char *name);
 #define SAFE_ATO_MASK_FLAGS(base) ((base) & ~SAFE_ATO_ALL_FLAGS)
 
 int safe_atou_full(const char *s, unsigned base, unsigned *ret_u);
+
+static inline int safe_atou(const char *s, unsigned *ret_u) {
+        return safe_atou_full(s, 0, ret_u);
+}
 
 int safe_atollu(const char *s, unsigned long long *ret_u);
 int safe_atollu_full(const char *s, unsigned base, unsigned long long *ret_llu);
