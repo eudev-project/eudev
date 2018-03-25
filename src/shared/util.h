@@ -475,6 +475,20 @@ int unlink_noerrno(const char *path);
                 _d_;                                                    \
         })
 
+/**
+ * Normal bsearch requires base to be nonnull. Here were require
+ * that only if nmemb > 0.
+ */
+static inline void* bsearch_safe(const void *key, const void *base,
+                                 size_t nmemb, size_t size,
+                                 int (*compar)(const void *, const void *)) {
+        if (nmemb <= 0)
+                return NULL;
+
+        assert(base);
+        return bsearch(key, base, nmemb, size, compar);
+}
+
 static inline void qsort_safe(void *base, size_t nmemb, size_t size,
                               int (*compar)(const void *, const void *)) {
        if (nmemb <= 1)

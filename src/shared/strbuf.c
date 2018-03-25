@@ -143,7 +143,6 @@ ssize_t strbuf_add_string(struct strbuf *str, const char *s, size_t len) {
         str->in_len += len;
 
         node = str->root;
-        c = s[len-1];
         for (depth = 0; depth <= len; depth++) {
                 struct strbuf_child_entry search;
 
@@ -158,8 +157,8 @@ ssize_t strbuf_add_string(struct strbuf *str, const char *s, size_t len) {
                 /* lookup child node */
                 c = s[len - 1 - depth];
                 search.c = c;
-                child = bsearch(&search, node->children, node->children_count,
-                                sizeof(struct strbuf_child_entry), strbuf_children_cmp);
+                child = bsearch_safe(&search, node->children, node->children_count,
+                                     sizeof(struct strbuf_child_entry), strbuf_children_cmp);
                 if (!child)
                         break;
                 node = child->child;
