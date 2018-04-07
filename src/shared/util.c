@@ -88,6 +88,18 @@ size_t page_size(void) {
         return pgsz;
 }
 
+uint64_t physical_memory(void) {
+        long sc;
+
+        /* We return this as uint64_t in case we are running as 32bit process on a 64bit kernel with huge amounts of
+         * memory. */
+
+        sc = sysconf(_SC_PHYS_PAGES);
+        assert(sc > 0);
+
+        return (uint64_t) sc * (uint64_t) page_size();
+}
+
 bool streq_ptr(const char *a, const char *b) {
 
         /* Like streq(), but tries to make sense of NULL pointers */
