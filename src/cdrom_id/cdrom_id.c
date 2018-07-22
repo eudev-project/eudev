@@ -1,8 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0+ */
 /*
  * cdrom_id - optical drive and media information prober
- *
- *
  */
 
 #ifndef _GNU_SOURCE
