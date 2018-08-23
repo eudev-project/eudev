@@ -882,7 +882,6 @@ int main(int argc, char *argv[]) {
         node = argv[optind];
         if (!node) {
                 log_error("no device");
-                fprintf(stderr, "no device\n");
                 rc = 1;
                 goto exit;
         }
