@@ -329,6 +329,9 @@ _public_ int udev_monitor_filter_update(struct udev_monitor *udev_monitor)
         struct udev_list_entry *list_entry;
         int err, r = 0;
 
+        if (udev_monitor == NULL)
+                return -EINVAL;
+
         if (udev_list_get_entry(&udev_monitor->filter_subsystem_list) == NULL &&
             udev_list_get_entry(&udev_monitor->filter_tag_list) == NULL)
                 return 0;
@@ -905,6 +908,9 @@ _public_ int udev_monitor_filter_add_match_tag(struct udev_monitor *udev_monitor
 _public_ int udev_monitor_filter_remove(struct udev_monitor *udev_monitor)
 {
         static struct sock_fprog filter = { 0, NULL };
+
+        if (udev_monitor == NULL)
+                return -EINVAL;
 
         udev_list_cleanup(&udev_monitor->filter_subsystem_list);
         udev_list_cleanup(&udev_monitor->filter_tag_list);

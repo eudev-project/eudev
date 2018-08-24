@@ -893,6 +893,11 @@ _public_ struct udev_device *udev_device_new_from_device_id(struct udev *udev, c
         char subsys[UTIL_PATH_SIZE];
         char *sysname;
 
+        if (id == NULL) {
+                errno = EINVAL;
+                return NULL;
+        }
+
         switch(id[0]) {
         case 'b':
         case 'c':
@@ -1719,6 +1724,10 @@ static int udev_device_sysattr_list_read(struct udev_device *udev_device)
  **/
 _public_ struct udev_list_entry *udev_device_get_sysattr_list_entry(struct udev_device *udev_device)
 {
+        if (udev_device == NULL) {
+                errno = EINVAL;
+                return NULL;
+        }
         if (!udev_device->sysattr_list_read) {
                 int ret;
                 ret = udev_device_sysattr_list_read(udev_device);
@@ -1817,6 +1826,8 @@ const char *udev_device_get_id_filename(struct udev_device *udev_device)
  **/
 _public_ int udev_device_get_is_initialized(struct udev_device *udev_device)
 {
+        if (udev_device == NULL)
+                return -EINVAL;
         if (!udev_device->info_loaded)
                 udev_device_read_db(udev_device);
         return udev_device->is_initialized;
