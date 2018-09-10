@@ -92,7 +92,7 @@ endif
 dist_udevconf_DATA = \
 	udev.conf
 
-sharepkgconfig_DATA = \
+pkgconfiglib_DATA = \
 	udev.pc
 
 EXTRA_DIST = \
