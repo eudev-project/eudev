@@ -11,6 +11,7 @@ dist_udevhwdb_DATA = \
 	20-sdio-vendor-model.hwdb \
 	20-usb-classes.hwdb \
 	20-usb-vendor-model.hwdb \
+	20-vmbus-class.hwdb \
 	60-evdev.hwdb \
 	60-keyboard.hwdb \
 	60-sensor.hwdb \
