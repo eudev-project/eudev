@@ -165,8 +165,8 @@ AS_IF(
 )
 
 # Configured paths
-AC_SUBST([rootprefix], [$with_rootprefix])
-AC_SUBST([rootlibdir], [$with_rootlibdir])
+AC_SUBST([rootprefix], [${with_rootprefix}])
+AC_SUBST([rootlibdir], [${with_rootlibdir}])
 AC_SUBST([rootlibexecdir], [${with_rootlibexecdir}])
 AC_SUBST([udevlibexecdir], [${rootlibexecdir}])
 
@@ -293,8 +293,8 @@ AM_CONDITIONAL([ENABLE_RULE_GENERATOR], [test "x$enable_rule_generator" = xyes])
 # mtd_probe - autoloads FTL module for mtd devices
 # ------------------------------------------------------------------------------
 AC_ARG_ENABLE([mtd_probe],
-	AS_HELP_STRING([--disable-mtd_probe], [disable MTD support]),
-	[], [enable_mtd_probe=yes])
+        AS_HELP_STRING([--disable-mtd_probe], [disable MTD support]),
+        [], [enable_mtd_probe=yes])
 AM_CONDITIONAL([ENABLE_MTD_PROBE], [test "x$enable_mtd_probe" = xyes])
 
 # ------------------------------------------------------------------------------
@@ -305,6 +305,7 @@ AC_CONFIG_FILES([Makefile
                  rule_generator/Makefile
                  rule_generator/write_net_rules
                  rules/Makefile
+                 rules/64-btrfs.rules
                  src/Makefile
                  src/ata_id/Makefile
                  src/cdrom_id/Makefile
@@ -329,6 +330,7 @@ AC_MSG_RESULT([
         sysconfdir:              ${sysconfdir}
         datadir:                 ${datadir}
         includedir:              ${includedir}
+        bindir:                  ${bindir}
         libdir:                  ${libdir}
 
         rootprefix:              ${rootprefix}

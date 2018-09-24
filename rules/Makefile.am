@@ -1,5 +1,8 @@
 ACLOCAL_AMFLAGS = -I m4 ${ACLOCAL_FLAGS}
 
+EXTRA_DIST = \
+	64-btrfs.rules.in
+
 dist_udevrules_DATA = \
 	50-udev-default.rules \
 	60-block.rules \

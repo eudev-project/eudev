@@ -31,6 +31,8 @@ m4/lt~obsolete.m4
 
 rule_generator/write_net_rules
 
+rules/64-btrfs.rules
+
 src/ata_id/ata_id
 src/cdrom_id/cdrom_id
 src/collect/collect
