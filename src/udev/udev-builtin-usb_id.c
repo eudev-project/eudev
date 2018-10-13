@@ -324,7 +324,16 @@ static int builtin_usb_id(struct udev_device *dev, int argc __attribute__((unuse
 
 fallback:
         vendor_id = udev_device_get_sysattr_value(dev_usb, "idVendor");
+        if (!vendor_id) {
+                log_debug("%s: Failed to get idVendor attribute", udev_device_get_sysname(dev_usb));
+                return EXIT_FAILURE;
+        }
+
         product_id = udev_device_get_sysattr_value(dev_usb, "idProduct");
+        if (!product_id) {
+                log_debug("%s: Failed to get idProduct attribute", udev_device_get_sysname(dev_usb));
+                return EXIT_FAILURE;
+        }
 
         /* fallback to USB vendor & device */
         if (vendor_str[0] == '\0') {
