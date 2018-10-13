@@ -82,7 +82,14 @@ out:
 ** See drivers/scsi/scsi_scan.c::scsilun_to_int() for more details.
 */
 static int format_lun_number(struct udev_device *dev, char **path) {
-        unsigned long lun = strtoul(udev_device_get_sysnum(dev), NULL, 10);
+        const char *sysnum;
+        unsigned long lun;
+
+        sysnum = udev_device_get_sysnum(dev);
+        if (!sysnum)
+                return -ENOENT;
+
+        lun = strtoul(sysnum, NULL, 10);
 
         /* address method 0, peripheral device addressing with bus id of zero */
         if (lun < 256)
@@ -280,6 +287,7 @@ static struct udev_device *handle_scsi_iscsi(struct udev_device *parent, char **
         struct udev_device *transportdev;
         struct udev_device *sessiondev = NULL;
         const char *target;
+        const char *sysnum;
         char *connname;
         struct udev_device *conndev = NULL;
         const char *addr;
@@ -305,7 +313,12 @@ static struct udev_device *handle_scsi_iscsi(struct udev_device *parent, char **
                 goto out;
         }
 
-        if (asprintf(&connname, "connection%s:0", udev_device_get_sysnum(transportdev)) < 0) {
+        sysnum = udev_device_get_sysnum(transportdev);
+        if (!sysnum) {
+                parent = NULL;
+                goto out;
+        }
+        if (asprintf(&connname, "connection%s:0", sysnum) < 0) {
                 parent = NULL;
                 goto out;
         }
@@ -832,8 +845,13 @@ static int builtin_path_id(struct udev_device *dev, int argc __attribute__((unus
                         parent = handle_bcma(parent, &path);
                         supported_transport = true;
                 } else if (streq(subsys, "serio")) {
-                        path_prepend(&path, "serio-%s", udev_device_get_sysnum(parent));
-                        parent = skip_subsystem(parent, "serio");
+                        const char *sysnum;
+
+                        sysnum = udev_device_get_sysnum(parent);
+                        if (sysnum) {
+                                path_prepend(&path, "serio-%s", sysnum);
+                                parent = skip_subsystem(parent, "serio");
+                        }
                 } else if (streq(subsys, "auxiliary")) {
                         const char *sfnum;
                         unsigned n;
