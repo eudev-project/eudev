@@ -330,10 +330,6 @@ fallback:
                 usb_vendor = udev_device_get_sysattr_value(dev_usb, "manufacturer");
                 if (!usb_vendor)
                         usb_vendor = vendor_id;
-                if (!usb_vendor) {
-                        log_debug("No USB vendor information available");
-                        return -ENOENT;
-                }
                 encode_devnode_name(usb_vendor, vendor_str_enc, sizeof(vendor_str_enc));
                 util_replace_whitespace(usb_vendor, vendor_str, sizeof(vendor_str)-1);
                 util_replace_chars(vendor_str, NULL);
@@ -345,8 +341,6 @@ fallback:
                 usb_model = udev_device_get_sysattr_value(dev_usb, "product");
                 if (!usb_model)
                         usb_model = product_id;
-                if (!usb_model)
-                        return -ENOENT;
                 encode_devnode_name(usb_model, model_str_enc, sizeof(model_str_enc));
                 util_replace_whitespace(usb_model, model_str, sizeof(model_str)-1);
                 util_replace_chars(model_str, NULL);
