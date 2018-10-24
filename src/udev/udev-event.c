@@ -735,6 +735,11 @@ int udev_event_spawn(struct udev_event *event,
         strscpy(arg, sizeof(arg), cmd);
         udev_build_argv(event->udev, arg, NULL, argv);
 
+        if (isempty(argv[0])) {
+                log_error("Invalid command '%s'", cmd);
+                return -EINVAL;
+        }
+
         /* pipes from child to parent */
         if (result != NULL || log_get_max_level() >= LOG_INFO) {
                 if (pipe2(outpipe, O_NONBLOCK) != 0) {
