@@ -110,9 +110,10 @@
       <varlistentry>
         <term><option>-t</option>, <option>--event-timeout=</option></term>
         <listitem>
-          <para>Set the number of seconds to wait for events to finish. After
-          this time the event will be terminated. The default is 180 seconds,
-          which is also used when 0 is given.</para>
+          <para>Set the number of seconds to wait for events to finish, or a
+          time span with a unit, e.g. <literal>5min</literal>. After this time
+          the event will be terminated. The default is 180 seconds, which is
+          also used when 0 is given.</para>
         </listitem>
       </varlistentry>
 
@@ -203,7 +204,8 @@
         <term><varname>rd.udev.event_timeout=</varname></term>
         <listitem>
           <para>Wait for events to finish up to the given number
-          of seconds. This option might be useful if events are
+          of seconds, or a time span with a unit, e.g.
+          <literal>5min</literal>. This option might be useful if events are
           terminated due to kernel drivers taking too long to initialize.
           It takes precedence over <option>--event-timeout=</option>,
           unless it is 0.</para>
