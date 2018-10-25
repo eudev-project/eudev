@@ -1696,9 +1696,11 @@ void udev_event_execute_run(struct udev_event *event, usec_t timeout_usec, usec_
                 } else {
                         char **envp;
 
-                        if (event->exec_delay > 0) {
+                        if (event->exec_delay_usec > 0) {
+                                struct timespec ts;
+
                                 log_debug("delay execution of '%s'", command);
-                                sleep(event->exec_delay);
+                                (void) nanosleep(timespec_store(&ts, event->exec_delay_usec), NULL);
                         }
 
                         envp = udev_device_get_properties_envp(event->dev);

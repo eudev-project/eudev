@@ -63,7 +63,8 @@ Limit the number of events executed in parallel\&.
 .RS 4
 Delay the execution of
 \fIRUN\fR
-instructions by the given number of seconds\&. This option might be useful when debugging system crashes during coldplug caused by loading non\-working kernel modules\&.
+instructions by the given number of seconds, or by a time span with a unit, e\&.g\&.
+500ms\&. This option might be useful when debugging system crashes during coldplug caused by loading non\-working kernel modules\&.
 .RE
 .PP
 \fB\-t\fR, \fB\-\-event\-timeout=\fR
@@ -146,7 +147,8 @@ Limit the number of events executed in parallel\&. It takes precedence over
 .RS 4
 Delay the execution of
 \fIRUN\fR
-instructions by the given number of seconds\&. This option might be useful when debugging system crashes during coldplug caused by loading non\-working kernel modules\&. It takes precedence over
+instructions by the given number of seconds, or by a time span with a unit, e\&.g\&.
+500ms\&. This option might be useful when debugging system crashes during coldplug caused by loading non\-working kernel modules\&. It takes precedence over
 \fB\-\-exec\-delay=\fR, unless it is 0\&.
 .RE
 .PP

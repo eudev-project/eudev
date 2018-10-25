@@ -90,7 +90,7 @@ static bool arg_trace = false;
 struct udev_config {
         int log_level;
         unsigned children_max;
-        int exec_delay;
+        usec_t exec_delay_usec;
         usec_t timeout_usec;
 };
 
@@ -111,7 +111,7 @@ static bool trace = false;
 static unsigned arg_children_max;
 /* the maximum number of workers before udevadm control changes it */
 static unsigned default_children_max;
-static int arg_exec_delay;
+static usec_t arg_exec_delay_usec;
 static usec_t arg_event_timeout_usec = DEFAULT_EVENT_TIMEOUT_USEC;
 static usec_t arg_event_timeout_warn_usec = DEFAULT_EVENT_TIMEOUT_USEC / 3;
 static sigset_t sigmask_orig;
@@ -529,8 +529,7 @@ static void worker_spawn(struct event *event) {
                         /* reuse the netlink socket for all events */
                         udev_event->rtnl_fd = rtnl_fd;
 
-                        if (arg_exec_delay > 0)
-                                udev_event->exec_delay = arg_exec_delay;
+                        udev_event->exec_delay_usec = arg_exec_delay_usec;
 
                         /*
                          * If this is a block device and the device is locked currently via the BSD advisory locks,
@@ -1114,7 +1113,7 @@ static void manager_merge_config(void) {
                             log_get_max_level();
 
         arg_children_max = config_by_kernel.children_max ?: config_by_command.children_max;
-        arg_exec_delay = config_by_kernel.exec_delay ?: config_by_command.exec_delay;
+        arg_exec_delay_usec = config_by_kernel.exec_delay_usec ?: config_by_command.exec_delay_usec;
         arg_event_timeout_usec = config_by_kernel.timeout_usec ?: config_by_command.timeout_usec ?:
                                  DEFAULT_EVENT_TIMEOUT_USEC;
         arg_event_timeout_warn_usec = (arg_event_timeout_usec / 3) ? : 1;
@@ -1598,7 +1597,7 @@ static int parse_proc_cmdline_item(const char *key, const char *value) {
                 if (proc_cmdline_value_missing(key, value))
                         return 0;
 
-                r = safe_atoi(value, &config_by_kernel.exec_delay);
+                r = parse_sec(value, &config_by_kernel.exec_delay_usec);
 
         } else if (proc_cmdline_key_streq(key, "udev.trace")) {
 
@@ -1671,9 +1670,9 @@ static int parse_argv(int argc, char *argv[]) {
                                 log_warning("Invalid --children-max ignored: %s", optarg);
                         break;
                 case 'e':
-                        r = safe_atoi(optarg, &config_by_command.exec_delay);
+                        r = parse_sec(optarg, &config_by_command.exec_delay_usec);
                         if (r < 0)
-                                log_warning("Invalid --exec-delay ignored: %s", optarg);
+                                log_warning_errno(r, "Failed to parse --exec-delay= value '%s', ignoring: %m", optarg);
                         break;
                 case 't':
                         r = safe_atou64(optarg, &config_by_command.timeout_usec);

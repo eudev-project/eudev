@@ -99,7 +99,8 @@
         <term><option>-e</option>, <option>--exec-delay=</option></term>
         <listitem>
           <para>Delay the execution of <varname>RUN</varname>
-          instructions by the given number of seconds. This option
+          instructions by the given number of seconds, or by a time span
+          with a unit, e.g. <literal>500ms</literal>. This option
           might be useful when debugging system crashes during
           coldplug caused by loading non-working kernel
           modules.</para>
@@ -190,7 +191,8 @@
         <term><varname>rd.udev.exec_delay=</varname></term>
         <listitem>
           <para>Delay the execution of <varname>RUN</varname> instructions by the given
-          number of seconds. This option might be useful when
+          number of seconds, or by a time span with a unit, e.g.
+          <literal>500ms</literal>. This option might be useful when
           debugging system crashes during coldplug caused by loading
           non-working kernel modules. It takes precedence over
           <option>--exec-delay=</option>, unless it is 0.</para>

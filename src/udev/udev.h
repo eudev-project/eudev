@@ -56,7 +56,7 @@ struct udev_event {
         struct udev_list written_sysctl_list;
         /* the alternative names requested with OPTIONS+="net_altnames", see event_generate_altnames() */
         char **altnames;
-        int exec_delay;
+        usec_t exec_delay_usec;
         usec_t birth_usec;
         int fd_signal;
         /* the netlink socket of udev-netlink.h, opened when needed; a udevd worker passes its own socket to
