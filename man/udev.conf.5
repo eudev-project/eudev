@@ -39,6 +39,51 @@ and
 \fBdebug\fR\&.
 .RE
 .PP
+\fIchildren_max\fR
+.RS 4
+An integer\&. The maximum number of events executed in parallel\&. When unspecified or 0 is specified, the maximum is determined based on the system resources:
+MIN(2 \(mu CPUs + 16, MAX(RAM / 128 MiB, 10), 2048), where
+CPUs
+is the number of CPUs
+\fBudevd\fR
+may run on, according to its CPU affinity, and
+RAM
+the size of the physical memory, or the memory limit of the cgroup of PID 1 when it is smaller:
+\fImemory\&.max\fR
+with cgroup v2, or
+\fImemory\&.limit_in_bytes\fR
+in the hierarchy of the memory controller with cgroup v1\&.
+.sp
+This is the same as the
+\fB\-\-children\-max=\fR
+option of
+\fBudevd\fR(8)\&.
+.RE
+.PP
+\fIexec_delay\fR
+.RS 4
+Delay the execution of
+\fIRUN\fR
+instructions by the given number of seconds, or by a time span with a unit, e\&.g\&.
+500ms\&. This option might be useful when debugging system crashes during coldplug caused by loading non\-working kernel modules\&. 0 means no delay, and a delay that is not shorter than the event timeout is ignored\&.
+.sp
+This is the same as the
+\fB\-\-exec\-delay=\fR
+option of
+\fBudevd\fR(8)\&.
+.RE
+.PP
+\fIevent_timeout\fR
+.RS 4
+The number of seconds to wait for events to finish, or a time span with a unit, e\&.g\&.
+5min\&. After this time, the event will be terminated\&. The default is 180 seconds, which is also used when 0 or less than a millisecond is given\&.
+.sp
+This is the same as the
+\fB\-\-event\-timeout=\fR
+option of
+\fBudevd\fR(8)\&.
+.RE
+.PP
 \fIhwdb_format\fR
 .RS 4
 The format of the compiled hardware database
@@ -170,7 +215,21 @@ starts\&.
 In addition,
 udevd
 can be configured by command\-line options and the kernel command line (see
-\fBudevd\fR(8))\&.
+\fBudevd\fR(8))\&. The command\-line options take precedence over the settings in this file, the options on the kernel command line take precedence over both, and for the maximum number of workers,
+\fBudevadm control \-\-children\-max=\fR
+over all of them\&. For
+\fIchildren_max\fR,
+\fIexec_delay\fR
+and
+\fIevent_timeout\fR, 0 counts as not set, so e\&.g\&.
+\fIudev\&.children_max=0\fR
+on the kernel command line does not override
+\fIchildren_max=4\fR
+in this file\&. Invalid values of these settings are ignored, with a warning when
+\fBudevd\fR
+starts\&. The file is only read when
+\fBudevd\fR
+starts\&.
 .SH "SEE ALSO"
 .PP
 \fBudevd\fR(8),

@@ -104,7 +104,10 @@
           memory limit of the cgroup of PID 1 when it is smaller:
           <varname>memory.max</varname> with cgroup v2, or
           <varname>memory.limit_in_bytes</varname> in the hierarchy of the
-          memory controller with cgroup v1.</para>
+          memory controller with cgroup v1. It takes precedence over
+          <varname>children_max=</varname> in
+          <citerefentry><refentrytitle>udev.conf</refentrytitle><manvolnum>5</manvolnum></citerefentry>,
+          unless it is 0.</para>
         </listitem>
       </varlistentry>
 
@@ -117,7 +120,9 @@
           might be useful when debugging system crashes during
           coldplug caused by loading non-working kernel
           modules. A delay that is not shorter than the event timeout
-          is ignored.</para>
+          is ignored. It takes precedence over <varname>exec_delay=</varname> in
+          <citerefentry><refentrytitle>udev.conf</refentrytitle><manvolnum>5</manvolnum></citerefentry>,
+          unless it is 0.</para>
         </listitem>
       </varlistentry>
 
@@ -127,7 +132,10 @@
           <para>Set the number of seconds to wait for events to finish, or a
           time span with a unit, e.g. <literal>5min</literal>. After this time
           the event will be terminated. The default is 180 seconds, which is
-          also used when 0 or less than a millisecond is given.</para>
+          also used when 0 or less than a millisecond is given. It takes
+          precedence over <varname>event_timeout=</varname> in
+          <citerefentry><refentrytitle>udev.conf</refentrytitle><manvolnum>5</manvolnum></citerefentry>,
+          unless it is 0.</para>
         </listitem>
       </varlistentry>
 

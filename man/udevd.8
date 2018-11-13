@@ -69,7 +69,10 @@ the size of the physical memory, or the memory limit of the cgroup of PID 1 when
 \fImemory\&.max\fR
 with cgroup v2, or
 \fImemory\&.limit_in_bytes\fR
-in the hierarchy of the memory controller with cgroup v1\&.
+in the hierarchy of the memory controller with cgroup v1\&. It takes precedence over
+\fIchildren_max=\fR
+in
+\fBudev.conf\fR(5), unless it is 0\&.
 .RE
 .PP
 \fB\-e\fR, \fB\-\-exec\-delay=\fR
@@ -77,13 +80,19 @@ in the hierarchy of the memory controller with cgroup v1\&.
 Delay the execution of
 \fIRUN\fR
 instructions by the given number of seconds, or by a time span with a unit, e\&.g\&.
-500ms\&. This option might be useful when debugging system crashes during coldplug caused by loading non\-working kernel modules\&. A delay that is not shorter than the event timeout is ignored\&.
+500ms\&. This option might be useful when debugging system crashes during coldplug caused by loading non\-working kernel modules\&. A delay that is not shorter than the event timeout is ignored\&. It takes precedence over
+\fIexec_delay=\fR
+in
+\fBudev.conf\fR(5), unless it is 0\&.
 .RE
 .PP
 \fB\-t\fR, \fB\-\-event\-timeout=\fR
 .RS 4
 Set the number of seconds to wait for events to finish, or a time span with a unit, e\&.g\&.
-5min\&. After this time the event will be terminated\&. The default is 180 seconds, which is also used when 0 or less than a millisecond is given\&.
+5min\&. After this time the event will be terminated\&. The default is 180 seconds, which is also used when 0 or less than a millisecond is given\&. It takes precedence over
+\fIevent_timeout=\fR
+in
+\fBudev.conf\fR(5), unless it is 0\&.
 .RE
 .PP
 \fB\-\-timeout\-signal=\fR

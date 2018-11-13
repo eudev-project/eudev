@@ -102,7 +102,7 @@ struct udev_config {
 
 #define UDEV_CONFIG_INIT { .log_level = -1, }
 
-/* only timeout_signal, udev_new() applies the log level of udev.conf */
+/* udev_new() reads udev.conf and applies its log level, the other settings are taken from there */
 static struct udev_config config_by_udev_conf = UDEV_CONFIG_INIT;
 static struct udev_config config_by_command = UDEV_CONFIG_INIT;
 static struct udev_config config_by_kernel = UDEV_CONFIG_INIT;
@@ -1185,18 +1185,20 @@ static int manager_merge_config_log_level(void) {
 }
 
 /* Like manager_merge_config() of systemd: the kernel command line takes precedence over the command line,
- * and 0 means that the setting is not given, so that e.g. udev.children-max=0 does not override
- * --children-max=. The log level is merged as described above; this is called once at startup, when the
- * current log level is the one of udev.conf, which udev_new() applied. */
+ * which takes precedence over udev.conf, and 0 means that the setting is not given, so that e.g.
+ * udev.children-max=0 does not override --children-max=. The log level is merged as described above; this
+ * is called once at startup, when the current log level is the one of udev.conf, which udev_new() applied. */
 static void manager_merge_config(void) {
         default_log_level = config_by_kernel.log_level >= 0 ? config_by_kernel.log_level :
                             config_by_command.log_level >= 0 ? config_by_command.log_level :
                             log_get_max_level();
 
-        arg_children_max = config_by_kernel.children_max ?: config_by_command.children_max;
-        arg_exec_delay_usec = config_by_kernel.exec_delay_usec ?: config_by_command.exec_delay_usec;
+        arg_children_max = config_by_kernel.children_max ?: config_by_command.children_max ?:
+                           config_by_udev_conf.children_max;
+        arg_exec_delay_usec = config_by_kernel.exec_delay_usec ?: config_by_command.exec_delay_usec ?:
+                              config_by_udev_conf.exec_delay_usec;
         arg_event_timeout_usec = config_by_kernel.timeout_usec ?: config_by_command.timeout_usec ?:
-                                 DEFAULT_EVENT_TIMEOUT_USEC;
+                                 config_by_udev_conf.timeout_usec ?: DEFAULT_EVENT_TIMEOUT_USEC;
         arg_timeout_signal = config_by_kernel.timeout_signal ?: config_by_command.timeout_signal ?:
                              config_by_udev_conf.timeout_signal ?: SIGKILL;
         arg_blockdev_read_only = config_by_kernel.blockdev_read_only;
@@ -1908,6 +1910,7 @@ int main(int argc, char *argv[]) {
         struct epoll_event ep_worker = { .events = EPOLLIN };
         int r = 0, one = 1;
         bool invalid;
+        char **w;
 
         /*
          * Ensure no file descriptor unwillingly falls in the 0..2 range
@@ -1938,6 +1941,10 @@ int main(int argc, char *argv[]) {
         if (r <= 0)
                 goto exit;
 
+        config_by_udev_conf.children_max = udev_get_children_max(udev);
+        config_by_udev_conf.exec_delay_usec = udev_get_exec_delay_usec(udev);
+        config_by_udev_conf.timeout_usec = udev_get_event_timeout_usec(udev);
+
         r = parse_proc_cmdline(parse_proc_cmdline_item);
         if (r < 0)
                 log_warning_errno(r, "failed to parse kernel command line, ignoring: %m");
@@ -1948,6 +1955,12 @@ int main(int argc, char *argv[]) {
 
         manager_merge_config();
         log_set_max_level(manager_merge_config_log_level());
+
+        /* udev_new() read udev.conf, but only udevd warns about its invalid settings; with the merged log
+         * level, as udev_new() applied udev_log= right away, so that e.g. --debug shows them too */
+        STRV_FOREACH(w, udev_get_conf_warnings(udev))
+                log_warning("%s", *w);
+
         manager_adjust_config();
 
         if (getuid() != 0) {

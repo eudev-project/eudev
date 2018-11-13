@@ -43,6 +43,10 @@
 /* libudev.c */
 int udev_get_rules_path(struct udev *udev, char **path[], usec_t *ts_usec[]);
 int udev_parse_hwdb_format(const char *s);
+unsigned udev_get_children_max(struct udev *udev);
+usec_t udev_get_exec_delay_usec(struct udev *udev);
+usec_t udev_get_event_timeout_usec(struct udev *udev);
+char **udev_get_conf_warnings(struct udev *udev);
 int udev_get_timeout_signal(struct udev *udev, bool *ret_invalid);
 int udev_get_hwdb_format(struct udev *udev);
 int udev_read_hwdb_format(const char *root);

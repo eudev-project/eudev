@@ -77,6 +77,58 @@
       </varlistentry>
 
       <varlistentry>
+        <term><varname>children_max</varname></term>
+
+        <listitem>
+          <para>An integer. The maximum number of events executed in parallel.
+          When unspecified or 0 is specified, the maximum is determined based
+          on the system resources:
+          <literal>MIN(2 × CPUs + 16, MAX(RAM / 128 MiB, 10), 2048)</literal>,
+          where <literal>CPUs</literal> is the number of CPUs
+          <command>udevd</command> may run on, according to its CPU affinity,
+          and <literal>RAM</literal> the size of the physical memory, or the
+          memory limit of the cgroup of PID 1 when it is smaller:
+          <varname>memory.max</varname> with cgroup v2, or
+          <varname>memory.limit_in_bytes</varname> in the hierarchy of the
+          memory controller with cgroup v1.</para>
+
+          <para>This is the same as the <option>--children-max=</option> option of
+          <citerefentry><refentrytitle>udevd</refentrytitle><manvolnum>8</manvolnum></citerefentry>.</para>
+        </listitem>
+      </varlistentry>
+
+      <varlistentry>
+        <term><varname>exec_delay</varname></term>
+
+        <listitem>
+          <para>Delay the execution of <varname>RUN</varname>
+          instructions by the given number of seconds, or by a time span
+          with a unit, e.g. <literal>500ms</literal>. This option
+          might be useful when debugging system crashes during
+          coldplug caused by loading non-working kernel
+          modules. 0 means no delay, and a delay that is not shorter than the
+          event timeout is ignored.</para>
+
+          <para>This is the same as the <option>--exec-delay=</option> option of
+          <citerefentry><refentrytitle>udevd</refentrytitle><manvolnum>8</manvolnum></citerefentry>.</para>
+        </listitem>
+      </varlistentry>
+
+      <varlistentry>
+        <term><varname>event_timeout</varname></term>
+
+        <listitem>
+          <para>The number of seconds to wait for events to finish, or a time
+          span with a unit, e.g. <literal>5min</literal>. After this time, the
+          event will be terminated. The default is 180 seconds, which is also
+          used when 0 or less than a millisecond is given.</para>
+
+          <para>This is the same as the <option>--event-timeout=</option> option of
+          <citerefentry><refentrytitle>udevd</refentrytitle><manvolnum>8</manvolnum></citerefentry>.</para>
+        </listitem>
+      </varlistentry>
+
+      <varlistentry>
         <term><varname>hwdb_format</varname></term>
 
         <listitem>
@@ -209,6 +261,17 @@
       In addition, <filename>udevd</filename> can be configured
       by command-line options and the kernel command line (see
       <citerefentry><refentrytitle>udevd</refentrytitle><manvolnum>8</manvolnum></citerefentry>).
+      The command-line options take precedence over the settings in this file,
+      the options on the kernel command line take precedence over both, and
+      for the maximum number of workers,
+      <command>udevadm control --children-max=</command> over all of them.
+      For <varname>children_max</varname>, <varname>exec_delay</varname> and
+      <varname>event_timeout</varname>, 0 counts as not set, so e.g.
+      <varname>udev.children_max=0</varname> on the kernel command line does not
+      override <varname>children_max=4</varname> in this file.
+      Invalid values of these settings are ignored, with a warning when
+      <command>udevd</command> starts. The file is only read when
+      <command>udevd</command> starts.
     </para>
   </refsect1>
 

@@ -30,6 +30,7 @@
 #include "libudev.h"
 #include "libudev-private.h"
 #include "missing.h"
+#include "strv.h"
 
 /**
  * SECTION:libudev
@@ -52,6 +53,13 @@ struct udev {
          * remembered, so that udevd warns about it */
         int timeout_signal;
         bool timeout_signal_invalid;
+        /* children_max=, exec_delay= and event_timeout= in udev.conf for udevd, 0 if they are not set; an
+         * invalid value is ignored, and a message about it is added to conf_warnings */
+        unsigned children_max;
+        usec_t exec_delay_usec;
+        usec_t event_timeout_usec;
+        /* the messages about invalid settings of udevd in udev.conf, which udevd logs as warnings */
+        char **conf_warnings;
         void (*log_fn)(struct udev *udev,
                        int priority, const char *file, int line, const char *fn,
                        const char *format, va_list args);
@@ -96,6 +104,23 @@ int udev_parse_hwdb_format(const char *s) {
         if (streq(s, "2"))
                 return 2;
         return -EINVAL;
+}
+
+/* Like log_syntax_parse_error() of systemd, but the message is only logged at debug level here, and
+ * remembered, so that udevd can warn about it, while the other users of libudev do not complain about the
+ * settings of udevd. */
+static void udev_conf_parse_error(struct udev *udev, const char *filename, unsigned line,
+                                  const char *key, const char *value, int error) {
+        _cleanup_free_ char *escaped = NULL;
+        char *m;
+
+        escaped = cescape(value);
+        errno = abs(error);
+        if (asprintf(&m, "%s:%u: Failed to parse %s=%s, ignoring: %m", filename, line, key, escaped ?: value) < 0)
+                return;
+
+        log_debug("%s", m);
+        (void) strv_consume(&udev->conf_warnings, m);
 }
 
 static void udev_read_conf(struct udev *udev, const char *filename) {
@@ -152,7 +177,10 @@ static void udev_read_conf(struct udev *udev, const char *filename) {
                                         udev->net_altnames = -EINVAL;
                                         free(udev->net_altnames_invalid);
                                         udev->net_altnames_invalid = strdup("");
-                                }
+                                } else if (streq(key, "children_max") || streq(key, "exec_delay") ||
+                                           streq(key, "event_timeout"))
+                                        /* like systemd's parsers of these values */
+                                        udev_conf_parse_error(udev, filename, line_nr, key, val, -EINVAL);
                                 continue;
                         }
                         while (isspace((unsigned char) val[len-1]))
@@ -222,6 +250,32 @@ static void udev_read_conf(struct udev *udev, const char *filename) {
                                 continue;
                         }
 
+                        if (streq(key, "children_max")) {
+                                unsigned n;
+                                int r;
+
+                                r = safe_atou(val, &n);
+                                if (r < 0)
+                                        udev_conf_parse_error(udev, filename, line_nr, key, val, r);
+                                else
+                                        udev->children_max = n;
+                                continue;
+                        }
+
+                        if (streq(key, "exec_delay") || streq(key, "event_timeout")) {
+                                usec_t t;
+                                int r;
+
+                                r = parse_sec(val, &t);
+                                if (r < 0)
+                                        udev_conf_parse_error(udev, filename, line_nr, key, val, r);
+                                else if (streq(key, "exec_delay"))
+                                        udev->exec_delay_usec = t;
+                                else
+                                        udev->event_timeout_usec = t;
+                                continue;
+                        }
+
                         if (streq(key, "timeout_signal")) {
                                 int sig;
 
@@ -263,6 +317,34 @@ _public_ struct udev *udev_new(void) {
         return udev;
 }
 
+/* Not part of the public API, used by udevd. Return children_max=, exec_delay= and event_timeout= in udev.conf,
+ * or 0 if they are not set. */
+unsigned udev_get_children_max(struct udev *udev) {
+        if (udev == NULL)
+                return 0;
+        return udev->children_max;
+}
+
+usec_t udev_get_exec_delay_usec(struct udev *udev) {
+        if (udev == NULL)
+                return 0;
+        return udev->exec_delay_usec;
+}
+
+usec_t udev_get_event_timeout_usec(struct udev *udev) {
+        if (udev == NULL)
+                return 0;
+        return udev->event_timeout_usec;
+}
+
+/* Not part of the public API, used by udevd. Returns the messages about the invalid settings of udevd in
+ * udev.conf, which udevd logs as warnings, or NULL if there are none. */
+char **udev_get_conf_warnings(struct udev *udev) {
+        if (udev == NULL)
+                return NULL;
+        return udev->conf_warnings;
+}
+
 /* Not part of the public API, used by udevd. Returns the signal of timeout_signal= in udev.conf, or 0 if it is
  * not set, and whether an invalid value was ignored. */
 int udev_get_timeout_signal(struct udev *udev, bool *ret_invalid) {
@@ -301,6 +383,7 @@ int udev_read_hwdb_format(const char *root) {
         log_set_max_level(level);
         free(tmp.net_naming_scheme);
         free(tmp.net_altnames_invalid);
+        strv_free(tmp.conf_warnings);
 
         return tmp.hwdb_format;
 }
@@ -368,6 +451,7 @@ _public_ struct udev *udev_unref(struct udev *udev) {
                 return udev;
         free(udev->net_naming_scheme);
         free(udev->net_altnames_invalid);
+        strv_free(udev->conf_warnings);
         free(udev);
         return NULL;
 }
