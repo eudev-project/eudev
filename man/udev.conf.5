@@ -84,6 +84,22 @@ option of
 \fBudevd\fR(8)\&.
 .RE
 .PP
+\fIresolve_names\fR
+.RS 4
+Specifies when
+\fBudevd\fR
+should resolve names of users and groups\&. When set to
+\fBearly\fR
+(the default), names will be resolved when the rules are parsed\&. When set to
+\fBlate\fR, names will be resolved for every event\&. When set to
+\fBnever\fR, names will never be resolved and all devices will be owned by root\&.
+.sp
+This is the same as the
+\fB\-\-resolve\-names=\fR
+option of
+\fBudevd\fR(8)\&.
+.RE
+.PP
 \fIhwdb_format\fR
 .RS 4
 The format of the compiled hardware database
@@ -225,7 +241,13 @@ and
 \fIudev\&.children_max=0\fR
 on the kernel command line does not override
 \fIchildren_max=4\fR
-in this file\&. Invalid values of these settings are ignored, with a warning when
+in this file\&. Invalid values of
+\fIchildren_max\fR,
+\fIexec_delay\fR,
+\fIevent_timeout\fR
+and
+\fIresolve_names\fR
+are ignored, with a warning when
 \fBudevd\fR
 starts\&. The file is only read when
 \fBudevd\fR

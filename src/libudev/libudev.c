@@ -58,6 +58,9 @@ struct udev {
         unsigned children_max;
         usec_t exec_delay_usec;
         usec_t event_timeout_usec;
+        /* resolve_names= in udev.conf for udevd, see udev_parse_resolve_names(), if resolve_names_set */
+        int resolve_names;
+        bool resolve_names_set;
         /* the messages about invalid settings of udevd in udev.conf, which udevd logs as warnings */
         char **conf_warnings;
         void (*log_fn)(struct udev *udev,
@@ -123,6 +126,21 @@ static void udev_conf_parse_error(struct udev *udev, const char *filename, unsig
         (void) strv_consume(&udev->conf_warnings, m);
 }
 
+/* Not part of the public API, used by udevd. Parses the value of resolve_names= in udev.conf and of
+ * --resolve-names=: 1 for "early", 0 for "late" and -1 for "never", as udev_rules_new() takes it. */
+int udev_parse_resolve_names(const char *s, int *ret) {
+        if (streq(s, "early"))
+                *ret = 1;
+        else if (streq(s, "late"))
+                *ret = 0;
+        else if (streq(s, "never"))
+                *ret = -1;
+        else
+                return -EINVAL;
+
+        return 0;
+}
+
 static void udev_read_conf(struct udev *udev, const char *filename) {
         _cleanup_fclose_ FILE *f = NULL;
 
@@ -178,7 +196,7 @@ static void udev_read_conf(struct udev *udev, const char *filename) {
                                         free(udev->net_altnames_invalid);
                                         udev->net_altnames_invalid = strdup("");
                                 } else if (streq(key, "children_max") || streq(key, "exec_delay") ||
-                                           streq(key, "event_timeout"))
+                                           streq(key, "event_timeout") || streq(key, "resolve_names"))
                                         /* like systemd's parsers of these values */
                                         udev_conf_parse_error(udev, filename, line_nr, key, val, -EINVAL);
                                 continue;
@@ -276,6 +294,17 @@ static void udev_read_conf(struct udev *udev, const char *filename) {
                                 continue;
                         }
 
+                        if (streq(key, "resolve_names")) {
+                                int r;
+
+                                r = udev_parse_resolve_names(val, &udev->resolve_names);
+                                if (r < 0)
+                                        udev_conf_parse_error(udev, filename, line_nr, key, val, r);
+                                else
+                                        udev->resolve_names_set = true;
+                                continue;
+                        }
+
                         if (streq(key, "timeout_signal")) {
                                 int sig;
 
@@ -335,6 +364,15 @@ usec_t udev_get_event_timeout_usec(struct udev *udev) {
         if (udev == NULL)
                 return 0;
         return udev->event_timeout_usec;
+}
+
+/* Not part of the public API, used by udevd. Returns true and resolve_names= in udev.conf, see
+ * udev_parse_resolve_names(), if it is set. */
+bool udev_get_resolve_names(struct udev *udev, int *ret) {
+        if (udev == NULL || !udev->resolve_names_set)
+                return false;
+        *ret = udev->resolve_names;
+        return true;
 }
 
 /* Not part of the public API, used by udevd. Returns the messages about the invalid settings of udevd in

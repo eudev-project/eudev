@@ -114,7 +114,10 @@ Specify when udevd should resolve names of users and groups\&. When set to
 \fBearly\fR
 (the default), names will be resolved when the rules are parsed\&. When set to
 \fBlate\fR, names will be resolved for every event\&. When set to
-\fBnever\fR, names will never be resolved and all devices will be owned by root\&.
+\fBnever\fR, names will never be resolved and all devices will be owned by root\&. It takes precedence over
+\fIresolve_names=\fR
+in
+\fBudev.conf\fR(5)\&.
 .RE
 .PP
 \fB\-h\fR, \fB\-\-help\fR

@@ -84,6 +84,7 @@ static bool stop_exec_queue;
 static bool start_exec_queue;
 static bool reload;
 static int arg_daemonize = false;
+/* the merged setting of resolve_names, see udev_parse_resolve_names() */
 static int arg_resolve_names = 1;
 /* udev.trace on the kernel command line */
 static bool arg_trace = false;
@@ -98,9 +99,12 @@ struct udev_config {
         usec_t timeout_usec;
         int timeout_signal;
         bool blockdev_read_only;
+        /* see udev_parse_resolve_names(), RESOLVE_NAMES_UNSET if not given */
+        int resolve_names;
 };
 
-#define UDEV_CONFIG_INIT { .log_level = -1, }
+#define RESOLVE_NAMES_UNSET INT_MIN
+#define UDEV_CONFIG_INIT { .log_level = -1, .resolve_names = RESOLVE_NAMES_UNSET, }
 
 /* udev_new() reads udev.conf and applies its log level, the other settings are taken from there */
 static struct udev_config config_by_udev_conf = UDEV_CONFIG_INIT;
@@ -1199,6 +1203,10 @@ static void manager_merge_config(void) {
                               config_by_udev_conf.exec_delay_usec;
         arg_event_timeout_usec = config_by_kernel.timeout_usec ?: config_by_command.timeout_usec ?:
                                  config_by_udev_conf.timeout_usec ?: DEFAULT_EVENT_TIMEOUT_USEC;
+        /* like MERGE_NON_NEGATIVE() of systemd, the kernel command line has no such option */
+        arg_resolve_names = config_by_command.resolve_names != RESOLVE_NAMES_UNSET ? config_by_command.resolve_names :
+                            config_by_udev_conf.resolve_names != RESOLVE_NAMES_UNSET ? config_by_udev_conf.resolve_names :
+                            1;
         arg_timeout_signal = config_by_kernel.timeout_signal ?: config_by_command.timeout_signal ?:
                              config_by_udev_conf.timeout_signal ?: SIGKILL;
         arg_blockdev_read_only = config_by_kernel.blockdev_read_only;
@@ -1860,13 +1868,8 @@ static int parse_argv(int argc, char *argv[]) {
                         log_set_target(LOG_TARGET_CONSOLE);
                         break;
                 case 'N':
-                        if (streq(optarg, "early")) {
-                                arg_resolve_names = 1;
-                        } else if (streq(optarg, "late")) {
-                                arg_resolve_names = 0;
-                        } else if (streq(optarg, "never")) {
-                                arg_resolve_names = -1;
-                        } else {
+                        r = udev_parse_resolve_names(optarg, &config_by_command.resolve_names);
+                        if (r < 0) {
                                 log_error("resolve-names must be early, late or never");
                                 return 0;
                         }
@@ -1944,6 +1947,7 @@ int main(int argc, char *argv[]) {
         config_by_udev_conf.children_max = udev_get_children_max(udev);
         config_by_udev_conf.exec_delay_usec = udev_get_exec_delay_usec(udev);
         config_by_udev_conf.timeout_usec = udev_get_event_timeout_usec(udev);
+        (void) udev_get_resolve_names(udev, &config_by_udev_conf.resolve_names);
 
         r = parse_proc_cmdline(parse_proc_cmdline_item);
         if (r < 0)

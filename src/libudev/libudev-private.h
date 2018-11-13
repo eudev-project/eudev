@@ -46,6 +46,8 @@ int udev_parse_hwdb_format(const char *s);
 unsigned udev_get_children_max(struct udev *udev);
 usec_t udev_get_exec_delay_usec(struct udev *udev);
 usec_t udev_get_event_timeout_usec(struct udev *udev);
+int udev_parse_resolve_names(const char *s, int *ret);
+bool udev_get_resolve_names(struct udev *udev, int *ret);
 char **udev_get_conf_warnings(struct udev *udev);
 int udev_get_timeout_signal(struct udev *udev, bool *ret_invalid);
 int udev_get_hwdb_format(struct udev *udev);

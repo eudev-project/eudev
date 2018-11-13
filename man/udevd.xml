@@ -162,7 +162,9 @@
           resolved when the rules are parsed.  When set to
           <option>late</option>, names will be resolved for every event.
           When set to <option>never</option>, names will never be resolved
-          and all devices will be owned by root.</para>
+          and all devices will be owned by root. It takes precedence over
+          <varname>resolve_names=</varname> in
+          <citerefentry><refentrytitle>udev.conf</refentrytitle><manvolnum>5</manvolnum></citerefentry>.</para>
         </listitem>
       </varlistentry>
 

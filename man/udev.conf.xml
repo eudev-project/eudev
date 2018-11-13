@@ -129,6 +129,22 @@
       </varlistentry>
 
       <varlistentry>
+        <term><varname>resolve_names</varname></term>
+
+        <listitem>
+          <para>Specifies when <command>udevd</command> should resolve names of
+          users and groups. When set to <option>early</option> (the default),
+          names will be resolved when the rules are parsed. When set to
+          <option>late</option>, names will be resolved for every event. When
+          set to <option>never</option>, names will never be resolved and all
+          devices will be owned by root.</para>
+
+          <para>This is the same as the <option>--resolve-names=</option> option of
+          <citerefentry><refentrytitle>udevd</refentrytitle><manvolnum>8</manvolnum></citerefentry>.</para>
+        </listitem>
+      </varlistentry>
+
+      <varlistentry>
         <term><varname>hwdb_format</varname></term>
 
         <listitem>
@@ -269,7 +285,9 @@
       <varname>event_timeout</varname>, 0 counts as not set, so e.g.
       <varname>udev.children_max=0</varname> on the kernel command line does not
       override <varname>children_max=4</varname> in this file.
-      Invalid values of these settings are ignored, with a warning when
+      Invalid values of <varname>children_max</varname>,
+      <varname>exec_delay</varname>, <varname>event_timeout</varname> and
+      <varname>resolve_names</varname> are ignored, with a warning when
       <command>udevd</command> starts. The file is only read when
       <command>udevd</command> starts.
     </para>
