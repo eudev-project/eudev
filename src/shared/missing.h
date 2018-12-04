@@ -179,3 +179,7 @@ static inline int name_to_handle_at(int fd, const char *name, struct file_handle
 #ifndef INPUT_PROP_MAX
 #define INPUT_PROP_MAX 0x1f
 #endif
+
+#ifndef KEY_ALS_TOGGLE
+#define KEY_ALS_TOGGLE 0x7a
+#endif
