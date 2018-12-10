@@ -103,7 +103,7 @@
 
     <refsect2><title>udevadm info
       <arg choice="opt"><replaceable>options</replaceable></arg>
-      <arg choice="opt"><replaceable>devpath</replaceable>|<replaceable>file</replaceable></arg>
+      <arg choice="opt" rep="repeat"><replaceable>devpath</replaceable>|<replaceable>file</replaceable></arg>
     </title>
 
       <para>Queries the udev database for device information
@@ -272,10 +272,13 @@
         </varlistentry>
       </variablelist>
 
-      <para>In addition an optional positional argument can be used
-      to specify a device name or a sys path. It must start with
-      <filename>/dev</filename> or <filename>/sys</filename>
-      respectively.</para>
+      <para>In addition optional positional arguments can be used
+      to specify one or more devices. Each one may be a device name or
+      a sys path. It must start with <filename>/dev</filename> or
+      <filename>/sys</filename> respectively. The devices given with
+      <option>--name=</option> and <option>--path=</option> are shown
+      first. Only one device may be specified with
+      <option>--attribute-walk</option> and <option>--tree</option>.</para>
 
       <para>The generated output shows the current device database entry in a terse format. Each line shown
       is prefixed with one of the following characters:</para>

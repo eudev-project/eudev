@@ -54,8 +54,9 @@ struct udev_device *find_device(struct udev *udev,
                 return udev_device_new_from_devnum(udev, type, statbuf.st_rdev);
         } else if (startswith(id, "/sys/"))
                 return udev_device_new_from_syspath(udev, id);
-        else
-                return NULL;
+
+        errno = EINVAL;
+        return NULL;
 }
 
 int device_is_processed(struct udev_device *dev) {
