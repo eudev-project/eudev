@@ -183,3 +183,8 @@ static inline int name_to_handle_at(int fd, const char *name, struct file_handle
 #ifndef KEY_ALS_TOGGLE
 #define KEY_ALS_TOGGLE 0x7a
 #endif
+
+#ifndef BTN_DPAD_UP
+#define BTN_DPAD_UP 0x220
+#define BTN_DPAD_RIGHT 0x223
+#endif
