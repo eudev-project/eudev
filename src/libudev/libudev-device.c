@@ -2160,10 +2160,13 @@ void udev_device_cleanup_tags_list(struct udev_device *udev_device)
  * udev_device_get_tags_list_entry:
  * @udev_device: udev device
  *
- * Retrieve the list of tags attached to the udev device. The next
- * list entry can be retrieved with udev_list_entry_get_next(),
- * which returns #NULL if no more entries exist. The tag string
- * can be retrieved from the list entry by udev_list_entry_get_name().
+ * Retrieve the list of tags attached to the udev device. Tags are "sticky":
+ * once set by a uevent, they remain attached to the device until it is
+ * removed, see udev_device_get_current_tags_list_entry() for the tags of the
+ * most recent uevent. The next list entry can be retrieved with
+ * udev_list_entry_get_next(), which returns #NULL if no more entries exist.
+ * The tag string can be retrieved from the list entry by
+ * udev_list_entry_get_name().
  *
  * Returns: the first entry of the tag list
  **/
@@ -2184,10 +2187,24 @@ struct udev_list_entry *udev_device_get_current_tags_list_entry_raw(struct udev_
         return udev_list_get_entry(&udev_device->current_tags_list);
 }
 
+/**
+ * udev_device_get_current_tags_list_entry:
+ * @udev_device: udev device
+ *
+ * Retrieve the list of tags attached to the udev device by the most recent
+ * uevent. Tags are "sticky": once set, they remain attached to the device
+ * until it is removed, see udev_device_get_tags_list_entry(). The next list
+ * entry can be retrieved with udev_list_entry_get_next(), which returns #NULL
+ * if no more entries exist. The tag string can be retrieved from the list
+ * entry by udev_list_entry_get_name().
+ *
+ * Returns: the first entry of the current tag list
+ **/
 _public_ struct udev_list_entry *udev_device_get_current_tags_list_entry(struct udev_device *udev_device)
 {
-        // TODO: eudev database does not support current tags
-        return udev_device_get_tags_list_entry(udev_device);
+        if (udev_device == NULL)
+                return NULL;
+        return udev_device_get_current_tags_list_entry_raw(udev_device);
 }
 
 /**
@@ -2195,7 +2212,8 @@ _public_ struct udev_list_entry *udev_device_get_current_tags_list_entry(struct 
  * @udev_device: udev device
  * @tag: tag name
  *
- * Check if a given device has a certain tag associated.
+ * Check if a given device has a certain tag associated, by the most
+ * recent or an earlier uevent, as tags are "sticky".
  *
  * Returns: 1 if the tag is found. 0 otherwise.
  **/
@@ -2213,9 +2231,26 @@ _public_ int udev_device_has_tag(struct udev_device *udev_device, const char *ta
         return false;
 }
 
-_public_ int udev_device_has_current_tag(struct udev_device *udev_device, const char *tag) {
-        // TODO: eudev database does not support current tags
-        return udev_device_has_tag(udev_device, tag);
+/**
+ * udev_device_has_current_tag:
+ * @udev_device: udev device
+ * @tag: tag name
+ *
+ * Check if a given device has a certain tag associated by the most recent
+ * uevent.
+ *
+ * Returns: 1 if the tag is found. 0 otherwise.
+ **/
+_public_ int udev_device_has_current_tag(struct udev_device *udev_device, const char *tag)
+{
+        struct udev_list_entry *list_entry;
+
+        if (udev_device == NULL || tag == NULL)
+                return false;
+        list_entry = udev_device_get_current_tags_list_entry(udev_device);
+        if (udev_list_entry_get_by_name(list_entry, tag) != NULL)
+                return true;
+        return false;
 }
 
 #define ENVP_SIZE                        128
