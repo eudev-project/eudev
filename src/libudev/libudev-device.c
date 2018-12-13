@@ -604,17 +604,19 @@ int udev_device_read_db(struct udev_device *udev_device)
         if (udev_device->db_loaded)
                 return 0;
 
-        udev_device->db_loaded = true;
-
         id = udev_device_get_id_filename(udev_device);
         if (id == NULL)
                 return -1;
 
         strscpyl(filename, sizeof(filename), UDEV_ROOT_RUN "/udev/data/", id, NULL);
 
+        /* We will retry if we couldn't access the file, e.g. because the device has not been
+         * processed by udevd yet, but not if parsing failed. */
         f = fopen(filename, "re");
         if (f == NULL)
                 return log_debug_errno(errno, "no db file to read %s: %m", filename);
+
+        udev_device->db_loaded = true;
 
         /* devices with a database entry are initialized */
         udev_device->is_initialized = true;
