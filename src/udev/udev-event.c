@@ -982,6 +982,24 @@ static void netif_tmp_name(struct udev_device *dev, char newifname[IFNAMSIZ]) {
 }
 #endif
 
+static int copy_all_tags(struct udev_device *d, struct udev_device *s) {
+        struct udev_list_entry *list_entry;
+        int r;
+
+        assert(d);
+
+        if (!s)
+                return 0;
+
+        udev_list_entry_foreach(list_entry, udev_device_get_tags_list_entry(s)) {
+                r = udev_device_add_tag(d, udev_list_entry_get_name(list_entry), false);
+                if (r < 0)
+                        return r;
+        }
+
+        return 0;
+}
+
 void udev_event_execute_rules(struct udev_event *event,
                               usec_t timeout_usec, usec_t timeout_warn_usec,
                               struct udev_list *properties_list,
@@ -1018,6 +1036,10 @@ void udev_event_execute_rules(struct udev_event *event,
                         udev_watch_end(event->udev, dev);
 
                 event->dev_db = udev_device_clone_with_db(dev);
+
+                if (copy_all_tags(dev, event->dev_db) < 0)
+                        log_warning("%s: Failed to copy all tags from old database entry, ignoring",
+                                    udev_device_get_sysname(dev));
 
                 if (major(udev_device_get_devnum(dev)) == 0 &&
                     streq(udev_device_get_action(dev), "move"))

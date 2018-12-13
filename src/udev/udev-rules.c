@@ -3058,7 +3058,7 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                                 udev_device_cleanup_tags_list(event->dev);
                         if (cur->key.op == OP_REMOVE)
                                 udev_device_remove_tag(event->dev, tag);
-                        else if (udev_device_add_tag(event->dev, tag) == -EINVAL && tag[0] != '\0')
+                        else if (udev_device_add_tag(event->dev, tag, true) == -EINVAL && tag[0] != '\0')
                                 log_error("ignoring invalid tag name '%s' %s:%u", tag,
                                           rules_str(rules, rule->rule.filename_off), rule->rule.filename_line);
                         break;

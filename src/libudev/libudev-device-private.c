@@ -96,6 +96,8 @@ static bool device_has_info(struct udev_device *udev_device)
                         return true;
         if (udev_device_get_tags_list_entry(udev_device) != NULL)
                 return true;
+        if (udev_device_get_current_tags_list_entry_raw(udev_device) != NULL)
+                return true;
         return false;
 }
 
@@ -190,7 +192,11 @@ int udev_device_update_db(struct udev_device *udev_device)
 
                 udev_list_entry_foreach(list_entry, udev_device_get_tags_list_entry(udev_device))
                         if (db_entry_is_safe(udev_device, "G", udev_list_entry_get_name(list_entry), NULL))
-                                fprintf(f, "G:%s\n", udev_list_entry_get_name(list_entry));
+                                fprintf(f, "G:%s\n", udev_list_entry_get_name(list_entry)); /* Any tag */
+
+                udev_list_entry_foreach(list_entry, udev_device_get_current_tags_list_entry_raw(udev_device))
+                        if (db_entry_is_safe(udev_device, "Q", udev_list_entry_get_name(list_entry), NULL))
+                                fprintf(f, "Q:%s\n", udev_list_entry_get_name(list_entry)); /* Current tag */
         }
 
         fclose(f);

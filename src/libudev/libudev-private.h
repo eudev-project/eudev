@@ -59,7 +59,8 @@ ssize_t udev_device_get_properties_monitor_buf(struct udev_device *udev_device, 
 const char *udev_device_get_devpath_old(struct udev_device *udev_device);
 const char *udev_device_get_id_filename(struct udev_device *udev_device);
 void udev_device_set_is_initialized(struct udev_device *udev_device);
-int udev_device_add_tag(struct udev_device *udev_device, const char *tag);
+int udev_device_add_tag(struct udev_device *udev_device, const char *tag, bool both);
+struct udev_list_entry *udev_device_get_current_tags_list_entry_raw(struct udev_device *udev_device);
 void udev_device_remove_tag(struct udev_device *udev_device, const char *tag);
 void udev_device_cleanup_tags_list(struct udev_device *udev_device);
 usec_t udev_device_get_usec_initialized(struct udev_device *udev_device);

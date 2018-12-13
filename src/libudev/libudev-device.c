@@ -84,7 +84,8 @@ struct udev_device {
         struct udev_list properties_list;
         struct udev_list sysattr_value_list;
         struct udev_list sysattr_list;
-        struct udev_list tags_list;
+        struct udev_list tags_list;             /* all tags, sticky until the device is removed */
+        struct udev_list current_tags_list;     /* the tags assigned by the latest event */
         unsigned long long int seqnum;
         usec_t usec_initialized;
         int devlink_priority;
@@ -608,11 +609,12 @@ static void udev_device_add_property_from_string_parse(struct udev_device *udev_
                 }
                 if (slink[0] != '\0')
                         udev_device_add_devlink(udev_device, slink);
-        } else if (startswith(property, "TAGS=")) {
+        } else if (startswith(property, "TAGS=") || startswith(property, "CURRENT_TAGS=")) {
+                bool current = startswith(property, "CURRENT_TAGS=");
                 char tags[UTIL_PATH_SIZE];
                 char *next;
 
-                strscpy(tags, sizeof(tags), &property[5]);
+                strscpy(tags, sizeof(tags), strchr(property, '=') + 1);
                 next = strchr(tags, ':');
                 if (next != NULL) {
                         next++;
@@ -625,7 +627,7 @@ static void udev_device_add_property_from_string_parse(struct udev_device *udev_
                                         break;
                                 next[0] = '\0';
                                 next++;
-                                udev_device_add_tag(udev_device, tag);
+                                udev_device_add_tag(udev_device, tag, current);
                         }
                 }
         } else if (startswith(property, "USEC_INITIALIZED=")) {
@@ -752,8 +754,9 @@ int udev_device_read_db(struct udev_device *udev_device)
                         entry = udev_device_add_property_from_string(udev_device, val);
                         udev_list_entry_set_num(entry, true);
                         break;
-                case 'G':
-                        udev_device_add_tag(udev_device, val);
+                case 'G': /* Any tag */
+                case 'Q': /* Current tag */
+                        udev_device_add_tag(udev_device, val, line[0] == 'Q');
                         break;
                 case 'W':
                         /* Deprecated. Previously, watch handle is both saved in database and /run/udev/watch.
@@ -856,6 +859,7 @@ static struct udev_device *udev_device_new(struct udev *udev)
         udev_list_init(udev, &udev_device->sysattr_value_list, true);
         udev_list_init(udev, &udev_device->sysattr_list, false);
         udev_list_init(udev, &udev_device->tags_list, true);
+        udev_list_init(udev, &udev_device->current_tags_list, true);
         udev_device->watch_handle = -1;
 
         return udev_device;
@@ -1385,6 +1389,7 @@ _public_ struct udev_device *udev_device_unref(struct udev_device *udev_device)
         udev_list_cleanup(&udev_device->sysattr_value_list);
         udev_list_cleanup(&udev_device->sysattr_list);
         udev_list_cleanup(&udev_device->tags_list);
+        udev_list_cleanup(&udev_device->current_tags_list);
         free(udev_device->action);
         free(udev_device->driver);
         free(udev_device->devpath_old);
@@ -1505,6 +1510,26 @@ void udev_device_cleanup_devlinks_list(struct udev_device *udev_device)
         udev_list_cleanup(&udev_device->devlinks_list);
 }
 
+/* Sets TAGS= or CURRENT_TAGS= to ":tag1:tag2:", or unsets it when there are no tags. */
+static void udev_device_set_tags_property(struct udev_device *udev_device, const char *key, struct udev_list_entry *first)
+{
+        struct udev_list_entry *list_entry;
+        char tags[UTIL_PATH_SIZE];
+        char *s;
+        size_t l;
+
+        if (!first) {
+                udev_device_add_property_internal(udev_device, key, NULL);
+                return;
+        }
+
+        s = tags;
+        l = strpcpyl(&s, sizeof(tags), ":", NULL);
+        udev_list_entry_foreach(list_entry, first)
+                l = strpcpyl(&s, l, udev_list_entry_get_name(list_entry), ":", NULL);
+        udev_device_add_property_internal(udev_device, key, tags);
+}
+
 /**
  * udev_device_get_properties_list_entry:
  * @udev_device: udev device
@@ -1544,20 +1569,8 @@ _public_ struct udev_list_entry *udev_device_get_properties_list_entry(struct ud
         }
         if (!udev_device->tags_uptodate) {
                 udev_device->tags_uptodate = true;
-                if (udev_device_get_tags_list_entry(udev_device) != NULL) {
-                        char tags[UTIL_PATH_SIZE];
-                        struct udev_list_entry *list_entry;
-                        char *s;
-                        size_t l;
-
-                        s = tags;
-                        l = strpcpyl(&s, sizeof(tags), ":", NULL);
-                        udev_list_entry_foreach(list_entry, udev_device_get_tags_list_entry(udev_device))
-                                l = strpcpyl(&s, l, udev_list_entry_get_name(list_entry), ":", NULL);
-                        udev_device_add_property_internal(udev_device, "TAGS", tags);
-                } else {
-                        udev_device_add_property_internal(udev_device, "TAGS", NULL);
-                }
+                udev_device_set_tags_property(udev_device, "TAGS", udev_device_get_tags_list_entry(udev_device));
+                udev_device_set_tags_property(udev_device, "CURRENT_TAGS", udev_list_get_entry(&udev_device->current_tags_list));
         }
         return udev_list_get_entry(&udev_device->properties_list);
 }
@@ -2095,23 +2108,40 @@ static bool is_valid_tag(const char *tag)
                                 "0123456789-_")] == '\0';
 }
 
-int udev_device_add_tag(struct udev_device *udev_device, const char *tag)
+/* Adds the tag to all tags, which are sticky, and with both, also to the current tags. */
+int udev_device_add_tag(struct udev_device *udev_device, const char *tag, bool both)
 {
+        struct udev_list_entry *e;
+        bool added;
+
         if (!is_valid_tag(tag))
                 return -EINVAL;
+
+        /* Definitely add to the "all" list of tags (i.e. the sticky list) */
+        added = !udev_list_entry_get_by_name(udev_list_get_entry(&udev_device->tags_list), tag);
+        e = udev_list_entry_add(&udev_device->tags_list, tag, NULL);
+        if (!e)
+                return -ENOMEM;
+
+        /* And optionally, also add it to the current list of tags */
+        if (both && !udev_list_entry_add(&udev_device->current_tags_list, tag, NULL)) {
+                if (added)
+                        udev_list_entry_delete(e);
+                return -ENOMEM;
+        }
+
         udev_device->tags_uptodate = false;
-        if (udev_list_entry_add(&udev_device->tags_list, tag, NULL) != NULL)
-                return 0;
-        return -ENOMEM;
+        return 0;
 }
 
+/* Removes the tag from the current tags. It stays in all tags. */
 void udev_device_remove_tag(struct udev_device *udev_device, const char *tag)
 {
         struct udev_list_entry *e;
 
         if (!is_valid_tag(tag))
                 return;
-        e = udev_list_get_entry(&udev_device->tags_list);
+        e = udev_list_get_entry(&udev_device->current_tags_list);
         e = udev_list_entry_get_by_name(e, tag);
         if (e) {
                 udev_device->tags_uptodate = false;
@@ -2123,6 +2153,7 @@ void udev_device_cleanup_tags_list(struct udev_device *udev_device)
 {
         udev_device->tags_uptodate = false;
         udev_list_cleanup(&udev_device->tags_list);
+        udev_list_cleanup(&udev_device->current_tags_list);
 }
 
 /**
@@ -2143,6 +2174,14 @@ _public_ struct udev_list_entry *udev_device_get_tags_list_entry(struct udev_dev
         if (!udev_device->info_loaded)
                 udev_device_read_db(udev_device);
         return udev_list_get_entry(&udev_device->tags_list);
+}
+
+/* The tags assigned by the latest event, as stored in the Q: lines of the database. */
+struct udev_list_entry *udev_device_get_current_tags_list_entry_raw(struct udev_device *udev_device)
+{
+        if (!udev_device->info_loaded)
+                udev_device_read_db(udev_device);
+        return udev_list_get_entry(&udev_device->current_tags_list);
 }
 
 _public_ struct udev_list_entry *udev_device_get_current_tags_list_entry(struct udev_device *udev_device)
