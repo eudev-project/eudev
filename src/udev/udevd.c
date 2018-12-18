@@ -159,6 +159,8 @@ static void worker_free(struct worker *worker) {
         free(worker);
 }
 
+DEFINE_TRIVIAL_CLEANUP_FUNC(struct worker *, worker_free);
+
 static void workers_free(void) {
         struct worker *worker;
         Iterator i;
@@ -171,7 +173,7 @@ static void workers_free(void) {
 }
 
 static int worker_new(struct worker **ret, struct udev *udev, struct udev_monitor *worker_monitor, pid_t pid) {
-        _cleanup_free_ struct worker *worker = NULL;
+        _cleanup_(worker_freep) struct worker *worker = NULL;
         int r;
 
         assert(ret);
