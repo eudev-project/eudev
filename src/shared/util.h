@@ -65,7 +65,7 @@ bool streq_ptr(const char *a, const char *b) _pure_;
 
 #define new(t, n) ((t*) malloc_multiply(sizeof(t), (n)))
 
-#define new0(t, n) ((t*) calloc((n), sizeof(t)))
+#define new0(t, n) ((t*) calloc((n) ?: 1, sizeof(t)))
 #define malloc0(n) (calloc((n), 1))
 
 static inline const char* one_zero(bool b) {
@@ -317,14 +317,14 @@ _malloc_  _alloc_(1, 2) static inline void *malloc_multiply(size_t a, size_t b) 
         if (_unlikely_(b != 0 && a > ((size_t) -1) / b))
                 return NULL;
 
-        return malloc(a * b);
+        return malloc(a * b ?: 1);
 }
 
 _alloc_(2, 3) static inline void *realloc_multiply(void *p, size_t a, size_t b) {
         if (_unlikely_(b != 0 && a > ((size_t) -1) / b))
                 return NULL;
 
-        return realloc(p, a * b);
+        return realloc(p, a * b ?: 1);
 }
 
 /* If for some reason more than 4M are allocated on the stack, let's abort immediately. It's better than
