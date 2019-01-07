@@ -895,6 +895,18 @@ int strverscmp_improved(const char *a, const char *b) {
         }
 }
 
+int getenv_bool(const char *name) {
+        const char *e;
+
+        assert(name);
+
+        e = getenv(name);
+        if (!e)
+                return -ENXIO;
+
+        return parse_boolean(e);
+}
+
 int secure_getenv_bool(const char *name) {
         const char *e;
 

@@ -36,6 +36,7 @@
 #include "udev.h"
 #include "udev-util.h"
 #include "udevadm-util.h"
+#include "virt.h"
 
 static bool udev_exit;
 
@@ -149,6 +150,11 @@ static int adm_monitor(struct udev *udev, int argc, char *argv[]) {
                 default:
                         return 1;
                 }
+
+        if (running_in_chroot() > 0) {
+                log_info("Running in chroot, ignoring request.");
+                return 0;
+        }
 
         if (!print_kernel && !print_udev) {
                 print_kernel = true;

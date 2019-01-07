@@ -1578,6 +1578,27 @@
         <varname>$LC_CTYPE</varname> or <varname>$LANG</varname>, is not UTF-8.</para></listitem>
       </varlistentry>
       <varlistentry>
+        <term><varname>$UDEV_IN_CHROOT</varname></term>
+        <term><varname>$SYSTEMD_IN_CHROOT</varname></term>
+        <listitem><para>Takes a boolean argument, and overrides the detection of a
+        <citerefentry project='man-pages'><refentrytitle>chroot</refentrytitle><manvolnum>2</manvolnum></citerefentry>
+        environment. In a chroot, <command>udevadm trigger</command>, <command>udevadm control</command>,
+        <command>udevadm settle</command> and <command>udevadm monitor</command> do nothing: they log
+        "Running in chroot, ignoring request." and succeed. Their options are checked first, so
+        <option>--help</option>, <option>--version</option> and invalid options work as outside a chroot.
+        By default, <command>udevadm</command> is in a
+        chroot if its root directory is not the one of PID 1, or if <filename>/proc</filename> is not
+        mounted. <varname>$UDEV_IN_CHROOT</varname> takes precedence over
+        <varname>$SYSTEMD_IN_CHROOT</varname>.</para></listitem>
+      </varlistentry>
+      <varlistentry>
+        <term><varname>$SYSTEMD_IGNORE_CHROOT</varname></term>
+        <listitem><para>Deprecated, use <varname>$SYSTEMD_IN_CHROOT=0</varname> instead. If set to true,
+        <command>udevadm</command> does not consider itself to be in a chroot. It is only read when
+        neither <varname>$UDEV_IN_CHROOT</varname> nor <varname>$SYSTEMD_IN_CHROOT</varname> is set, and a
+        false value has no effect.</para></listitem>
+      </varlistentry>
+      <varlistentry>
         <term><varname>$UDEV_DEVICE_VERIFY_SYSFS</varname></term>
         <listitem>
           <para>Takes a boolean. Like systemd, <command>udevadm</command>, <command>udevd</command> and

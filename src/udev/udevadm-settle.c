@@ -37,6 +37,7 @@
 #include "udev-util.h"
 #include "udevadm-util.h"
 #include "util.h"
+#include "virt.h"
 
 static void help(void) {
         pager_open(0);
@@ -113,6 +114,11 @@ static int adm_settle(struct udev *udev, int argc, char *argv[]) {
         if (optind < argc) {
                 fprintf(stderr, "Extraneous argument: '%s'\n", argv[optind]);
                 return EXIT_FAILURE;
+        }
+
+        if (running_in_chroot() > 0) {
+                log_info("Running in chroot, ignoring request.");
+                return 0;
         }
 
         deadline = now(CLOCK_MONOTONIC) + timeout * USEC_PER_SEC;

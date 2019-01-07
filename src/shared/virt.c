@@ -20,11 +20,15 @@
 #include <string.h>
 #include <errno.h>
 #include <unistd.h>
+#include <sys/stat.h>
+#include <sys/vfs.h>
+#include <linux/magic.h>
 
 #include "util.h"
 #include "process-util.h"
 #include "virt.h"
 #include "fileio.h"
+#include "log.h"
 
 int detect_container(const char **id) {
 
@@ -102,4 +106,71 @@ finish:
                 *id = _id;
 
         return r;
+}
+
+/* Like systemd's proc_mounted(): whether procfs is mounted on /proc. */
+static int proc_mounted(void) {
+        struct statfs s;
+
+        if (statfs("/proc/", &s) < 0)
+                return errno == ENOENT ? false : -errno;
+
+        return F_TYPE_EQUAL(s.f_type, PROC_SUPER_MAGIC);
+}
+
+/* Like the stat() fallback of systemd's inode_same(): whether a and b are the same inode. */
+static int inode_same(const char *a, const char *b) {
+        struct stat sta, stb;
+
+        if (stat(a, &sta) < 0)
+                return -errno;
+        if (stat(b, &stb) < 0)
+                return -errno;
+
+        return ((sta.st_mode ^ stb.st_mode) & S_IFMT) == 0 &&
+                sta.st_dev == stb.st_dev &&
+                sta.st_ino == stb.st_ino;
+}
+
+int running_in_chroot(void) {
+        int r;
+
+        /* If we're PID1, /proc may not be mounted (and most likely we're not in a chroot). But PID1 will
+         * mount /proc, so all other programs can assume that if /proc is *not* available, we're in some
+         * chroot. */
+
+        /* eudev: $UDEV_IN_CHROOT takes precedence over $SYSTEMD_IN_CHROOT. */
+        r = getenv_bool("UDEV_IN_CHROOT");
+        if (r >= 0)
+                return r > 0;
+        if (r != -ENXIO)
+                log_debug_errno(r, "Failed to parse $UDEV_IN_CHROOT, ignoring: %m");
+
+        r = getenv_bool("SYSTEMD_IN_CHROOT");
+        if (r >= 0)
+                return r > 0;
+        if (r != -ENXIO)
+                log_debug_errno(r, "Failed to parse $SYSTEMD_IN_CHROOT, ignoring: %m");
+
+        /* Deprecated but kept for backwards compatibility. */
+        if (getenv_bool("SYSTEMD_IGNORE_CHROOT") > 0)
+                return 0;
+
+        r = inode_same("/proc/1/root", "/");
+        if (r == -ENOENT) {
+                r = proc_mounted();
+                if (r == 0) {
+                        if (getpid() == 1)
+                                return false; /* We will mount /proc, assuming we're not in a chroot. */
+
+                        log_debug("/proc/ is not mounted, assuming we're in a chroot.");
+                        return true;
+                }
+                if (r > 0) /* If we have fake /proc/, we can't do the check properly. */
+                        return -ENOSYS;
+        }
+        if (r < 0)
+                return log_debug_errno(r, "Failed to check if /proc/1/root and / are the same inode: %m");
+
+        return r == 0;
 }

@@ -1359,6 +1359,42 @@ or
 \fI$LANG\fR, is not UTF\-8\&.
 .RE
 .PP
+\fI$UDEV_IN_CHROOT\fR, \fI$SYSTEMD_IN_CHROOT\fR
+.RS 4
+Takes a boolean argument, and overrides the detection of a
+\fBchroot\fR(2)
+environment\&. In a chroot,
+\fBudevadm trigger\fR,
+\fBudevadm control\fR,
+\fBudevadm settle\fR
+and
+\fBudevadm monitor\fR
+do nothing: they log "Running in chroot, ignoring request\&." and succeed\&. Their options are checked first, so
+\fB\-\-help\fR,
+\fB\-\-version\fR
+and invalid options work as outside a chroot\&. By default,
+\fBudevadm\fR
+is in a chroot if its root directory is not the one of PID 1, or if
+/proc
+is not mounted\&.
+\fI$UDEV_IN_CHROOT\fR
+takes precedence over
+\fI$SYSTEMD_IN_CHROOT\fR\&.
+.RE
+.PP
+\fI$SYSTEMD_IGNORE_CHROOT\fR
+.RS 4
+Deprecated, use
+\fI$SYSTEMD_IN_CHROOT=0\fR
+instead\&. If set to true,
+\fBudevadm\fR
+does not consider itself to be in a chroot\&. It is only read when neither
+\fI$UDEV_IN_CHROOT\fR
+nor
+\fI$SYSTEMD_IN_CHROOT\fR
+is set, and a false value has no effect\&.
+.RE
+.PP
 \fI$UDEV_DEVICE_VERIFY_SYSFS\fR
 .RS 4
 Takes a boolean\&. Like systemd,

@@ -126,6 +126,7 @@ int safe_atoi(const char *s, int *ret_i);
 int parse_boolean(const char *v) _pure_;
 int strverscmp_improved(const char *a, const char *b);
 /* Returns -ENXIO if the variable is not set */
+int getenv_bool(const char *name);
 int secure_getenv_bool(const char *name);
 
 #define SAFE_ATO_REFUSE_PLUS_MINUS (1U << 30)

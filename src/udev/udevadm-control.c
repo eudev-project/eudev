@@ -29,6 +29,7 @@
 #include "udev.h"
 #include "udev-util.h"
 #include "udevadm-util.h"
+#include "virt.h"
 
 static void print_help(void) {
         pager_open(0);
@@ -177,6 +178,13 @@ static int adm_control(struct udev *udev, int argc, char *argv[]) {
         if (n_commands == 0) {
                 fprintf(stderr, "Option missing\n");
                 return rc;
+        }
+
+        /* Unlike systemd, the options are parsed first, so that --help, --version and invalid options
+         * work in a chroot too, and only the commands are not sent there. */
+        if (running_in_chroot() > 0) {
+                log_info("Running in chroot, ignoring request.");
+                return 0;
         }
 
         if (getuid() != 0) {

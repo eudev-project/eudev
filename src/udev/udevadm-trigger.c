@@ -39,6 +39,7 @@
 #include "udev-util.h"
 #include "udevadm-util.h"
 #include "util.h"
+#include "virt.h"
 
 static int verbose;
 static int dry_run;
@@ -606,6 +607,8 @@ static int adm_trigger(struct udev *udev, int argc, char *argv[]) {
         bool ping = false;
         _cleanup_set_free_free_ Set *settle_set = NULL;
         _cleanup_strv_free_ char **list = NULL, **prioritized_subsystems = NULL, **parents = NULL;
+        _cleanup_strv_free_ char **parent_match = NULL, **name_match = NULL;
+        char **m;
         int c, r;
 
         udev_enumerate = udev_enumerate_new(udev);
@@ -672,21 +675,13 @@ static int adm_trigger(struct udev *udev, int argc, char *argv[]) {
                 case 'y':
                         udev_enumerate_add_match_sysname(udev_enumerate, optarg);
                         break;
-                case 'b': {
-                        _cleanup_udev_device_unref_ struct udev_device *dev;
-
-                        dev = find_device(udev, optarg, "/sys");
-                        if (dev == NULL) {
-                                log_error("unable to open the device '%s'", optarg);
-                                return 2;
-                        }
-
-                        if (strv_extend(&parents, udev_device_get_syspath(dev)) < 0) {
+                case 'b':
+                        /* the device is looked up after the check for a chroot */
+                        if (strv_extend(&parent_match, optarg) < 0) {
                                 log_oom();
                                 return 1;
                         }
                         break;
-                }
                 case 'w':
                         arg_settle = true;
                         break;
@@ -723,21 +718,13 @@ static int adm_trigger(struct udev *udev, int argc, char *argv[]) {
                         }
                         break;
 
-                case ARG_NAME: {
-                        _cleanup_udev_device_unref_ struct udev_device *dev;
-
-                        dev = find_device(udev, optarg, "/dev/");
-                        if (dev == NULL) {
-                                log_error("unable to open the device '%s'", optarg);
-                                return 2;
-                        }
-
-                        if (strv_extend(&parents, udev_device_get_syspath(dev)) < 0) {
+                case ARG_NAME:
+                        /* the device is looked up after the check for a chroot */
+                        if (strv_extend(&name_match, optarg) < 0) {
                                 log_oom();
                                 return 1;
                         }
                         break;
-                }
 
                 case 'h':
                         help();
@@ -749,6 +736,43 @@ static int adm_trigger(struct udev *udev, int argc, char *argv[]) {
                         return 1;
                 default:
                         assert_not_reached("Unknown option");
+                }
+        }
+
+        /* Unlike systemd, the options are parsed first, so that --help, --version and invalid options
+         * work in a chroot too, and only the action is skipped there. */
+        if (running_in_chroot() > 0) {
+                log_info("Running in chroot, ignoring request.");
+                return 0;
+        }
+
+        STRV_FOREACH(m, parent_match) {
+                _cleanup_udev_device_unref_ struct udev_device *dev;
+
+                dev = find_device(udev, *m, "/sys");
+                if (dev == NULL) {
+                        log_error("unable to open the device '%s'", *m);
+                        return 2;
+                }
+
+                if (strv_extend(&parents, udev_device_get_syspath(dev)) < 0) {
+                        log_oom();
+                        return 1;
+                }
+        }
+
+        STRV_FOREACH(m, name_match) {
+                _cleanup_udev_device_unref_ struct udev_device *dev;
+
+                dev = find_device(udev, *m, "/dev/");
+                if (dev == NULL) {
+                        log_error("unable to open the device '%s'", *m);
+                        return 2;
+                }
+
+                if (strv_extend(&parents, udev_device_get_syspath(dev)) < 0) {
+                        log_oom();
+                        return 1;
                 }
         }
 

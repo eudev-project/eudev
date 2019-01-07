@@ -20,3 +20,10 @@
 #pragma once
 
 int detect_container(const char **id);
+
+/* Like systemd's running_in_chroot(): > 0 if the root directory is not the one of PID 1, or if /proc
+ * is not mounted (unless this is PID 1), 0 if it is, and a negative error if that cannot be
+ * determined, e.g. -ENOSYS with a /proc that has no /proc/1. $UDEV_IN_CHROOT, or else
+ * $SYSTEMD_IN_CHROOT, overrides the check with a boolean. Otherwise, the deprecated
+ * $SYSTEMD_IGNORE_CHROOT, when true, makes it 0. */
+int running_in_chroot(void);
