@@ -38,7 +38,7 @@ AC_PATH_PROG([M4], [m4])
 
 # Checks for header files.
 AC_CHECK_HEADERS(
-        [arpa/inet.h fcntl.h inttypes.h langinfo.h limits.h locale.h \
+        [arpa/inet.h fcntl.h inttypes.h limits.h locale.h \
          netinet/in.h sys/ioctl.h sys/mount.h \
          sys/param.h sys/socket.h sys/statvfs.h sys/time.h sys/vfs.h syslog.h \
          termios.h unistd.h],

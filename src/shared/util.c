@@ -50,7 +50,6 @@
 #include <sys/vfs.h>
 #include <linux/magic.h>
 #include <limits.h>
-#include <langinfo.h>
 #include <locale.h>
 #include <libgen.h>
 
