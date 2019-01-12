@@ -446,6 +446,13 @@
           </listitem>
         </varlistentry>
         <varlistentry>
+          <term><option>--ping</option></term>
+          <listitem>
+            <para>Send a ping message to udevd and wait for the reply. This may be useful to check that
+            udevd daemon is running.</para>
+          </listitem>
+        </varlistentry>
+        <varlistentry>
           <term><option>--timeout=</option><replaceable>seconds</replaceable></term>
           <listitem>
             <para>The maximum number of seconds to wait for a reply from udevd.</para>

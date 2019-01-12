@@ -40,6 +40,7 @@ static void print_help(void) {
                "  -R --reload              Reload rules and databases\n"
                "  -p --property=KEY=VALUE  Set a global property for all events\n"
                "  -m --children-max=N      Maximum number of children\n"
+               "     --ping                Wait for udev to respond to a ping message\n"
                "     --timeout=SECONDS     Maximum time to block for a reply\n"
                , program_invocation_short_name);
 }
@@ -47,7 +48,11 @@ static void print_help(void) {
 static int adm_control(struct udev *udev, int argc, char *argv[]) {
         _cleanup_udev_ctrl_unref_ struct udev_ctrl *uctrl = NULL;
         int timeout = 60;
-        int rc = 1, c;
+        int rc = 1, c, r;
+
+        enum {
+                ARG_PING = 0x100,
+        };
 
         static const struct option options[] = {
                 { "exit",             no_argument,       NULL, 'e' },
@@ -60,6 +65,7 @@ static int adm_control(struct udev *udev, int argc, char *argv[]) {
                 { "property",         required_argument, NULL, 'p' },
                 { "env",              required_argument, NULL, 'p' }, /* alias for -p */
                 { "children-max",     required_argument, NULL, 'm' },
+                { "ping",             no_argument,       NULL, ARG_PING },
                 { "timeout",          required_argument, NULL, 't' },
                 { "help",             no_argument,       NULL, 'h' },
                 { "version",          no_argument,       NULL, 'V' },
@@ -140,6 +146,14 @@ static int adm_control(struct udev *udev, int argc, char *argv[]) {
                                 rc = 0;
                         break;
                 }
+                case ARG_PING:
+                        r = udev_ctrl_send_ping(uctrl, timeout);
+                        if (r < 0) {
+                                log_error_errno(r, "Failed to connect to udev daemon: %m");
+                                rc = 2;
+                        } else
+                                rc = 0;
+                        break;
                 case 't': {
                         int seconds;
 
