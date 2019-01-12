@@ -101,12 +101,15 @@ static void help(void) {
                "     --name-match=NAME              Trigger devices with this /dev name\n"
                "  -b --parent-match=NAME            Trigger devices with that parent device\n"
                "  -w --settle                       Wait for the triggered events to complete\n"
+               "     --wait-daemon[=SECONDS]        Wait for udevd daemon to be initialized\n"
+               "                                    before triggering uevents\n"
                , program_invocation_short_name);
 }
 
 static int adm_trigger(struct udev *udev, int argc, char *argv[]) {
         enum {
                 ARG_NAME = 0x100,
+                ARG_PING,
         };
 
         static const struct option options[] = {
@@ -124,6 +127,7 @@ static int adm_trigger(struct udev *udev, int argc, char *argv[]) {
                 { "name-match",        required_argument, NULL, ARG_NAME },
                 { "parent-match",      required_argument, NULL, 'b'      },
                 { "settle",            no_argument,       NULL, 'w'      },
+                { "wait-daemon",       optional_argument, NULL, ARG_PING },
                 { "help",              no_argument,       NULL, 'h'      },
                 { "version",           no_argument,       NULL, 'V'      },
                 {}
@@ -139,9 +143,10 @@ static int adm_trigger(struct udev *udev, int argc, char *argv[]) {
         _cleanup_close_ int fd_ep = -1;
         int fd_udev = -1;
         struct epoll_event ep_udev;
-        bool settle = false;
+        usec_t ping_timeout_usec = 5 * USEC_PER_SEC;
+        bool settle = false, ping = false;
         _cleanup_set_free_free_ Set *settle_set = NULL;
-        int c;
+        int c, r;
 
         udev_enumerate = udev_enumerate_new(udev);
         if (udev_enumerate == NULL)
@@ -219,6 +224,17 @@ static int adm_trigger(struct udev *udev, int argc, char *argv[]) {
                         settle = true;
                         break;
 
+                case ARG_PING:
+                        ping = true;
+                        if (optarg) {
+                                r = parse_sec(optarg, &ping_timeout_usec);
+                                if (r < 0) {
+                                        log_error_errno(r, "Failed to parse timeout value '%s': %m", optarg);
+                                        return 1;
+                                }
+                        }
+                        break;
+
                 case ARG_NAME: {
                         _cleanup_udev_device_unref_ struct udev_device *dev;
 
@@ -242,6 +258,29 @@ static int adm_trigger(struct udev *udev, int argc, char *argv[]) {
                         return 1;
                 default:
                         assert_not_reached("Unknown option");
+                }
+        }
+
+        if (ping) {
+                _cleanup_udev_ctrl_unref_ struct udev_ctrl *uctrl = NULL;
+                int timeout;
+
+                uctrl = udev_ctrl_new(udev);
+                if (!uctrl) {
+                        log_oom();
+                        return 1;
+                }
+
+                /* The control socket takes the timeout in seconds, round up. */
+                if (ping_timeout_usec == USEC_INFINITY || ping_timeout_usec / USEC_PER_SEC >= INT_MAX / MSEC_PER_SEC)
+                        timeout = -1;
+                else
+                        timeout = (ping_timeout_usec + USEC_PER_SEC - 1) / USEC_PER_SEC;
+
+                r = udev_ctrl_send_ping(uctrl, timeout);
+                if (r < 0) {
+                        log_error_errno(r, "Failed to connect to udev daemon: %m");
+                        return 1;
                 }
         }
 

@@ -240,6 +240,14 @@ Apart from triggering events, also waits for those events to finish\&. Note that
 waits for all events to finish\&. This option only waits for events triggered by the same command to finish\&.
 .RE
 .PP
+\fB\-\-wait\-daemon[=\fR\fB\fISECONDS\fR\fR\fB]\fR
+.RS 4
+Before triggering uevents, wait for udevd daemon to be initialized\&. Optionally takes timeout value\&. Default timeout is 5 seconds\&. This is equivalent to invoking
+\fBudevadm control \-\-ping\fR
+before
+\fBudevadm trigger\fR\&.
+.RE
+.PP
 \fB\-h\fR, \fB\-\-help\fR
 .RS 4
 Print help text\&.
