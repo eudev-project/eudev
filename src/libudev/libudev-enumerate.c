@@ -32,6 +32,7 @@
 
 #include "libudev.h"
 #include "libudev-private.h"
+#include "path-util.h"
 
 /**
  * SECTION:libudev-enumerate
@@ -635,7 +636,8 @@ static bool match_parent(struct udev_enumerate *udev_enumerate, struct udev_devi
         if (udev_enumerate->parent_match == NULL)
                 return true;
 
-        return startswith(udev_device_get_devpath(dev), udev_device_get_devpath(udev_enumerate->parent_match));
+        /* check path components, e.g. a parent .../net/eth1 must not match .../net/eth10 */
+        return path_startswith(udev_device_get_devpath(dev), udev_device_get_devpath(udev_enumerate->parent_match)) != NULL;
 }
 
 static bool match_sysname(struct udev_enumerate *udev_enumerate, const char *sysname)
