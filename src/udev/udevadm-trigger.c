@@ -280,6 +280,28 @@ static int include_parents(struct udev *udev, char ***list) {
         return 0;
 }
 
+/* libudev matches only one parent device, so scan the devices below each parent, the results are
+ * merged by the enumerator. */
+static void scan_devices(struct udev *udev, struct udev_enumerate *udev_enumerate, char **parents) {
+        char **p;
+
+        if (strv_isempty(parents)) {
+                udev_enumerate_scan_devices(udev_enumerate);
+                return;
+        }
+
+        STRV_FOREACH(p, parents) {
+                _cleanup_udev_device_unref_ struct udev_device *dev = NULL;
+
+                dev = udev_device_new_from_syspath(udev, *p);
+                if (!dev)
+                        continue;
+
+                udev_enumerate_add_match_parent(udev_enumerate, dev);
+                udev_enumerate_scan_devices(udev_enumerate);
+        }
+}
+
 /* Returns the syspaths of the devices to trigger, in the order to trigger them. */
 static int build_list(struct udev *udev, struct udev_enumerate *udev_enumerate,
                       char **prioritized_subsystems, char ***ret) {
@@ -579,7 +601,7 @@ static int adm_trigger(struct udev *udev, int argc, char *argv[]) {
         usec_t ping_timeout_usec = 5 * USEC_PER_SEC;
         bool ping = false;
         _cleanup_set_free_free_ Set *settle_set = NULL;
-        _cleanup_strv_free_ char **list = NULL, **prioritized_subsystems = NULL;
+        _cleanup_strv_free_ char **list = NULL, **prioritized_subsystems = NULL, **parents = NULL;
         int c, r;
 
         udev_enumerate = udev_enumerate_new(udev);
@@ -654,7 +676,10 @@ static int adm_trigger(struct udev *udev, int argc, char *argv[]) {
                                 return 2;
                         }
 
-                        udev_enumerate_add_match_parent(udev_enumerate, dev);
+                        if (strv_extend(&parents, udev_device_get_syspath(dev)) < 0) {
+                                log_oom();
+                                return 1;
+                        }
                         break;
                 }
                 case 'w':
@@ -702,7 +727,10 @@ static int adm_trigger(struct udev *udev, int argc, char *argv[]) {
                                 return 2;
                         }
 
-                        udev_enumerate_add_match_parent(udev_enumerate, dev);
+                        if (strv_extend(&parents, udev_device_get_syspath(dev)) < 0) {
+                                log_oom();
+                                return 1;
+                        }
                         break;
                 }
 
@@ -751,7 +779,10 @@ static int adm_trigger(struct udev *udev, int argc, char *argv[]) {
                         return 2;
                 }
 
-                udev_enumerate_add_match_parent(udev_enumerate, dev);
+                if (strv_extend(&parents, udev_device_get_syspath(dev)) < 0) {
+                        log_oom();
+                        return 1;
+                }
         }
 
         if (arg_settle) {
@@ -791,11 +822,11 @@ static int adm_trigger(struct udev *udev, int argc, char *argv[]) {
                 udev_enumerate_scan_subsystems(udev_enumerate);
                 break;
         case TYPE_DEVICES:
-                udev_enumerate_scan_devices(udev_enumerate);
+                scan_devices(udev, udev_enumerate, parents);
                 break;
         case TYPE_ALL:
                 udev_enumerate_scan_subsystems(udev_enumerate);
-                udev_enumerate_scan_devices(udev_enumerate);
+                scan_devices(udev, udev_enumerate, parents);
                 break;
         default:
                 assert_not_reached("device_type");

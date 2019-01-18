@@ -341,17 +341,16 @@
         <varlistentry>
           <term><option>--name-match=<replaceable>NAME</replaceable></option></term>
           <listitem>
-            <para>Trigger events for devices with a matching
-            device path. This options can be specified multiple
-            times.</para>
+            <para>Trigger events for devices with a matching device path. When this option is specified more than once,
+            then each matching result is ORed, that is, all specified devices are triggered.</para>
           </listitem>
         </varlistentry>
         <varlistentry>
           <term><option>-b</option></term>
           <term><option>--parent-match=<replaceable>SYSPATH</replaceable></option></term>
           <listitem>
-            <para>Trigger events for all children of a given
-            device.</para>
+            <para>Trigger events for all children of a given device. When this option is specified more than once,
+            then each matching result is ORed, that is, all children of each specified device are triggered.</para>
           </listitem>
         </varlistentry>
         <varlistentry>

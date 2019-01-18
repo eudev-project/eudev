@@ -238,12 +238,12 @@ Trigger events for devices with a matching sys device path\&. This option can be
 .PP
 \fB\-\-name\-match=\fR\fB\fINAME\fR\fR
 .RS 4
-Trigger events for devices with a matching device path\&. This options can be specified multiple times\&.
+Trigger events for devices with a matching device path\&. When this option is specified more than once, then each matching result is ORed, that is, all specified devices are triggered\&.
 .RE
 .PP
 \fB\-b\fR, \fB\-\-parent\-match=\fR\fB\fISYSPATH\fR\fR
 .RS 4
-Trigger events for all children of a given device\&.
+Trigger events for all children of a given device\&. When this option is specified more than once, then each matching result is ORed, that is, all children of each specified device are triggered\&.
 .RE
 .PP
 \fB\-\-initialized\-match\fR, \fB\-\-initialized\-nomatch\fR
