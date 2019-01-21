@@ -440,6 +440,13 @@ Watch the device node with inotify; when the node is closed after being opened f
 .RS 4
 Disable the watching of a device node with inotify\&.
 .RE
+.PP
+\fBdb_persist\fR
+.RS 4
+Set the flag (sticky bit) on the udev database entry of the event device\&. Device properties are then kept in the database even when
+\fBudevadm info \-\-cleanup\-db\fR
+is called\&. This option can be useful in certain cases (e\&.g\&. Device Mapper devices) for persisting device state on the transition from initramfs\&.
+.RE
 .RE
 .PP
 The
