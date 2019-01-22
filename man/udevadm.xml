@@ -166,7 +166,8 @@
           <term><option>-P</option></term>
           <term><option>--export-prefix=<replaceable>NAME</replaceable></option></term>
           <listitem>
-            <para>Add a prefix to the key name of exported values.</para>
+            <para>Add a prefix to the key name of exported values.
+            This implies <option>--export</option>.</para>
           </listitem>
         </varlistentry>
         <varlistentry>

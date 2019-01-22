@@ -521,6 +521,7 @@ static int uinfo(struct udev *udev, int argc, char *argv[]) {
                         export = true;
                         break;
                 case 'P':
+                        export = true;
                         export_prefix = optarg;
                         break;
                 case 'w':
