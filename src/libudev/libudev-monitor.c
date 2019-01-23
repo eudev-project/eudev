@@ -870,5 +870,9 @@ _public_ int udev_monitor_filter_remove(struct udev_monitor *udev_monitor)
         static struct sock_fprog filter = { 0, NULL };
 
         udev_list_cleanup(&udev_monitor->filter_subsystem_list);
-        return setsockopt(udev_monitor->sock, SOL_SOCKET, SO_ATTACH_FILTER, &filter, sizeof(filter));
+        udev_list_cleanup(&udev_monitor->filter_tag_list);
+        if (setsockopt(udev_monitor->sock, SOL_SOCKET, SO_DETACH_FILTER, &filter, sizeof(filter)) < 0)
+                return -errno;
+
+        return 0;
 }
