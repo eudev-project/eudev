@@ -1121,6 +1121,33 @@ static int parse_argv(int argc, char *argv[]) {
         return 1;
 }
 
+static int readyfd(void) {
+	int fd = -1;
+	char *env = NULL, *endptr = NULL;
+
+	if (!(env = getenv("READY_FD")))
+		return 0;
+
+	unsetenv("READY_FD");
+
+	errno = 0;
+	fd = (int)strtol(env, &endptr, 10);
+
+	if (env[0] == '\0' || endptr[0] != '\0')
+		return log_error_errno(EINVAL, "READY_FD contained non-digits: %m");
+
+	if (errno != 0)
+		return log_error_errno(errno, "readyfd: strtol: %m");
+
+	if (write(fd, "\n", 1) != 1) {
+		close(fd);
+		return log_error_errno(errno, "readyfd: write: %m");
+	}
+
+	close(fd);
+	return 0;
+}
+
 int main(int argc, char *argv[]) {
         struct udev *udev;
         sigset_t mask;
@@ -1265,6 +1292,9 @@ int main(int argc, char *argv[]) {
 
                 write_string_file("/proc/self/oom_score_adj", "-1000");
         }
+
+	if ((r = readyfd()) != 0)
+		goto exit;
 
         if (arg_children_max == 0) {
                 cpu_set_t cpu_set;
