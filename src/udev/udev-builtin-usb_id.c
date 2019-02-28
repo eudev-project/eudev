@@ -130,8 +130,10 @@ static int dev_if_packed_info(struct udev_device *dev, char *ifs_str, size_t len
                 return log_device_debug_errno(dev, errno, "Failed to open \"%s\": %m", filename);
 
         size = read(fd, buf, sizeof(buf));
-        if (size < 18 || size == sizeof(buf))
-                return -EIO;
+        if (size < 18)
+                return log_device_warning_errno(dev, SYNTHETIC_ERRNO(EIO),
+                                                "Short read from \"%s\"", filename);
+        assert((size_t) size <= sizeof buf);
 
         ifs_str[0] = '\0';
         while (pos + sizeof(struct usb_interface_descriptor) < (size_t) size &&
@@ -140,7 +142,7 @@ static int dev_if_packed_info(struct udev_device *dev, char *ifs_str, size_t len
                 struct usb_interface_descriptor *desc;
                 char if_str[8];
 
-                desc = (struct usb_interface_descriptor *) &buf[pos];
+                desc = (struct usb_interface_descriptor *) (buf + pos);
                 if (desc->bLength < 3)
                         break;
                 if (desc->bLength > (size_t) size - pos) {
