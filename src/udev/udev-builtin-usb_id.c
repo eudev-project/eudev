@@ -102,12 +102,12 @@ static const char* set_scsi_type(unsigned type_num) {
 #define USB_DT_INTERFACE                0x04
 
 static int dev_if_packed_info(struct udev_device *dev, char *ifs_str, size_t len) {
-        _cleanup_free_ char *filename = NULL;
         _cleanup_close_ int fd = -1;
         ssize_t size;
         unsigned char buf[18 + 65535];
         size_t pos = 0;
         unsigned strpos = 0;
+        const char *filename;
         struct usb_interface_descriptor {
                 uint8_t bLength;
                 uint8_t bDescriptorType;
@@ -124,9 +124,7 @@ static int dev_if_packed_info(struct udev_device *dev, char *ifs_str, size_t len
         assert(ifs_str);
         assert(len >= 2);
 
-        if (asprintf(&filename, "%s/descriptors", udev_device_get_syspath(dev)) < 0)
-                return log_oom();
-
+        filename = strjoina(udev_device_get_syspath(dev), "/descriptors");
         fd = open(filename, O_RDONLY|O_CLOEXEC|O_NOCTTY);
         if (fd < 0)
                 return log_device_debug_errno(dev, errno, "Failed to open \"%s\": %m", filename);
