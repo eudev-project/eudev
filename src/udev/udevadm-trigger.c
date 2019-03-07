@@ -636,12 +636,12 @@ static int adm_trigger(struct udev *udev, int argc, char *argv[]) {
                         }
                         break;
                 case 'c':
-                        if (!nulstr_contains("add\0" "remove\0" "change\0", optarg)) {
+                        if (device_action_from_string(optarg) < 0) {
                                 log_error("unknown action '%s'", optarg);
                                 return 2;
-                        } else
-                                action = optarg;
+                        }
 
+                        action = optarg;
                         break;
                 case 's':
                         udev_enumerate_add_match_subsystem(udev_enumerate, optarg);

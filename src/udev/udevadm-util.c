@@ -544,3 +544,27 @@ int parse_json_argument(const char *s, JsonFormatFlags *ret) {
 
         return r;
 }
+
+/* The actions of kernel uevents, in the order of systemd's sd_device_action_t. */
+static const char* const device_action_table[] = {
+        "add",
+        "remove",
+        "change",
+        "move",
+        "online",
+        "offline",
+        "bind",
+        "unbind",
+};
+
+int device_action_from_string(const char *s) {
+        size_t i;
+
+        assert(s);
+
+        for (i = 0; i < ELEMENTSOF(device_action_table); i++)
+                if (streq(device_action_table[i], s))
+                        return i;
+
+        return -EINVAL;
+}

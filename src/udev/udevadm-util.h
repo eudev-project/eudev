@@ -52,3 +52,6 @@ int search_rules_files(char * const *args, const char *root, char ***ret_names, 
  * systemd's parse_json_argument(). Returns 1 if the argument was parsed, 0 if a list of the
  * arguments was shown for "help", and a negative error for an unknown argument. */
 int parse_json_argument(const char *s, JsonFormatFlags *ret);
+
+/* Like systemd's device_action_from_string(): the index of the kernel uevent action, or -EINVAL. */
+int device_action_from_string(const char *s);
