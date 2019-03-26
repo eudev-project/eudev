@@ -1392,6 +1392,8 @@ _public_ struct udev_list_entry *udev_device_get_properties_list_entry(struct ud
                         udev_list_entry_foreach(list_entry, udev_device_get_tags_list_entry(udev_device))
                                 l = strpcpyl(&s, l, udev_list_entry_get_name(list_entry), ":", NULL);
                         udev_device_add_property_internal(udev_device, "TAGS", tags);
+                } else {
+                        udev_device_add_property_internal(udev_device, "TAGS", NULL);
                 }
         }
         return udev_list_get_entry(&udev_device->properties_list);
