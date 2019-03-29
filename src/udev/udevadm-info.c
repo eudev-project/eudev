@@ -457,7 +457,7 @@ static int uinfo(struct udev *udev, int argc, char *argv[]) {
                 QUERY_ALL,
         } query = QUERY_ALL;
 
-        while ((c = getopt_long(argc, argv, "aced:n:p:q:rxP:w::RVh", options, NULL)) >= 0)
+        while ((c = getopt_long(argc, argv, "aced:n:p:q:rxP:w::Vh", options, NULL)) >= 0)
                 switch (c) {
                 case 'n': {
                         if (device != NULL) {
