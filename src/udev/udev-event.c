@@ -1070,26 +1070,21 @@ void udev_event_execute_run(struct udev_event *event, usec_t timeout_usec, usec_
         struct udev_list_entry *list_entry;
 
         udev_list_entry_foreach(list_entry, udev_list_get_entry(&event->run_list)) {
-                const char *cmd = udev_list_entry_get_name(list_entry);
+                const char *command = udev_list_entry_get_name(list_entry);
                 enum udev_builtin_cmd builtin_cmd = udev_list_entry_get_num(list_entry);
 
                 if (builtin_cmd < UDEV_BUILTIN_MAX) {
-                        char command[UTIL_PATH_SIZE];
-
-                        udev_event_apply_format(event, cmd, command, sizeof(command), false);
                         udev_builtin_run(event->dev, builtin_cmd, command, false);
                 } else {
-                        char program[UTIL_PATH_SIZE];
                         char **envp;
 
                         if (event->exec_delay > 0) {
-                                log_debug("delay execution of '%s'", program);
+                                log_debug("delay execution of '%s'", command);
                                 sleep(event->exec_delay);
                         }
 
-                        udev_event_apply_format(event, cmd, program, sizeof(program), false);
                         envp = udev_device_get_properties_envp(event->dev);
-                        udev_event_spawn(event, timeout_usec, timeout_warn_usec, program, envp, sigmask, NULL, 0);
+                        udev_event_spawn(event, timeout_usec, timeout_warn_usec, command, envp, sigmask, NULL, 0);
                 }
         }
 }

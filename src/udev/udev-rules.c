@@ -2760,6 +2760,7 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                 case TK_A_RUN_BUILTIN:
                 case TK_A_RUN_PROGRAM: {
                         struct udev_list_entry *entry;
+                        char cmd[UTIL_PATH_SIZE];
 
                         if (event->run_final)
                                 break;
@@ -2767,11 +2768,18 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                                 event->run_final = true;
                         if (cur->key.op == OP_ASSIGN || cur->key.op == OP_ASSIGN_FINAL)
                                 udev_list_cleanup(&event->run_list);
+
+                        udev_event_apply_format(event, rules_str(rules, cur->key.value_off), cmd, sizeof(cmd), false);
+
                         log_debug("RUN '%s' %s:%u",
-                                  rules_str(rules, cur->key.value_off),
+                                  cmd,
                                   rules_str(rules, rule->rule.filename_off),
                                   rule->rule.filename_line);
-                        entry = udev_list_entry_add(&event->run_list, rules_str(rules, cur->key.value_off), NULL);
+                        entry = udev_list_entry_add(&event->run_list, cmd, NULL);
+                        if (entry == NULL) {
+                                log_oom();
+                                break;
+                        }
                         udev_list_entry_set_num(entry, cur->key.builtin_cmd);
                         break;
                 }

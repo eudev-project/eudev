@@ -1421,6 +1421,19 @@ KERNEL=="sda", ENV{A}!=i"abc", SYMLINK+="bad"
 KERNEL=="sda", SYMLINK+=i"bad"
 EOF
         },
+        {
+                desc            => "RUN value is formatted when the rule is applied",
+                devpath         => "/devices/pci0000:00/0000:00:1f.2/host0/target0:0:0/0:0:0:0/block/sda",
+                exp_name        => "found",
+                not_exp_name    => "bad",
+                exp_rem_error   => "yes",
+                option          => "clean",
+                rules           => <<EOF
+KERNEL=="sda", ACTION=="add", ENV{A}="found"
+KERNEL=="sda", ACTION=="add", RUN+="/bin/ln -s sda /dev/\$env{A}"
+KERNEL=="sda", ACTION=="add", ENV{A}="bad"
+EOF
+        },
 );
 
 sub udev {
