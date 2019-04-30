@@ -362,16 +362,13 @@ static int node_permissions_apply(struct udev_device *dev, bool apply,
                 bool smack = false;
 
                 if ((stats.st_mode & 0777) != (mode & 0777) || stats.st_uid != uid || stats.st_gid != gid) {
-                        log_debug("set permissions %s, %#o, uid=%u, gid=%u", devnode, mode, uid, gid);
-                        err = chmod(devnode, mode);
+                        log_debug("Setting permissions %s, %#o, uid=%u, gid=%u", devnode, mode, uid, gid);
+
+                        err = chmod_and_chown(devnode, mode, uid, gid);
                         if (err < 0)
-                                log_warning_errno(errno, "setting mode of %s to %#o failed: %m", devnode, mode);
-                        err = chown(devnode, uid, gid);
-                        if (err < 0)
-                                log_warning_errno(errno, "setting owner of %s to uid=%u, gid=%u failed: %m", devnode, uid, gid);
-                } else {
-                        log_debug("preserve permissions %s, %#o, uid=%u, gid=%u", devnode, mode, uid, gid);
-                }
+                                log_warning_errno(err, "Failed to set owner/mode of %s to uid=" UID_FMT ", gid=" GID_FMT ", mode=%#o: %m", devnode, uid, gid, mode);
+                } else
+                        log_debug("Preserve permissions of %s, %#o, uid=%u, gid=%u", devnode, mode, uid, gid);
 
                 /* apply SECLABEL{$module}=$label */
                 udev_list_entry_foreach(entry, udev_list_get_entry(seclabel_list)) {
