@@ -56,6 +56,8 @@
 #include "fileio.h"
 #include "hashmap.h"
 
+#define WORKER_NUM_MAX 2048U
+
 #define EVENT_REQUEUE_INTERVAL_USEC (200 * USEC_PER_MSEC)
 #define EVENT_REQUEUE_TIMEOUT_USEC  (3 * USEC_PER_MINUTE)
 
@@ -1764,17 +1766,18 @@ int main(int argc, char *argv[]) {
         }
 
         if (arg_children_max == 0) {
+                unsigned long cpu_limit, mem_limit;
+                unsigned long cpu_count = 1;
                 cpu_set_t cpu_set;
-                unsigned long mem_limit;
 
-                arg_children_max = 8;
+                if (sched_getaffinity(0, sizeof(cpu_set), &cpu_set) == 0)
+                        cpu_count = CPU_COUNT(&cpu_set);
 
-                if (sched_getaffinity(0, sizeof (cpu_set), &cpu_set) == 0) {
-                        arg_children_max +=  CPU_COUNT(&cpu_set) * 2;
-                }
+                cpu_limit = cpu_count * 2 + 16;
+                mem_limit = MAX(physical_memory() / (128UL*1024*1024), 10U);
 
-                mem_limit = physical_memory() / (128LU*1024*1024);
-                arg_children_max = MAX(10U, MIN(arg_children_max, mem_limit));
+                arg_children_max = MIN(cpu_limit, mem_limit);
+                arg_children_max = MIN(WORKER_NUM_MAX, arg_children_max);
         }
         log_debug("set children_max to %u", arg_children_max);
         default_children_max = arg_children_max;
