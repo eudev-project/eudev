@@ -192,6 +192,14 @@
           </listitem>
         </varlistentry>
         <varlistentry>
+          <term><option>-w<optional>SECONDS</optional></option></term>
+          <term><option>--wait-for-initialization<optional>=SECONDS</optional></option></term>
+          <listitem>
+            <para>Wait for device to be initialized. If argument <replaceable>SECONDS</replaceable>
+            is not specified, the default is to wait forever.</para>
+          </listitem>
+        </varlistentry>
+        <varlistentry>
           <term><option>--version</option></term>
           <listitem>
             <para>Print version.</para>

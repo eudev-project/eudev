@@ -373,6 +373,22 @@ static void cleanup_db(struct udev *udev __attribute__((unused))) {
          * And should not be removed by external program when udevd is running. */
 }
 
+static int wait_for_initialization(struct udev_device **device, usec_t timeout_usec) {
+        struct udev_device *d;
+        int r;
+
+        if (timeout_usec == 0)
+                return 0;
+
+        r = device_wait_for_initialization(*device, timeout_usec, &d);
+        if (r < 0)
+                return r;
+
+        udev_device_unref(*device);
+        *device = d;
+        return 0;
+}
+
 static void help(void) {
 
         printf("%s info [OPTIONS] [DEVPATH|FILE]\n\n"
@@ -395,6 +411,8 @@ static void help(void) {
                "  -P --export-prefix          Export the key name with a prefix\n"
                "  -e --export-db              Export the content of the udev database\n"
                "  -c --cleanup-db             Clean up the udev database\n"
+               "  -w --wait-for-initialization[=SECONDS]\n"
+               "                              Wait for device to be initialized\n"
                , program_invocation_short_name);
 }
 
@@ -405,7 +423,8 @@ static int uinfo(struct udev *udev, int argc, char *argv[]) {
         const char *export_prefix = NULL;
         char name[UTIL_PATH_SIZE];
         struct udev_list_entry *list_entry;
-        int c;
+        usec_t wait_for_initialization_timeout = 0;
+        int c, r;
 
         static const struct option options[] = {
                 { "name",              required_argument, NULL, 'n' },
@@ -418,6 +437,7 @@ static int uinfo(struct udev *udev, int argc, char *argv[]) {
                 { "device-id-of-file", required_argument, NULL, 'd' },
                 { "export",            no_argument,       NULL, 'x' },
                 { "export-prefix",     required_argument, NULL, 'P' },
+                { "wait-for-initialization", optional_argument, NULL, 'w' },
                 { "version",           no_argument,       NULL, 'V' },
                 { "help",              no_argument,       NULL, 'h' },
                 {}
@@ -437,7 +457,7 @@ static int uinfo(struct udev *udev, int argc, char *argv[]) {
                 QUERY_ALL,
         } query = QUERY_ALL;
 
-        while ((c = getopt_long(argc, argv, "aced:n:p:q:rxP:RVh", options, NULL)) >= 0)
+        while ((c = getopt_long(argc, argv, "aced:n:p:q:rxP:w::RVh", options, NULL)) >= 0)
                 switch (c) {
                 case 'n': {
                         if (device != NULL) {
@@ -503,6 +523,16 @@ static int uinfo(struct udev *udev, int argc, char *argv[]) {
                 case 'P':
                         export_prefix = optarg;
                         break;
+                case 'w':
+                        if (optarg) {
+                                r = parse_sec(optarg, &wait_for_initialization_timeout);
+                                if (r < 0) {
+                                        log_error_errno(r, "Failed to parse timeout value: %m");
+                                        return 1;
+                                }
+                        } else
+                                wait_for_initialization_timeout = USEC_INFINITY;
+                        break;
                 case 'V':
                         printf("%s\n", UDEV_VERSION);
                         return 0;
@@ -526,6 +556,9 @@ static int uinfo(struct udev *udev, int argc, char *argv[]) {
                                 return 4;
                         }
                 }
+
+                if (wait_for_initialization(&device, wait_for_initialization_timeout) < 0)
+                        return 1;
 
                 switch(query) {
                 case QUERY_NAME: {
@@ -594,6 +627,8 @@ static int uinfo(struct udev *udev, int argc, char *argv[]) {
                         fprintf(stderr, "Unknown device, --name=, --path=, or absolute path in /dev/ or /sys expected.\n");
                         return 4;
                 }
+                if (wait_for_initialization(&device, wait_for_initialization_timeout) < 0)
+                        return 1;
                 print_device_chain(device);
                 break;
         case ACTION_DEVICE_ID_FILE:

@@ -23,6 +23,8 @@ struct udev_device *find_device(struct udev *udev,
                                 const char *id,
                                 const char *prefix);
 
+int device_wait_for_initialization(struct udev_device *device, usec_t timeout_usec, struct udev_device **ret);
+
 /* Colors for the output on standard output, as systemd's ansi-color.h uses them. They
  * are empty strings unless standard output is a terminal, $NO_COLOR is not set and
  * $TERM is not "dumb". */
