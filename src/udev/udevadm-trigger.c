@@ -40,13 +40,24 @@
 static int verbose;
 static int dry_run;
 
-static void exec_list(struct udev_enumerate *udev_enumerate, const char *action, Set *settle_set) {
+static int write_uevent(const char *filename, const char *action) {
+        _cleanup_close_ int fd = -1;
+
+        fd = open(filename, O_WRONLY|O_CLOEXEC);
+        if (fd < 0)
+                return -errno;
+        if (write(fd, action, strlen(action)) < 0)
+                return -errno;
+        return 0;
+}
+
+static int exec_list(struct udev_enumerate *udev_enumerate, const char *action, Set *settle_set) {
         struct udev_list_entry *entry;
+        int r, ret = 0;
 
         udev_list_entry_foreach(entry, udev_enumerate_get_list_entry(udev_enumerate)) {
                 char filename[UTIL_PATH_SIZE];
                 const char *syspath;
-                int fd;
 
                 syspath = udev_list_entry_get_name(entry);
                 if (verbose)
@@ -55,15 +66,51 @@ static void exec_list(struct udev_enumerate *udev_enumerate, const char *action,
                         continue;
 
                 strscpyl(filename, sizeof(filename), syspath, "/uevent", NULL);
-                fd = open(filename, O_WRONLY|O_CLOEXEC);
-                if (fd < 0)
+                r = write_uevent(filename, action);
+                if (r < 0) {
+                        /* ENOENT may be returned when a device does not have /uevent or is already
+                         * removed. Hence, this is logged at debug level and ignored.
+                         *
+                         * ENODEV may be returned by some buggy device drivers e.g. /sys/devices/vio.
+                         * See,
+                         * https://github.com/systemd/systemd/issues/13652#issuecomment-535129791 and
+                         * https://bugs.launchpad.net/ubuntu/+source/linux/+bug/1845319.
+                         * So, this error is ignored, but logged at warning level to encourage people to
+                         * fix the driver.
+                         *
+                         * EROFS is returned when /sys is read only. In that case, all subsequent
+                         * writes will also fail, hence return immediately.
+                         *
+                         * EACCES or EPERM may be returned when this is invoked by non-privileged user.
+                         * We do NOT return immediately, but continue operation and propagate the error.
+                         * Why? Some device can be owned by a user, e.g., network devices configured in
+                         * a network namespace. See, https://github.com/systemd/systemd/pull/18559 and
+                         * https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=ebb4a4bf76f164457184a3f43ebc1552416bc823
+                         *
+                         * All other errors are logged at error level, but let's continue the operation,
+                         * and propagate the error.
+                         */
+
+                        bool ignore = IN_SET(r, -ENOENT, -ENODEV);
+                        int level =
+                                r == -ENOENT ? LOG_DEBUG :
+                                r == -ENODEV ? LOG_WARNING : LOG_ERR;
+
+                        log_full_errno(level, r, "%s: Failed to write '%s' to '%s'%s: %m",
+                                       eudev_basename(syspath), action, filename, ignore ? ", ignoring" : "");
+
+                        if (r == -EROFS)
+                                return r;
+                        if (ret == 0 && !ignore)
+                                ret = r;
                         continue;
-                if (write(fd, action, strlen(action)) < 0)
-                        log_debug_errno(errno, "error writing '%s' to '%s': %m", action, filename);
-                else if (settle_set != NULL && set_put_strdup(settle_set, syspath) < 0)
-                        log_oom();
-                close(fd);
+                }
+
+                if (settle_set != NULL && set_put_strdup(settle_set, syspath) < 0)
+                        return log_oom();
         }
+
+        return ret;
 }
 
 static const char *keyval(const char *str, const char **val, char *buf, size_t size) {
@@ -342,7 +389,9 @@ static int adm_trigger(struct udev *udev, int argc, char *argv[]) {
         default:
                 assert_not_reached("device_type");
         }
-        exec_list(udev_enumerate, action, settle_set);
+        r = exec_list(udev_enumerate, action, settle_set);
+        if (r < 0)
+                return 1;
 
         while (!set_isempty(settle_set)) {
                 int fdcount;
