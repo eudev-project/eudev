@@ -467,7 +467,9 @@
             <para>Type of event to be triggered. Possible actions are <literal>add</literal>,
             <literal>remove</literal>, <literal>change</literal>, <literal>move</literal>,
             <literal>online</literal>, <literal>offline</literal>, <literal>bind</literal>,
-            and <literal>unbind</literal>. The default value is <literal>change</literal>.</para>
+            and <literal>unbind</literal>. Also, the special value <literal>help</literal> can be used
+            to list the possible actions. The default value is <literal>change</literal>.
+            </para>
           </listitem>
         </varlistentry>
         <varlistentry>
@@ -955,9 +957,13 @@
       <variablelist>
         <varlistentry>
           <term><option>-a</option></term>
-          <term><option>--action=<replaceable>string</replaceable></option></term>
+          <term><option>--action=<replaceable>ACTION</replaceable></option></term>
           <listitem>
-            <para>The action string.</para>
+            <para>Type of event to be simulated. Possible actions are <literal>add</literal>,
+            <literal>remove</literal>, <literal>change</literal>, <literal>move</literal>,
+            <literal>online</literal>, <literal>offline</literal>, <literal>bind</literal>,
+            and <literal>unbind</literal>. Also, the special value <literal>help</literal> can be used
+            to list the possible actions. The default value is <literal>add</literal>.</para>
           </listitem>
         </varlistentry>
         <varlistentry>

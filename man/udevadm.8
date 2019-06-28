@@ -432,7 +432,9 @@ move,
 online,
 offline,
 bind, and
-unbind\&. The default value is
+unbind\&. Also, the special value
+help
+can be used to list the possible actions\&. The default value is
 change\&.
 .RE
 .PP
@@ -785,9 +787,20 @@ and
 \fIRUN\fR
 commands, is printed on standard output, and the debug messages on standard error\&.
 .PP
-\fB\-a\fR, \fB\-\-action=\fR\fB\fIstring\fR\fR
+\fB\-a\fR, \fB\-\-action=\fR\fB\fIACTION\fR\fR
 .RS 4
-The action string\&.
+Type of event to be simulated\&. Possible actions are
+add,
+remove,
+change,
+move,
+online,
+offline,
+bind, and
+unbind\&. Also, the special value
+help
+can be used to list the possible actions\&. The default value is
+add\&.
 .RE
 .PP
 \fB\-N\fR, \fB\-\-resolve\-names=\fR\fB\fBearly\fR\fR\fB|\fR\fB\fBlate\fR\fR\fB|\fR\fB\fBnever\fR\fR

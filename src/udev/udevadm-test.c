@@ -45,7 +45,7 @@ static void help(void) {
                "Test an event run.\n"
                "  -h --help                            Show this help\n"
                "  -V --version                         Show package version\n"
-               "  -a --action=ACTION                   Set action string\n"
+               "  -a --action=ACTION|help              Set action string\n"
                "  -N --resolve-names=early|late|never  When to resolve names\n"
                "     --json=pretty|short|off           Generate JSON output\n"
                , program_invocation_short_name);
@@ -81,7 +81,13 @@ static int adm_test(struct udev *udev, int argc, char *argv[]) {
         while((c = getopt_long(argc, argv, "a:N:hV", options, NULL)) >= 0)
                 switch (c) {
                 case 'a':
-                        action = optarg;
+                        r = parse_device_action(optarg, &action);
+                        if (r < 0) {
+                                log_error("Invalid action '%s'", optarg);
+                                exit(EXIT_FAILURE);
+                        }
+                        if (r == 0)
+                                exit(EXIT_SUCCESS);
                         break;
                 case 'N':
                         if (streq (optarg, "early")) {

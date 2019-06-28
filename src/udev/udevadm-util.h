@@ -55,3 +55,7 @@ int parse_json_argument(const char *s, JsonFormatFlags *ret);
 
 /* Like systemd's device_action_from_string(): the index of the kernel uevent action, or -EINVAL. */
 int device_action_from_string(const char *s);
+
+/* Like systemd's parse_device_action(): returns 1 and the action if str is one, 0 after listing the
+ * actions for "help", and -EINVAL otherwise. */
+int parse_device_action(const char *str, const char **ret);

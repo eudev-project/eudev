@@ -568,3 +568,25 @@ int device_action_from_string(const char *s) {
 
         return -EINVAL;
 }
+
+int parse_device_action(const char *str, const char **ret) {
+        int a;
+
+        assert(str);
+        assert(ret);
+
+        if (streq(str, "help")) {
+                size_t i;
+
+                for (i = 0; i < ELEMENTSOF(device_action_table); i++)
+                        puts(device_action_table[i]);
+                return 0;
+        }
+
+        a = device_action_from_string(str);
+        if (a < 0)
+                return a;
+
+        *ret = device_action_table[a];
+        return 1;
+}

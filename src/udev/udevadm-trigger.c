@@ -528,7 +528,7 @@ static void help(void) {
                "          devices                     sysfs devices (default)\n"
                "          subsystems                  sysfs subsystems and drivers\n"
                "          all                         sysfs devices, subsystems, and drivers\n"
-               "  -c --action=ACTION                Event action value, default is \"change\"\n"
+               "  -c --action=ACTION|help           Event action value, default is \"change\"\n"
                "  -s --subsystem-match=SUBSYSTEM    Trigger devices from a matching subsystem\n"
                "  -S --subsystem-nomatch=SUBSYSTEM  Exclude devices from a matching subsystem\n"
                "  -a --attr-match=FILE[=VALUE]      Trigger devices with a matching attribute\n"
@@ -636,12 +636,13 @@ static int adm_trigger(struct udev *udev, int argc, char *argv[]) {
                         }
                         break;
                 case 'c':
-                        if (device_action_from_string(optarg) < 0) {
+                        r = parse_device_action(optarg, &action);
+                        if (r < 0) {
                                 log_error("unknown action '%s'", optarg);
                                 return 2;
                         }
-
-                        action = optarg;
+                        if (r == 0)
+                                return 0;
                         break;
                 case 's':
                         udev_enumerate_add_match_subsystem(udev_enumerate, optarg);
