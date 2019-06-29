@@ -1179,7 +1179,13 @@ void udev_event_execute_rules(struct udev_event *event,
 
                         apply = streq(udev_device_get_action(dev), "add") || event->owner_set || event->group_set || event->mode_set;
                         if (EVENT_MODE_DESTRUCTIVE(event))
-                                udev_node_add(dev, apply, event->mode, event->uid, event->gid, &event->seclabel_list);
+                                /* Unless applying them, leave the owner, the group and the mode of the
+                                 * device node alone. */
+                                udev_node_add(dev, apply,
+                                              apply ? event->mode : MODE_INVALID,
+                                              apply ? event->uid : UID_INVALID,
+                                              apply ? event->gid : GID_INVALID,
+                                              &event->seclabel_list);
                         else
                                 log_debug("Running in test mode, skipping handling device node '%s', devnum=%s, "
                                           "mode=%#o, uid="UID_FMT", gid="GID_FMT".",
