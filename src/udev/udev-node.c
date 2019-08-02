@@ -367,14 +367,25 @@ static int node_permissions_apply(struct udev_device *dev, bool apply_mac,
                 bool smack = false;
 
                 if (apply_mode || apply_uid || apply_gid) {
-                        log_debug("Setting permissions %s, %#o, uid=%u, gid=%u", devnode, mode, uid, gid);
+                        log_debug("Setting permissions %s, uid=" UID_FMT ", gid=" GID_FMT ", mode=%#o",
+                                  devnode,
+                                  uid != UID_INVALID ? uid : stats.st_uid,
+                                  gid != GID_INVALID ? gid : stats.st_gid,
+                                  mode != MODE_INVALID ? mode & 0777 : stats.st_mode & 0777);
 
                         err = chmod_and_chown(devnode, mode, uid, gid);
                         if (err < 0)
                                 log_warning_errno(err, "Failed to set owner/mode of %s to uid=" UID_FMT ", gid=" GID_FMT ", mode=%#o: %m",
-                                                  devnode, uid, gid, mode);
+                                                  devnode,
+                                                  uid != UID_INVALID ? uid : stats.st_uid,
+                                                  gid != GID_INVALID ? gid : stats.st_gid,
+                                                  mode != MODE_INVALID ? mode & 0777 : stats.st_mode & 0777);
                 } else
-                        log_debug("Preserve permissions of %s, %#o, uid=%u, gid=%u", devnode, mode, uid, gid);
+                        log_debug("Preserve permissions of %s, uid=" UID_FMT ", gid=" GID_FMT ", mode=%#o",
+                                  devnode,
+                                  uid != UID_INVALID ? uid : stats.st_uid,
+                                  gid != GID_INVALID ? gid : stats.st_gid,
+                                  mode != MODE_INVALID ? mode & 0777 : stats.st_mode & 0777);
 
                 /* apply SECLABEL{$module}=$label */
                 udev_list_entry_foreach(entry, udev_list_get_entry(seclabel_list)) {
@@ -425,8 +436,7 @@ void udev_node_add(struct udev_device *dev, bool apply_mac,
         char filename[UTIL_PATH_SIZE];
         struct udev_list_entry *list_entry;
 
-        log_debug("handling device node '%s', devnum=%s, mode=%#o, uid="UID_FMT", gid="GID_FMT,
-                  udev_device_get_devnode(dev), udev_device_get_id_filename(dev), mode, uid, gid);
+        log_debug("Handling device node '%s', devnum=%s", udev_device_get_devnode(dev), udev_device_get_id_filename(dev));
 
         if (node_permissions_apply(dev, apply_mac, mode, uid, gid, seclabel_list) < 0)
                 return;
