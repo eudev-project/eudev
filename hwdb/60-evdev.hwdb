@@ -40,10 +40,19 @@
 # Sort by brand, model
 
 #########################################
+# AIPTEK
+#########################################
+
+# Hyperpen 12000U
+evdev:input:b0003v08CAp0010*
+ EVDEV_ABS_00=::20
+ EVDEV_ABS_01=::20
+
+#########################################
 # Apple
 #########################################
 
-#  Macbook2,1 (late 2006), single-button touchpad
+# Macbook2,1 (late 2006), single-button touchpad
 evdev:input:b0003v05ACp021B*
 # Macbook4,1
 evdev:input:b0003v05ACp0229*
@@ -91,9 +100,42 @@ evdev:input:b0003v05ACp025B*
  EVDEV_ABS_35=::94
  EVDEV_ABS_36=::92
 
+# MacBook8,1 (2015), MacBook9,1 (2016), MacBook10,1 (2017)
+evdev:name:Apple SPI Touchpad:dmi:*:svnAppleInc.:pnMacBook8,1:*
+evdev:name:Apple SPI Touchpad:dmi:*:svnAppleInc.:pnMacBook9,1:*
+evdev:name:Apple SPI Touchpad:dmi:*:svnAppleInc.:pnMacBook10,1:*
+ EVDEV_ABS_00=::95
+ EVDEV_ABS_01=::90
+ EVDEV_ABS_35=::95
+ EVDEV_ABS_36=::90
+
+# MacBookPro13,* (Late 2016), MacBookPro14,* (Mid 2017)
+evdev:name:Apple SPI Touchpad:dmi:*:svnAppleInc.:pnMacBookPro13,1:*
+evdev:name:Apple SPI Touchpad:dmi:*:svnAppleInc.:pnMacBookPro13,2:*
+evdev:name:Apple SPI Touchpad:dmi:*:svnAppleInc.:pnMacBookPro14,1:*
+evdev:name:Apple SPI Touchpad:dmi:*:svnAppleInc.:pnMacBookPro14,2:*
+ EVDEV_ABS_00=::96
+ EVDEV_ABS_01=::94
+ EVDEV_ABS_35=::96
+ EVDEV_ABS_36=::94
+
+evdev:name:Apple SPI Touchpad:dmi:*:svnAppleInc.:pnMacBookPro13,3:*
+evdev:name:Apple SPI Touchpad:dmi:*:svnAppleInc.:pnMacBookPro14,3:*
+ EVDEV_ABS_00=::96
+ EVDEV_ABS_01=::95
+ EVDEV_ABS_35=::96
+ EVDEV_ABS_36=::95
+
 #########################################
 # ASUS
 #########################################
+
+# Asus N53SV
+evdev:name:ETPS/2 Elantech Touchpad:dmi:*svnASUSTeKComputerInc.:pnN53SV*
+ EVDEV_ABS_00=0:1152:14
+ EVDEV_ABS_01=0:576:10
+ EVDEV_ABS_35=0:1152:14
+ EVDEV_ABS_36=0:576:10
 
 # Asus F3Sg
 evdev:name:SynPS/2 Synaptics TouchPad:dmi:*svnASUSTeKComputerInc.:pnF3Sg:*
@@ -136,6 +178,17 @@ evdev:name:Elan Touchpad:dmi:*:svnASUSTeKCOMPUTERINC.:pnUX305UA:*
  EVDEV_ABS_01=0:2119:33
  EVDEV_ABS_35=0:3097:32
  EVDEV_ABS_36=0:2119:33
+
+#########################################
+# Bangho
+#########################################
+
+# Bangho Cloud Pro
+evdev:name:SYNA3602:00 0911:5288 Touchpad:dmi:*svnBANGHO:pnCLOUDPRO:*
+ EVDEV_ABS_00=52:1747:17
+ EVDEV_ABS_01=45:954:14
+ EVDEV_ABS_35=52:1747:17
+ EVDEV_ABS_36=45:954:14
 
 #########################################
 # Dell
@@ -185,6 +238,13 @@ evdev:name:AlpsPS/2 ALPS DualPoint TouchPad:dmi:bvn*:bvr*:bd*:svnDellInc.:pnLati
  EVDEV_ABS_01=140:1325:29
  EVDEV_ABS_35=79:1841:22
  EVDEV_ABS_36=140:1325:29
+
+# Dell Latitude E7250
+evdev:name:AlpsPS/2 ALPS GlidePoint:dmi:bvn*:bvr*:bd*:svnDellInc.:pnLatitudeE7250*
+ EVDEV_ABS_00=179:3903:38
+ EVDEV_ABS_01=277:1916:32
+ EVDEV_ABS_35=179:3903:38
+ EVDEV_ABS_36=277:1916:32
 
 # Dell Latitude E7470
 evdev:name:AlpsPS/2 ALPS DualPoint TouchPad:dmi:bvn*:bvr*:bd*:svnDellInc.:pnLatitudeE7470*
@@ -257,12 +317,12 @@ evdev:name:SynPS/2 Synaptics TouchPad*:dmi:*svnHewlett-Packard:pnHPPaviliondm4*
  EVDEV_ABS_35=1360:5563:47
  EVDEV_ABS_36=1269:4618:61
 
-# HP Pavilion g6 
-evdev:name:SynPS/2 Synaptics TouchPad:dmi:*svnHewlett-Packard:pnHPPaviliong6*
- EVDEV_ABS_00=1284:5696:88
- EVDEV_ABS_01=1287:4838:39
- EVDEV_ABS_35=1284:5696:88
- EVDEV_ABS_36=1287:4838:39
+# HP Pavilion g6
+evdev:name:SynPS/2 Synaptics TouchPad:dmi:bvnHewlett-Packard:*svnHewlett-Packard:pnHPPaviliong6*
+ EVDEV_ABS_00=1255:5728:50
+ EVDEV_ABS_01=1215:4761:71
+ EVDEV_ABS_35=1255:5728:50
+ EVDEV_ABS_36=1215:4761:71
 
 # HP Pavilion dv7
 evdev:name:SynPS/2 Synaptics TouchPad*:dmi:*svnHewlett-Packard:pnHPPaviliondv7*
@@ -284,6 +344,13 @@ evdev:name:SynPS/2 Synaptics TouchPad:dmi:*svnHP:pnHPSpectreNotebook*
  EVDEV_ABS_01=1083:4808:65
  EVDEV_ABS_35=1205:5691:47
  EVDEV_ABS_36=1083:4808:65
+
+# HP Envy x360
+evdev:name:SynPS/2 Synaptics TouchPad:*svnHP:pnHPENVYx360Convertible15m-cn0xxx*
+ EVDEV_ABS_00=1302:5640:36
+ EVDEV_ABS_01=1119:4741:61
+ EVDEV_ABS_35=1302:5640:36
+ EVDEV_ABS_36=1119:4741:61
 
 #########################################
 # Lenovo
@@ -432,6 +499,13 @@ evdev:name:SynPS/2 Synaptics TouchPad:dmi:*svnLENOVO*:pn*02173BG*:*pvrThinkPadEd
  EVDEV_ABS_01=653:5395:116
  EVDEV_ABS_35=916:6077:55
  EVDEV_ABS_36=653:5395:116
+
+# Lenovo Yoga 500-14IBD, 80N4
+evdev:name:AlpsPS/2 ALPS GlidePoint:dmi:*svnLENOVO:*pvrLenovoYoga500-14IBD*
+ EVDEV_ABS_00=117:3952:36
+ EVDEV_ABS_01=105:1960:26
+ EVDEV_ABS_35=117:3952:36
+ EVDEV_ABS_36=105:1960:26
 
 #########################################
 # Razer
