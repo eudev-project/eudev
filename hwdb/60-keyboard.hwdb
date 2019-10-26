@@ -23,7 +23,7 @@
 #      evdev:input:bZZZZvYYYYpXXXXeWWWW-VVVV
 #    This matches on the kernel modalias of the input-device, mainly:
 #    ZZZZ is the bus-id (see /usr/include/linux/input.h BUS_*), YYYY, XXXX and
-#    WWW are the 4-digit hex uppercase vendor, product and version ID and VVVV
+#    WWWW are the 4-digit hex uppercase vendor, product and version ID and VVVV
 #    is an arbitrary length input-modalias describing the device capabilities.
 #    The vendor, product and version ID for a device node "eventX" is listed
 #    in /sys/class/input/eventX/device/id.
@@ -1135,6 +1135,12 @@ evdev:atkbd:dmi:bvn*:bvr*:bd*:svnMEDIONNB:pnA555*:pvr*
  KEYBOARD_KEY_67=email                                  # envelope button
  KEYBOARD_KEY_69=prog2                                  # link 2 button
 
+# Erazer
+evdev:atkbd:dmi:bvn*:bvr*:bd*:svnMedion*:pnErazer*:pvr*
+ KEYBOARD_KEY_a0=!mute
+ KEYBOARD_KEY_ae=!volumedown
+ KEYBOARD_KEY_b0=!volumeup
+
 ###########################################################
 # Microsoft
 ###########################################################
@@ -1474,6 +1480,14 @@ evdev:name:Sony Vaio Keys:dmi:bvn*:bvr*:bd*:svnSony*:pnVPC*:pvr*
  KEYBOARD_KEY_05=f21                                    # Fn+F1 -> KEY_F21 (The actual touchpad toggle)
  KEYBOARD_KEY_0d=down                                   # Fn+F9 zoomout
  KEYBOARD_KEY_0e=up                                     # Fn+F10 zoomin
+
+###########################################################
+# System76
+###########################################################
+
+evdev:atkbd:dmi:bvn*:bvr*:bd*:svnSystem76*:pn*
+ KEYBOARD_KEY_f7=f21                                    # Touchpad toggle
+ KEYBOARD_KEY_f8=f21                                    # Touchpad toggle
 
 ###########################################################
 # T-bao
