@@ -346,6 +346,8 @@ static int node_permissions_apply(struct udev_device *dev, bool apply_mac,
                 mode |= S_IFCHR;
 
         if (lstat(devnode, &stats) != 0) {
+                if (errno == ENOENT)
+                        return 0; /* this is necessarily racey, so ignore missing the device */
                 err = -errno;
                 log_debug_errno(errno, "can not stat() node '%s' (%m)", devnode);
                 goto out;
@@ -375,11 +377,13 @@ static int node_permissions_apply(struct udev_device *dev, bool apply_mac,
 
                         err = chmod_and_chown(devnode, mode, uid, gid);
                         if (err < 0)
-                                log_warning_errno(err, "Failed to set owner/mode of %s to uid=" UID_FMT ", gid=" GID_FMT ", mode=%#o: %m",
-                                                  devnode,
-                                                  uid != UID_INVALID ? uid : stats.st_uid,
-                                                  gid != GID_INVALID ? gid : stats.st_gid,
-                                                  mode != MODE_INVALID ? mode & 0777 : stats.st_mode & 0777);
+                                log_full_errno(err == -ENOENT ? LOG_DEBUG : LOG_ERR, err,
+                                               "Failed to set owner/mode of %s to uid=" UID_FMT
+                                               ", gid=" GID_FMT ", mode=%#o: %m",
+                                               devnode,
+                                               uid != UID_INVALID ? uid : stats.st_uid,
+                                               gid != GID_INVALID ? gid : stats.st_gid,
+                                               mode != MODE_INVALID ? mode & 0777 : stats.st_mode & 0777);
                 } else
                         log_debug("Preserve permissions of %s, uid=" UID_FMT ", gid=" GID_FMT ", mode=%#o",
                                   devnode,
@@ -400,7 +404,8 @@ static int node_permissions_apply(struct udev_device *dev, bool apply_mac,
 
                                 r = mac_selinux_apply(devnode, label);
                                 if (r < 0)
-                                        log_error_errno(r, "SECLABEL: failed to set SELinux label '%s': %m", label);
+                                        log_full_errno(r == -ENOENT ? LOG_DEBUG : LOG_ERR, r,
+                                                       "SECLABEL: failed to set SELinux label '%s': %m", label);
                                 else
                                         log_debug("SECLABEL: set SELinux label '%s'", label);
 
@@ -409,7 +414,8 @@ static int node_permissions_apply(struct udev_device *dev, bool apply_mac,
 
                                 r = mac_smack_apply(devnode, label);
                                 if (r < 0)
-                                        log_error_errno(r, "SECLABEL: failed to set SMACK label '%s': %m", label);
+                                        log_full_errno(r == -ENOENT ? LOG_DEBUG : LOG_ERR, r,
+                                                       "SECLABEL: failed to set SMACK label '%s': %m", label);
                                 else
                                         log_debug("SECLABEL: set SMACK label '%s'", label);
 
