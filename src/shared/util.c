@@ -698,7 +698,6 @@ int safe_atoi(const char *s, int *ret_i) {
         long l;
 
         assert(s);
-        assert(ret_i);
 
         errno = 0;
         l = strtol(s, &x, 0);
@@ -709,7 +708,9 @@ int safe_atoi(const char *s, int *ret_i) {
         if ((long) (int) l != l)
                 return -ERANGE;
 
-        *ret_i = (int) l;
+        if (ret_i)
+                *ret_i = (int) l;
+
         return 0;
 }
 
@@ -917,7 +918,6 @@ int safe_atollu(const char *s, long long unsigned *ret_llu) {
         unsigned long long l;
 
         assert(s);
-        assert(ret_llu);
 
         s += strspn(s, WHITESPACE);
 
@@ -930,7 +930,9 @@ int safe_atollu(const char *s, long long unsigned *ret_llu) {
         if (*s == '-')
                 return -ERANGE;
 
-        *ret_llu = l;
+        if (ret_llu)
+                *ret_llu = l;
+
         return 0;
 }
 
@@ -977,7 +979,6 @@ int safe_atolli(const char *s, long long int *ret_lli) {
         long long l;
 
         assert(s);
-        assert(ret_lli);
 
         errno = 0;
         l = strtoll(s, &x, 0);
@@ -986,7 +987,9 @@ int safe_atolli(const char *s, long long int *ret_lli) {
         if (!x || x == s || *x != 0)
                 return -EINVAL;
 
-        *ret_lli = l;
+        if (ret_lli)
+                *ret_lli = l;
+
         return 0;
 }
 
