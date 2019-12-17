@@ -7,9 +7,9 @@ NAME!="", GOTO="net_name_slot_end"
 IMPORT{cmdline}="net.ifnames"
 ENV{net.ifnames}=="0", GOTO="net_name_slot_end"
 
-NAME=="", ENV{ID_NET_NAME_ONBOARD}!="", NAME="$env{ID_NET_NAME_ONBOARD}"
-NAME=="", ENV{ID_NET_NAME_SLOT}!="", NAME="$env{ID_NET_NAME_SLOT}"
-NAME=="", ENV{ID_NET_NAME_PATH}!="", NAME="$env{ID_NET_NAME_PATH}"
+NAME=="", ENV{ID_NET_NAME_ONBOARD}!="", ENV{ID_NET_NAME_ONBOARD}!="????????????????*", NAME="$env{ID_NET_NAME_ONBOARD}"
+NAME=="", ENV{ID_NET_NAME_SLOT}!="", ENV{ID_NET_NAME_SLOT}!="????????????????*", NAME="$env{ID_NET_NAME_SLOT}"
+NAME=="", ENV{ID_NET_NAME_PATH}!="", ENV{ID_NET_NAME_PATH}!="????????????????*", NAME="$env{ID_NET_NAME_PATH}"
 NAME=="", ENV{ID_NET_NAME_MAC}!="", ENV{ID_NET_NAME_MAC}!="??x000000000000", NAME="$env{ID_NET_NAME_MAC}"
 
 LABEL="net_name_slot_end"

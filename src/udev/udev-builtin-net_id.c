@@ -14,10 +14,6 @@
  * man/udev.xml must be updated too.
  *
  * The "eudev" scheme is implemented separately in udev-builtin-net_id-eudev.c.
- *
- * eudev: unlike systemd, which also uses longer names as alternative interface names, only
- * names that fit into IFNAMSIZ are exported in the ID_NET_NAME_* properties, as the rules
- * assign them with NAME=.
  */
 
 #include <ctype.h>
@@ -324,7 +320,7 @@ static int pci_get_onboard_index(struct udev_device *dev, unsigned *ret) {
 static int names_pci_onboard(struct udev_device *dev, struct udev_device *pci_dev, const char *prefix, const char *suffix, enum udev_event_mode mode) {
         _cleanup_free_ char *port = NULL;
         unsigned idx = 0;  /* avoid false maybe-uninitialized warning */
-        char str[IFNAMSIZ];
+        char str[ALTIFNAMSIZ];
         int r;
 
         assert(dev);
@@ -699,7 +695,7 @@ static int get_pci_slot_specifiers(
 static int names_pci_slot(struct udev_device *dev, struct udev_device *pci_dev, const char *prefix, const char *suffix, enum udev_event_mode mode) {
         _cleanup_free_ char *domain = NULL, *bus_and_slot = NULL, *func = NULL, *port = NULL;
         uint32_t slot = 0;  /* avoid false maybe-uninitialized warning */
-        char str[IFNAMSIZ];
+        char str[ALTIFNAMSIZ];
         int r;
 
         assert(dev);
@@ -752,7 +748,7 @@ static int names_pci_slot(struct udev_device *dev, struct udev_device *pci_dev, 
 static int names_vio(struct udev_device *dev, const char *prefix, enum udev_event_mode mode) {
         _cleanup_free_ char *s = NULL;
         unsigned slotid;
-        char str[IFNAMSIZ];
+        char str[ALTIFNAMSIZ];
         int r;
 
         assert(dev);
@@ -796,7 +792,7 @@ static int names_platform(struct udev_device *dev, const char *prefix, enum udev
         const char *validchars;
         char vendor[5], model_str[5], instance_str[3];
         unsigned model, instance;
-        char str[IFNAMSIZ];
+        char str[ALTIFNAMSIZ];
         char *c;
         int r;
 
@@ -926,7 +922,7 @@ static int names_devicetree_alias_prefix(struct udev_device *dev, const char *pr
 
         while ((de = readdir(dir))) {
                 const char *alias = de->d_name, *alias_path, *alias_index, *conflict;
-                char str[IFNAMSIZ];
+                char str[ALTIFNAMSIZ];
                 unsigned i;
 
                 if (!IN_SET(de->d_type, DT_REG, DT_LNK))
@@ -1112,7 +1108,7 @@ static int get_usb_specifier(struct udev_device *dev, char **ret) {
 static int names_usb(struct udev_device *dev, const char *prefix, enum udev_event_mode mode) {
         struct udev_device *usbdev, *pcidev;
         _cleanup_free_ char *suffix = NULL;
-        char str[IFNAMSIZ];
+        char str[ALTIFNAMSIZ];
         int r;
 
         assert(dev);
@@ -1194,7 +1190,7 @@ static int names_ccw(struct udev_device *dev, const char *prefix, enum udev_even
         struct udev_device *cdev;
         const char *bus_id;
         size_t bus_id_start, bus_id_len;
-        char str[IFNAMSIZ];
+        char str[ALTIFNAMSIZ];
 
         assert(dev);
         assert(prefix);
@@ -1322,7 +1318,7 @@ static int names_mac(struct udev_device *dev, const char *prefix, enum udev_even
         unsigned iftype, assign_type;
         uint8_t mac[6];
         const char *s;
-        char str[IFNAMSIZ];
+        char str[ALTIFNAMSIZ];
         int r;
 
         assert(dev);
@@ -1367,7 +1363,7 @@ static int names_netdevsim(struct udev_device *dev, const char *prefix, enum ude
         struct udev_device *netdevsimdev;
         const char *phys_port_name;
         unsigned addr;
-        char str[IFNAMSIZ];
+        char str[ALTIFNAMSIZ];
         int r;
 
         assert(dev);
@@ -1402,7 +1398,7 @@ static int names_xen(struct udev_device *dev, const char *prefix, enum udev_even
         _cleanup_free_ char *vif = NULL;
         const char *p;
         unsigned id;
-        char str[IFNAMSIZ];
+        char str[ALTIFNAMSIZ];
         int r;
 
         assert(dev);

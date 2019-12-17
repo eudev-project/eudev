@@ -913,7 +913,9 @@ for wireless LAN,
 ww
 for wireless WAN and
 mc
-for MCTP\&. Names that do not fit into the 15 characters of an interface name are not exported\&. The following properties are set:
+for MCTP\&. Names that do not fit into the 15 characters of an interface name are exported as well, up to 127 characters, but
+80\-net\-name\-slot\&.rules
+does not rename the interface to them\&. The following properties are set:
 .PP
 \fIID_NET_NAMING_SCHEME=\fR
 .RS 4
@@ -1012,7 +1014,7 @@ may also be used, e\&.g\&. to preview the names with
 \fBudevadm test\-builtin net_id\fR; it takes precedence over both, unless it is prefixed with
 :\&. The schemes
 v238
-and later are the ones of systemd and generate the same names as systemd does, except that names longer than 15 characters are not exported\&. The default is
+and later are the ones of systemd and generate the same names as systemd does\&. The default is
 latest\&. Unknown names are ignored with a warning, and the next setting in the order above is used\&. The following schemes are defined:
 .PP
 eudev

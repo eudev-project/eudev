@@ -1099,8 +1099,9 @@ SUBSYSTEM=="net", OPTIONS="log_level=debug"</programlisting></para>
       InfiniBand, <literal>sl</literal> for serial line IP (slip),
       <literal>wl</literal> for wireless LAN, <literal>ww</literal> for wireless
       WAN and <literal>mc</literal> for MCTP. Names that do not fit into the 15
-      characters of an interface name are not exported. The following properties
-      are set:</para>
+      characters of an interface name are exported as well, up to 127
+      characters, but <filename>80-net-name-slot.rules</filename> does not
+      rename the interface to them. The following properties are set:</para>
 
       <variablelist>
         <varlistentry>
@@ -1248,7 +1249,7 @@ SUBSYSTEM=="net", OPTIONS="log_level=debug"</programlisting></para>
         takes precedence over both, unless it is prefixed with
         <literal>:</literal>. The schemes <literal>v238</literal> and
         later are the ones of systemd and generate the same names as systemd
-        does, except that names longer than 15 characters are not exported. The default is
+        does. The default is
         <literal>latest</literal>. Unknown names are ignored with a warning, and
         the next setting in the order above is used. The following schemes are
         defined:</para>
