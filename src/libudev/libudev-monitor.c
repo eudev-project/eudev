@@ -186,7 +186,7 @@ struct udev_monitor *udev_monitor_new_from_netlink_fd(struct udev *udev, const c
                  * We do not set a netlink multicast group here, so the socket
                  * will not receive any messages.
                  */
-                if (access(UDEV_ROOT_RUN "/udev/control", F_OK) < 0 || !udev_has_devtmpfs(udev)) {
+                if (access(UDEV_ROOT_RUN "/udev/control", F_OK) < 0) {
                         log_debug("the udev service seems not to be active, disable the monitor");
                         group = UDEV_MONITOR_NONE;
                 } else
