@@ -913,29 +913,6 @@ int parse_boolean(const char *v) {
         return -EINVAL;
 }
 
-int safe_atollu(const char *s, long long unsigned *ret_llu) {
-        char *x = NULL;
-        unsigned long long l;
-
-        assert(s);
-
-        s += strspn(s, WHITESPACE);
-
-        errno = 0;
-        l = strtoull(s, &x, 0);
-        if (errno > 0)
-                return -errno;
-        if (!x || x == s || *x != 0)
-                return -EINVAL;
-        if (*s == '-')
-                return -ERANGE;
-
-        if (ret_llu)
-                *ret_llu = l;
-
-        return 0;
-}
-
 int safe_atollu_full(const char *s, unsigned base, unsigned long long *ret_llu) {
         char *x = NULL;
         unsigned long long l;
