@@ -305,7 +305,6 @@ AC_CONFIG_FILES([Makefile
                  rule_generator/Makefile
                  rule_generator/write_net_rules
                  rules/Makefile
-                 rules/64-btrfs.rules
                  src/Makefile
                  src/ata_id/Makefile
                  src/cdrom_id/Makefile

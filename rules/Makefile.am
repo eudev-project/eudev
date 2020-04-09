@@ -43,5 +43,11 @@ dist_udevrules_DATA += \
 	75-probe_mtd.rules
 endif
 
+do_subst = $(SED) \
+	-e 's,[@]bindir[@],$(bindir),g'
+
+64-btrfs.rules: 64-btrfs.rules.in Makefile
+	$(do_subst) < $< > $@
+
 install-data-local:
 	$(MKDIR_P) $(DESTDIR)$(udevconfdir)/rules.d
