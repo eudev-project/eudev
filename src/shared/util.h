@@ -358,6 +358,12 @@ int ip_tos_to_string_alloc(int i, char **s);
 int ip_tos_from_string(const char *s);
 
 const char *signal_to_string(int i) _const_;
+/* A signal number, its name with or without "SIG", or RTMIN+n or RTMAX-n */
+int signal_from_string(const char *s);
+
+#define SIGNAL_VALID(signo) ((signo) > 0 && (signo) < _NSIG)
+
+int kill_and_sigcont(pid_t pid, int sig);
 
 extern int saved_argc;
 extern char **saved_argv;

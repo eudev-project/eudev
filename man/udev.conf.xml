@@ -189,6 +189,19 @@
           rebuild the initrd if it starts <command>udevd</command>.</para>
         </listitem>
       </varlistentry>
+      <varlistentry>
+        <term><varname>timeout_signal</varname></term>
+
+        <listitem>
+          <para>Specifies a signal that <command>udevd</command> will send on worker
+          timeouts. Note that both workers and spawned processes will be killed using this
+          signal. Defaults to <option>SIGKILL</option>. This is the same as the
+          <option>--timeout-signal=</option> option of
+          <citerefentry><refentrytitle>udevd</refentrytitle><manvolnum>8</manvolnum></citerefentry>.
+          An invalid value is ignored, with a warning when <command>udevd</command>
+          starts.</para>
+        </listitem>
+      </varlistentry>
     </variablelist>
 
     <para>

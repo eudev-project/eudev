@@ -2432,6 +2432,81 @@ const char *signal_to_string(int signo) {
         return buf;
 }
 
+int signal_from_string(const char *s) {
+        const char *p;
+        int signo, r;
+
+        /* Check that the input is a signal number. */
+        if (safe_atoi(s, &signo) >= 0) {
+                if (SIGNAL_VALID(signo))
+                        return signo;
+                else
+                        return -ERANGE;
+        }
+
+        /* Drop "SIG" prefix. */
+        if (startswith(s, "SIG"))
+                s += 3;
+
+        /* Check that the input is a signal name. */
+        signo = __signal_from_string(s);
+        if (signo > 0)
+                return signo;
+
+        /* Check that the input is RTMIN or
+         * RTMIN+n (0 <= n <= SIGRTMAX-SIGRTMIN). */
+        p = startswith(s, "RTMIN");
+        if (p) {
+                if (*p == '\0')
+                        return SIGRTMIN;
+                if (*p != '+')
+                        return -EINVAL;
+
+                r = safe_atoi(p, &signo);
+                if (r < 0)
+                        return r;
+
+                if (signo < 0 || signo > SIGRTMAX - SIGRTMIN)
+                        return -ERANGE;
+
+                return signo + SIGRTMIN;
+        }
+
+        /* Check that the input is RTMAX or
+         * RTMAX-n (0 <= n <= SIGRTMAX-SIGRTMIN). */
+        p = startswith(s, "RTMAX");
+        if (p) {
+                if (*p == '\0')
+                        return SIGRTMAX;
+                if (*p != '-')
+                        return -EINVAL;
+
+                r = safe_atoi(p, &signo);
+                if (r < 0)
+                        return r;
+
+                if (signo > 0 || signo < SIGRTMIN - SIGRTMAX)
+                        return -ERANGE;
+
+                return signo + SIGRTMAX;
+        }
+
+        return -EINVAL;
+}
+
+int kill_and_sigcont(pid_t pid, int sig) {
+        int r;
+
+        r = kill(pid, sig) < 0 ? -errno : 0;
+
+        /* If this worked, also send SIGCONT, unless we already just sent a SIGCONT, or SIGKILL was sent which isn't
+         * affected by a process being suspended anyway. */
+        if (r >= 0 && !IN_SET(sig, SIGCONT, SIGKILL))
+                (void) kill(pid, SIGCONT);
+
+        return r;
+}
+
 int fd_inc_sndbuf(int fd, size_t n) {
         int r, value;
         socklen_t l = sizeof(value);

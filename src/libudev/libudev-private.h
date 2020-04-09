@@ -43,6 +43,7 @@
 /* libudev.c */
 int udev_get_rules_path(struct udev *udev, char **path[], usec_t *ts_usec[]);
 int udev_parse_hwdb_format(const char *s);
+int udev_get_timeout_signal(struct udev *udev, bool *ret_invalid);
 int udev_get_hwdb_format(struct udev *udev);
 int udev_read_hwdb_format(const char *root);
 bool udev_get_sas_legacy_path(struct udev *udev);

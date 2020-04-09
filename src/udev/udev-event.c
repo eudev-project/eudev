@@ -57,6 +57,7 @@ struct udev_event *udev_event_new(struct udev_device *dev, enum udev_event_mode 
         event->fd_signal = -1;
         event->rtnl_fd = -1;
         event->birth_usec = now(CLOCK_MONOTONIC);
+        event->timeout_signal = SIGKILL;
         event->event_mode = mode;
         /* OPTIONS="log_level=reset" goes back to this */
         event->default_log_level = log_get_max_level();
@@ -768,7 +769,7 @@ static int spawn_wait(struct udev_event *event,
                         }
                         if (fdcount == 0) {
                                 log_error("timeout: killing '%s' ["PID_FMT"]", cmd, pid);
-                                kill(pid, SIGKILL);
+                                (void) kill_and_sigcont(pid, event->timeout_signal);
                         }
                 }
 

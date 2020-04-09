@@ -84,18 +84,21 @@ static int arg_resolve_names = 1;
 /* udev.trace on the kernel command line */
 static bool arg_trace = false;
 
-/* Like UdevConfig of systemd: the settings of the command line and of the kernel command line, which are
- * merged by manager_merge_config(). A negative log level and 0 for the other settings mean that the setting
- * is not given. */
+/* Like UdevConfig of systemd: the settings of udev.conf, the command line and the kernel command line, which
+ * are merged by manager_merge_config(). A negative log level and 0 for the other settings mean that the
+ * setting is not given. */
 struct udev_config {
         int log_level;
         unsigned children_max;
         usec_t exec_delay_usec;
         usec_t timeout_usec;
+        int timeout_signal;
 };
 
 #define UDEV_CONFIG_INIT { .log_level = -1, }
 
+/* only timeout_signal, udev_new() applies the log level of udev.conf */
+static struct udev_config config_by_udev_conf = UDEV_CONFIG_INIT;
 static struct udev_config config_by_command = UDEV_CONFIG_INIT;
 static struct udev_config config_by_kernel = UDEV_CONFIG_INIT;
 
@@ -114,6 +117,7 @@ static unsigned default_children_max;
 static usec_t arg_exec_delay_usec;
 static usec_t arg_event_timeout_usec = DEFAULT_EVENT_TIMEOUT_USEC;
 static usec_t arg_event_timeout_warn_usec = DEFAULT_EVENT_TIMEOUT_USEC / 3;
+static int arg_timeout_signal = SIGKILL;
 static sigset_t sigmask_orig;
 static UDEV_LIST(event_list);
 Hashmap *workers;
@@ -505,6 +509,18 @@ static void worker_spawn(struct event *event) {
                 /* request TERM signal if parent exits */
                 prctl(PR_SET_PDEATHSIG, SIGTERM);
 
+                /* The worker blocks all signals, and reads SIGTERM and SIGCHLD from the signalfd. Like the
+                 * workers of systemd, let another signal that udevd sends on a timeout take its default
+                 * action, e.g. dump core with SIGABRT. */
+                if (!IN_SET(arg_timeout_signal, SIGTERM, SIGCHLD)) {
+                        sigset_t timeout_mask;
+
+                        (void) signal(arg_timeout_signal, SIG_DFL);
+                        sigemptyset(&timeout_mask);
+                        sigaddset(&timeout_mask, arg_timeout_signal);
+                        (void) sigprocmask(SIG_UNBLOCK, &timeout_mask, NULL);
+                }
+
                 /* reset OOM score, we only protect the main daemon */
                 write_string_file("/proc/self/oom_score_adj", "0");
 
@@ -530,6 +546,7 @@ static void worker_spawn(struct event *event) {
                         udev_event->rtnl_fd = rtnl_fd;
 
                         udev_event->exec_delay_usec = arg_exec_delay_usec;
+                        udev_event->timeout_signal = arg_timeout_signal;
 
                         /*
                          * If this is a block device and the device is locked currently via the BSD advisory locks,
@@ -1117,6 +1134,8 @@ static void manager_merge_config(void) {
         arg_event_timeout_usec = config_by_kernel.timeout_usec ?: config_by_command.timeout_usec ?:
                                  DEFAULT_EVENT_TIMEOUT_USEC;
         arg_event_timeout_warn_usec = (arg_event_timeout_usec / 3) ? : 1;
+        arg_timeout_signal = config_by_kernel.timeout_signal ?: config_by_command.timeout_signal ?:
+                             config_by_udev_conf.timeout_signal ?: SIGKILL;
 }
 
 static void manager_set_log_level(int log_level) {
@@ -1553,6 +1572,7 @@ static void handle_signal(struct udev *udev __attribute__((unused)), int signo) 
  *   udev.children_max=<number of workers>     events are fully serialized if set to 1
  *   udev.exec_delay=<number of seconds>       delay execution of every executed program
  *   udev.event_timeout=<number of seconds>    seconds to wait before terminating an event
+ *   udev.timeout_signal=<signal>              signal sent to workers and programs on a timeout
  * "-" and "_" are the same in the keys, e.g. udev.children-max= is udev.children_max=.
  */
 static int parse_proc_cmdline_item(const char *key, const char *value) {
@@ -1597,6 +1617,15 @@ static int parse_proc_cmdline_item(const char *key, const char *value) {
 
                 r = parse_sec(value, &config_by_kernel.exec_delay_usec);
 
+        } else if (proc_cmdline_key_streq(key, "udev.timeout_signal")) {
+
+                if (proc_cmdline_value_missing(key, value))
+                        return 0;
+
+                r = signal_from_string(value);
+                if (r > 0)
+                        config_by_kernel.timeout_signal = r;
+
         } else if (proc_cmdline_key_streq(key, "udev.trace")) {
 
                 if (!value)
@@ -1631,10 +1660,15 @@ static void help(void) {
                "  -t --event-timeout=SECONDS  Seconds to wait before terminating an event\n"
                "  -N --resolve-names=early|late|never\n"
                "                              When to resolve users and groups\n"
+               "     --timeout-signal=SIGNAL  Signal used when terminating an event\n"
                , program_invocation_short_name);
 }
 
 static int parse_argv(int argc, char *argv[]) {
+        enum {
+                ARG_TIMEOUT_SIGNAL = 0x100,
+        };
+
         static const struct option options[] = {
                 { "daemon",             no_argument,            NULL, 'd' },
                 { "debug",              no_argument,            NULL, 'D' },
@@ -1645,6 +1679,7 @@ static int parse_argv(int argc, char *argv[]) {
                 { "resolve-names",      required_argument,      NULL, 'N' },
                 { "help",               no_argument,            NULL, 'h' },
                 { "version",            no_argument,            NULL, 'V' },
+                { "timeout-signal",     required_argument,      NULL, ARG_TIMEOUT_SIGNAL },
                 {}
         };
 
@@ -1676,6 +1711,13 @@ static int parse_argv(int argc, char *argv[]) {
                         r = parse_sec(optarg, &config_by_command.timeout_usec);
                         if (r < 0)
                                 log_warning_errno(r, "Failed to parse --event-timeout= value '%s', ignoring: %m", optarg);
+                        break;
+                case ARG_TIMEOUT_SIGNAL:
+                        r = signal_from_string(optarg);
+                        if (r <= 0)
+                                log_warning_errno(r, "Failed to parse --timeout-signal= value '%s', ignoring: %m", optarg);
+                        else
+                                config_by_command.timeout_signal = r;
                         break;
                 case 'D':
                         arg_debug = true;
@@ -1731,6 +1773,7 @@ int main(int argc, char *argv[]) {
         struct epoll_event ep_netlink = { .events = EPOLLIN };
         struct epoll_event ep_worker = { .events = EPOLLIN };
         int r = 0, one = 1;
+        bool invalid;
 
         /*
          * Ensure no file descriptor unwillingly falls in the 0..2 range
@@ -1764,6 +1807,10 @@ int main(int argc, char *argv[]) {
         r = parse_proc_cmdline(parse_proc_cmdline_item);
         if (r < 0)
                 log_warning_errno(r, "failed to parse kernel command line, ignoring: %m");
+
+        config_by_udev_conf.timeout_signal = udev_get_timeout_signal(udev, &invalid);
+        if (invalid)
+                log_warning("Invalid timeout_signal= in udev.conf, ignoring.");
 
         if (arg_debug)
                 log_set_target(LOG_TARGET_CONSOLE);
@@ -2070,7 +2117,7 @@ int main(int argc, char *argv[]) {
                                 if ((ts - event->start_usec) > arg_event_timeout_warn_usec) {
                                         if ((ts - event->start_usec) > arg_event_timeout_usec) {
                                                 log_error("worker ["PID_FMT"] %s timeout; kill it", worker->pid, event->devpath);
-                                                kill(worker->pid, SIGKILL);
+                                                (void) kill_and_sigcont(worker->pid, arg_timeout_signal);
                                                 worker->state = WORKER_KILLED;
 
                                                 log_error("seq %llu '%s' killed", udev_device_get_seqnum(event->dev), event->devpath);

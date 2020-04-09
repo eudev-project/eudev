@@ -48,6 +48,10 @@ struct udev {
         int refcount;
         /* format of hwdb.bin created by 'udevadm hwdb', hwdb_format= in udev.conf, negative if invalid */
         int hwdb_format;
+        /* timeout_signal= in udev.conf for udevd, 0 if it is not set; an invalid value is ignored, and
+         * remembered, so that udevd warns about it */
+        int timeout_signal;
+        bool timeout_signal_invalid;
         void (*log_fn)(struct udev *udev,
                        int priority, const char *file, int line, const char *fn,
                        const char *format, va_list args);
@@ -212,6 +216,18 @@ static void udev_read_conf(struct udev *udev, const char *filename) {
                                 udev->net_naming_scheme = val[0] != '\0' ? strdup(val) : NULL;
                                 continue;
                         }
+
+                        if (streq(key, "timeout_signal")) {
+                                int sig;
+
+                                sig = signal_from_string(val);
+                                if (sig < 0) {
+                                        log_debug("%s:%u: invalid signal '%s' for timeout_signal, ignoring.", filename, line_nr, val);
+                                        udev->timeout_signal_invalid = true;
+                                } else
+                                        udev->timeout_signal = sig;
+                                continue;
+                        }
                 }
         }
 }
@@ -240,6 +256,16 @@ _public_ struct udev *udev_new(void) {
         udev_read_conf(udev, UDEV_CONF_FILE);
 
         return udev;
+}
+
+/* Not part of the public API, used by udevd. Returns the signal of timeout_signal= in udev.conf, or 0 if it is
+ * not set, and whether an invalid value was ignored. */
+int udev_get_timeout_signal(struct udev *udev, bool *ret_invalid) {
+        if (ret_invalid)
+                *ret_invalid = udev && udev->timeout_signal_invalid;
+        if (udev == NULL)
+                return 0;
+        return udev->timeout_signal;
 }
 
 /* Returns the format of hwdb.bin configured with hwdb_format= in udev.conf, 1 or 2, or

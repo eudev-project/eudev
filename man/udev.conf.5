@@ -153,6 +153,19 @@ starts, and interfaces are renamed only when they are added, so a change takes e
 \fBudevd\fR\&.
 .RE
 .PP
+\fItimeout_signal\fR
+.RS 4
+Specifies a signal that
+\fBudevd\fR
+will send on worker timeouts\&. Note that both workers and spawned processes will be killed using this signal\&. Defaults to
+\fBSIGKILL\fR\&. This is the same as the
+\fB\-\-timeout\-signal=\fR
+option of
+\fBudevd\fR(8)\&. An invalid value is ignored, with a warning when
+\fBudevd\fR
+starts\&.
+.RE
+.PP
 In addition,
 udevd
 can be configured by command\-line options and the kernel command line (see
