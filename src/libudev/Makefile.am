@@ -4,16 +4,6 @@ LIBUDEV_CURRENT=7
 LIBUDEV_REVISION=3
 LIBUDEV_AGE=6
 
-define move-to-rootlibdir
-	if test "$(libdir)" != "$(rootlibdir)"; then \
-		$(MKDIR_P) $(DESTDIR)$(rootlibdir) && \
-		so_img_name=$$(readlink $(DESTDIR)$(libdir)/$$libname) && \
-		so_img_rel_target_prefix=$$(echo $(libdir) | sed 's,\(^/\|\)[^/][^/]*,..,g') && \
-		$(LN_S) -f $$so_img_rel_target_prefix$(rootlibdir)/$$so_img_name $(DESTDIR)$(libdir)/$$libname && \
-		mv $(DESTDIR)$(libdir)/$$libname.* $(DESTDIR)$(rootlibdir); \
-	fi
-endef
-
 AM_CPPFLAGS = \
 	-include $(top_builddir)/config.h \
 	-DUDEV_ROOT_RUN=\"$(rootrundir)\" \
@@ -80,7 +70,14 @@ CLEANFILES = \
 	libudev.pc
 
 install-exec-hook:
-	libname=libudev.so && $(move-to-rootlibdir)
+	libname=libudev.so; if test "$(libdir)" != "$(rootlibdir)"; then \
+		$(MKDIR_P) $(DESTDIR)$(rootlibdir) && \
+		so_img_name=$$(readlink $(DESTDIR)$(libdir)/$$libname) && \
+		so_img_rel_target_prefix=$$(echo $(libdir) | sed 's,\(^/\)\?[^/]\+,..,g') && \
+		$(LN_S) -f $$so_img_rel_target_prefix$(rootlibdir)/$$so_img_name $(DESTDIR)$(libdir)/$$libname && \
+		mv $(DESTDIR)$(libdir)/$$libname.* $(DESTDIR)$(rootlibdir); \
+	fi
+
 
 uninstall-hook:
 	rm -f $(DESTDIR)$(rootlibdir)/libudev.so*

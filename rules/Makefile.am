@@ -3,6 +3,9 @@ ACLOCAL_AMFLAGS = -I m4 ${ACLOCAL_FLAGS}
 EXTRA_DIST = \
 	64-btrfs.rules.in
 
+CLEANFILES = \
+	64-btrfs.rules
+
 dist_udevrules_DATA = \
 	50-udev-default.rules \
 	60-block.rules \
@@ -46,8 +49,8 @@ endif
 do_subst = $(SED) \
 	-e 's,[@]bindir[@],$(bindir),g'
 
-64-btrfs.rules: 64-btrfs.rules.in Makefile
-	$(do_subst) < $< > $@
+64-btrfs.rules: $(srcdir)/64-btrfs.rules.in Makefile
+	$(do_subst) $(srcdir)/64-btrfs.rules.in > 64-btrfs.rules
 
 install-data-local:
 	$(MKDIR_P) $(DESTDIR)$(udevconfdir)/rules.d

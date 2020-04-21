@@ -50,7 +50,7 @@ check_DATA = \
 	test/sys
 
 test/sys:
-	$(AM_V_at)$(MKDIR_P) $(dir $@)
+	$(AM_V_at)f="$@"; $(MKDIR_P) "$${f%/*}"
 	$(AM_V_GEN)tar -C $(top_builddir)/test/test -xJf $(top_srcdir)/test/sys.tar.xz
 
 test-sys-distclean:
