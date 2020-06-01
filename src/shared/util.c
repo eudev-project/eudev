@@ -253,20 +253,23 @@ int unlink_noerrno(const char *path) {
 }
 
 int parse_uid(const char *s, uid_t* ret_uid) {
-        unsigned long ul = 0;
-        uid_t uid;
+        unsigned uid = 0;
         int r;
 
         assert(s);
 
-        r = safe_atolu(s, &ul);
+        assert_cc(sizeof(uid_t) == sizeof(unsigned));
+
+        /* We are very strict when parsing UIDs, and prohibit +/- as prefix, leading zero as prefix, and
+         * whitespace. We do this, since this call is often used in a context where we parse things as UID
+         * first, and if that doesn't work we fall back to NSS. Thus we really want to make sure that UIDs
+         * are parsed as UIDs only if they really really look like UIDs. */
+        r = safe_atou_full(s, 10
+                           | SAFE_ATO_REFUSE_PLUS_MINUS
+                           | SAFE_ATO_REFUSE_LEADING_ZERO
+                           | SAFE_ATO_REFUSE_LEADING_WHITESPACE, &uid);
         if (r < 0)
                 return r;
-
-        uid = (uid_t) ul;
-
-        if ((unsigned long) uid != ul)
-                return -ERANGE;
 
         /* Some libc APIs use UID_INVALID as special placeholder */
         if (uid == (uid_t) 0xFFFFFFFF)
