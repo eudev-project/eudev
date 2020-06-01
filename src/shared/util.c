@@ -694,13 +694,17 @@ int safe_atou_full(const char *s, unsigned base, unsigned *ret_u) {
 }
 
 int safe_atoi(const char *s, int *ret_i) {
+        unsigned base = 0;
         char *x = NULL;
         long l;
 
         assert(s);
 
+        s += strspn(s, WHITESPACE);
+        s = mangle_base(s, &base);
+
         errno = 0;
-        l = strtol(s, &x, 0);
+        l = strtol(s, &x, base);
         if (errno > 0)
                 return -errno;
         if (!x || x == s || *x != 0)
@@ -952,13 +956,17 @@ int safe_atollu_full(const char *s, unsigned base, unsigned long long *ret_llu) 
 }
 
 int safe_atolli(const char *s, long long int *ret_lli) {
+        unsigned base = 0;
         char *x = NULL;
         long long l;
 
         assert(s);
 
+        s += strspn(s, WHITESPACE);
+        s = mangle_base(s, &base);
+
         errno = 0;
-        l = strtoll(s, &x, 0);
+        l = strtoll(s, &x, base);
         if (errno > 0)
                 return -errno;
         if (!x || x == s || *x != 0)
