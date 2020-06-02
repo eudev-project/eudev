@@ -237,6 +237,22 @@
         </listitem>
       </varlistentry>
       <varlistentry>
+        <term><varname>udev.blockdev_read_only[=<replaceable>BOOL</replaceable>]</varname></term>
+        <term><varname>rd.udev.blockdev_read_only[=<replaceable>BOOL</replaceable>]</varname></term>
+        <listitem>
+          <para>If specified, mark all physical block devices read-only as they appear. Synthetic block
+          devices (such as loopback block devices or device mapper devices) are left as they are. This is
+          useful to guarantee that the contents of physical block devices remains unmodified during runtime,
+          for example to implement fully stateless systems, for testing or for recovery situations where
+          corrupted file systems shall not be corrupted further through accidental modification.</para>
+
+          <para>A block device may be marked writable again by issuing the <command>blockdev
+          --setrw</command> command, see <citerefentry
+          project='man-pages'><refentrytitle>blockdev</refentrytitle><manvolnum>8</manvolnum></citerefentry>
+          for details.</para>
+        </listitem>
+      </varlistentry>
+      <varlistentry>
         <term><varname>net.ifnames=</varname></term>
         <listitem>
           <para>Network interfaces are renamed to give them predictable names

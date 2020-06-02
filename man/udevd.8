@@ -180,6 +180,17 @@ Specifies a signal that
 will send to workers on timeout\&. Note that kernel command line option overrides both the setting in the configuration file and the one on the program command line\&.
 .RE
 .PP
+\fIudev\&.blockdev_read_only[=\fR\fI\fIBOOL\fR\fR\fI]\fR, \fIrd\&.udev\&.blockdev_read_only[=\fR\fI\fIBOOL\fR\fR\fI]\fR
+.RS 4
+If specified, mark all physical block devices read\-only as they appear\&. Synthetic block devices (such as loopback block devices or device mapper devices) are left as they are\&. This is useful to guarantee that the contents of physical block devices remains unmodified during runtime, for example to implement fully stateless systems, for testing or for recovery situations where corrupted file systems shall not be corrupted further through accidental modification\&.
+.sp
+A block device may be marked writable again by issuing the
+\fBblockdev \-\-setrw\fR
+command, see
+\fBblockdev\fR(8)
+for details\&.
+.RE
+.PP
 \fInet\&.ifnames=\fR
 .RS 4
 Network interfaces are renamed to give them predictable names when possible\&. It is enabled by default; specifying 0 disables it\&.
