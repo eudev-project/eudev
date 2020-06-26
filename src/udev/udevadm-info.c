@@ -60,12 +60,39 @@ static bool skip_attribute(const char *name) {
         return false;
 }
 
-static void print_all_attributes(struct udev_device *device, const char *key) {
+typedef struct SysAttr {
+        const char *name;
+        const char *value;
+} SysAttr;
+
+static int sysattr_compare(const void *a, const void *b) {
+        const SysAttr *x = a, *y = b;
+
+        return strcmp(x->name, y->name);
+}
+
+static int print_all_attributes(struct udev_device *device, bool is_parent) {
+        _cleanup_free_ SysAttr *sysattrs = NULL;
+        size_t n_items = 0, n_allocated = 0, i;
         struct udev_list_entry *sysattr;
+        const char *value;
+
+        assert(device);
+
+        value = udev_device_get_devpath(device);
+        printf("  looking at %sdevice '%s':\n", is_parent ? "parent " : "", value ?: "");
+
+        value = udev_device_get_sysname(device);
+        printf("    %s==\"%s\"\n", is_parent ? "KERNELS" : "KERNEL", value ?: "");
+
+        value = udev_device_get_subsystem(device);
+        printf("    %s==\"%s\"\n", is_parent ? "SUBSYSTEMS" : "SUBSYSTEM", value ?: "");
+
+        value = udev_device_get_driver(device);
+        printf("    %s==\"%s\"\n", is_parent ? "DRIVERS" : "DRIVER", value ?: "");
 
         udev_list_entry_foreach(sysattr, udev_device_get_sysattr_list_entry(device)) {
                 const char *name;
-                const char *value;
                 size_t len;
 
                 name = udev_list_entry_get_name(sysattr);
@@ -82,19 +109,34 @@ static void print_all_attributes(struct udev_device *device, const char *key) {
 
                 /* skip nonprintable attributes */
                 len = strlen(value);
-                while (len > 0 && isprint(value[len-1]))
+                while (len > 0 && isprint((unsigned char) value[len-1]))
                         len--;
                 if (len > 0)
                         continue;
 
-                printf("    %s{%s}==\"%s\"\n", key, name, value);
+                if (!GREEDY_REALLOC(sysattrs, n_allocated, n_items + 1))
+                        return log_oom();
+
+                sysattrs[n_items] = (SysAttr) {
+                        .name = name,
+                        .value = value,
+                };
+                n_items++;
         }
-        printf("\n");
+
+        qsort_safe(sysattrs, n_items, sizeof(SysAttr), sysattr_compare);
+
+        for (i = 0; i < n_items; i++)
+                printf("    %s{%s}==\"%s\"\n", is_parent ? "ATTRS" : "ATTR", sysattrs[i].name, sysattrs[i].value);
+
+        puts("");
+
+        return 0;
 }
 
 static int print_device_chain(struct udev_device *device) {
-        struct udev_device *device_parent;
-        const char *str;
+        struct udev_device *child, *parent;
+        int r;
 
         printf("\n"
                "Udevadm info starts with the device specified by the devpath and then\n"
@@ -104,35 +146,15 @@ static int print_device_chain(struct udev_device *device) {
                "and the attributes from one single parent device.\n"
                "\n");
 
-        printf("  looking at device '%s':\n", udev_device_get_devpath(device));
-        printf("    KERNEL==\"%s\"\n", udev_device_get_sysname(device));
-        str = udev_device_get_subsystem(device);
-        if (str == NULL)
-                str = "";
-        printf("    SUBSYSTEM==\"%s\"\n", str);
-        str = udev_device_get_driver(device);
-        if (str == NULL)
-                str = "";
-        printf("    DRIVER==\"%s\"\n", str);
-        print_all_attributes(device, "ATTR");
+        r = print_all_attributes(device, false);
+        if (r < 0)
+                return r;
 
-        device_parent = device;
-        do {
-                device_parent = udev_device_get_parent(device_parent);
-                if (device_parent == NULL)
-                        break;
-                printf("  looking at parent device '%s':\n", udev_device_get_devpath(device_parent));
-                printf("    KERNELS==\"%s\"\n", udev_device_get_sysname(device_parent));
-                str = udev_device_get_subsystem(device_parent);
-                if (str == NULL)
-                        str = "";
-                printf("    SUBSYSTEMS==\"%s\"\n", str);
-                str = udev_device_get_driver(device_parent);
-                if (str == NULL)
-                        str = "";
-                printf("    DRIVERS==\"%s\"\n", str);
-                print_all_attributes(device_parent, "ATTRS");
-        } while (device_parent != NULL);
+        for (child = device; (parent = udev_device_get_parent(child)); child = parent) {
+                r = print_all_attributes(parent, true);
+                if (r < 0)
+                        return r;
+        }
 
         return 0;
 }
@@ -988,7 +1010,8 @@ static int uinfo(struct udev *udev, int argc, char *argv[]) {
                 }
                 if (wait_for_initialization(&device, wait_for_initialization_timeout) < 0)
                         return 1;
-                print_device_chain(device);
+                if (print_device_chain(device) < 0)
+                        return 1;
                 break;
         case ACTION_DEVICE_ID_FILE:
                 if (stat_device(name, export, export_prefix) != 0)
