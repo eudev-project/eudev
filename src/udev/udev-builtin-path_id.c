@@ -952,6 +952,14 @@ static int builtin_path_id(struct udev_device *dev, int argc __attribute__((unus
                                 supported_parent = true;
                                 supported_transport = true;
                         }
+                } else if (streq(subsys, "spi")) {
+                        const char *sysnum;
+
+                        sysnum = udev_device_get_sysnum(parent);
+                        if (sysnum) {
+                                path_prepend(&path, "cs-%s", sysnum);
+                                parent = skip_subsystem(parent, "spi");
+                        }
                 }
 
                 parent = udev_device_get_parent(parent);
