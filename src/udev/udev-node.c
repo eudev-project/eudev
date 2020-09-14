@@ -336,28 +336,34 @@ static int node_permissions_apply(struct udev_device *dev, bool apply_mac,
         const char *devnode = udev_device_get_devnode(dev);
         dev_t devnum = udev_device_get_devnum(dev);
         bool apply_mode, apply_uid, apply_gid;
+        _cleanup_close_ int node_fd = -1;
         struct stat stats;
         struct udev_list_entry *entry;
-        int err = 0;
+        int r;
 
         if (streq(udev_device_get_subsystem(dev), "block"))
                 mode |= S_IFBLK;
         else
                 mode |= S_IFCHR;
 
-        if (lstat(devnode, &stats) != 0) {
-                if (errno == ENOENT)
-                        return 0; /* this is necessarily racey, so ignore missing the device */
-                err = -errno;
-                log_debug_errno(errno, "can not stat() node '%s' (%m)", devnode);
-                goto out;
+        node_fd = open(devnode, O_PATH|O_NOFOLLOW|O_CLOEXEC);
+        if (node_fd < 0) {
+                if (errno == ENOENT) {
+                        log_debug_errno(errno, "Device node %s is missing, skipping handling.", devnode);
+                        return 0; /* This is necessarily racey, so ignore missing the device */
+                }
+
+                return log_debug_errno(errno, "Cannot open node %s: %m", devnode);
         }
 
+        if (fstat(node_fd, &stats) < 0)
+                return log_debug_errno(errno, "cannot stat() node %s: %m", devnode);
+
         if ((mode != MODE_INVALID && (stats.st_mode & S_IFMT) != (mode & S_IFMT)) || stats.st_rdev != devnum) {
-                err = -EEXIST;
-                log_debug("found node '%s' with non-matching devnum %s, skip handling",
-                          udev_device_get_devnode(dev), udev_device_get_id_filename(dev));
-                goto out;
+                log_debug("Found node '%s' with non-matching devnum %s, skipping handling.",
+                          devnode, udev_device_get_id_filename(dev));
+                return 0; /* We might process a device that already got replaced by the time we have a look
+                           * at it, handle this gracefully and step away. */
         }
 
         apply_mode = mode != MODE_INVALID && (stats.st_mode & 0777) != (mode & 0777);
@@ -375,9 +381,9 @@ static int node_permissions_apply(struct udev_device *dev, bool apply_mac,
                                   gid != GID_INVALID ? gid : stats.st_gid,
                                   mode != MODE_INVALID ? mode & 0777 : stats.st_mode & 0777);
 
-                        err = chmod_and_chown(devnode, mode, uid, gid);
-                        if (err < 0)
-                                log_full_errno(err == -ENOENT ? LOG_DEBUG : LOG_ERR, err,
+                        r = fchmod_and_chown(node_fd, mode, uid, gid);
+                        if (r < 0)
+                                log_full_errno(r == -ENOENT ? LOG_DEBUG : LOG_ERR, r,
                                                "Failed to set owner/mode of %s to uid=" UID_FMT
                                                ", gid=" GID_FMT ", mode=%#o: %m",
                                                devnode,
@@ -394,7 +400,7 @@ static int node_permissions_apply(struct udev_device *dev, bool apply_mac,
                 /* apply SECLABEL{$module}=$label */
                 udev_list_entry_foreach(entry, udev_list_get_entry(seclabel_list)) {
                         const char *name, *label;
-                        int r;
+                        int q;
 
                         name = udev_list_entry_get_name(entry);
                         label = udev_list_entry_get_value(entry);
@@ -402,9 +408,9 @@ static int node_permissions_apply(struct udev_device *dev, bool apply_mac,
                         if (streq(name, "selinux")) {
                                 selinux = true;
 
-                                r = mac_selinux_apply(devnode, label);
-                                if (r < 0)
-                                        log_full_errno(r == -ENOENT ? LOG_DEBUG : LOG_ERR, r,
+                                q = mac_selinux_apply_fd(node_fd, devnode, label);
+                                if (q < 0)
+                                        log_full_errno(q == -ENOENT ? LOG_DEBUG : LOG_ERR, q,
                                                        "SECLABEL: failed to set SELinux label '%s': %m", label);
                                 else
                                         log_debug("SECLABEL: set SELinux label '%s'", label);
@@ -412,9 +418,9 @@ static int node_permissions_apply(struct udev_device *dev, bool apply_mac,
                         } else if (streq(name, "smack")) {
                                 smack = true;
 
-                                r = mac_smack_apply(devnode, label);
-                                if (r < 0)
-                                        log_full_errno(r == -ENOENT ? LOG_DEBUG : LOG_ERR, r,
+                                q = mac_smack_apply_fd(node_fd, label);
+                                if (q < 0)
+                                        log_full_errno(q == -ENOENT ? LOG_DEBUG : LOG_ERR, q,
                                                        "SECLABEL: failed to set SMACK label '%s': %m", label);
                                 else
                                         log_debug("SECLABEL: set SMACK label '%s'", label);
@@ -425,15 +431,17 @@ static int node_permissions_apply(struct udev_device *dev, bool apply_mac,
 
                 /* set the defaults */
                 if (!selinux)
-                        mac_selinux_fix(devnode, true, false);
+                        (void) mac_selinux_fix_fd(node_fd, devnode, false);
                 if (!smack)
-                        mac_smack_apply(devnode, NULL);
+                        (void) mac_smack_apply_fd(node_fd, NULL);
         }
 
         /* always update timestamp when we re-use the node, like on media change events */
-        utimensat(AT_FDCWD, devnode, NULL, 0);
-out:
-        return err;
+        r = futimens_opath(node_fd, NULL);
+        if (r < 0)
+                log_debug_errno(r, "Failed to adjust timestamp of node %s: %m", devnode);
+
+        return r;
 }
 
 void udev_node_add(struct udev_device *dev, bool apply_mac,
