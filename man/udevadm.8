@@ -269,7 +269,7 @@ Modify the internal state of the running udev daemon\&.
 Signal and wait for udevd to exit\&.
 .RE
 .PP
-\fB\-l\fR, \fB\-\-log\-priority=\fR\fB\fIvalue\fR\fR
+\fB\-l\fR, \fB\-\-log\-level=\fR\fB\fIvalue\fR\fR
 .RS 4
 Set the internal log level of
 udevd\&. Valid values are the numerical syslog priorities or their textual representations:
@@ -280,7 +280,9 @@ udevd\&. Valid values are the numerical syslog priorities or their textual repre
 \fBwarning\fR,
 \fBnotice\fR,
 \fBinfo\fR, and
-\fBdebug\fR\&.
+\fBdebug\fR\&. The old name
+\fB\-\-log\-priority=\fR
+is still accepted\&.
 .RE
 .PP
 \fB\-s\fR, \fB\-\-stop\-exec\-queue\fR

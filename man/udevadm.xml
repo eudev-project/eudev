@@ -393,7 +393,7 @@
         </varlistentry>
         <varlistentry>
           <term><option>-l</option></term>
-          <term><option>--log-priority=<replaceable>value</replaceable></option></term>
+          <term><option>--log-level=<replaceable>value</replaceable></option></term>
           <listitem>
             <para>Set the internal log level of
             <filename>udevd</filename>. Valid values are the
@@ -402,7 +402,8 @@
             <option>alert</option>, <option>crit</option>,
             <option>err</option>, <option>warning</option>,
             <option>notice</option>, <option>info</option>, and
-            <option>debug</option>.</para>
+            <option>debug</option>. The old name
+            <option>--log-priority=</option> is still accepted.</para>
           </listitem>
         </varlistentry>
         <varlistentry>

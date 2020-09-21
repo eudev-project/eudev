@@ -34,7 +34,7 @@ static void print_help(void) {
                "  -h --help                Show this help\n"
                "     --version             Show package version\n"
                "  -e --exit                Instruct the daemon to cleanup and exit\n"
-               "  -l --log-priority=LEVEL  Set the udev log level for the daemon\n"
+               "  -l --log-level=LEVEL     Set the udev log level for the daemon\n"
                "  -s --stop-exec-queue     Do not execute events, queue only\n"
                "  -S --start-exec-queue    Execute events, flush queue\n"
                "  -R --reload              Reload rules and databases\n"
@@ -51,7 +51,8 @@ static int adm_control(struct udev *udev, int argc, char *argv[]) {
 
         static const struct option options[] = {
                 { "exit",             no_argument,       NULL, 'e' },
-                { "log-priority",     required_argument, NULL, 'l' },
+                { "log-level",        required_argument, NULL, 'l' },
+                { "log-priority",     required_argument, NULL, 'l' }, /* for backward compatibility */
                 { "stop-exec-queue",  no_argument,       NULL, 's' },
                 { "start-exec-queue", no_argument,       NULL, 'S' },
                 { "reload",           no_argument,       NULL, 'R' },
@@ -87,10 +88,10 @@ static int adm_control(struct udev *udev, int argc, char *argv[]) {
 
                         i = util_log_priority(optarg);
                         if (i < 0) {
-                                fprintf(stderr, "invalid number '%s'\n", optarg);
+                                fprintf(stderr, "invalid log level '%s'\n", optarg);
                                 return rc;
                         }
-                        if (udev_ctrl_send_set_log_level(uctrl, util_log_priority(optarg), timeout) < 0)
+                        if (udev_ctrl_send_set_log_level(uctrl, i, timeout) < 0)
                                 rc = 2;
                         else
                                 rc = 0;
