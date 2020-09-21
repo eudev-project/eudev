@@ -74,7 +74,7 @@
         <term><option>-D</option>, <option>--debug</option></term>
         <listitem>
           <para>Print debug messages to standard error. The log level
-          set with <varname>udev.log_priority=</varname> on the kernel
+          set with <varname>udev.log_level=</varname> on the kernel
           command line takes precedence over it.</para>
         </listitem>
       </varlistentry>
@@ -175,10 +175,11 @@
       <varname>udev.children-max=</varname> is the same as
       <varname>udev.children_max=</varname>.</para>
       <varlistentry>
-        <term><varname>udev.log_priority=</varname></term>
-        <term><varname>rd.udev.log_priority=</varname></term>
+        <term><varname>udev.log_level=</varname></term>
+        <term><varname>rd.udev.log_level=</varname></term>
         <listitem>
-          <para>Set the log level. It takes precedence over
+          <para>Set the log level. <varname>udev.log_priority=</varname> and
+          <varname>rd.udev.log_priority=</varname> are accepted too. It takes precedence over
           <varname>udev_log=</varname> in
           <citerefentry><refentrytitle>udev.conf</refentrytitle><manvolnum>5</manvolnum></citerefentry>
           and over <option>--debug</option>, and
@@ -190,7 +191,7 @@
         <term><varname>udev.trace[=<replaceable>BOOL</replaceable>]</varname></term>
         <term><varname>rd.udev.trace[=<replaceable>BOOL</replaceable>]</varname></term>
         <listitem>
-          <para>Enable/disable trace logging. When enabled, <varname>udev.log_priority=</varname> will be
+          <para>Enable/disable trace logging. When enabled, <varname>udev.log_level=</varname> will be
           ignored, and <literal>debug</literal> level is assumed.</para>
         </listitem>
       </varlistentry>

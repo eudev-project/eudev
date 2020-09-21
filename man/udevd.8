@@ -45,7 +45,7 @@ Detach and run in the background\&.
 \fB\-D\fR, \fB\-\-debug\fR
 .RS 4
 Print debug messages to standard error\&. The log level set with
-\fIudev\&.log_priority=\fR
+\fIudev\&.log_level=\fR
 on the kernel command line takes precedence over it\&.
 .RE
 .PP
@@ -130,9 +130,13 @@ In the names of the parameters, "\-" and "_" are the same, e\&.g\&.
 is the same as
 \fIudev\&.children_max=\fR\&.
 .PP
-\fIudev\&.log_priority=\fR, \fIrd\&.udev\&.log_priority=\fR
+\fIudev\&.log_level=\fR, \fIrd\&.udev\&.log_level=\fR
 .RS 4
-Set the log level\&. It takes precedence over
+Set the log level\&.
+\fIudev\&.log_priority=\fR
+and
+\fIrd\&.udev\&.log_priority=\fR
+are accepted too\&. It takes precedence over
 \fIudev_log=\fR
 in
 \fBudev.conf\fR(5)
@@ -145,7 +149,7 @@ takes precedence over it\&.
 \fIudev\&.trace[=\fR\fI\fIBOOL\fR\fR\fI]\fR, \fIrd\&.udev\&.trace[=\fR\fI\fIBOOL\fR\fR\fI]\fR
 .RS 4
 Enable/disable trace logging\&. When enabled,
-\fIudev\&.log_priority=\fR
+\fIudev\&.log_level=\fR
 will be ignored, and
 debug
 level is assumed\&.

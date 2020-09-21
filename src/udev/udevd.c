@@ -1285,9 +1285,9 @@ static void handle_ctrl_msg(struct udev_ctrl *uctrl) {
         i = udev_ctrl_get_set_log_level(ctrl_msg);
         if (i >= 0) {
                 if ((i & LOG_PRIMASK) != i)
-                        log_warning("udevd message (SET_LOG_LEVEL) received with invalid log_priority=%i, ignoring", i);
+                        log_warning("udevd message (SET_LOG_LEVEL) received with invalid log_level=%i, ignoring", i);
                 else {
-                        log_debug("udevd message (SET_LOG_LEVEL) received, log_priority=%i", i);
+                        log_debug("udevd message (SET_LOG_LEVEL) received, log_level=%i", i);
                         manager_set_log_level(i);
                 }
         }
@@ -1621,7 +1621,7 @@ static void handle_signal(struct udev *udev __attribute__((unused)), int signo) 
 
 /*
  * read the kernel command line, in case we need to get into debug mode
- *   udev.log_priority=<level>                 syslog priority
+ *   udev.log_level=<level>                    syslog priority
  *   udev.trace[=<bool>]                       trace logging, with debug level
  *   udev.children_max=<number of workers>     events are fully serialized if set to 1
  *   udev.exec_delay=<number of seconds>       delay execution of every executed program
@@ -1640,7 +1640,8 @@ static int parse_proc_cmdline_item(const char *key, const char *value) {
         if (startswith(key, "rd."))
                 key += strlen("rd.");
 
-        if (proc_cmdline_key_streq(key, "udev.log_priority")) {
+        if (proc_cmdline_key_streq(key, "udev.log_level") ||
+            proc_cmdline_key_streq(key, "udev.log_priority")) { /* kept for backward compatibility */
 
                 if (proc_cmdline_value_missing(key, value))
                         return 0;
