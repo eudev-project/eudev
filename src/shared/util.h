@@ -149,6 +149,12 @@ int unoctchar(char c) _const_;
 
 char *cescape(const char *s);
 size_t cescape_char(char c, char *buf);
+
+typedef enum UnescapeFlags {
+        UNESCAPE_RELAX = 1,
+} UnescapeFlags;
+
+int cunescape_length(const char *s, size_t length, UnescapeFlags flags, char **ret);
 char *xescape(const char *s, const char *bad);
 
 bool dirent_is_file_with_suffix(const struct dirent *de, const char *suffix) _pure_;

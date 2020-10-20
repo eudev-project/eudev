@@ -1396,6 +1396,17 @@ KERNEL=="sda", SYMLINK=="link", SYMLINK!="bad", SYMLINK-="link"
 KERNEL=="sda", SYMLINK=="link", SYMLINK+="bad"
 EOF
         },
+        {
+                desc            => "escaped string value e\"...\"",
+                devpath         => "/devices/pci0000:00/0000:00:1f.2/host0/target0:0:0/0:0:0:0/block/sda",
+                exp_name        => "found",
+                not_exp_name    => "bad",
+                rules           => <<EOF
+KERNEL=="sda", ENV{A}=e"x\\x2dy\\ttab\\"q\\\\z"
+KERNEL=="sda", ENV{A}=="x-y\ttab\\"q\\z", SYMLINK+="found"
+KERNEL=="sda", ENV{A}=="x\\x2dy*", SYMLINK+="bad"
+EOF
+        },
 );
 
 sub udev {

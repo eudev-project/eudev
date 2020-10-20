@@ -759,6 +759,73 @@ static int cunescape_one(const char *p, size_t length, char *ret, uint32_t *ret_
         return r;
 }
 
+int cunescape_length(const char *s, size_t length, UnescapeFlags flags, char **ret) {
+        char *r, *t;
+        const char *f;
+
+        assert(s);
+        assert(ret);
+
+        /* Undoes C style string escaping. */
+
+        r = new(char, length+1);
+        if (!r)
+                return -ENOMEM;
+
+        for (f = s, t = r; f < s + length; f++) {
+                size_t remaining;
+                uint32_t u;
+                char c;
+                int k;
+
+                remaining = s + length - f;
+                assert(remaining > 0);
+
+                if (*f != '\\') {
+                        /* A literal literal, copy verbatim */
+                        *(t++) = *f;
+                        continue;
+                }
+
+                if (remaining == 1) {
+                        if (flags & UNESCAPE_RELAX) {
+                                /* A trailing backslash, copy verbatim */
+                                *(t++) = *f;
+                                continue;
+                        }
+
+                        free(r);
+                        return -EINVAL;
+                }
+
+                k = cunescape_one(f + 1, remaining - 1, &c, &u);
+                if (k < 0) {
+                        if (flags & UNESCAPE_RELAX) {
+                                /* Invalid escape code, let's take it literal then */
+                                *(t++) = '\\';
+                                continue;
+                        }
+
+                        free(r);
+                        return k;
+                }
+
+                if (c != 0)
+                        /* Non-Unicode? Let's encode this directly */
+                        *(t++) = c;
+                else
+                        /* Unicode? Then let's encode this in UTF-8 */
+                        t += utf8_encode_unichar(t, u);
+
+                f += k;
+        }
+
+        *t = 0;
+
+        *ret = r;
+        return t - r;
+}
+
 char *xescape(const char *s, const char *bad) {
         char *r, *t;
         const char *f;

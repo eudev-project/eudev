@@ -91,6 +91,15 @@ Remove the value from a key that holds a list of entries\&.
 Assign a value to a key finally; disallow any later changes\&.
 .RE
 .PP
+Values are written as double quoted strings, such as ("string")\&. To include a quotation mark (") in the value, precede it by a backslash (\e")\&. Any other occurrences of a backslash followed by a character are not unescaped\&. That is, "\et\en" is treated as four characters: backslash, lowercase t, backslash, lowercase n\&.
+.PP
+The string can be prefixed with a lowercase e (e"string\en") to mark the string as C\-style escaped, see
+\m[blue]\fBEscape sequences in C\fR\m[]\&\s-2\u[1]\d\s+2\&. For example, e"string\en" is parsed as 7 characters: 6 lowercase letters and a newline\&. This can be useful for writing special characters when a kernel driver requires them\&.
+.PP
+Please note that
+\fBNUL\fR
+is not allowed in either string variant\&.
+.PP
 The following key names can be used to match against device properties\&. Some of the keys also match against properties of the parent devices in sysfs, not only the device that has generated the event\&. If multiple keys that match a parent device are specified in a single rule, all these keys must match at one and the same parent device\&.
 .PP
 \fIACTION\fR
@@ -589,3 +598,9 @@ is set at run\-time, and its value identifies a file in the file system, then th
 .PP
 \fBudevd\fR(8),
 \fBudevadm\fR(8)
+.SH "NOTES"
+.IP " 1." 4
+Escape sequences in C
+.RS 4
+\%https://en.wikipedia.org/wiki/Escape_sequences_in_C#Table_of_escape_sequences
+.RE

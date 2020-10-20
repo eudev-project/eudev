@@ -823,6 +823,7 @@ static int get_key(struct udev *udev __attribute__((unused)), char **line, char 
         char *linepos;
         char *temp;
         unsigned i, j;
+        bool is_escaped;
 
         linepos = *line;
         if (linepos == NULL || linepos[0] == '\0')
@@ -890,30 +891,54 @@ static int get_key(struct udev *udev __attribute__((unused)), char **line, char 
         if (linepos[0] == '\0')
                 return -1;
 
-        /* get the value */
+        /* get the value, it may be prefixed with "e" for C-style escaped strings */
+        is_escaped = linepos[0] == 'e';
+        linepos += is_escaped;
+
+        /* value must be double quotated */
         if (linepos[0] == '"')
                 linepos++;
         else
                 return -1;
         *value = linepos;
 
-        /* terminate */
-        for (i = 0, j = 0; ; i++, j++) {
+        if (!is_escaped) {
+                /* terminate */
+                for (i = 0, j = 0; ; i++, j++) {
 
-                if (linepos[i] == '"')
-                        break;
+                        if (linepos[i] == '"')
+                                break;
 
-                if (linepos[i] == '\0')
-                        return -1;
+                        if (linepos[i] == '\0')
+                                return -1;
 
-                /* double quotes can be escaped */
-                if (linepos[i] == '\\')
-                        if (linepos[i+1] == '"')
+                        /* double quotes can be escaped */
+                        if (linepos[i] == '\\')
+                                if (linepos[i+1] == '"')
+                                        i++;
+
+                        linepos[j] = linepos[i];
+                }
+                linepos[j] = '\0';
+        } else {
+                _cleanup_free_ char *unescaped = NULL;
+                int r;
+
+                /* find the end position of value */
+                for (i = 0; linepos[i] != '"'; i++) {
+                        if (linepos[i] == '\\')
                                 i++;
+                        if (linepos[i] == '\0')
+                                return -1;
+                }
+                linepos[i] = '\0';
 
-                linepos[j] = linepos[i];
+                r = cunescape_length(linepos, i, 0, &unescaped);
+                if (r < 0)
+                        return -1;
+                assert((unsigned) r <= i);
+                memcpy(linepos, unescaped, r + 1);
         }
-        linepos[j] = '\0';
 
         /* move line to next key */
         *line = linepos + i + 1;
