@@ -1219,6 +1219,9 @@ _public_ struct udev_device *udev_device_new_from_environment(struct udev *udev)
                 return NULL;
         udev_device_set_info_loaded(udev_device);
 
+        /* the tags in the environment of an older udevd are all current */
+        udev_device->database_version = 0;
+
         for (i = 0; environ[i] != NULL; i++)
                 udev_device_add_property_from_string_parse(udev_device, environ[i]);
 
@@ -2211,10 +2214,24 @@ struct udev_list_entry *udev_device_get_current_tags_list_entry_raw(struct udev_
  *
  * Returns: the first entry of the current tag list
  **/
+static bool device_database_supports_current_tags(struct udev_device *udev_device)
+{
+        if (!udev_device->info_loaded)
+                udev_device_read_db(udev_device);
+
+        /* The current tags (saved in Q field) feature is implemented in database version 1.
+         * If the database version is 0, then the tags (NOT current tags, saved in G field) are not
+         * sticky. Thus, we can safely bypass the operations for the current tags (Q) to tags (G). */
+
+        return udev_device->database_version >= 1;
+}
+
 _public_ struct udev_list_entry *udev_device_get_current_tags_list_entry(struct udev_device *udev_device)
 {
         if (udev_device == NULL)
                 return NULL;
+        if (!device_database_supports_current_tags(udev_device))
+                return udev_device_get_tags_list_entry(udev_device);
         return udev_device_get_current_tags_list_entry_raw(udev_device);
 }
 
@@ -2258,6 +2275,7 @@ _public_ int udev_device_has_current_tag(struct udev_device *udev_device, const 
 
         if (udev_device == NULL || tag == NULL)
                 return false;
+        /* for database version 0, udev_device_get_current_tags_list_entry() returns all tags */
         list_entry = udev_device_get_current_tags_list_entry(udev_device);
         if (udev_list_entry_get_by_name(list_entry, tag) != NULL)
                 return true;
@@ -2452,6 +2470,9 @@ struct udev_device *udev_device_new_from_nulstr(struct udev *udev, char *nulstr,
         }
 
         udev_device_set_info_loaded(device);
+
+        /* the tags in a message of an older udevd are all current */
+        device->database_version = 0;
 
         while (bufpos < buflen) {
                 char *key;
