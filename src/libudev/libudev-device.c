@@ -2527,6 +2527,11 @@ struct udev_device *udev_device_new_from_nulstr(struct udev *udev, char *nulstr,
                 }
 
                 bufpos += keylen + 1;
+
+                /* netlink messages for some devices contain an unwanted newline at the end of value.
+                 * Let's drop the newline and remaining characters after the newline. */
+                key[strcspn(key, NEWLINE)] = '\0';
+
                 udev_device_add_property_from_string_parse(device, key);
         }
 
