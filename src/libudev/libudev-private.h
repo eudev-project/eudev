@@ -32,6 +32,14 @@
 #define READ_END  0
 #define WRITE_END 1
 
+/* The database version indicates the supported features by the udev database.
+ * This is saved and parsed in V field.
+ *
+ * 0: None of the following features are supported (older eudev, systemd <= 246).
+ * 1: The current tags (Q) and the database version (V) features are implemented.
+ */
+#define LATEST_UDEV_DATABASE_VERSION 1
+
 /* libudev.c */
 int udev_get_rules_path(struct udev *udev, char **path[], usec_t *ts_usec[]);
 int udev_parse_hwdb_format(const char *s);

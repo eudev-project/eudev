@@ -86,6 +86,7 @@ struct udev_device {
         struct udev_list sysattr_list;
         struct udev_list tags_list;             /* all tags, sticky until the device is removed */
         struct udev_list current_tags_list;     /* the tags assigned by the latest event */
+        unsigned database_version;              /* of the database or netlink message read, see LATEST_UDEV_DATABASE_VERSION */
         unsigned long long int seqnum;
         usec_t usec_initialized;
         int devlink_priority;
@@ -720,6 +721,9 @@ int udev_device_read_db(struct udev_device *udev_device)
         /* devices with a database entry are initialized */
         udev_device->is_initialized = true;
 
+        /* a database without the V: line has version 0 */
+        udev_device->database_version = 0;
+
         while (fgets(line, sizeof(line), f)) {
                 size_t len;
                 const char *val;
@@ -766,6 +770,10 @@ int udev_device_read_db(struct udev_device *udev_device)
                         break;
                 case 'I':
                         udev_device_set_usec_initialized(udev_device, strtoull(val, NULL, 10));
+                        break;
+                case 'V':
+                        if (safe_atou(val, &udev_device->database_version) < 0)
+                                log_debug("invalid database version '%s' in db file %s, ignoring", val, filename);
                         break;
                 }
         }
@@ -861,6 +869,9 @@ static struct udev_device *udev_device_new(struct udev *udev)
         udev_list_init(udev, &udev_device->tags_list, true);
         udev_list_init(udev, &udev_device->current_tags_list, true);
         udev_device->watch_handle = -1;
+        /* The tags of a device created by this libudev are current tags. Reading a database or a
+         * message of an older udevd sets an older version. */
+        udev_device->database_version = LATEST_UDEV_DATABASE_VERSION;
 
         return udev_device;
 }

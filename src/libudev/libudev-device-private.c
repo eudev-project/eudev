@@ -197,6 +197,10 @@ int udev_device_update_db(struct udev_device *udev_device)
                 udev_list_entry_foreach(list_entry, udev_device_get_current_tags_list_entry_raw(udev_device))
                         if (db_entry_is_safe(udev_device, "Q", udev_list_entry_get_name(list_entry), NULL))
                                 fprintf(f, "Q:%s\n", udev_list_entry_get_name(list_entry)); /* Current tag */
+
+                /* Always write the latest database version here, instead of the value stored in
+                 * the device, as which may be 0. */
+                fprintf(f, "V:%u\n", LATEST_UDEV_DATABASE_VERSION);
         }
 
         fclose(f);
