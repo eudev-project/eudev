@@ -163,6 +163,7 @@ enum token_type {
         TK_A_DB_PERSIST,
         TK_A_INOTIFY_WATCH,             /* int */
         TK_A_DEVLINK_PRIO,              /* int */
+        TK_A_LOG_LEVEL,                 /* int, -1 for "reset" */
         TK_A_OWNER,                     /* val */
         TK_A_GROUP,                     /* val */
         TK_A_MODE,                      /* val */
@@ -214,6 +215,7 @@ struct token {
                                 gid_t gid;
                                 int devlink_prio;
                                 int watch;
+                                int log_level;
                                 enum udev_builtin_cmd builtin_cmd;
                         };
                 } key;
@@ -391,6 +393,7 @@ static const char *token_str(enum token_type type) {
                 [TK_A_DB_PERSIST] =             "A DB_PERSIST",
                 [TK_A_INOTIFY_WATCH] =          "A INOTIFY_WATCH",
                 [TK_A_DEVLINK_PRIO] =           "A DEVLINK_PRIO",
+                [TK_A_LOG_LEVEL] =              "A LOG_LEVEL",
                 [TK_A_OWNER] =                  "A OWNER",
                 [TK_A_GROUP] =                  "A GROUP",
                 [TK_A_MODE] =                   "A MODE",
@@ -495,6 +498,9 @@ static void dump_token(struct udev_rules *rules, struct token *token) {
                 break;
         case TK_A_DEVLINK_PRIO:
                 log_debug("%s %u", token_str(type), token->key.devlink_prio);
+                break;
+        case TK_A_LOG_LEVEL:
+                log_debug("%s %i", token_str(type), token->key.log_level);
                 break;
         case TK_A_OWNER_ID:
                 log_debug("%s %s %u", token_str(type), operation_str(op), token->key.uid);
@@ -1238,6 +1244,9 @@ static int rule_add_key(struct rule_tmp *rule_tmp, enum token_type type,
         case TK_A_DEVLINK_PRIO:
                 token->key.devlink_prio = *(int *)data;
                 break;
+        case TK_A_LOG_LEVEL:
+                token->key.log_level = *(int *)data;
+                break;
         case TK_A_OWNER_ID:
                 token->key.uid = *(uid_t *)data;
                 break;
@@ -1871,6 +1880,29 @@ static int add_rule(struct udev_rules *rules, char *line,
                                 int prio = atoi(&pos[strlen("link_priority=")]);
 
                                 rule_add_key(&rule_tmp, TK_A_DEVLINK_PRIO, op, NULL, &prio);
+                        }
+
+                        pos = strstr(value, "log_level=");
+                        if (pos != NULL) {
+                                _cleanup_free_ char *level_str = NULL;
+                                int level;
+
+                                pos = &pos[strlen("log_level=")];
+                                level_str = strndup(pos, strcspn(pos, ", "));
+                                if (!level_str) {
+                                        log_oom();
+                                        goto invalid;
+                                }
+                                if (streq(level_str, "reset"))
+                                        level = -1;
+                                else {
+                                        level = log_level_from_string(level_str);
+                                        if (level < 0) {
+                                                log_error("Failed to parse log level '%s' %s:%u", level_str, filename, lineno);
+                                                goto invalid;
+                                        }
+                                }
+                                rule_add_key(&rule_tmp, TK_A_LOG_LEVEL, op, NULL, &level);
                         }
 
                         pos = strstr(value, "string_escape=");
@@ -2726,6 +2758,23 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                 case TK_A_DEVLINK_PRIO:
                         udev_device_set_devlink_priority(event->dev, cur->key.devlink_prio);
                         break;
+                case TK_A_LOG_LEVEL: {
+                        int level = cur->key.log_level;
+
+                        if (level < 0)
+                                level = event->default_log_level;
+
+                        log_set_max_level(level);
+
+                        if (level == LOG_DEBUG && !event->log_level_was_debug) {
+                                /* The log level becomes LOG_DEBUG at first time. Let's log basic information. */
+                                log_debug("%s: The log level is changed to 'debug' while processing device (SEQNUM=%llu, ACTION=%s)",
+                                          udev_device_get_sysname(event->dev), udev_device_get_seqnum(event->dev),
+                                          udev_device_get_action(event->dev) ?: "n/a");
+                                event->log_level_was_debug = true;
+                        }
+                        break;
+                }
                 case TK_A_OWNER: {
                         char owner[UTIL_NAME_SIZE];
                         const char *ow = owner;

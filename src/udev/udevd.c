@@ -367,6 +367,9 @@ static void worker_spawn(struct event *event) {
 skip:
                         log_debug("seq %llu processed", udev_device_get_seqnum(dev));
 
+                        /* Reset the log level, as it might be changed by "OPTIONS=log_level=". */
+                        log_set_max_level(udev_event->default_log_level);
+
                         /* send udevd the result of the event execution */
                         r = worker_send_message(worker_watch[WRITE_END]);
                         if (r < 0)

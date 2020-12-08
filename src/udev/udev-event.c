@@ -53,6 +53,9 @@ struct udev_event *udev_event_new(struct udev_device *dev, enum udev_event_mode 
         event->fd_signal = -1;
         event->birth_usec = now(CLOCK_MONOTONIC);
         event->event_mode = mode;
+        /* OPTIONS="log_level=reset" goes back to this */
+        event->default_log_level = log_get_max_level();
+        event->log_level_was_debug = event->default_log_level == LOG_DEBUG;
         return event;
 }
 

@@ -70,6 +70,8 @@ struct udev_event {
         bool name_final;
         bool devlink_final;
         bool run_final;
+        bool log_level_was_debug;
+        int default_log_level;
         enum udev_event_mode event_mode;
 };
 
