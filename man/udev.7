@@ -447,6 +447,34 @@ Set the flag (sticky bit) on the udev database entry of the event device\&. Devi
 \fBudevadm info \-\-cleanup\-db\fR
 is called\&. This option can be useful in certain cases (e\&.g\&. Device Mapper devices) for persisting device state on the transition from initramfs\&.
 .RE
+.PP
+\fBlog_level=\fR\fB\fIlevel\fR\fR
+.RS 4
+Takes a log level name like
+debug
+or
+info, or a special value
+reset\&. When a log level name is specified, the maximum log level is changed to that level\&. When
+reset
+is set, then the previously specified log level is revoked\&. Defaults to the log level of the main process of
+\fBudevd\fR\&.
+.sp
+This may be useful when debugging events for certain devices\&. Note that the log level is applied when the line including this rule is processed\&. So, for debugging, it is recommended that this is specified at earlier place, e\&.g\&., the first line of
+00\-debug\&.rules\&.
+.sp
+Example for debugging uevent processing for network interfaces\&.
+.sp
+.if n \{\
+.RS 4
+.\}
+.nf
+# /etc/udev/rules\&.d/00\-debug\-net\&.rules
+SUBSYSTEM=="net", OPTIONS="log_level=debug"
+.fi
+.if n \{\
+.RE
+.\}
+.RE
 .RE
 .PP
 The
