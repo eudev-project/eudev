@@ -156,7 +156,6 @@ bool udev_hwdb_validate(struct udev_hwdb *hwdb);
 ssize_t util_get_sys_core_link_value(struct udev *udev, const char *slink, const char *syspath, char *value, size_t size);
 int util_resolve_sys_link(struct udev *udev, char *syspath, size_t size);
 int util_log_priority(const char *priority);
-size_t util_path_encode(const char *src, char *dest, size_t size);
 void util_remove_trailing_chars(char *path, char c);
 int util_replace_whitespace(const char *str, char *to, size_t len);
 int util_replace_chars(char *str, const char *white);

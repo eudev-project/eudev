@@ -173,38 +173,6 @@ int util_log_priority(const char *priority)
         return log_level_from_string(priority);
 }
 
-size_t util_path_encode(const char *src, char *dest, size_t size)
-{
-        size_t i, j;
-
-        for (i = 0, j = 0; src[i] != '\0'; i++) {
-                if (src[i] == '/') {
-                        if (j+4 >= size) {
-                                j = 0;
-                                break;
-                        }
-                        memcpy(&dest[j], "\\x2f", 4);
-                        j += 4;
-                } else if (src[i] == '\\') {
-                        if (j+4 >= size) {
-                                j = 0;
-                                break;
-                        }
-                        memcpy(&dest[j], "\\x5c", 4);
-                        j += 4;
-                } else {
-                        if (j+1 >= size) {
-                                j = 0;
-                                break;
-                        }
-                        dest[j] = src[i];
-                        j++;
-                }
-        }
-        dest[j] = '\0';
-        return j;
-}
-
 void util_remove_trailing_chars(char *path, char c)
 {
         size_t len;

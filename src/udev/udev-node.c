@@ -178,6 +178,40 @@ static const char *link_find_prioritized(struct udev_device *dev, bool add, cons
         return target;
 }
 
+static size_t escape_path(const char *src, char *dest, size_t size) {
+        size_t i, j;
+
+        assert(src);
+        assert(dest);
+
+        for (i = 0, j = 0; src[i] != '\0'; i++) {
+                if (src[i] == '/') {
+                        if (j+4 >= size) {
+                                j = 0;
+                                break;
+                        }
+                        memcpy(&dest[j], "\\x2f", 4);
+                        j += 4;
+                } else if (src[i] == '\\') {
+                        if (j+4 >= size) {
+                                j = 0;
+                                break;
+                        }
+                        memcpy(&dest[j], "\\x5c", 4);
+                        j += 4;
+                } else {
+                        if (j+1 >= size) {
+                                j = 0;
+                                break;
+                        }
+                        dest[j] = src[i];
+                        j++;
+                }
+        }
+        dest[j] = '\0';
+        return j;
+}
+
 /* manage "stack of names" with possibly specified device priorities */
 static void link_update(struct udev_device *dev, const char *slink, bool add) {
         char name_enc[UTIL_PATH_SIZE];
@@ -186,7 +220,7 @@ static void link_update(struct udev_device *dev, const char *slink, bool add) {
         const char *target;
         char buf[UTIL_PATH_SIZE];
 
-        util_path_encode(slink + strlen("/dev"), name_enc, sizeof(name_enc));
+        escape_path(slink + STRLEN("/dev"), name_enc, sizeof(name_enc));
         strscpyl(dirname, sizeof(dirname), UDEV_ROOT_RUN "/udev/links/", name_enc, NULL);
         strscpyl(filename, sizeof(filename), dirname, "/", udev_device_get_id_filename(dev), NULL);
 
