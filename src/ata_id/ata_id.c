@@ -47,6 +47,7 @@
 
 #include "build.h"
 #include "libudev.h"
+#include "device-nodes.h"
 #include "libudev-private.h"
 #include "udev-util.h"
 #include "log.h"
@@ -502,7 +503,7 @@ int main(int argc, char *argv[])
 
         memcpy(model, id.model, 40);
         model[40] = '\0';
-        udev_util_encode_string(model, model_enc, sizeof(model_enc));
+        encode_devnode_name(model, model_enc, sizeof(model_enc));
         util_replace_whitespace((char *) id.model, model, 40);
         util_replace_chars(model, NULL);
         util_replace_whitespace((char *) id.serial_no, serial, 20);

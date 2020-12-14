@@ -34,6 +34,7 @@
 #include <sys/stat.h>
 
 #include "libudev.h"
+#include "device-nodes.h"
 #include "libudev-private.h"
 #include "scsi_id.h"
 #include "udev-util.h"
@@ -489,8 +490,8 @@ static int set_inq_values(struct udev *udev, struct scsi_id_device *dev_scsi, co
         if (retval)
                 return retval;
 
-        udev_util_encode_string(dev_scsi->vendor, vendor_enc_str, sizeof(vendor_enc_str));
-        udev_util_encode_string(dev_scsi->model, model_enc_str, sizeof(model_enc_str));
+        encode_devnode_name(dev_scsi->vendor, vendor_enc_str, sizeof(vendor_enc_str));
+        encode_devnode_name(dev_scsi->model, model_enc_str, sizeof(model_enc_str));
 
         util_replace_whitespace(dev_scsi->vendor, vendor_str, sizeof(vendor_str));
         util_replace_chars(vendor_str, NULL);
