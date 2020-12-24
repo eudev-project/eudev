@@ -1057,7 +1057,6 @@ static int parse_argv(int argc, char *argv[]) {
 int main(int argc, char *argv[]) {
         struct udev *udev;
         int fd = -1;
-        int cnt;
         int rc = 0;
         int r;
 
@@ -1074,16 +1073,13 @@ int main(int argc, char *argv[]) {
                 goto exit;
         }
 
-        initialize_srand();
-        for (cnt = 20; cnt > 0; cnt--) {
-                struct timespec duration;
+        for (int cnt = 0; cnt < 20; cnt++) {
+                if (cnt != 0)
+                        (void) usleep(100 * USEC_PER_MSEC + random_u64() % (100 * USEC_PER_MSEC));
 
                 fd = open(arg_node, O_RDONLY|O_NONBLOCK|O_CLOEXEC|O_NOCTTY);
                 if (fd >= 0 || errno != EBUSY)
                         break;
-                duration.tv_sec = 0;
-                duration.tv_nsec = (100 * 1000 * 1000) + (rand() % 100 * 1000 * 1000);
-                nanosleep(&duration, NULL);
         }
         if (fd < 0) {
                 bool ignore = IN_SET(errno, ENODEV, ENXIO, ENOENT);
