@@ -35,6 +35,10 @@ static bool arg_lock = false;
 static bool arg_unlock = false;
 static const char *arg_node = NULL;
 
+typedef struct Context {
+        int fd;
+} Context;
+
 /* device info */
 static unsigned cd_rw_nonremovable;
 static unsigned cd_rw_removable;
@@ -127,6 +131,21 @@ static unsigned cd_media_track_count;
 static unsigned cd_media_track_count_data;
 static unsigned cd_media_track_count_audio;
 static unsigned long long int cd_media_session_last_offset;
+
+static void context_clear(Context *c) {
+        if (!c)
+                return;
+
+        safe_close(c->fd);
+}
+
+static void context_init(Context *c) {
+        assert(c);
+
+        *c = (Context) {
+                .fd = -1,
+        };
+}
 
 #define ERRCODE(s)      ((((s)[2] & 0x0F) << 16) | ((s)[12] << 8) | ((s)[13]))
 #define SK(errcode)     (((errcode) >> 16) & 0xF)
@@ -237,10 +256,12 @@ static int media_eject(int fd) {
         return scsi_cmd_run_and_log(&sc, fd, NULL, 0, "start/stop unit");
 }
 
-static int cd_capability_compat(int fd) {
+static int cd_capability_compat(Context *c) {
         int capability;
 
-        capability = ioctl(fd, CDROM_GET_CAPABILITY, NULL);
+        assert(c);
+
+        capability = ioctl(c->fd, CDROM_GET_CAPABILITY, NULL);
         if (capability < 0)
                 return log_debug_errno(errno, "CDROM_GET_CAPABILITY failed");
 
@@ -261,24 +282,28 @@ static int cd_capability_compat(int fd) {
         return 0;
 }
 
-static int cd_media_compat(int fd) {
-        if (ioctl(fd, CDROM_DRIVE_STATUS, CDSL_CURRENT) != CDS_DISC_OK)
+static int cd_media_compat(Context *c) {
+        assert(c);
+
+        if (ioctl(c->fd, CDROM_DRIVE_STATUS, CDSL_CURRENT) != CDS_DISC_OK)
                 return log_debug_errno(errno, "CDROM_DRIVE_STATUS != CDS_DISC_OK");
 
         cd_media = 1;
         return 0;
 }
 
-static int cd_inquiry(int fd) {
+static int cd_inquiry(Context *c) {
         struct scsi_cmd sc;
         unsigned char inq[36] = {};
         int r;
+
+        assert(c);
 
         scsi_cmd_init(&sc);
         scsi_cmd_set(&sc, 0, GPCMD_INQUIRY);
         scsi_cmd_set(&sc, 4, sizeof(inq));
         scsi_cmd_set(&sc, 5, 0);
-        r = scsi_cmd_run_and_log(&sc, fd, inq, sizeof(inq), "inquire");
+        r = scsi_cmd_run_and_log(&sc, c->fd, inq, sizeof(inq), "inquire");
         if (r < 0)
                 return r;
 
@@ -639,18 +664,19 @@ static int feature_profiles(const unsigned char *profiles, size_t size) {
         return 0;
 }
 
-static int cd_profiles_old_mmc(int fd) {
+static int cd_profiles_old_mmc(Context *c) {
+        disc_information discinfo = {};
         struct scsi_cmd sc;
         size_t len;
         int r;
 
-        disc_information discinfo = {};
+        assert(c);
 
         scsi_cmd_init(&sc);
         scsi_cmd_set(&sc, 0, GPCMD_READ_DISC_INFO);
         scsi_cmd_set(&sc, 8, sizeof(discinfo.disc_information_length));
         scsi_cmd_set(&sc, 9, 0);
-        r = scsi_cmd_run_and_log(&sc, fd, (unsigned char *)&discinfo.disc_information_length, sizeof(discinfo.disc_information_length), "read disc information");
+        r = scsi_cmd_run_and_log(&sc, c->fd, (unsigned char *)&discinfo.disc_information_length, sizeof(discinfo.disc_information_length), "read disc information");
         if (r >= 0) {
                 /* Not all drives have the same disc_info length, so requeue
                  * packet with the length the drive tells us it can supply */
@@ -662,7 +688,7 @@ static int cd_profiles_old_mmc(int fd) {
                 scsi_cmd_set(&sc, 0, GPCMD_READ_DISC_INFO);
                 scsi_cmd_set(&sc, 8, len);
                 scsi_cmd_set(&sc, 9, 0);
-                r = scsi_cmd_run_and_log(&sc, fd, (unsigned char *)&discinfo, len, "read disc information");
+                r = scsi_cmd_run_and_log(&sc, c->fd, (unsigned char *)&discinfo, len, "read disc information");
         }
         if (r < 0) {
                 if (cd_media == 1) {
@@ -692,7 +718,7 @@ static int cd_profiles_old_mmc(int fd) {
         return 1;
 }
 
-static int cd_profiles(int fd) {
+static int cd_profiles(Context *c) {
         struct scsi_cmd sc;
         unsigned char features[65530] = {};
         unsigned cur_profile = 0;
@@ -701,18 +727,20 @@ static int cd_profiles(int fd) {
         bool has_media = false;
         int r;
 
+        assert(c);
+
         /* First query the current profile */
         scsi_cmd_init(&sc);
         scsi_cmd_set(&sc, 0, GPCMD_GET_CONFIGURATION);
         scsi_cmd_set(&sc, 8, 8);
         scsi_cmd_set(&sc, 9, 0);
-        r = scsi_cmd_run(&sc, fd, features, 8);
+        r = scsi_cmd_run(&sc, c->fd, features, 8);
         if (r != 0) {
                 /* handle pre-MMC2 drives which do not support GET CONFIGURATION */
                 if (r > 0 && SK(r) == 0x5 && IN_SET(ASC(r), 0x20, 0x24)) {
                         log_debug("Drive is pre-MMC2 and does not support 46h get configuration command; "
                                   "trying to work around the problem.");
-                        return cd_profiles_old_mmc(fd);
+                        return cd_profiles_old_mmc(c);
                 }
 
                 return log_scsi_debug_errno(r, "get configuration");
@@ -741,7 +769,7 @@ static int cd_profiles(int fd) {
         scsi_cmd_set(&sc, 7, ( len >> 8 ) & 0xff);
         scsi_cmd_set(&sc, 8, len & 0xff);
         scsi_cmd_set(&sc, 9, 0);
-        r = scsi_cmd_run_and_log(&sc, fd, features, len, "get configuration");
+        r = scsi_cmd_run_and_log(&sc, c->fd, features, len, "get configuration");
         if (r < 0)
                 return r;
 
@@ -774,7 +802,7 @@ static int cd_profiles(int fd) {
         return has_media;
 }
 
-static int cd_media_info(int fd) {
+static int cd_media_info(Context *c) {
         struct scsi_cmd sc;
         unsigned char header[32] = {};
         static const char *const media_status[] = {
@@ -785,11 +813,13 @@ static int cd_media_info(int fd) {
         };
         int r;
 
+        assert(c);
+
         scsi_cmd_init(&sc);
         scsi_cmd_set(&sc, 0, GPCMD_READ_DISC_INFO);
         scsi_cmd_set(&sc, 8, sizeof(header));
         scsi_cmd_set(&sc, 9, 0);
-        r = scsi_cmd_run_and_log(&sc, fd, header, sizeof(header), "read disc information");
+        r = scsi_cmd_run_and_log(&sc, c->fd, header, sizeof(header), "read disc information");
         if (r < 0)
                 return r;
 
@@ -826,7 +856,7 @@ static int cd_media_info(int fd) {
                         scsi_cmd_set(&sc, 7, 0xC0);
                         scsi_cmd_set(&sc, 9, sizeof(dvdstruct));
                         scsi_cmd_set(&sc, 11, 0);
-                        r = scsi_cmd_run_and_log(&sc, fd, dvdstruct, sizeof(dvdstruct), "read DVD structure");
+                        r = scsi_cmd_run_and_log(&sc, c->fd, dvdstruct, sizeof(dvdstruct), "read DVD structure");
                         if (r < 0)
                                 return r;
 
@@ -841,7 +871,7 @@ static int cd_media_info(int fd) {
                         scsi_cmd_set(&sc, 0, GPCMD_READ_FORMAT_CAPACITIES);
                         scsi_cmd_set(&sc, 8, sizeof(format));
                         scsi_cmd_set(&sc, 9, 0);
-                        r = scsi_cmd_run_and_log(&sc, fd, format, sizeof(format), "read DVD format capacities");
+                        r = scsi_cmd_run_and_log(&sc, c->fd, format, sizeof(format), "read DVD format capacities");
                         if (r < 0)
                                 return r;
 
@@ -880,7 +910,7 @@ static int cd_media_info(int fd) {
                 scsi_cmd_set(&sc, 5, 0);
                 scsi_cmd_set(&sc, 8, sizeof(buffer)/2048);
                 scsi_cmd_set(&sc, 9, 0);
-                r = scsi_cmd_run_and_log(&sc, fd, buffer, sizeof(buffer), "read first 32 blocks");
+                r = scsi_cmd_run_and_log(&sc, c->fd, buffer, sizeof(buffer), "read first 32 blocks");
                 if (r < 0) {
                         cd_media = 0;
                         return r;
@@ -919,7 +949,7 @@ determined:
         return 0;
 }
 
-static int cd_media_toc(int fd) {
+static int cd_media_toc(Context *c) {
         struct scsi_cmd sc;
         unsigned char header[12] = {};
         unsigned char toc[65536] = {};
@@ -927,12 +957,14 @@ static int cd_media_toc(int fd) {
         unsigned char *p;
         int r;
 
+        assert(c);
+
         scsi_cmd_init(&sc);
         scsi_cmd_set(&sc, 0, GPCMD_READ_TOC_PMA_ATIP);
         scsi_cmd_set(&sc, 6, 1);
         scsi_cmd_set(&sc, 8, sizeof(header));
         scsi_cmd_set(&sc, 9, 0);
-        r = scsi_cmd_run_and_log(&sc, fd, header, sizeof(header), "read TOC");
+        r = scsi_cmd_run_and_log(&sc, c->fd, header, sizeof(header), "read TOC");
         if (r < 0)
                 return r;
 
@@ -955,7 +987,7 @@ static int cd_media_toc(int fd) {
         scsi_cmd_set(&sc, 7, (len >> 8) & 0xff);
         scsi_cmd_set(&sc, 8, len & 0xff);
         scsi_cmd_set(&sc, 9, 0);
-        r = scsi_cmd_run_and_log(&sc, fd, toc, len, "read TOC (tracks)");
+        r = scsi_cmd_run_and_log(&sc, c->fd, toc, len, "read TOC (tracks)");
         if (r < 0)
                 return r;
 
@@ -983,7 +1015,7 @@ static int cd_media_toc(int fd) {
         scsi_cmd_set(&sc, 2, 1); /* Session Info */
         scsi_cmd_set(&sc, 8, sizeof(header));
         scsi_cmd_set(&sc, 9, 0);
-        r = scsi_cmd_run_and_log(&sc, fd, header, sizeof(header), "read TOC (multi session)");
+        r = scsi_cmd_run_and_log(&sc, c->fd, header, sizeof(header), "read TOC (multi session)");
         if (r < 0)
                 return r;
 
@@ -991,6 +1023,29 @@ static int cd_media_toc(int fd) {
         log_debug("last track %u starts at block %u", header[4+2], len);
         cd_media_session_last_offset = (unsigned long long int)len * 2048;
 
+        return 0;
+}
+
+static int open_drive(Context *c) {
+        _cleanup_close_ int fd = -1;
+
+        assert(c);
+        assert(c->fd < 0);
+
+        for (int cnt = 0; cnt < 20; cnt++) {
+                if (cnt != 0)
+                        (void) usleep(100 * USEC_PER_MSEC + random_u64() % (100 * USEC_PER_MSEC));
+
+                fd = open(arg_node, O_RDONLY|O_NONBLOCK|O_CLOEXEC|O_NOCTTY);
+                if (fd >= 0 || errno != EBUSY)
+                        break;
+        }
+        if (fd < 0)
+                return log_debug_errno(errno, "Unable to open '%s'", arg_node);
+
+        log_debug("probing: '%s'", arg_node);
+
+        c->fd = TAKE_FD(fd);
         return 0;
 }
 
@@ -1050,12 +1105,13 @@ static int parse_argv(int argc, char *argv[]) {
 }
 
 int main(int argc, char *argv[]) {
+        _cleanup_(context_clear) Context c;
         struct udev *udev;
-        int fd = -1;
-        int rc = 0;
-        int r;
+        int r, rc = 0;
 
         log_open();
+
+        context_init(&c);
 
         /* not used otherwise, but udev_new() applies udev_log= from udev.conf */
         udev = udev_new();
@@ -1068,67 +1124,59 @@ int main(int argc, char *argv[]) {
                 goto exit;
         }
 
-        for (int cnt = 0; cnt < 20; cnt++) {
-                if (cnt != 0)
-                        (void) usleep(100 * USEC_PER_MSEC + random_u64() % (100 * USEC_PER_MSEC));
-
-                fd = open(arg_node, O_RDONLY|O_NONBLOCK|O_CLOEXEC|O_NOCTTY);
-                if (fd >= 0 || errno != EBUSY)
-                        break;
-        }
-        if (fd < 0) {
-                bool ignore = IN_SET(errno, ENODEV, ENXIO, ENOENT);
-                log_full_errno(ignore ? LOG_DEBUG : LOG_WARNING, errno,
+        r = open_drive(&c);
+        if (r < 0) {
+                bool ignore = IN_SET(r, -ENODEV, -ENXIO, -ENOENT);
+                log_full_errno(ignore ? LOG_DEBUG : LOG_WARNING, r,
                                "Failed to open device node '%s'%s: %m",
                                arg_node, ignore ? ", ignoring" : "");
                 rc = ignore ? 0 : 1;
                 goto exit;
         }
-        log_debug("probing: '%s'", arg_node);
 
         /* same data as original cdrom_id */
-        if (cd_capability_compat(fd) < 0) {
+        if (cd_capability_compat(&c) < 0) {
                 rc = 1;
                 goto exit;
         }
 
         /* check for media - don't bail if there's no media as we still need to
          * to read profiles */
-        cd_media_compat(fd);
+        cd_media_compat(&c);
 
         /* check if drive talks MMC */
-        if (cd_inquiry(fd) < 0)
+        if (cd_inquiry(&c) < 0)
                 goto work;
 
         /* read drive and possibly current profile */
-        r = cd_profiles(fd);
+        r = cd_profiles(&c);
         if (r > 0) {
                 /* at this point we are guaranteed to have media in the drive - find out more about it */
 
                 /* get session/track info */
-                cd_media_toc(fd);
+                cd_media_toc(&c);
 
                 /* get writable media state */
-                cd_media_info(fd);
+                cd_media_info(&c);
         }
 
 work:
         /* lock the media, so we enable eject button events */
         if (arg_lock && cd_media) {
                 log_debug("PREVENT_ALLOW_MEDIUM_REMOVAL (lock)");
-                media_lock(fd, true);
+                media_lock(c.fd, true);
         }
 
         if (arg_unlock && cd_media) {
                 log_debug("PREVENT_ALLOW_MEDIUM_REMOVAL (unlock)");
-                media_lock(fd, false);
+                media_lock(c.fd, false);
         }
 
         if (arg_eject) {
                 log_debug("PREVENT_ALLOW_MEDIUM_REMOVAL (unlock)");
-                media_lock(fd, false);
+                media_lock(c.fd, false);
                 log_debug("START_STOP_UNIT (eject)");
-                media_eject(fd);
+                media_eject(c.fd);
         }
 
         printf("ID_CDROM=1\n");
@@ -1307,8 +1355,6 @@ work:
         if (cd_media_track_count_data > 0)
                 printf("ID_CDROM_MEDIA_TRACK_COUNT_DATA=%u\n", cd_media_track_count_data);
 exit:
-        if (fd >= 0)
-                close(fd);
         udev_unref(udev);
         log_close();
         return rc;
