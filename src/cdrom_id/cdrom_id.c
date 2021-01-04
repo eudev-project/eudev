@@ -946,41 +946,26 @@ static int parse_argv(int argc, char *argv[]) {
         return 1;
 }
 
-int main(int argc, char *argv[]) {
+static int run(int argc, char *argv[]) {
         _cleanup_(context_clear) Context c;
-        struct udev *udev;
-        int r, rc = 0;
-
-        log_open();
+        int r;
 
         context_init(&c);
 
-        /* not used otherwise, but udev_new() applies udev_log= from udev.conf */
-        udev = udev_new();
-        if (udev == NULL)
-                goto exit;
-
         r = parse_argv(argc, argv);
-        if (r <= 0) {
-                rc = r < 0;
-                goto exit;
-        }
+        if (r <= 0)
+                return r;
 
         r = open_drive(&c);
-        if (r < 0) {
-                bool ignore = IN_SET(r, -ENODEV, -ENXIO, -ENOENT);
-                log_full_errno(ignore ? LOG_DEBUG : LOG_WARNING, r,
-                               "Failed to open device node '%s'%s: %m",
-                               arg_node, ignore ? ", ignoring" : "");
-                rc = ignore ? 0 : 1;
-                goto exit;
-        }
+        if (IN_SET(r, -ENODEV, -ENXIO, -ENOENT))
+                return 0;
+        if (r < 0)
+                return log_warning_errno(r, "Failed to open device node '%s': %m", arg_node);
 
         /* same data as original cdrom_id */
-        if (cd_capability_compat(&c) < 0) {
-                rc = 1;
-                goto exit;
-        }
+        r = cd_capability_compat(&c);
+        if (r < 0)
+                return r;
 
         /* check for media - don't bail if there's no media as we still need to
          * to read profiles */
@@ -990,8 +975,7 @@ int main(int argc, char *argv[]) {
         if (cd_inquiry(&c) < 0)
                 goto work;
 
-        /* read drive and possibly current profile */
-        r = cd_profiles(&c);
+        r = cd_profiles(&c); /* read drive and possibly current profile */
         if (r > 0) {
                 /* at this point we are guaranteed to have media in the drive - find out more about it */
 
@@ -1023,8 +1007,22 @@ work:
 
         print_properties(&c);
 
-exit:
+        return 0;
+}
+
+int main(int argc, char *argv[]) {
+        struct udev *udev;
+        int r;
+
+        log_open();
+
+        /* not used otherwise, but udev_new() applies udev_log= from udev.conf */
+        udev = udev_new();
+
+        r = run(argc, argv);
+
         udev_unref(udev);
         log_close();
-        return rc;
+
+        return r < 0 ? EXIT_FAILURE : EXIT_SUCCESS;
 }
