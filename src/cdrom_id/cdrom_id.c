@@ -17,7 +17,9 @@
 #include "libudev.h"
 
 #include "libudev-private.h"
+#include "main-func.h"
 #include "random-util.h"
+#include "udev-util.h"
 #include "unaligned.h"
 
 static bool arg_eject = false;
@@ -948,7 +950,13 @@ static int parse_argv(int argc, char *argv[]) {
 
 static int run(int argc, char *argv[]) {
         _cleanup_(context_clear) Context c;
+        _cleanup_udev_unref_ struct udev *udev = NULL;
         int r;
+
+        log_open();
+
+        /* not used otherwise, but udev_new() applies udev_log= from udev.conf */
+        udev = udev_new();
 
         context_init(&c);
 
@@ -1010,19 +1018,4 @@ work:
         return 0;
 }
 
-int main(int argc, char *argv[]) {
-        struct udev *udev;
-        int r;
-
-        log_open();
-
-        /* not used otherwise, but udev_new() applies udev_log= from udev.conf */
-        udev = udev_new();
-
-        r = run(argc, argv);
-
-        udev_unref(udev);
-        log_close();
-
-        return r < 0 ? EXIT_FAILURE : EXIT_SUCCESS;
-}
+DEFINE_MAIN_FUNCTION(run);
