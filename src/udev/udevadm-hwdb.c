@@ -441,9 +441,8 @@ static int insert_data(struct trie *trie, struct udev_list *match_list,
         while (isblank(line[0]) && isblank(line[1]))
                 line++;
 
-        if (isempty(line + 1) || isempty(value)) {
-                log_error("Warning, empty %s in \"%s=%s\", ignoring",
-                          isempty(line + 1) ? "key" : "value",
+        if (isempty(line + 1)) {
+                log_error("Warning, empty key in \"%s=%s\", ignoring",
                           line, value);
                 return -EINVAL;
         }
