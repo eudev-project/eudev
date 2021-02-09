@@ -426,21 +426,25 @@ static int insert_data(struct trie *trie, struct udev_list *match_list,
         char *value;
         struct udev_list_entry *entry;
 
+        assert(line[0] == ' ');
+
         value = strchr(line, '=');
         if (!value) {
-                log_error("Error, key/value pair expected but got '%s' in '%s':", line, filename);
+                log_error("Warning, key-value pair expected but got \"%s\", ignoring", line);
                 return -EINVAL;
         }
 
         value[0] = '\0';
         value++;
 
-        /* libudev requires properties to start with a space */
+        /* Replace multiple leading spaces by a single space */
         while (isblank(line[0]) && isblank(line[1]))
                 line++;
 
-        if (line[0] == '\0' || value[0] == '\0') {
-                log_error("Error, empty key or value '%s' in '%s':", line, filename);
+        if (isempty(line + 1) || isempty(value)) {
+                log_error("Warning, empty %s in \"%s=%s\", ignoring",
+                          isempty(line + 1) ? "key" : "value",
+                          line, value);
                 return -EINVAL;
         }
 
@@ -459,16 +463,20 @@ static int import_file(struct udev *udev, struct trie *trie, const char *filenam
         FILE *f;
         char line[LINE_MAX];
         struct udev_list match_list;
+        uint32_t line_number = 0;
+        int r = 0, err;
 
         udev_list_init(udev, &match_list, false);
 
         f = fopen(filename, "re");
-        if (f == NULL)
+        if (!f)
                 return -errno;
 
         while (fgets(line, sizeof(line), f)) {
                 size_t len;
                 char *pos;
+
+                ++line_number;
 
                 /* comment line */
                 if (line[0] == '#')
@@ -491,7 +499,8 @@ static int import_file(struct udev *udev, struct trie *trie, const char *filenam
                                 break;
 
                         if (line[0] == ' ') {
-                                log_error("Error, MATCH expected but got '%s' in '%s':", line, filename);
+                                log_error("Warning, match expected but got indented property \"%s\", ignoring line", line);
+                                r = -EINVAL;
                                 break;
                         }
 
@@ -502,46 +511,55 @@ static int import_file(struct udev *udev, struct trie *trie, const char *filenam
 
                 case HW_MATCH:
                         if (len == 0) {
-                                log_error("Error, DATA expected but got empty line in '%s':", filename);
+                                log_error("Warning, property expected, ignoring record with no properties");
+                                r = -EINVAL;
                                 state = HW_NONE;
                                 udev_list_cleanup(&match_list);
                                 break;
                         }
 
-                        /* another match */
                         if (line[0] != ' ') {
+                                /* another match */
                                 udev_list_entry_add(&match_list, line, NULL);
                                 break;
                         }
 
                         /* first data */
                         state = HW_DATA;
-                        insert_data(trie, &match_list, line, filename);
+                        err = insert_data(trie, &match_list, line, filename);
+                        if (err < 0)
+                                r = err;
                         break;
 
                 case HW_DATA:
-                        /* end of record */
                         if (len == 0) {
+                                /* end of record */
                                 state = HW_NONE;
                                 udev_list_cleanup(&match_list);
                                 break;
                         }
 
                         if (line[0] != ' ') {
-                                log_error("Error, DATA expected but got '%s' in '%s':", line, filename);
+                                log_error("Warning, property or empty line expected, got \"%s\", ignoring record", line);
+                                r = -EINVAL;
                                 state = HW_NONE;
                                 udev_list_cleanup(&match_list);
                                 break;
                         }
 
-                        insert_data(trie, &match_list, line, filename);
+                        err = insert_data(trie, &match_list, line, filename);
+                        if (err < 0)
+                                r = err;
                         break;
                 };
         }
 
+        if (state == HW_MATCH)
+                log_error("Warning, property expected, ignoring record with no properties");
+
         fclose(f);
         udev_list_cleanup(&match_list);
-        return 0;
+        return r;
 }
 
 static void help(void) {
