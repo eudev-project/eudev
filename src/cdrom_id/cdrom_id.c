@@ -74,7 +74,7 @@ typedef enum Feature {
         FEATURE_MRW_W,
 
         _FEATURE_MAX,
-        _FEATURE_INVALID = -1,
+        _FEATURE_INVALID = -EINVAL,
 } Feature;
 
 typedef enum MediaState {
@@ -83,7 +83,7 @@ typedef enum MediaState {
         MEDIA_STATE_COMPLETE   = 2,
         MEDIA_STATE_OTHER      = 3,
         _MEDIA_STATE_MAX,
-        _MEDIA_STATE_INVALID = -1,
+        _MEDIA_STATE_INVALID = -EINVAL,
 } MediaState;
 
 typedef struct Context {
