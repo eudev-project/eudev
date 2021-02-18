@@ -1660,8 +1660,15 @@ _public_ int udev_device_set_sysattr_value(struct udev_device *udev_device, cons
                 return 0;
 
         /* wrote a valid value, store it in cache */
-        if (udev_list_entry_add(&udev_device->sysattr_value_list, sysattr, v) == NULL)
-                return -ENOMEM;
+        if (udev_list_entry_add(&udev_device->sysattr_value_list, sysattr, v) == NULL) {
+                /* The value has been written, hence do not fail. But do not leave a cache
+                 * entry without a value behind, which would make the attribute look absent. */
+                log_debug("failed to cache sysfs attribute value '%s', ignoring", sysattr);
+                list_entry = udev_list_get_entry(&udev_device->sysattr_value_list);
+                list_entry = udev_list_entry_get_by_name(list_entry, sysattr);
+                if (list_entry != NULL)
+                        udev_list_entry_delete(list_entry);
+        }
         return 0;
 
 fail:
