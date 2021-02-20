@@ -39,6 +39,7 @@
 
 static int verbose;
 static int dry_run;
+static bool arg_quiet = false;
 
 static int write_uevent(const char *filename, const char *action) {
         _cleanup_close_ int fd = -1;
@@ -93,6 +94,7 @@ static int exec_list(struct udev_enumerate *udev_enumerate, const char *action, 
 
                         bool ignore = IN_SET(r, -ENOENT, -ENODEV);
                         int level =
+                                arg_quiet ? LOG_DEBUG :
                                 r == -ENOENT ? LOG_DEBUG :
                                 r == -ENODEV ? LOG_WARNING : LOG_ERR;
 
@@ -133,6 +135,7 @@ static void help(void) {
                "     --version                      Show package version\n"
                "  -v --verbose                      Print the list of devices while running\n"
                "  -n --dry-run                      Do not actually trigger the events\n"
+               "  -q --quiet                        Suppress error logging in triggering events\n"
                "  -t --type=                        Type of events to trigger\n"
                "          devices                     sysfs devices (default)\n"
                "          subsystems                  sysfs subsystems and drivers\n"
@@ -162,6 +165,7 @@ static int adm_trigger(struct udev *udev, int argc, char *argv[]) {
         static const struct option options[] = {
                 { "verbose",           no_argument,       NULL, 'v'      },
                 { "dry-run",           no_argument,       NULL, 'n'      },
+                { "quiet",             no_argument,       NULL, 'q'      },
                 { "type",              required_argument, NULL, 't'      },
                 { "action",            required_argument, NULL, 'c'      },
                 { "subsystem-match",   required_argument, NULL, 's'      },
@@ -199,7 +203,7 @@ static int adm_trigger(struct udev *udev, int argc, char *argv[]) {
         if (udev_enumerate == NULL)
                 return 1;
 
-        while ((c = getopt_long(argc, argv, "vnt:c:s:S:a:A:p:g:y:b:wh", options, NULL)) >= 0) {
+        while ((c = getopt_long(argc, argv, "vnqt:c:s:S:a:A:p:g:y:b:wh", options, NULL)) >= 0) {
                 const char *key;
                 const char *val;
                 char buf[UTIL_PATH_SIZE];
@@ -210,6 +214,9 @@ static int adm_trigger(struct udev *udev, int argc, char *argv[]) {
                         break;
                 case 'n':
                         dry_run = 1;
+                        break;
+                case 'q':
+                        arg_quiet = true;
                         break;
                 case 't':
                         if (streq(optarg, "devices"))
