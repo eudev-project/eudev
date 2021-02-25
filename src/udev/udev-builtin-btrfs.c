@@ -65,8 +65,18 @@ static int builtin_btrfs(struct udev_device *dev, int argc, char *argv[], enum u
         }
 
         fd = open("/dev/btrfs-control", O_RDWR|O_CLOEXEC|O_NOCTTY);
-        if (fd < 0)
+        if (fd < 0) {
+                if (IN_SET(errno, ENOENT, ENXIO, ENODEV, ENOMEDIUM)) {
+                        /* Driver not installed? Then we aren't ready. This is useful in initrds that lack
+                         * btrfs.ko. After the host transition (where btrfs.ko will hopefully become
+                         * available) the device can be retriggered and will then be considered ready. */
+                        udev_builtin_add_property(dev, mode, "ID_BTRFS_READY", "0");
+                        return EXIT_SUCCESS;
+                }
+
+                log_debug_errno(errno, "Failed to open /dev/btrfs-control: %m");
                 return EXIT_FAILURE;
+        }
 
         strscpy(args.name, sizeof(args.name), node);
         err = ioctl(fd, BTRFS_IOC_DEVICES_READY, &args);
