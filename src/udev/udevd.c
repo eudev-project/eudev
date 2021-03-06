@@ -348,8 +348,11 @@ static void worker_spawn(struct event *event) {
                                                arg_event_timeout_usec, arg_event_timeout_warn_usec,
                                                &sigmask_orig);
 
-                        /* apply/restore inotify watch */
-                        if (udev_event->inotify_watch) {
+                        /* apply/restore inotify watch; some udev rule may erroneously set
+                         * inotify watch on remove event, silently ignore it for safety */
+                        if (udev_event->inotify_watch &&
+                            !streq_ptr(udev_device_get_action(dev), "remove") &&
+                            udev_device_get_devnode(dev) != NULL) {
                                 udev_watch_begin(udev, dev);
                                 udev_device_update_db(dev);
                         }
