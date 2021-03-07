@@ -645,7 +645,10 @@ int udev_device_read_db(struct udev_device *udev_device)
                         udev_device_add_tag(udev_device, val);
                         break;
                 case 'W':
-                        udev_device_set_watch_handle(udev_device, atoi(val));
+                        /* Deprecated. Previously, watch handle is both saved in database and /run/udev/watch.
+                         * However, the handle saved in database may not be updated when the handle is updated
+                         * or removed. Moreover, it is not necessary to store the handle within the database,
+                         * as its value becomes meaningless when udevd is restarted. */
                         break;
                 case 'I':
                         udev_device_set_usec_initialized(udev_device, strtoull(val, NULL, 10));

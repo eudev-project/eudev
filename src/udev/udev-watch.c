@@ -29,6 +29,9 @@
 #include <sys/inotify.h>
 
 #include "udev.h"
+#include "mkdir.h"
+
+#define WATCH_DIR UDEV_ROOT_RUN "/udev/watch"
 
 static int inotify_fd = -1;
 
@@ -50,13 +53,13 @@ void udev_watch_restore(struct udev *udev) {
         if (inotify_fd < 0)
                 return;
 
-        if (rename(UDEV_ROOT_RUN "/udev/watch", UDEV_ROOT_RUN "/udev/watch.old") == 0) {
+        if (rename(WATCH_DIR, WATCH_DIR ".old") == 0) {
                 DIR *dir;
                 struct dirent *ent;
 
-                dir = opendir(UDEV_ROOT_RUN "/udev/watch.old");
+                dir = opendir(WATCH_DIR ".old");
                 if (dir == NULL) {
-                        log_error_errno(errno, "unable to open old watches dir " UDEV_ROOT_RUN "/udev/watch.old; old watches will not be restored: %m");
+                        log_error_errno(errno, "unable to open old watches dir " WATCH_DIR ".old; old watches will not be restored: %m");
                         return;
                 }
 
@@ -64,9 +67,15 @@ void udev_watch_restore(struct udev *udev) {
                         char device[UTIL_PATH_SIZE];
                         ssize_t len;
                         struct udev_device *dev;
+                        int wd;
 
                         if (ent->d_name[0] == '.')
                                 continue;
+
+                        /* For backward compatibility, read symlink from watch handle to device id, and ignore
+                         * the opposite direction symlink. */
+                        if (safe_atoi(ent->d_name, &wd) < 0)
+                                goto unlink;
 
                         len = readlinkat(dirfd(dir), ent->d_name, device, sizeof(device));
                         if (len <= 0 || len == (ssize_t)sizeof(device))
@@ -85,57 +94,186 @@ unlink:
                 }
 
                 closedir(dir);
-                rmdir(UDEV_ROOT_RUN "/udev/watch.old");
+                rmdir(WATCH_DIR ".old");
 
         } else if (errno != ENOENT) {
-                log_error_errno(errno, "unable to move watches dir " UDEV_ROOT_RUN "/udev/watch; old watches will not be restored: %m");
+                log_error_errno(errno, "unable to move watches dir " WATCH_DIR "; old watches will not be restored: %m");
         }
+}
+
+static int udev_watch_clear(struct udev_device *dev, int dirfd, int *ret_wd) {
+        char wd_str[DECIMAL_STR_MAX(int)];
+        char buf[UTIL_PATH_SIZE];
+        const char *id;
+        ssize_t len;
+        int wd = -1, r;
+
+        id = udev_device_get_id_filename(dev);
+        if (id == NULL)
+                return -ENODEV;
+
+        /* 1. read symlink ID -> wd */
+        len = readlinkat(dirfd, id, wd_str, sizeof(wd_str));
+        if (len < 0 && errno == ENOENT) {
+                if (ret_wd)
+                        *ret_wd = -1;
+                return 0;
+        }
+        if (len < 0) {
+                r = -errno;
+                log_debug_errno(r, "Failed to read symlink '" WATCH_DIR "/%s': %m", id);
+                goto finalize;
+        }
+        if ((size_t) len >= sizeof(wd_str)) {
+                r = -EINVAL;
+                log_debug_errno(r, "Invalid symlink '" WATCH_DIR "/%s'.", id);
+                goto finalize;
+        }
+        wd_str[len] = '\0';
+
+        r = safe_atoi(wd_str, &wd);
+        if (r < 0) {
+                log_debug_errno(r, "Failed to parse watch handle from symlink '" WATCH_DIR "/%s': %m", id);
+                goto finalize;
+        }
+
+        if (wd < 0) {
+                r = -EBADF;
+                log_debug_errno(r, "Invalid watch handle %i.", wd);
+                goto finalize;
+        }
+
+        /* 2. read symlink wd -> ID */
+        len = readlinkat(dirfd, wd_str, buf, sizeof(buf));
+        if (len < 0) {
+                r = -errno;
+                log_debug_errno(r, "Failed to read symlink '" WATCH_DIR "/%s': %m", wd_str);
+                goto finalize;
+        }
+        if ((size_t) len >= sizeof(buf)) {
+                r = -EINVAL;
+                log_debug_errno(r, "Invalid symlink '" WATCH_DIR "/%s'.", wd_str);
+                goto finalize;
+        }
+        buf[len] = '\0';
+
+        /* 3. check if the symlink wd -> ID is owned by the device. */
+        if (!streq(buf, id)) {
+                r = -ENOENT;
+                log_debug_errno(r, "Symlink '" WATCH_DIR "/%s' is owned by another device '%s'.", wd_str, buf);
+                goto finalize;
+        }
+
+        /* 4. remove symlink wd -> ID.
+         * In the above, we already confirmed that the symlink is owned by us. Hence, no other workers remove
+         * the symlink and cannot create a new symlink with the same filename but to a different ID. Hence,
+         * the removal below is safe even the steps in this function are not atomic. */
+        if (unlinkat(dirfd, wd_str, 0) < 0 && errno != ENOENT)
+                log_debug_errno(errno, "Failed to remove '" WATCH_DIR "/%s', ignoring: %m", wd_str);
+
+        if (ret_wd)
+                *ret_wd = wd;
+        r = 0;
+
+finalize:
+        /* 5. remove symlink ID -> wd.
+         * The file is always owned by the device. Hence, it is safe to remove it unconditionally. */
+        if (unlinkat(dirfd, id, 0) < 0 && errno != ENOENT)
+                log_debug_errno(errno, "Failed to remove '" WATCH_DIR "/%s': %m", id);
+
+        return r;
 }
 
 void udev_watch_begin(struct udev *udev __attribute__((unused)), struct udev_device *dev) {
-        char filename[UTIL_PATH_SIZE];
-        int wd;
-        int r;
+        char wd_str[DECIMAL_STR_MAX(int)];
+        _cleanup_close_ int dirfd = -1;
+        const char *devnode, *id;
+        int wd = -1, r;
 
         if (inotify_fd < 0)
                 return;
 
-        log_debug("adding watch on '%s'", udev_device_get_devnode(dev));
-        wd = inotify_add_watch(inotify_fd, udev_device_get_devnode(dev), IN_CLOSE_WRITE);
-        if (wd < 0) {
-                log_error_errno(errno, "inotify_add_watch(%d, %s, %o) failed: %m",
-                    inotify_fd, udev_device_get_devnode(dev), IN_CLOSE_WRITE);
+        devnode = udev_device_get_devnode(dev);
+        if (devnode == NULL)
+                return;
+
+        id = udev_device_get_id_filename(dev);
+        if (id == NULL)
+                return;
+
+        r = udev_mkdir_p(WATCH_DIR, 0755);
+        if (r < 0) {
+                log_error_errno(r, "Failed to create " WATCH_DIR ": %m");
                 return;
         }
 
-        snprintf(filename, sizeof(filename), UDEV_ROOT_RUN "/udev/watch/%d", wd);
-        mkdir_parents(filename, 0755);
-        unlink(filename);
-        r = symlink(udev_device_get_id_filename(dev), filename);
-        if (r < 0)
-                log_error_errno(errno, "Failed to create symlink %s: %m", filename);
+        dirfd = open(WATCH_DIR, O_CLOEXEC | O_DIRECTORY | O_NOFOLLOW | O_RDONLY);
+        if (dirfd < 0) {
+                log_error_errno(errno, "Failed to open " WATCH_DIR ": %m");
+                return;
+        }
 
-        udev_device_set_watch_handle(dev, wd);
+        /* 1. Clear old symlinks */
+        (void) udev_watch_clear(dev, dirfd, NULL);
+
+        /* 2. Add inotify watch */
+        log_debug("adding watch on '%s'", devnode);
+        wd = inotify_add_watch(inotify_fd, devnode, IN_CLOSE_WRITE);
+        if (wd < 0) {
+                log_error_errno(errno, "inotify_add_watch(%d, %s, %o) failed: %m",
+                    inotify_fd, devnode, IN_CLOSE_WRITE);
+                return;
+        }
+
+        xsprintf(wd_str, "%d", wd);
+
+        /* 3. Create new symlinks */
+        if (symlinkat(wd_str, dirfd, id) < 0) {
+                log_error_errno(errno, "Failed to create symlink '" WATCH_DIR "/%s' to '%s': %m", id, wd_str);
+                goto on_failure;
+        }
+
+        if (symlinkat(id, dirfd, wd_str) < 0) {
+                /* Possibly, the watch handle is previously assigned to another device, and udev_watch_end()
+                 * is not called for the device yet. */
+                log_error_errno(errno, "Failed to create symlink '" WATCH_DIR "/%s' to '%s': %m", wd_str, id);
+                goto on_failure;
+        }
+
+        return;
+
+on_failure:
+        (void) unlinkat(dirfd, id, 0);
+        (void) inotify_rm_watch(inotify_fd, wd);
 }
 
 void udev_watch_end(struct udev *udev __attribute__((unused)), struct udev_device *dev) {
-        int wd;
-        char filename[UTIL_PATH_SIZE];
+        _cleanup_close_ int dirfd = -1;
+        int wd = -1, r;
 
         if (inotify_fd < 0)
                 return;
 
-        wd = udev_device_get_watch_handle(dev);
-        if (wd < 0)
+        if (udev_device_get_devnode(dev) == NULL)
                 return;
 
-        log_debug("removing watch on '%s'", udev_device_get_devnode(dev));
-        inotify_rm_watch(inotify_fd, wd);
+        dirfd = open(WATCH_DIR, O_CLOEXEC | O_DIRECTORY | O_NOFOLLOW | O_RDONLY);
+        if (dirfd < 0) {
+                if (errno != ENOENT)
+                        log_debug_errno(errno, "Failed to open " WATCH_DIR ": %m");
+                return;
+        }
 
-        snprintf(filename, sizeof(filename), UDEV_ROOT_RUN "/udev/watch/%d", wd);
-        unlink(filename);
+        /* First, clear symlinks. */
+        r = udev_watch_clear(dev, dirfd, &wd);
+        if (r < 0)
+                return;
 
-        udev_device_set_watch_handle(dev, -1);
+        /* Then, remove inotify watch. */
+        if (wd >= 0) {
+                log_debug("removing watch handle %i on '%s'", wd, udev_device_get_devnode(dev));
+                (void) inotify_rm_watch(inotify_fd, wd);
+        }
 }
 
 struct udev_device *udev_watch_lookup(struct udev *udev, int wd) {
@@ -146,7 +284,7 @@ struct udev_device *udev_watch_lookup(struct udev *udev, int wd) {
         if (inotify_fd < 0 || wd < 0)
                 return NULL;
 
-        snprintf(filename, sizeof(filename), UDEV_ROOT_RUN "/udev/watch/%d", wd);
+        snprintf(filename, sizeof(filename), WATCH_DIR "/%d", wd);
         len = readlink(filename, device, sizeof(device));
         if (len <= 0 || (size_t)len == sizeof(device))
                 return NULL;

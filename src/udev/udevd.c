@@ -917,8 +917,9 @@ static int handle_inotify(struct udev *udev) {
                 log_debug("inotify event: %x for %s", e->mask, udev_device_get_devnode(dev));
                 if (e->mask & IN_CLOSE_WRITE)
                         synthesize_change(dev);
-                else if (e->mask & IN_IGNORED)
-                        udev_watch_end(udev, dev);
+
+                /* Do not handle IN_IGNORED here. It should be handled by worker in 'remove' uevent;
+                 * udev_event_execute_rules() -> udev_watch_end(). */
 
                 udev_device_unref(dev);
         }
