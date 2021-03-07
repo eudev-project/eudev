@@ -350,11 +350,12 @@ static void worker_spawn(struct event *event) {
 
                         /* apply/restore inotify watch; some udev rule may erroneously set
                          * inotify watch on remove event, silently ignore it for safety */
-                        if (udev_event->inotify_watch &&
-                            !streq_ptr(udev_device_get_action(dev), "remove") &&
+                        if (!streq_ptr(udev_device_get_action(dev), "remove") &&
                             udev_device_get_devnode(dev) != NULL) {
-                                udev_watch_begin(udev, dev);
-                                udev_device_update_db(dev);
+                                if (udev_event->inotify_watch)
+                                        udev_watch_begin(udev, dev);
+                                else
+                                        udev_watch_end(udev, dev);
                         }
 
                         safe_close(fd_lock);

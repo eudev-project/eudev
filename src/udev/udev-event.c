@@ -923,12 +923,11 @@ void udev_event_execute_rules(struct udev_event *event,
                 if (major(udev_device_get_devnum(dev)) != 0)
                         udev_node_remove(dev);
         } else {
+                /* disable watch during event processing */
+                if (major(udev_device_get_devnum(dev)) != 0)
+                        udev_watch_end(event->udev, dev);
+
                 event->dev_db = udev_device_clone_with_db(dev);
-                if (event->dev_db != NULL) {
-                        /* disable watch during event processing */
-                        if (major(udev_device_get_devnum(dev)) != 0)
-                                udev_watch_end(event->udev, event->dev_db);
-                }
 
                 if (major(udev_device_get_devnum(dev)) == 0 &&
                     streq(udev_device_get_action(dev), "move"))
