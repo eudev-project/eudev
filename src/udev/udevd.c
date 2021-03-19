@@ -116,6 +116,7 @@ enum worker_state {
         WORKER_RUNNING,
         WORKER_IDLE,
         WORKER_KILLED,
+        WORKER_KILLING,
 };
 
 struct worker {
@@ -502,13 +503,19 @@ static int event_queue_insert(struct udev_device *dev) {
         return 0;
 }
 
-static void worker_kill(void) {
+static void worker_kill(bool force) {
         struct worker *worker;
         Iterator i;
 
         HASHMAP_FOREACH(worker, workers, i) {
                 if (worker->state == WORKER_KILLED)
                         continue;
+
+                /* do not interrupt a running worker, kill it when it has finished its event */
+                if (worker->state == WORKER_RUNNING && !force) {
+                        worker->state = WORKER_KILLING;
+                        continue;
+                }
 
                 worker->state = WORKER_KILLED;
                 kill(worker->pid, SIGTERM);
@@ -665,7 +672,10 @@ static void worker_returned(int fd_worker) {
                         continue;
                 }
 
-                if (worker->state != WORKER_KILLED)
+                if (worker->state == WORKER_KILLING) {
+                        worker->state = WORKER_KILLED;
+                        kill(worker->pid, SIGTERM);
+                } else if (worker->state != WORKER_KILLED)
                         worker->state = WORKER_IDLE;
 
                 /* worker returned */
@@ -708,7 +718,7 @@ static void handle_ctrl_msg(struct udev_ctrl *uctrl) {
         if (i >= 0) {
                 log_debug("udevd message (SET_LOG_LEVEL) received, log_priority=%i", i);
                 log_set_max_level(i);
-                worker_kill();
+                worker_kill(false);
         }
 
         if (udev_ctrl_get_stop_exec_queue(ctrl_msg) > 0) {
@@ -750,7 +760,7 @@ static void handle_ctrl_msg(struct udev_ctrl *uctrl) {
                         }
                         free(key);
                 }
-                worker_kill();
+                worker_kill(false);
         }
 
         i = udev_ctrl_get_set_children_max(ctrl_msg);
@@ -1423,7 +1433,7 @@ int main(int argc, char *argv[]) {
 
                         /* discard queued events and kill workers */
                         event_queue_cleanup(udev, EVENT_QUEUED);
-                        worker_kill();
+                        worker_kill(true);
 
                         /* exit after all has cleaned up */
                         if (udev_list_node_is_empty(&event_list) && hashmap_isempty(workers))
@@ -1459,7 +1469,7 @@ int main(int argc, char *argv[]) {
                         /* kill idle workers */
                         if (udev_list_node_is_empty(&event_list)) {
                                 log_debug("cleanup idle workers");
-                                worker_kill();
+                                worker_kill(false);
                         }
 
                         /* check for hanging events */
@@ -1467,7 +1477,7 @@ int main(int argc, char *argv[]) {
                                 struct event *event = worker->event;
                                 usec_t ts;
 
-                                if (worker->state != WORKER_RUNNING)
+                                if (worker->state != WORKER_RUNNING && worker->state != WORKER_KILLING)
                                         continue;
 
                                 assert(event);
@@ -1516,7 +1526,7 @@ int main(int argc, char *argv[]) {
 
                 /* reload requested, HUP signal received, rules changed, builtin changed */
                 if (reload) {
-                        worker_kill();
+                        worker_kill(false);
                         rules = udev_rules_unref(rules);
                         udev_builtin_exit(udev);
                         reload = false;
