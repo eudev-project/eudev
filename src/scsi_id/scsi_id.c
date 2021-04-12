@@ -128,7 +128,7 @@ static int get_file_options(struct udev *udev __attribute__((unused)),
 {
         _cleanup_free_ char *vendor_in = NULL, *model_in = NULL, *options_in = NULL; /* read in from file */
         _cleanup_strv_free_ char **options_argv = NULL;
-        _cleanup_fclose_ FILE *f;
+        _cleanup_fclose_ FILE *f = NULL;
         int lineno, r;
 
         f = fopen(config_file, "re");
