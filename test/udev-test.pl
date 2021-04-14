@@ -1372,6 +1372,18 @@ SYMLINK!="link1", SYMLINK+="bad"
 SYMLINK!="nolink", SYMLINK+="found"
 EOF
         },
+        {
+                desc            => "ENV assignment with string_escape=replace",
+                devpath         => "/devices/pci0000:00/0000:00:1f.2/host0/target0:0:0/0:0:0:0/block/sda",
+                exp_name        => "found",
+                not_exp_name    => "bad",
+                rules           => <<EOF
+KERNEL=="sda", ENV{TESTENV}="a b/c"
+KERNEL=="sda", OPTIONS="string_escape=replace", ENV{ESCAPED}="\$env{TESTENV}"
+KERNEL=="sda", ENV{TESTENV}=="a b/c", ENV{ESCAPED}=="a_b_c", SYMLINK+="found"
+KERNEL=="sda", ENV{ESCAPED}=="a b/c", SYMLINK+="bad"
+EOF
+        },
 );
 
 sub udev {

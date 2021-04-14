@@ -396,7 +396,16 @@ Specify the priority of the created symlinks\&. Devices with higher priorities o
 .PP
 \fBstring_escape=\fR\fB\fInone|replace\fR\fR
 .RS 4
-Usually control and other possibly unsafe characters are replaced in strings used for device naming\&. The mode of replacement can be specified with this option\&.
+When
+replace, possibly unsafe characters in strings assigned to
+\fINAME\fR,
+\fISYMLINK\fR, and
+\fIENV{\fR\fI\fIkey\fR\fR\fI}\fR
+are replaced\&. When
+none, no replacement is performed\&. When unset, the replacement is performed for
+\fINAME\fR,
+\fISYMLINK\fR, but not for
+\fIENV{\fR\fI\fIkey\fR\fR\fI}\fR\&. Defaults to unset\&.
 .RE
 .PP
 \fBstatic_node=\fR

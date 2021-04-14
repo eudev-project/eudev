@@ -2478,9 +2478,20 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
 
                                 /* append value separated by space */
                                 udev_event_apply_format(event, value, temp, sizeof(temp), false);
+                                if (esc == ESCAPE_REPLACE) {
+                                        int count = util_replace_chars(temp, NULL);
+                                        if (count > 0)
+                                                log_debug("%i character(s) replaced", count);
+                                }
                                 strscpyl(value_new, sizeof(value_new), value_old, " ", temp, NULL);
-                        } else
+                        } else {
                                 udev_event_apply_format(event, value, value_new, sizeof(value_new), false);
+                                if (esc == ESCAPE_REPLACE) {
+                                        int count = util_replace_chars(value_new, NULL);
+                                        if (count > 0)
+                                                log_debug("%i character(s) replaced", count);
+                                }
+                        }
 
                         udev_device_add_property(event->dev, name, value_new);
                         break;
