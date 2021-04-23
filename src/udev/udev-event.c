@@ -826,6 +826,7 @@ static int rename_netif_dev_fromname_toname(struct udev_device *dev,const char *
 
 #ifdef ENABLE_RULE_GENERATOR
 	int loop;
+    struct ifreq ifr_tmp;
 
 	if (r == 0) {
 		log_info("renamed network interface %s to %s\n", ifr.ifr_name, ifr.ifr_newname);
@@ -834,6 +835,16 @@ static int rename_netif_dev_fromname_toname(struct udev_device *dev,const char *
 	/* keep trying if the destination interface name already exists */
 	log_debug("collision on rename of network interface %s to %s , retrying until timeout\n",
 		ifr.ifr_name, ifr.ifr_newname);
+
+	/* there has been a collision so rename my name to a temporal name, letting other one to rename to my name, freeying its name... */
+        memzero(&ifr_tmp, sizeof(struct ifreq));
+        strscpy(ifr_tmp.ifr_name, IFNAMSIZ, oldname);
+	snprintf(ifr_tmp.ifr_newname, IFNAMSIZ, "rename_%s", oldname);
+        r = ioctl(sk, SIOCSIFNAME, &ifr_tmp);
+		log_info("Temporarily renamed network interface %s to %s\n", ifr_tmp.ifr_name, ifr_tmp.ifr_newname);
+	
+	/* we have changed our name so in subsequents tries i should rename my temporal name to the wanted one */
+        strscpy(ifr.ifr_name, IFNAMSIZ, ifr_tmp.ifr_newname);
 
 	r = -errno;
 	if (r != -EEXIST)
