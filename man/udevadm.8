@@ -245,6 +245,13 @@ Apart from triggering events, also waits for those events to finish\&. Note that
 waits for all events to finish\&. This option only waits for events triggered by the same command to finish\&.
 .RE
 .PP
+\fB\-\-uuid\fR
+.RS 4
+Trigger the synthetic device events, and associate a randomized UUID with each\&. These UUIDs are printed to standard output, one line for each event\&. These UUIDs are included in the uevent environment block (in the
+SYNTH_UUID=
+property) and may be used to track delivery of the generated events\&. This requires Linux 4\&.13 or newer\&.
+.RE
+.PP
 \fB\-\-wait\-daemon[=\fR\fB\fISECONDS\fR\fR\fB]\fR
 .RS 4
 Before triggering uevents, wait for udevd daemon to be initialized\&. Optionally takes timeout value\&. Default timeout is 5 seconds\&. This is equivalent to invoking

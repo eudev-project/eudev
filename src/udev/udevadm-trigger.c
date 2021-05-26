@@ -15,6 +15,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <ctype.h>
 #include <stdlib.h>
 #include <stddef.h>
 #include <string.h>
@@ -31,6 +32,7 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 
+#include "random-util.h"
 #include "set.h"
 #include "udev.h"
 #include "udev-util.h"
@@ -40,24 +42,88 @@
 static int verbose;
 static int dry_run;
 static bool arg_quiet = false;
+static bool arg_uuid = false;
+static bool arg_settle = false;
 
-static int write_uevent(const char *filename, const char *action) {
+/* "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" and the terminating NUL */
+#define UUID_STRING_MAX 37
+
+/* Generates a random UUID as sd_id128_randomize() does, in the UUID format. */
+static void random_uuid(char ret[static UUID_STRING_MAX]) {
+        uint8_t b[16];
+
+        random_bytes(b, sizeof(b));
+
+        /* Turn this into a valid v4 UUID, to be nice. */
+        b[6] = (b[6] & 0x0F) | 0x40;
+        b[8] = (b[8] & 0x3F) | 0x80;
+
+        snprintf(ret, UUID_STRING_MAX,
+                 "%02x%02x%02x%02x-%02x%02x-%02x%02x-%02x%02x-%02x%02x%02x%02x%02x%02x",
+                 b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7],
+                 b[8], b[9], b[10], b[11], b[12], b[13], b[14], b[15]);
+}
+
+/* Like sd_device_get_trigger_uuid(): gets the UUID attached to a uevent triggered from userspace,
+ * in lowercase UUID format. Returns -ENOENT if the uevent is not a synthetic one, and -ENODATA if
+ * it was triggered without a UUID. */
+static int device_get_trigger_uuid(struct udev_device *dev, char ret[static UUID_STRING_MAX]) {
+        const char *s;
+        size_t i, n = 0;
+        bool dashes;
+
+        s = udev_device_get_property_value(dev, "SYNTH_UUID");
+        if (!s)
+                return -ENOENT;
+
+        /* SYNTH_UUID=0 is set whenever a device is triggered by userspace without specifying a UUID */
+        if (streq(s, "0"))
+                return -ENODATA;
+
+        /* Accept the UUID format and 32 plain hexadecimal digits, as sd_id128_from_string() does. */
+        dashes = strlen(s) == 36;
+        if (!dashes && strlen(s) != 32)
+                return -EINVAL;
+
+        for (i = 0; s[i] != '\0'; i++) {
+                if (dashes && IN_SET(i, 8, 13, 18, 23)) {
+                        if (s[i] != '-')
+                                return -EINVAL;
+                        continue;
+                }
+                if (!isxdigit((unsigned char) s[i]))
+                        return -EINVAL;
+                if (IN_SET(n, 8, 13, 18, 23))
+                        ret[n++] = '-';
+                ret[n++] = tolower((unsigned char) s[i]);
+        }
+        ret[n] = '\0';
+
+        return 0;
+}
+
+static int write_uevent(const char *filename, const char *action, const char *uuid) {
         _cleanup_close_ int fd = -1;
+        const char *s;
+
+        s = uuid ? strjoina(action, " ", uuid) : action;
 
         fd = open(filename, O_WRONLY|O_CLOEXEC);
         if (fd < 0)
                 return -errno;
-        if (write(fd, action, strlen(action)) < 0)
+        if (write(fd, s, strlen(s)) < 0)
                 return -errno;
         return 0;
 }
 
 static int exec_list(struct udev_enumerate *udev_enumerate, const char *action, Set *settle_set) {
         struct udev_list_entry *entry;
+        int uuid_supported = -1;
         int r, ret = 0;
 
         udev_list_entry_foreach(entry, udev_enumerate_get_list_entry(udev_enumerate)) {
                 char filename[UTIL_PATH_SIZE];
+                char id[UUID_STRING_MAX] = "";
                 const char *syspath;
 
                 syspath = udev_list_entry_get_name(entry);
@@ -67,7 +133,23 @@ static int exec_list(struct udev_enumerate *udev_enumerate, const char *action, 
                         continue;
 
                 strscpyl(filename, sizeof(filename), syspath, "/uevent", NULL);
-                r = write_uevent(filename, action);
+
+                /* Use the UUID mode if the user explicitly asked for it, or if --settle has been specified,
+                 * so that we can recognize our own uevent. */
+                if ((arg_uuid || arg_settle) && uuid_supported != 0) {
+                        random_uuid(id);
+                        r = write_uevent(filename, action, id);
+                } else
+                        r = write_uevent(filename, action, NULL);
+                if (r == -EINVAL && !arg_uuid && arg_settle && uuid_supported < 0) {
+                        /* If we specified a UUID because of the settling logic, and we got EINVAL this might
+                         * be caused by an old kernel which doesn't know the UUID logic (pre-4.13). Let's try
+                         * if it works without the UUID logic then. */
+                        r = write_uevent(filename, action, NULL);
+                        if (r != -EINVAL)
+                                uuid_supported = false; /* dropping the uuid stuff changed the return code,
+                                                         * hence don't bother next time */
+                }
                 if (r < 0) {
                         /* ENOENT may be returned when a device does not have /uevent or is already
                          * removed. Hence, this is logged at debug level and ignored.
@@ -106,13 +188,74 @@ static int exec_list(struct udev_enumerate *udev_enumerate, const char *action, 
                         if (ret == 0 && !ignore)
                                 ret = r;
                         continue;
-                }
+                } else
+                        log_debug("%s: Triggered device with action '%s'.", eudev_basename(syspath), action);
 
-                if (settle_set != NULL && set_put_strdup(settle_set, syspath) < 0)
+                if (uuid_supported < 0)
+                        uuid_supported = true;
+
+                /* If the user asked for it, write event UUID to stdout */
+                if (arg_uuid)
+                        printf("%s\n", id);
+
+                /* Wait for the UUID if the kernel supports it, as the device may be renamed while the
+                 * event is processed. Otherwise, wait for an event for the device. */
+                if (settle_set != NULL && set_put_strdup(settle_set, uuid_supported ? id : syspath) < 0)
                         return log_oom();
         }
 
         return ret;
+}
+
+/* Returns true if the event is one of the triggered ones, and removes it from the set. */
+static bool settle_device(Set *settle_set, struct udev_device *dev) {
+        _cleanup_free_ char *saved = NULL;
+        char id[UUID_STRING_MAX] = "";
+        const char *syspath;
+
+        syspath = udev_device_get_syspath(dev);
+
+        if (device_get_trigger_uuid(dev, id) >= 0) {
+                saved = set_remove(settle_set, id);
+                if (!saved) {
+                        log_debug("Got uevent not matching expected UUID, ignoring.");
+                        return false;
+                }
+        } else {
+                saved = set_remove(settle_set, syspath);
+                if (!saved) {
+                        const char *old_sysname;
+
+                        /* When the device is renamed, the new name is broadcast, and the old name is saved
+                         * in INTERFACE_OLD. */
+                        old_sysname = udev_device_get_property_value(dev, "INTERFACE_OLD");
+                        if (old_sysname) {
+                                _cleanup_free_ char *dir = NULL, *old_syspath = NULL;
+
+                                dir = dirname_malloc(syspath);
+                                if (dir)
+                                        old_syspath = strjoin(dir, "/", old_sysname, NULL);
+                                if (!old_syspath) {
+                                        log_oom();
+                                        return false;
+                                }
+
+                                saved = set_remove(settle_set, old_syspath);
+                        }
+                }
+                if (!saved) {
+                        log_debug("Got uevent for unexpected device, ignoring.");
+                        return false;
+                }
+        }
+
+        if (verbose)
+                printf("settle %s\n", syspath);
+
+        if (arg_uuid)
+                printf("settle %s\n", id);
+
+        return true;
 }
 
 static const char *keyval(const char *str, const char **val, char *buf, size_t size) {
@@ -153,6 +296,7 @@ static void help(void) {
                "  -w --settle                       Wait for the triggered events to complete\n"
                "     --wait-daemon[=SECONDS]        Wait for udevd daemon to be initialized\n"
                "                                    before triggering uevents\n"
+               "     --uuid                         Print synthetic uevent UUID\n"
                , program_invocation_short_name);
 }
 
@@ -160,6 +304,7 @@ static int adm_trigger(struct udev *udev, int argc, char *argv[]) {
         enum {
                 ARG_NAME = 0x100,
                 ARG_PING,
+                ARG_UUID,
         };
 
         static const struct option options[] = {
@@ -181,6 +326,7 @@ static int adm_trigger(struct udev *udev, int argc, char *argv[]) {
                 { "wait-daemon",       optional_argument, NULL, ARG_PING },
                 { "help",              no_argument,       NULL, 'h'      },
                 { "version",           no_argument,       NULL, 'V'      },
+                { "uuid",              no_argument,       NULL, ARG_UUID },
                 {}
         };
         enum {
@@ -195,7 +341,7 @@ static int adm_trigger(struct udev *udev, int argc, char *argv[]) {
         int fd_udev = -1;
         struct epoll_event ep_udev;
         usec_t ping_timeout_usec = 5 * USEC_PER_SEC;
-        bool settle = false, ping = false;
+        bool ping = false;
         _cleanup_set_free_free_ Set *settle_set = NULL;
         int c, r;
 
@@ -275,7 +421,11 @@ static int adm_trigger(struct udev *udev, int argc, char *argv[]) {
                         break;
                 }
                 case 'w':
-                        settle = true;
+                        arg_settle = true;
+                        break;
+
+                case ARG_UUID:
+                        arg_uuid = true;
                         break;
 
                 case ARG_PING:
@@ -350,7 +500,7 @@ static int adm_trigger(struct udev *udev, int argc, char *argv[]) {
                 udev_enumerate_add_match_parent(udev_enumerate, dev);
         }
 
-        if (settle) {
+        if (arg_settle) {
                 fd_ep = epoll_create1(EPOLL_CLOEXEC);
                 if (fd_ep < 0) {
                         log_error_errno(errno, "error creating epoll fd: %m");
@@ -415,20 +565,12 @@ static int adm_trigger(struct udev *udev, int argc, char *argv[]) {
                 for (i = 0; i < fdcount; i++) {
                         if (ev[i].data.fd == fd_udev && ev[i].events & EPOLLIN) {
                                 _cleanup_udev_device_unref_ struct udev_device *device = NULL;
-                                const char *syspath = NULL;
-                                char *saved;
 
                                 device = udev_monitor_receive_device(udev_monitor);
                                 if (device == NULL)
                                         continue;
 
-                                syspath = udev_device_get_syspath(device);
-                                if (verbose)
-                                        printf("settle %s\n", syspath);
-                                saved = set_remove(settle_set, syspath);
-                                if (saved == NULL)
-                                        log_debug("Got epoll event on syspath %s not present in syspath set", syspath);
-                                free(saved);
+                                (void) settle_device(settle_set, device);
                         }
                 }
         }
