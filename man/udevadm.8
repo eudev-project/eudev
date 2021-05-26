@@ -190,6 +190,55 @@ In addition an optional positional argument can be used to specify a device name
 or
 /sys
 respectively\&.
+.PP
+The generated output shows the current device database entry in a terse format\&. Each line shown is prefixed with one of the following characters:
+.sp
+.it 1 an-trap
+.nr an-no-space-flag 1
+.nr an-break-flag 1
+.br
+.B Table\ \&1.\ \&udevadm info output prefixes
+.TS
+allbox tab(:);
+lB lB.
+T{
+Prefix
+T}:T{
+Meaning
+T}
+.T&
+l l
+l l
+l l
+l l
+l l.
+T{
+P:
+T}:T{
+Device path in /sys/
+T}
+T{
+N:
+T}:T{
+Kernel device node name
+T}
+T{
+L:
+T}:T{
+Device node symlink priority
+T}
+T{
+S:
+T}:T{
+Device node symlink
+T}
+T{
+E:
+T}:T{
+Device property
+T}
+.TE
+.sp 1
 .SS "udevadm trigger [\fIoptions\fR] [\fIdevpath\fR|\fIfile\fR...]"
 .PP
 Request device events from the kernel\&. Primarily used to replay events at system coldplug time\&.
