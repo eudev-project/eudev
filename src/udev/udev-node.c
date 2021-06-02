@@ -30,6 +30,7 @@
 #include <sys/types.h>
 #include <sys/sysmacros.h>
 
+#include "path-util.h"
 #include "udev.h"
 #include "smack-util.h"
 
@@ -217,10 +218,18 @@ static void link_update(struct udev_device *dev, const char *slink, bool add) {
         char name_enc[UTIL_PATH_SIZE];
         char filename[UTIL_PATH_SIZE * 2];
         char dirname[UTIL_PATH_SIZE];
-        const char *target;
+        const char *slink_name, *target;
         char buf[UTIL_PATH_SIZE];
 
-        escape_path(slink + STRLEN("/dev"), name_enc, sizeof(name_enc));
+        slink_name = path_startswith(slink, "/dev");
+        if (!slink_name) {
+                log_debug("Invalid symbolic link of device node: %s", slink);
+                return;
+        }
+
+        /* The name of the stack directory is the escaped path below /dev including its leading
+         * slash, e.g. \x2fdisk\x2fby-id\x2f..., as eudev has always named it. */
+        escape_path(strjoina("/", slink_name), name_enc, sizeof(name_enc));
         strscpyl(dirname, sizeof(dirname), UDEV_ROOT_RUN "/udev/links/", name_enc, NULL);
         strscpyl(filename, sizeof(filename), dirname, "/", udev_device_get_id_filename(dev), NULL);
 
