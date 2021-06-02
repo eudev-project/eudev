@@ -468,6 +468,7 @@ static int builtin_blkid(struct udev_device *dev, int argc, char *argv[], enum u
         _cleanup_blkid_free_probe_ blkid_probe pr = NULL;
         const char *data;
         const char *name;
+        const char *devnode;
         const char *root_partition;
         bool is_gpt = false;
         int nvals;
@@ -541,10 +542,19 @@ static int builtin_blkid(struct udev_device *dev, int argc, char *argv[], enum u
         if (noraid)
                 blkid_probe_filter_superblocks_usage(pr, BLKID_FLTR_NOTIN, BLKID_USAGE_RAID);
 
-        fd = open(udev_device_get_devnode(dev), O_RDONLY|O_CLOEXEC|O_NONBLOCK|O_NOCTTY);
+        devnode = udev_device_get_devnode(dev);
+        if (!devnode) {
+                log_debug("%s: Failed to get device name.", udev_device_get_sysname(dev));
+                return EXIT_FAILURE;
+        }
+
+        fd = open(devnode, O_RDONLY|O_CLOEXEC|O_NONBLOCK|O_NOCTTY);
         if (fd < 0) {
-                err = log_debug_errno(errno, "Failure opening block device %s: %m", udev_device_get_devnode(dev));
-                goto out;
+                bool ignore = errno == ENOENT;
+
+                log_debug_errno(errno, "Failed to open block device %s%s: %m",
+                                devnode, ignore ? ", ignoring" : "");
+                return ignore ? EXIT_SUCCESS : EXIT_FAILURE;
         }
 
         err = blkid_probe_set_device(pr, fd, offset, 0);
@@ -552,12 +562,12 @@ static int builtin_blkid(struct udev_device *dev, int argc, char *argv[], enum u
                 goto out;
 
         log_debug("probe %s %sraid offset=%"PRIi64,
-                  udev_device_get_devnode(dev),
+                  devnode,
                   noraid ? "no" : "", offset);
 
         err = probe_superblocks(pr);
         if (err < 0) {
-                log_debug_errno(err, "Failed to probe superblocks of %s: %m", udev_device_get_devnode(dev));
+                log_debug_errno(err, "Failed to probe superblocks of %s: %m", devnode);
                 goto out;
         }
 
