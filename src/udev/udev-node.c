@@ -69,24 +69,25 @@ static int node_symlink(struct udev_device *dev, const char *node, const char *s
                 goto exit;
         }
 
-        /* preserve link with correct target, do not replace node of other device */
         if (lstat(slink, &stats) == 0) {
-                if (S_ISBLK(stats.st_mode) || S_ISCHR(stats.st_mode)) {
-                        log_error("conflicting device node '%s' found, link to '%s' will not be created", slink, node);
-                        goto exit;
-                } else if (S_ISLNK(stats.st_mode)) {
-                        char buf[UTIL_PATH_SIZE];
-                        int len;
+                char buf[UTIL_PATH_SIZE];
+                int len;
 
-                        len = readlink(slink, buf, sizeof(buf));
-                        if (len > 0 && len < (int)sizeof(buf)) {
-                                buf[len] = '\0';
-                                if (streq(target, buf)) {
-                                        log_debug("preserve already existing symlink '%s' to '%s'", slink, target);
-                                        label_fix(slink, true, false);
-                                        utimensat(AT_FDCWD, slink, NULL, AT_SYMLINK_NOFOLLOW);
-                                        goto exit;
-                                }
+                if (!S_ISLNK(stats.st_mode)) {
+                        log_debug("Conflicting inode '%s' found, link to '%s' will not be created.", slink, node);
+                        err = -EEXIST;
+                        goto exit;
+                }
+
+                len = readlink(slink, buf, sizeof(buf));
+                if (len > 0 && len < (int)sizeof(buf)) {
+                        buf[len] = '\0';
+                        if (streq(target, buf)) {
+                                /* preserve link with correct target, do not replace node of other device */
+                                log_debug("preserve already existing symlink '%s' to '%s'", slink, target);
+                                label_fix(slink, true, false);
+                                utimensat(AT_FDCWD, slink, NULL, AT_SYMLINK_NOFOLLOW);
+                                goto exit;
                         }
                 }
         } else {
@@ -275,8 +276,12 @@ static void link_update(struct udev_device *dev, const char *slink_in, bool add)
                 if (unlink(slink) == 0)
                         rmdir_parents(slink, "/dev");
         } else {
+                int r;
+
                 log_debug("creating link '%s' to '%s'", slink, target);
-                node_symlink(dev, target, slink);
+                r = node_symlink(dev, target, slink);
+                if (r < 0)
+                        log_warning_errno(r, "Failed to update device symlink '%s', ignoring: %m", slink);
         }
 
         if (add) {
