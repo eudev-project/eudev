@@ -31,8 +31,13 @@
 #include <sys/sysmacros.h>
 
 #include "path-util.h"
+#include "siphash24.h"
 #include "udev.h"
 #include "smack-util.h"
+#include "unaligned.h"
+
+#define UDEV_NODE_HASH_KEY ((const uint8_t[16]) { 0xb9, 0x6a, 0xf1, 0xce, 0x40, 0x31, 0x44, 0x1a, \
+                                                   0x9e, 0x19, 0xec, 0x8b, 0xae, 0xf3, 0xe3, 0x2f })
 
 static int node_symlink(struct udev_device *dev, const char *node, const char *slink) {
         struct stat stats;
@@ -179,43 +184,61 @@ static const char *link_find_prioritized(struct udev_device *dev, bool add, cons
         return target;
 }
 
-static size_t escape_path(const char *src, char *dest, size_t size) {
+static char urlsafe_base64char(int x) {
+        static const char table[64] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+                                      "abcdefghijklmnopqrstuvwxyz"
+                                      "0123456789-_";
+        return table[x & 63];
+}
+
+static size_t udev_node_escape_path(const char *src, char *dest, size_t size) {
         size_t i, j;
+        uint8_t out[8];
+        uint64_t h;
 
         assert(src);
         assert(dest);
 
         for (i = 0, j = 0; src[i] != '\0'; i++) {
                 if (src[i] == '/') {
-                        if (j+4 >= size) {
-                                j = 0;
-                                break;
-                        }
+                        if (j+4 >= size)
+                                goto toolong;
                         memcpy(&dest[j], "\\x2f", 4);
                         j += 4;
                 } else if (src[i] == '\\') {
-                        if (j+4 >= size) {
-                                j = 0;
-                                break;
-                        }
+                        if (j+4 >= size)
+                                goto toolong;
                         memcpy(&dest[j], "\\x5c", 4);
                         j += 4;
                 } else {
-                        if (j+1 >= size) {
-                                j = 0;
-                                break;
-                        }
+                        if (j+1 >= size)
+                                goto toolong;
                         dest[j] = src[i];
                         j++;
                 }
         }
         dest[j] = '\0';
         return j;
+
+toolong:
+        /* If the input path is too long to encode as a filename, then let's suffix with a string
+         * generated from the hash of the path. */
+
+        siphash24(out, src, strlen(src) + 1, UDEV_NODE_HASH_KEY);
+        h = unaligned_read_le64(out);
+
+        assert(size >= 12);
+
+        for (unsigned k = 0; k <= 10; k++)
+                dest[size - k - 2] = urlsafe_base64char((h >> (k * 6)) & 63);
+
+        dest[size - 1] = '\0';
+        return size - 1;
 }
 
 /* manage "stack of names" with possibly specified device priorities */
 static void link_update(struct udev_device *dev, const char *slink, bool add) {
-        char name_enc[UTIL_PATH_SIZE];
+        char name_enc[NAME_MAX+1];
         char filename[UTIL_PATH_SIZE * 2];
         char dirname[UTIL_PATH_SIZE];
         const char *slink_name, *target;
@@ -229,7 +252,7 @@ static void link_update(struct udev_device *dev, const char *slink, bool add) {
 
         /* The name of the stack directory is the escaped path below /dev including its leading
          * slash, e.g. \x2fdisk\x2fby-id\x2f..., as eudev has always named it. */
-        escape_path(strjoina("/", slink_name), name_enc, sizeof(name_enc));
+        (void) udev_node_escape_path(strjoina("/", slink_name), name_enc, sizeof(name_enc));
         strscpyl(dirname, sizeof(dirname), UDEV_ROOT_RUN "/udev/links/", name_enc, NULL);
         strscpyl(filename, sizeof(filename), dirname, "/", udev_device_get_id_filename(dev), NULL);
 
