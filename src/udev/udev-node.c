@@ -237,15 +237,26 @@ toolong:
 }
 
 /* manage "stack of names" with possibly specified device priorities */
-static void link_update(struct udev_device *dev, const char *slink, bool add) {
+static void link_update(struct udev_device *dev, const char *slink_in, bool add) {
+        _cleanup_free_ char *slink = NULL;
         char name_enc[NAME_MAX+1];
         char filename[UTIL_PATH_SIZE * 2];
         char dirname[UTIL_PATH_SIZE];
         const char *slink_name, *target;
         char buf[UTIL_PATH_SIZE];
 
+        slink = strdup(slink_in);
+        if (!slink) {
+                log_oom();
+                return;
+        }
+
+        path_simplify(slink);
+
         slink_name = path_startswith(slink, "/dev");
-        if (!slink_name) {
+        if (!slink_name ||
+            empty_or_root(slink_name) ||
+            !path_is_normalized(slink_name)) {
                 log_debug("Invalid symbolic link of device node: %s", slink);
                 return;
         }
