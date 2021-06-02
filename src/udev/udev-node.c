@@ -273,7 +273,7 @@ static void link_update(struct udev_device *dev, const char *slink_in, bool add)
         if (target == NULL) {
                 log_debug("no reference left, remove '%s'", slink);
                 if (unlink(slink) == 0)
-                        rmdir_parents(slink, "/");
+                        rmdir_parents(slink, "/dev");
         } else {
                 log_debug("creating link '%s' to '%s'", slink, target);
                 node_symlink(dev, target, slink);
