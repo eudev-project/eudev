@@ -303,7 +303,7 @@
         </varlistentry>
         <varlistentry>
           <term><option>-g</option></term>
-          <term><option>--tag-match=<replaceable>PROPERTY</replaceable></option></term>
+          <term><option>--tag-match=<replaceable>TAG</replaceable></option></term>
           <listitem>
             <para>Trigger events for devices with a matching tag. This
             option can be specified multiple times.</para>
