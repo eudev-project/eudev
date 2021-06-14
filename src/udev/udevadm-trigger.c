@@ -45,6 +45,12 @@ static bool arg_quiet = false;
 static bool arg_uuid = false;
 static bool arg_settle = false;
 
+static enum {
+        MATCH_INITIALIZED_ALL = -1, /* all devices */
+        MATCH_INITIALIZED_NO,       /* only devices without a db entry */
+        MATCH_INITIALIZED_YES,      /* only devices with a db entry */
+} arg_initialized_match = MATCH_INITIALIZED_ALL;
+
 /* "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" and the terminating NUL */
 #define UUID_STRING_MAX 37
 
@@ -227,7 +233,21 @@ static int build_list(struct udev *udev, struct udev_enumerate *udev_enumerate,
 
         n = 0;
         udev_list_entry_foreach(entry, udev_enumerate_get_list_entry(udev_enumerate)) {
-                list[n] = strdup(udev_list_entry_get_name(entry));
+                const char *syspath = udev_list_entry_get_name(entry);
+
+                if (arg_initialized_match != MATCH_INITIALIZED_ALL) {
+                        _cleanup_udev_device_unref_ struct udev_device *dev = NULL;
+
+                        /* The device may be gone already, this is necessarily racy, so skip it then. */
+                        dev = udev_device_new_from_syspath(udev, syspath);
+                        if (!dev)
+                                continue;
+
+                        if ((udev_device_get_is_initialized(dev) > 0) != (arg_initialized_match == MATCH_INITIALIZED_YES))
+                                continue;
+                }
+
+                list[n] = strdup(syspath);
                 if (!list[n])
                         return -ENOMEM;
                 n++;
@@ -426,6 +446,8 @@ static void help(void) {
                "  -y --sysname-match=NAME           Trigger devices with this /sys path\n"
                "     --name-match=NAME              Trigger devices with this /dev name\n"
                "  -b --parent-match=NAME            Trigger devices with that parent device\n"
+               "     --initialized-match            Trigger devices that are already initialized\n"
+               "     --initialized-nomatch          Trigger devices that are not initialized yet\n"
                "  -w --settle                       Wait for the triggered events to complete\n"
                "     --wait-daemon[=SECONDS]        Wait for udevd daemon to be initialized\n"
                "                                    before triggering uevents\n"
@@ -441,6 +463,8 @@ static int adm_trigger(struct udev *udev, int argc, char *argv[]) {
                 ARG_PING,
                 ARG_UUID,
                 ARG_PRIORITIZED_SUBSYSTEM,
+                ARG_INITIALIZED_MATCH,
+                ARG_INITIALIZED_NOMATCH,
         };
 
         static const struct option options[] = {
@@ -458,6 +482,8 @@ static int adm_trigger(struct udev *udev, int argc, char *argv[]) {
                 { "sysname-match",     required_argument, NULL, 'y'      },
                 { "name-match",        required_argument, NULL, ARG_NAME },
                 { "parent-match",      required_argument, NULL, 'b'      },
+                { "initialized-match", no_argument,       NULL, ARG_INITIALIZED_MATCH },
+                { "initialized-nomatch", no_argument,     NULL, ARG_INITIALIZED_NOMATCH },
                 { "settle",            no_argument,       NULL, 'w'      },
                 { "wait-daemon",       optional_argument, NULL, ARG_PING },
                 { "help",              no_argument,       NULL, 'h'      },
@@ -564,6 +590,11 @@ static int adm_trigger(struct udev *udev, int argc, char *argv[]) {
 
                 case ARG_UUID:
                         arg_uuid = true;
+                        break;
+
+                case ARG_INITIALIZED_MATCH:
+                case ARG_INITIALIZED_NOMATCH:
+                        arg_initialized_match = c == ARG_INITIALIZED_MATCH ? MATCH_INITIALIZED_YES : MATCH_INITIALIZED_NO;
                         break;
 
                 case ARG_PRIORITIZED_SUBSYSTEM:

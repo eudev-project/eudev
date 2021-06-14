@@ -246,6 +246,32 @@ Trigger events for devices with a matching device path\&. This options can be sp
 Trigger events for all children of a given device\&.
 .RE
 .PP
+\fB\-\-initialized\-match\fR, \fB\-\-initialized\-nomatch\fR
+.RS 4
+When
+\fB\-\-initialized\-match\fR
+is specified, trigger events for devices that are already initialized by
+\fBudevd\fR, and skip devices that are not initialized yet\&.
+.sp
+When
+\fB\-\-initialized\-nomatch\fR
+is specified, trigger events for devices that are not initialized by
+\fBudevd\fR
+yet, and skip devices that are already initialized\&.
+.sp
+Typically, it is essential that applications which intend to use such a match, make sure a suitable udev rule is installed that sets at least one property on devices that shall be matched\&. See also Initialized Devices section below for more details\&.
+.sp
+WARNING:
+\fB\-\-initialized\-nomatch\fR
+can potentially save a significant amount of time compared to re\-triggering all devices in the system and e\&.g\&. can be used to optimize boot time\&. However, this is not safe to be used in a boot sequence in general\&. Especially, when udev rules for a device depend on its parent devices (e\&.g\&.
+ATTRS
+or
+IMPORT{parent}
+keys, see
+\fBudev\fR(7)
+for more details), the final state of the device becomes easily unstable with this option\&.
+.RE
+.PP
 \fB\-w\fR, \fB\-\-settle\fR
 .RS 4
 Apart from triggering events, also waits for those events to finish\&. Note that this is different from calling
@@ -509,6 +535,13 @@ built\-in only checks its arguments\&.
 .RS 4
 Print help text\&.
 .RE
+.SH "INITIALIZED DEVICES"
+.PP
+Initialized devices are those for which at least one udev rule already completed execution \(en for any action but
+remove
+\(em that set a property or other device setting (and thus has an entry in the udev device database)\&. Devices are no longer considered initialized if a
+remove
+action is seen for them (which removes their entry in the udev device database)\&. Note that devices that have no udev rules are never considered initialized, but might still be announced via the libudev API (or similar)\&.
 .SH "SEE ALSO"
 .PP
 \fBudev\fR(7),
