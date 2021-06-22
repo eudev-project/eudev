@@ -71,9 +71,9 @@ static void map_keycode(int fd, const char *devnode, int scancode, const char *k
                 unsigned scan;
                 unsigned key;
         } map;
-        char *endptr;
         const struct key *k;
         unsigned keycode_num;
+        int r;
 
         /* translate identifier to key code */
         k = keyboard_lookup_key(keycode, strlen(keycode));
@@ -81,9 +81,9 @@ static void map_keycode(int fd, const char *devnode, int scancode, const char *k
                 keycode_num = k->id;
         } else {
                 /* check if it's a numeric code already */
-                keycode_num = strtoul(keycode, &endptr, 0);
-                if (endptr[0] !='\0') {
-                        log_error("Unknown key identifier '%s'", keycode);
+                r = safe_atou(keycode, &keycode_num);
+                if (r < 0) {
+                        log_error_errno(r, "Failed to parse key identifier '%s': %m", keycode);
                         return;
                 }
         }
@@ -218,7 +218,7 @@ static int builtin_keyboard(struct udev_device *dev, int argc __attribute__((unu
 
         udev_list_entry_foreach(entry, udev_device_get_properties_list_entry(dev)) {
                 const char *key;
-                char *endptr;
+                int r;
 
                 key = udev_list_entry_get_name(entry);
                 if (startswith(key, "KEYBOARD_KEY_")) {
@@ -226,9 +226,9 @@ static int builtin_keyboard(struct udev_device *dev, int argc __attribute__((unu
                         unsigned scancode;
 
                         /* KEYBOARD_KEY_<hex scan code>=<key identifier string> */
-                        scancode = strtoul(key + 13, &endptr, 16);
-                        if (endptr[0] != '\0') {
-                                log_warning("Unable to parse scan code from \"%s\"", key);
+                        r = safe_atou_full(key + 13, 16, &scancode);
+                        if (r < 0) {
+                                log_warning_errno(r, "Failed to parse scan code from \"%s\", ignoring: %m", key);
                                 continue;
                         }
 
@@ -257,9 +257,9 @@ static int builtin_keyboard(struct udev_device *dev, int argc __attribute__((unu
                         unsigned evcode;
 
                         /* EVDEV_ABS_<EV_ABS code>=<min>:<max>:<res>:<fuzz>:<flat> */
-                        evcode = strtoul(key + 10, &endptr, 16);
-                        if (endptr[0] != '\0') {
-                                log_warning("Unable to parse EV_ABS code from \"%s\"", key);
+                        r = safe_atou_full(key + 10, 16, &evcode);
+                        if (r < 0) {
+                                log_warning_errno(r, "Failed to parse EV_ABS code from \"%s\", ignoring: %m", key);
                                 continue;
                         }
 

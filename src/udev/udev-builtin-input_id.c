@@ -96,6 +96,7 @@ static void get_cap_mask(struct udev_device *dev __attribute__((unused)),
         unsigned i;
         char* word;
         unsigned long val;
+        int r;
 
         if (device_get_sysattr_safe_string(pdev, attr, &v) < 0)
                 v = "";
@@ -106,16 +107,20 @@ static void get_cap_mask(struct udev_device *dev __attribute__((unused)),
         memzero(bitmask, bitmask_size);
         i = 0;
         while ((word = strrchr(text, ' ')) != NULL) {
-                val = strtoul (word+1, NULL, 16);
-                if (i < bitmask_size/sizeof(unsigned long))
+                r = safe_atolu_full(word+1, 16, &val);
+                if (r < 0)
+                        log_debug_errno(r, "Ignoring %s block which failed to parse: %m", attr);
+                else if (i < bitmask_size/sizeof(unsigned long))
                         bitmask[i] = val;
                 else
                         log_debug("ignoring %s block %lX which is larger than maximum size", attr, val);
                 *word = '\0';
                 ++i;
         }
-        val = strtoul (text, NULL, 16);
-        if (i < bitmask_size / sizeof(unsigned long))
+        r = safe_atolu_full(text, 16, &val);
+        if (r < 0)
+                log_debug_errno(r, "Ignoring %s block which failed to parse: %m", attr);
+        else if (i < bitmask_size / sizeof(unsigned long))
                 bitmask[i] = val;
         else
                 log_debug("ignoring %s block %lX which is larger than maximum size", attr, val);

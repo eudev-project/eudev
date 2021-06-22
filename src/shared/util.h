@@ -143,6 +143,10 @@ int safe_atolli(const char *s, long long int *ret_i);
 
 
 #if LONG_MAX == INT_MAX
+static inline int safe_atolu_full(const char *s, unsigned base, unsigned long *ret_u) {
+        assert_cc(sizeof(unsigned long) == sizeof(unsigned));
+        return safe_atou_full(s, base, (unsigned*) ret_u);
+}
 static inline int safe_atolu(const char *s, unsigned long *ret_u) {
         assert_cc(sizeof(unsigned long) == sizeof(unsigned));
         return safe_atou(s, (unsigned*) ret_u);
@@ -152,6 +156,10 @@ static inline int safe_atoli(const char *s, long int *ret_u) {
         return safe_atoi(s, (int*) ret_u);
 }
 #else
+static inline int safe_atolu_full(const char *s, unsigned base, unsigned long *ret_u) {
+        assert_cc(sizeof(unsigned long) == sizeof(unsigned long long));
+        return safe_atollu_full(s, base, (unsigned long long*) ret_u);
+}
 static inline int safe_atolu(const char *s, unsigned long *ret_u) {
         assert_cc(sizeof(unsigned long) == sizeof(unsigned long long));
         return safe_atollu(s, (unsigned long long*) ret_u);
