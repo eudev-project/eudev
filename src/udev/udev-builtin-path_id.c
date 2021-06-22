@@ -444,8 +444,7 @@ static struct udev_device *handle_scsi_default(struct udev_device *parent, char 
                 goto out;
         }
         for (dent = readdir(dir); dent != NULL; dent = readdir(dir)) {
-                char *rest;
-                int i;
+                unsigned i;
 
                 if (dent->d_name[0] == '.')
                         continue;
@@ -453,15 +452,14 @@ static struct udev_device *handle_scsi_default(struct udev_device *parent, char 
                         continue;
                 if (!startswith(dent->d_name, "host"))
                         continue;
-                i = strtoul(&dent->d_name[4], &rest, 10);
-                if (rest[0] != '\0')
+                if (safe_atou_full(&dent->d_name[4], 10, &i) < 0)
                         continue;
                 /*
                  * find the smallest number; the host really needs to export its
                  * own instance number per parent device; relying on the global host
                  * enumeration and plainly rebasing the numbers sounds unreliable
                  */
-                if (basenum == -1 || i < basenum)
+                if (basenum == -1 || (int) i < basenum)
                         basenum = i;
         }
         closedir(dir);
