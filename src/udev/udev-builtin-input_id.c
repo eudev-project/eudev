@@ -361,10 +361,8 @@ static bool test_key(struct udev_device *dev,
                      const unsigned long* bitmask_ev,
                      const unsigned long* bitmask_key,
                      enum udev_event_mode mode) {
-        unsigned i;
-        unsigned long found;
-        unsigned long mask;
-        bool ret = false;
+
+        bool found = false;
 
         /* do we have any KEY_* capability? */
         if (!test_bit(EV_KEY, bitmask_ev)) {
@@ -373,39 +371,32 @@ static bool test_key(struct udev_device *dev,
         }
 
         /* only consider KEY_* here, not BTN_* */
-        found = 0;
-        for (i = 0; i < BTN_MISC/BITS_PER_LONG; ++i) {
-                found |= bitmask_key[i];
-                log_device_debug(dev, "test_key: checking bit block %lu for any keys; found=%s", (unsigned long)i*BITS_PER_LONG, found > 0 ? "yes" : "no");
+        for (size_t i = 0; i < BTN_MISC/BITS_PER_LONG && !found; i++) {
+                if (bitmask_key[i])
+                        found = true;
+
+                log_device_debug(dev, "test_key: checking bit block %zu for any keys; found=%s",
+                                 i * BITS_PER_LONG, found ? "yes" : "no");
         }
         /* If there are no keys in the lower block, check the higher blocks */
-        if (!found) {
-                unsigned block;
-                for (block = 0; block < (sizeof(high_key_blocks) / sizeof(struct range)); ++block) {
-                        for (i = high_key_blocks[block].start; i < high_key_blocks[block].end; ++i) {
-                                if (test_bit(i, bitmask_key)) {
-                                        log_device_debug(dev, "test_key: Found key %x in high block", i);
-                                        found = 1;
-                                        break;
-                                }
+        for (size_t block = 0; block < sizeof(high_key_blocks) / sizeof(struct range) && !found; block++)
+                for (unsigned i = high_key_blocks[block].start; i < high_key_blocks[block].end && !found; i++)
+                        if (test_bit(i, bitmask_key)) {
+                                log_device_debug(dev, "test_key: Found key %x in high block", i);
+                                found = true;
                         }
-                }
-        }
 
-        if (found > 0) {
+        if (found)
                 udev_builtin_add_property(dev, mode, "ID_INPUT_KEY", "1");
-                ret = true;
-        }
 
         /* the first 32 bits are ESC, numbers, and Q to D; if we have all of
          * those, consider it a full keyboard; do not test KEY_RESERVED, though */
-        mask = 0xFFFFFFFE;
-        if ((bitmask_key[0] & mask) == mask) {
+        if (FLAGS_SET(bitmask_key[0], 0xFFFFFFFE)) {
                 udev_builtin_add_property(dev, mode, "ID_INPUT_KEYBOARD", "1");
-                ret = true;
+                return true;
         }
 
-        return ret;
+        return found;
 }
 
 static int builtin_input_id(struct udev_device *dev, int argc __attribute__((unused)), char *argv[] __attribute__((unused)), enum udev_event_mode mode) {
