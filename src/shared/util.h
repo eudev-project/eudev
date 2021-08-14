@@ -433,3 +433,4 @@ union inotify_event_buffer {
 };
 
 void cmsg_close_all(struct msghdr *mh);
+const char *eudev_basename(const char *filename);
