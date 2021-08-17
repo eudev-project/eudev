@@ -32,12 +32,14 @@
 #include <sys/types.h>
 
 #include "udev.h"
+#include "udevadm-util.h"
 
 static void help(struct udev *udev) {
         printf("%s builtin [--help] COMMAND SYSPATH\n\n"
                "Test a built-in command.\n\n"
-               "  -h --help     Print this message\n"
-               "  -V --version  Print version of the program\n\n"
+               "  -h --help               Print this message\n"
+               "  -V --version            Print version of the program\n"
+               "  -a --action=ACTION|help Set action string\n\n"
                "Commands:\n"
                , program_invocation_short_name);
 
@@ -46,19 +48,31 @@ static void help(struct udev *udev) {
 
 static int adm_builtin(struct udev *udev, int argc, char *argv[]) {
         static const struct option options[] = {
-                { "help",    no_argument, NULL, 'h' },
-                { "version", no_argument, NULL, 'V' },
+                { "action",  required_argument, NULL, 'a' },
+                { "help",    no_argument,       NULL, 'h' },
+                { "version", no_argument,       NULL, 'V' },
                 {}
         };
+        const char *action = "add";
         char *command = NULL;
         char *syspath = NULL;
         char filename[UTIL_PATH_SIZE];
         struct udev_device *dev = NULL;
         enum udev_builtin_cmd cmd;
-        int rc = EXIT_SUCCESS, c;
+        int rc = EXIT_SUCCESS, c, r;
 
-        while ((c = getopt_long(argc, argv, "hV", options, NULL)) >= 0)
+        while ((c = getopt_long(argc, argv, "a:hV", options, NULL)) >= 0)
                 switch (c) {
+                case 'a':
+                        r = parse_device_action(optarg, &action);
+                        if (r < 0) {
+                                log_error("Invalid action '%s'", optarg);
+                                rc = EXIT_FAILURE;
+                                goto out;
+                        }
+                        if (r == 0)
+                                goto out;
+                        break;
                 case 'h':
                         help(udev);
                         goto out;
@@ -99,7 +113,7 @@ static int adm_builtin(struct udev *udev, int argc, char *argv[]) {
                 strscpy(filename, sizeof(filename), syspath);
         util_remove_trailing_chars(filename, '/');
 
-        dev = udev_device_new_from_syspath(udev, filename);
+        dev = udev_device_new_from_synthetic_event(udev, filename, action);
         if (dev == NULL) {
                 fprintf(stderr, "unable to open device '%s'\n\n", filename);
                 rc = 4;
