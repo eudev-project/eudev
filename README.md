@@ -1,3 +1,20 @@
+IMPORTANT DEPRECATION NOTICE (2021-08-20)
+
+Currently eudev is no longer being supported.  Eudev was started, in
+part because systemd did not build on musl-libc systems and a fork
+of the udev portion of systemd was required.  Currently systemd can
+be built on musl systems with patches from the openembedded team, and
+the need to maintain a separate fork is no longer pressing.
+
+Nonetheless, many distros have adopted eudev as their device manager
+and so may want to continue using it.  Anyone interested in inheriting
+the repo may contact me at blueness@gentoo.org.
+
+	Anthony G. Basile
+
+==========
+
+
 This git repo is a fork of git://anongit.freedesktop.org/systemd/systemd
 with the aim of isolating udev from any particular flavor of system
 initialization.  In this case, the isolation is from systemd.
