@@ -813,7 +813,7 @@ static int rename_netif_dev_fromname_toname(struct udev_device *dev,const char *
         int sk;
         struct ifreq ifr;
 
-	log_debug("changing net interface name from '%s' to '%s'\n",oldname,name);
+        log_debug("changing net interface name from '%s' to '%s'\n",oldname,name);
 
         sk = socket(PF_INET, SOCK_DGRAM, 0);
         if (sk < 0)
@@ -825,61 +825,61 @@ static int rename_netif_dev_fromname_toname(struct udev_device *dev,const char *
         r = ioctl(sk, SIOCSIFNAME, &ifr);
 
 #ifdef ENABLE_RULE_GENERATOR
-	int loop;
+        int loop;
     struct ifreq ifr_tmp;
 
-	if (r == 0) {
-		log_info("renamed network interface %s to %s\n", ifr.ifr_name, ifr.ifr_newname);
-		goto out;
-	}
-	/* keep trying if the destination interface name already exists */
-	log_debug("collision on rename of network interface %s to %s , retrying until timeout\n",
-		ifr.ifr_name, ifr.ifr_newname);
+        if (r == 0) {
+                log_info("renamed network interface %s to %s\n", ifr.ifr_name, ifr.ifr_newname);
+                goto out;
+        }
+        /* keep trying if the destination interface name already exists */
+        log_debug("collision on rename of network interface %s to %s , retrying until timeout\n",
+                ifr.ifr_name, ifr.ifr_newname);
 
-	/* there has been a collision so rename my name to a temporal name, letting other one to rename to my name, freeying its name... */
+        /* there has been a collision so rename my name to a temporal name, letting other one to rename to my name, freeying its name... */
         memzero(&ifr_tmp, sizeof(struct ifreq));
         strscpy(ifr_tmp.ifr_name, IFNAMSIZ, oldname);
-	snprintf(ifr_tmp.ifr_newname, IFNAMSIZ, "rename_%s", oldname);
+        snprintf(ifr_tmp.ifr_newname, IFNAMSIZ, "rename_%s", oldname);
         r = ioctl(sk, SIOCSIFNAME, &ifr_tmp);
-		log_info("Temporarily renamed network interface %s to %s\n", ifr_tmp.ifr_name, ifr_tmp.ifr_newname);
-	
-	/* we have changed our name so in subsequents tries i should rename my temporal name to the wanted one */
+                log_info("Temporarily renamed network interface %s to %s\n", ifr_tmp.ifr_name, ifr_tmp.ifr_newname);
+
+        /* we have changed our name so in subsequents tries i should rename my temporal name to the wanted one */
         strscpy(ifr.ifr_name, IFNAMSIZ, ifr_tmp.ifr_newname);
 
-	r = -errno;
-	if (r != -EEXIST)
-		goto out;
+        r = -errno;
+        if (r != -EEXIST)
+                goto out;
 
-	/* wait a maximum of 90 seconds for our target to become available */
-	loop = 90 * 20;
-	while (loop--) {
-		const struct timespec duration = { 0, 1000 * 1000 * 1000 / 20 };
+        /* wait a maximum of 90 seconds for our target to become available */
+        loop = 90 * 20;
+        while (loop--) {
+                const struct timespec duration = { 0, 1000 * 1000 * 1000 / 20 };
 
-		nanosleep(&duration, NULL);
+                nanosleep(&duration, NULL);
 
-		r = ioctl(sk, SIOCSIFNAME, &ifr);
-		if (r == 0) {
-			log_info("renamed network interface %s to %s\n", ifr.ifr_name, ifr.ifr_newname);
-			break;
-		}
-		r = -errno;
-		if (r != -EEXIST)
-			break;
-	}
+                r = ioctl(sk, SIOCSIFNAME, &ifr);
+                if (r == 0) {
+                        log_info("renamed network interface %s to %s\n", ifr.ifr_name, ifr.ifr_newname);
+                        break;
+                }
+                r = -errno;
+                if (r != -EEXIST)
+                        break;
+        }
 
 out:
 #endif
-	if (r < 0)
+        if (r < 0)
                 log_error_errno(-errno, "Error changing net interface name %s to %s: %m\n", ifr.ifr_name, ifr.ifr_newname);
-	else
-	        log_debug("renamed network interface '%s' to '%s'", oldname, name);
+        else
+                log_debug("renamed network interface '%s' to '%s'", oldname, name);
 
         close(sk);
         return r;
 }
 
 static int rename_netif(struct udev_event *event) {
-	return rename_netif_dev_fromname_toname(event->dev,udev_device_get_sysname(event->dev),event->name);
+        return rename_netif_dev_fromname_toname(event->dev,udev_device_get_sysname(event->dev),event->name);
 }
 
 void udev_event_execute_rules(struct udev_event *event,
@@ -944,7 +944,7 @@ void udev_event_execute_rules(struct udev_event *event,
                  */
 
 #ifdef ENABLE_RULE_GENERATOR
-		int r;
+                int r;
                 if (udev_device_get_ifindex(dev) > 0 && streq(udev_device_get_action(dev), "add") &&
                     (event->name == NULL && (r=udev_rules_assigning_name_to(rules,udev_device_get_sysname(dev))) > 0 ||
                     event->name != NULL && !streq(event->name, udev_device_get_sysname(dev)))) {
