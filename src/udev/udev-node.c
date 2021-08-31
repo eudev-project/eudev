@@ -31,11 +31,14 @@
 #include <sys/sysmacros.h>
 
 #include "path-util.h"
+#include "mkdir.h"
 #include "siphash24.h"
 #include "udev.h"
+#include "udev-util.h"
 #include "smack-util.h"
 #include "unaligned.h"
 
+#define CREATE_STACK_LINK_MAX_RETRIES 128
 #define UDEV_NODE_HASH_KEY ((const uint8_t[16]) { 0xb9, 0x6a, 0xf1, 0xce, 0x40, 0x31, 0x44, 0x1a, \
                                                    0x9e, 0x19, 0xec, 0x8b, 0xae, 0xf3, 0xe3, 0x2f })
 
@@ -132,57 +135,116 @@ exit:
         return err;
 }
 
-/* find device node of device with highest priority */
-static const char *link_find_prioritized(struct udev_device *dev, bool add, const char *stackdir, char *buf, size_t bufsize) {
+static int link_find_prioritized(struct udev_device *dev, bool add, const char *stackdir, char **ret) {
         struct udev *udev = udev_device_get_udev(dev);
-        DIR *dir;
-        int priority = 0;
-        const char *target = NULL;
+        _cleanup_closedir_ DIR *dir = NULL;
+        _cleanup_free_ char *target = NULL;
+        struct dirent *dent;
+        int r, priority = 0;
+        const char *id;
+
+        assert(dev);
+        assert(stackdir);
+        assert(ret);
+
+        /* Find device node of device with highest priority. This returns 1 if a device found, 0 if no
+         * device found, or a negative errno. */
 
         if (add) {
+                const char *devnode;
+
                 priority = udev_device_get_devlink_priority(dev);
-                strscpy(buf, bufsize, udev_device_get_devnode(dev));
-                target = buf;
+
+                devnode = udev_device_get_devnode(dev);
+                if (!devnode)
+                        return -ENOENT;
+
+                target = strdup(devnode);
+                if (!target)
+                        return -ENOMEM;
         }
 
         dir = opendir(stackdir);
-        if (dir == NULL)
-                return target;
-        for (;;) {
-                struct udev_device *dev_db;
-                struct dirent *dent;
+        if (!dir) {
+                if (errno == ENOENT) {
+                        *ret = TAKE_PTR(target);
+                        return !!*ret;
+                }
 
-                dent = readdir(dir);
-                if (dent == NULL || dent->d_name[0] == '\0')
-                        break;
+                return -errno;
+        }
+
+        id = udev_device_get_id_filename(dev);
+        if (!id)
+                return -ENODEV;
+
+        for (dent = readdir(dir); dent; dent = readdir(dir)) {
+                _cleanup_free_ char *path = NULL, *buf = NULL;
+                int tmp_prio;
+
                 if (dent->d_name[0] == '.')
                         continue;
 
-                log_debug("found '%s' claiming '%s'", dent->d_name, stackdir);
-
-                /* did we find ourself? */
-                if (streq(dent->d_name, udev_device_get_id_filename(dev)))
+                /* skip ourself */
+                if (streq(dent->d_name, id))
                         continue;
 
-                dev_db = udev_device_new_from_device_id(udev, dent->d_name);
-                if (dev_db != NULL) {
+                path = path_join(stackdir, dent->d_name);
+                if (!path)
+                        return -ENOMEM;
+
+                if (readlink_malloc(path, &buf) >= 0) {
+                        char *devnode;
+
+                        /* New format. The devnode and priority can be obtained from symlink. */
+
+                        devnode = strchr(buf, ':');
+                        if (!devnode || devnode == buf)
+                                continue;
+
+                        *(devnode++) = '\0';
+                        if (!path_startswith(devnode, "/dev"))
+                                continue;
+
+                        if (safe_atoi(buf, &tmp_prio) < 0)
+                                continue;
+
+                        if (target && tmp_prio <= priority)
+                                continue;
+
+                        r = free_and_strdup(&target, devnode);
+                        if (r < 0)
+                                return r;
+                } else {
+                        _cleanup_udev_device_unref_ struct udev_device *tmp_dev = NULL;
                         const char *devnode;
 
-                        devnode = udev_device_get_devnode(dev_db);
-                        if (devnode != NULL) {
-                                if (target == NULL || udev_device_get_devlink_priority(dev_db) > priority) {
-                                        log_debug("'%s' claims priority %i for '%s'",
-                                                  udev_device_get_syspath(dev_db), udev_device_get_devlink_priority(dev_db), stackdir);
-                                        priority = udev_device_get_devlink_priority(dev_db);
-                                        strscpy(buf, bufsize, devnode);
-                                        target = buf;
-                                }
-                        }
-                        udev_device_unref(dev_db);
+                        /* Old format. The devnode and priority must be obtained from uevent and
+                         * udev database files. */
+
+                        tmp_dev = udev_device_new_from_device_id(udev, dent->d_name);
+                        if (!tmp_dev)
+                                continue;
+
+                        tmp_prio = udev_device_get_devlink_priority(tmp_dev);
+
+                        if (target && tmp_prio <= priority)
+                                continue;
+
+                        devnode = udev_device_get_devnode(tmp_dev);
+                        if (!devnode)
+                                continue;
+
+                        r = free_and_strdup(&target, devnode);
+                        if (r < 0)
+                                return r;
                 }
+
+                priority = tmp_prio;
         }
-        closedir(dir);
-        return target;
+
+        *ret = TAKE_PTR(target);
+        return !!*ret;
 }
 
 static char urlsafe_base64char(int x) {
@@ -236,15 +298,75 @@ toolong:
         return size - 1;
 }
 
+static int update_stack_directory(struct udev_device *dev, const char *dirname, bool add) {
+        _cleanup_free_ char *filename = NULL, *data = NULL, *buf = NULL;
+        const char *devname, *id;
+        int priority, r;
+
+        assert(dev);
+        assert(dirname);
+
+        id = udev_device_get_id_filename(dev);
+        if (!id)
+                return log_debug_errno(ENODEV, "Failed to get device id: %m");
+
+        filename = path_join(dirname, id);
+        if (!filename)
+                return log_oom();
+
+        if (!add) {
+                if (unlink(filename) < 0 && errno != ENOENT)
+                        log_debug_errno(errno, "Failed to remove %s, ignoring: %m", filename);
+
+                (void) rmdir(dirname);
+                return 0;
+        }
+
+        devname = udev_device_get_devnode(dev);
+        if (!devname)
+                return log_debug_errno(ENOENT, "Failed to get device node: %m");
+
+        priority = udev_device_get_devlink_priority(dev);
+
+        if (asprintf(&data, "%i:%s", priority, devname) < 0)
+                return log_oom();
+
+        if (readlink_malloc(filename, &buf) >= 0 && streq(buf, data))
+                return 0;
+
+        if (unlink(filename) < 0 && errno != ENOENT)
+                log_debug_errno(errno, "Failed to remove %s, ignoring: %m", filename);
+
+        for (unsigned j = 0; j < CREATE_STACK_LINK_MAX_RETRIES; j++) {
+                /* This may fail with -ENOENT when the parent directory is removed during
+                 * creating the file by another udevd worker. */
+                r = udev_mkdir_p(dirname, 0755);
+                if (r == -ENOENT)
+                        continue;
+                if (r < 0)
+                        return log_debug_errno(r, "Failed to create directory %s: %m", dirname);
+
+                if (symlink(data, filename) < 0) {
+                        if (errno == ENOENT)
+                                continue;
+                        return log_debug_errno(errno, "Failed to create symbolic link %s: %m", filename);
+                }
+
+                return 0;
+        }
+
+        return log_debug_errno(ELOOP, "Failed to create symbolic link %s: %m", filename);
+}
+
 /* manage "stack of names" with possibly specified device priorities */
 static int link_update(struct udev_device *dev, const char *slink_in, bool add) {
-        _cleanup_free_ char *slink = NULL;
+        _cleanup_free_ char *slink = NULL, *dirname = NULL, *target = NULL;
+        const char *slink_name;
         char name_enc[NAME_MAX+1];
-        char filename[UTIL_PATH_SIZE * 2];
-        char dirname[UTIL_PATH_SIZE];
-        const char *slink_name, *target;
-        char buf[UTIL_PATH_SIZE];
-        int r = 0;
+        int r;
+
+        assert(dev);
+        assert(slink_in);
 
         slink = strdup(slink_in);
         if (!slink)
@@ -263,40 +385,28 @@ static int link_update(struct udev_device *dev, const char *slink_in, bool add) 
         /* The name of the stack directory is the escaped path below /dev including its leading
          * slash, e.g. \x2fdisk\x2fby-id\x2f..., as eudev has always named it. */
         (void) udev_node_escape_path(strjoina("/", slink_name), name_enc, sizeof(name_enc));
-        strscpyl(dirname, sizeof(dirname), UDEV_ROOT_RUN "/udev/links/", name_enc, NULL);
-        strscpyl(filename, sizeof(filename), dirname, "/", udev_device_get_id_filename(dev), NULL);
+        dirname = path_join(UDEV_ROOT_RUN "/udev/links", name_enc);
+        if (!dirname)
+                return log_oom();
 
-        if (!add && unlink(filename) == 0)
-                rmdir(dirname);
+        r = update_stack_directory(dev, dirname, add);
+        if (r < 0)
+                return r;
 
-        target = link_find_prioritized(dev, add, dirname, buf, sizeof(buf));
-        if (target == NULL) {
-                log_debug("no reference left, remove '%s'", slink);
-                if (unlink(slink) == 0)
-                        rmdir_parents(slink, "/dev");
-        } else {
-                log_debug("creating link '%s' to '%s'", slink, target);
-                r = node_symlink(dev, target, slink);
+        r = link_find_prioritized(dev, add, dirname, &target);
+        if (r < 0)
+                return log_debug_errno(r, "Failed to determine highest priority for symlink '%s': %m", slink);
+        if (r == 0) {
+                log_debug("No reference left for '%s', removing", slink);
+
+                if (unlink(slink) < 0 && errno != ENOENT)
+                        log_debug_errno(errno, "Failed to remove '%s', ignoring: %m", slink);
+
+                (void) rmdir_parents(slink, "/dev");
+                return 0;
         }
 
-        if (add) {
-                int err;
-
-                do {
-                        int fd;
-
-                        err = mkdir_parents(filename, 0755);
-                        if (err != 0 && err != -ENOENT)
-                                break;
-                        fd = open(filename, O_WRONLY|O_CREAT|O_CLOEXEC|O_TRUNC|O_NOFOLLOW, 0444);
-                        if (fd >= 0)
-                                close(fd);
-                        else
-                                err = -errno;
-                } while (err == -ENOENT);
-        }
-
-        return r;
+        return node_symlink(dev, target, slink);
 }
 
 static bool device_has_devlink(struct udev_device *dev, const char *devlink) {
