@@ -38,19 +38,54 @@
 #include "smack-util.h"
 #include "unaligned.h"
 
-#define CREATE_STACK_LINK_MAX_RETRIES 128
+#define CREATE_LINK_MAX_RETRIES        128
+#define CREATE_STACK_LINK_MAX_RETRIES  128
 #define UDEV_NODE_HASH_KEY ((const uint8_t[16]) { 0xb9, 0x6a, 0xf1, 0xce, 0x40, 0x31, 0x44, 0x1a, \
                                                    0x9e, 0x19, 0xec, 0x8b, 0xae, 0xf3, 0xe3, 0x2f })
+
+static int create_symlink(const char *target, const char *slink) {
+        int r = -ENOENT;
+
+        assert(target);
+        assert(slink);
+
+        for (unsigned i = 0; i < CREATE_LINK_MAX_RETRIES; i++) {
+                r = mkdir_parents_label(slink, 0755);
+                if (r == -ENOENT)
+                        continue;
+                if (r < 0)
+                        return r;
+
+                mac_selinux_create_file_prepare(slink, S_IFLNK);
+                r = RET_NERRNO(symlink(target, slink));
+                mac_selinux_create_file_clear();
+                if (r != -ENOENT)
+                        return r;
+        }
+
+        return r;
+}
 
 static int node_symlink(struct udev_device *dev, const char *node, const char *slink) {
         struct stat stats;
         char target[UTIL_PATH_SIZE];
         char *s;
         size_t l;
-        char slink_tmp[UTIL_PATH_SIZE + 32];
+        const char *id, *slink_tmp;
         int i = 0;
         int tail = 0;
-        int err = 0;
+        int r;
+
+        assert(dev);
+        assert(node);
+        assert(slink);
+
+        if (lstat(slink, &stats) >= 0) {
+                if (!S_ISLNK(stats.st_mode))
+                        return log_debug_errno(EEXIST,
+                                               "Conflicting inode '%s' found, link to '%s' will not be created.", slink, node);
+        } else if (errno != ENOENT)
+                return log_debug_errno(errno, "Failed to lstat() '%s': %m", slink);
 
         /* use relative link */
         target[0] = '\0';
@@ -67,72 +102,27 @@ static int node_symlink(struct udev_device *dev, const char *node, const char *s
                 i++;
         }
         l = strscpy(s, l, &node[tail]);
-        if (l == 0) {
-                err = -EINVAL;
-                goto exit;
+        if (l == 0)
+                return log_debug_errno(EINVAL, "Failed to get relative path from '%s' to '%s': %m", slink, node);
+
+        id = udev_device_get_id_filename(dev);
+        if (!id)
+                return log_debug_errno(ENODEV, "Failed to get device id: %m");
+
+        slink_tmp = strjoina(slink, ".tmp-", id);
+        (void) unlink(slink_tmp);
+
+        r = create_symlink(target, slink_tmp);
+        if (r < 0)
+                return log_debug_errno(r, "Failed to create symlink '%s' to '%s': %m", slink_tmp, target);
+
+        if (rename(slink_tmp, slink) < 0) {
+                r = log_debug_errno(errno, "Failed to rename '%s' to '%s': %m", slink_tmp, slink);
+                (void) unlink(slink_tmp);
+                return r;
         }
 
-        if (lstat(slink, &stats) == 0) {
-                char buf[UTIL_PATH_SIZE];
-                int len;
-
-                if (!S_ISLNK(stats.st_mode)) {
-                        log_debug("Conflicting inode '%s' found, link to '%s' will not be created.", slink, node);
-                        err = -EEXIST;
-                        goto exit;
-                }
-
-                len = readlink(slink, buf, sizeof(buf));
-                if (len > 0 && len < (int)sizeof(buf)) {
-                        buf[len] = '\0';
-                        if (streq(target, buf)) {
-                                /* preserve link with correct target, do not replace node of other device */
-                                log_debug("preserve already existing symlink '%s' to '%s'", slink, target);
-                                label_fix(slink, true, false);
-                                utimensat(AT_FDCWD, slink, NULL, AT_SYMLINK_NOFOLLOW);
-                                goto exit;
-                        }
-                }
-        } else {
-                log_debug("creating symlink '%s' to '%s'", slink, target);
-                do {
-                        err = mkdir_parents_label(slink, 0755);
-                        if (err != 0 && err != -ENOENT)
-                                break;
-                        mac_selinux_create_file_prepare(slink, S_IFLNK);
-                        err = symlink(target, slink);
-                        if (err != 0)
-                                err = -errno;
-                        mac_selinux_create_file_clear();
-                } while (err == -ENOENT);
-                if (err == 0)
-                        goto exit;
-        }
-
-        log_debug("atomically replace '%s'", slink);
-        strscpyl(slink_tmp, sizeof(slink_tmp), slink, ".tmp-", udev_device_get_id_filename(dev), NULL);
-        unlink(slink_tmp);
-        do {
-                err = mkdir_parents_label(slink_tmp, 0755);
-                if (err != 0 && err != -ENOENT)
-                        break;
-                mac_selinux_create_file_prepare(slink_tmp, S_IFLNK);
-                err = symlink(target, slink_tmp);
-                if (err != 0)
-                        err = -errno;
-                mac_selinux_create_file_clear();
-        } while (err == -ENOENT);
-        if (err != 0) {
-                log_error_errno(errno, "symlink '%s' '%s' failed: %m", target, slink_tmp);
-                goto exit;
-        }
-        err = rename(slink_tmp, slink);
-        if (err != 0) {
-                log_error_errno(errno, "rename '%s' '%s' failed: %m", slink_tmp, slink);
-                unlink(slink_tmp);
-        }
-exit:
-        return err;
+        return 0;
 }
 
 static int link_find_prioritized(struct udev_device *dev, bool add, const char *stackdir, char **ret) {
