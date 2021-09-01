@@ -1154,10 +1154,6 @@ void udev_event_execute_rules(struct udev_event *event,
                 if (major(udev_device_get_devnum(dev)) > 0) {
                         bool apply;
 
-                        /* remove/update possible left-over symlinks from old database entry */
-                        if (EVENT_MODE_DESTRUCTIVE(event) && event->dev_db != NULL)
-                                udev_node_update_old_links(dev, event->dev_db);
-
                         if (!event->owner_set)
                                 event->uid = udev_device_get_devnode_uid(dev);
 
@@ -1178,15 +1174,21 @@ void udev_event_execute_rules(struct udev_event *event,
                         }
 
                         apply = streq(udev_device_get_action(dev), "add") || event->owner_set || event->group_set || event->mode_set;
-                        if (EVENT_MODE_DESTRUCTIVE(event))
+                        if (EVENT_MODE_DESTRUCTIVE(event)) {
+                                int r;
+
                                 /* Unless applying them, leave the owner, the group and the mode of the
                                  * device node alone. */
-                                udev_node_add(dev, apply,
-                                              apply ? event->mode : MODE_INVALID,
-                                              apply ? event->uid : UID_INVALID,
-                                              apply ? event->gid : GID_INVALID,
-                                              &event->seclabel_list);
-                        else
+                                r = udev_node_apply_permissions(dev, apply,
+                                                                apply ? event->mode : MODE_INVALID,
+                                                                apply ? event->uid : UID_INVALID,
+                                                                apply ? event->gid : GID_INVALID,
+                                                                &event->seclabel_list);
+                                if (r < 0)
+                                        log_error_errno(r, "Failed to apply devnode permissions: %m");
+                                else
+                                        (void) udev_node_update(dev, event->dev_db);
+                        } else
                                 log_debug("Running in test mode, skipping handling device node '%s', devnum=%s, "
                                           "mode=%#o, uid="UID_FMT", gid="GID_FMT".",
                                           udev_device_get_devnode(dev), udev_device_get_id_filename(dev),

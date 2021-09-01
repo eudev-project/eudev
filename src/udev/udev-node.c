@@ -237,19 +237,18 @@ toolong:
 }
 
 /* manage "stack of names" with possibly specified device priorities */
-static void link_update(struct udev_device *dev, const char *slink_in, bool add) {
+static int link_update(struct udev_device *dev, const char *slink_in, bool add) {
         _cleanup_free_ char *slink = NULL;
         char name_enc[NAME_MAX+1];
         char filename[UTIL_PATH_SIZE * 2];
         char dirname[UTIL_PATH_SIZE];
         const char *slink_name, *target;
         char buf[UTIL_PATH_SIZE];
+        int r = 0;
 
         slink = strdup(slink_in);
-        if (!slink) {
-                log_oom();
-                return;
-        }
+        if (!slink)
+                return log_oom();
 
         path_simplify(slink);
 
@@ -258,7 +257,7 @@ static void link_update(struct udev_device *dev, const char *slink_in, bool add)
             empty_or_root(slink_name) ||
             !path_is_normalized(slink_name)) {
                 log_debug("Invalid symbolic link of device node: %s", slink);
-                return;
+                return -EINVAL;
         }
 
         /* The name of the stack directory is the escaped path below /dev including its leading
@@ -276,12 +275,8 @@ static void link_update(struct udev_device *dev, const char *slink_in, bool add)
                 if (unlink(slink) == 0)
                         rmdir_parents(slink, "/dev");
         } else {
-                int r;
-
                 log_debug("creating link '%s' to '%s'", slink, target);
                 r = node_symlink(dev, target, slink);
-                if (r < 0)
-                        log_warning_errno(r, "Failed to update device symlink '%s', ignoring: %m", slink);
         }
 
         if (add) {
@@ -300,39 +295,100 @@ static void link_update(struct udev_device *dev, const char *slink_in, bool add)
                                 err = -errno;
                 } while (err == -ENOENT);
         }
+
+        return r;
 }
 
-void udev_node_update_old_links(struct udev_device *dev, struct udev_device *dev_old) {
+static bool device_has_devlink(struct udev_device *dev, const char *devlink) {
+        return udev_list_entry_get_by_name(udev_device_get_devlinks_list_entry(dev), devlink) != NULL;
+}
+
+static void device_get_devpath_by_devnum(struct udev_device *dev, char *buf, size_t size) {
+        snprintf(buf, size, "/dev/%s/%u:%u",
+                 streq(udev_device_get_subsystem(dev), "block") ? "block" : "char",
+                 major(udev_device_get_devnum(dev)), minor(udev_device_get_devnum(dev)));
+}
+
+int udev_node_update(struct udev_device *dev, struct udev_device *dev_old) {
+        char filename[UTIL_PATH_SIZE];
         struct udev_list_entry *list_entry;
+        const char *devnode;
+        int r;
+
+        assert(dev);
+
+        devnode = udev_device_get_devnode(dev);
+        if (!devnode)
+                return log_debug_errno(ENOENT, "Failed to get devnode: %m");
+
+        log_debug("Handling device node '%s', devnum=%s", devnode, udev_device_get_id_filename(dev) ?: "n/a");
 
         /* update possible left-over symlinks */
-        udev_list_entry_foreach(list_entry, udev_device_get_devlinks_list_entry(dev_old)) {
-                const char *name = udev_list_entry_get_name(list_entry);
-                struct udev_list_entry *list_entry_current;
-                int found;
+        udev_list_entry_foreach(list_entry, dev_old ? udev_device_get_devlinks_list_entry(dev_old) : NULL) {
+                const char *devlink = udev_list_entry_get_name(list_entry);
 
                 /* check if old link name still belongs to this device */
-                found = 0;
-                udev_list_entry_foreach(list_entry_current, udev_device_get_devlinks_list_entry(dev)) {
-                        const char *name_current = udev_list_entry_get_name(list_entry_current);
-
-                        if (streq(name, name_current)) {
-                                found = 1;
-                                break;
-                        }
-                }
-                if (found)
+                if (device_has_devlink(dev, devlink))
                         continue;
 
-                log_debug("update old name, '%s' no longer belonging to '%s'",
-                     name, udev_device_get_devpath(dev));
-                link_update(dev, name, false);
+                log_debug("Removing/updating old device symlink '%s', which is no longer belonging to this device.",
+                          devlink);
+
+                r = link_update(dev, devlink, /* add = */ false);
+                if (r < 0)
+                        log_warning_errno(r, "Failed to remove/update device symlink '%s', ignoring: %m",
+                                          devlink);
         }
+
+        /* create/update symlinks, add symlinks to name index */
+        udev_list_entry_foreach(list_entry, udev_device_get_devlinks_list_entry(dev)) {
+                const char *devlink = udev_list_entry_get_name(list_entry);
+
+                r = link_update(dev, devlink, /* add = */ true);
+                if (r < 0)
+                        log_warning_errno(r, "Failed to create/update device symlink '%s', ignoring: %m",
+                                          devlink);
+        }
+
+        device_get_devpath_by_devnum(dev, filename, sizeof(filename));
+
+        /* always add /dev/{block,char}/$major:$minor */
+        r = node_symlink(dev, devnode, filename);
+        if (r < 0)
+                return log_warning_errno(r, "Failed to create device symlink '%s': %m", filename);
+
+        return 0;
 }
 
-static int node_permissions_apply(struct udev_device *dev, bool apply_mac,
-                                  mode_t mode, uid_t uid, gid_t gid,
-                                  struct udev_list *seclabel_list) {
+int udev_node_remove(struct udev_device *dev) {
+        char filename[UTIL_PATH_SIZE];
+        struct udev_list_entry *list_entry;
+        int r;
+
+        assert(dev);
+
+        /* remove/update symlinks, remove symlinks from name index */
+        udev_list_entry_foreach(list_entry, udev_device_get_devlinks_list_entry(dev)) {
+                const char *devlink = udev_list_entry_get_name(list_entry);
+
+                r = link_update(dev, devlink, /* add = */ false);
+                if (r < 0)
+                        log_warning_errno(r, "Failed to remove/update device symlink '%s', ignoring: %m",
+                                          devlink);
+        }
+
+        device_get_devpath_by_devnum(dev, filename, sizeof(filename));
+
+        /* remove /dev/{block,char}/$major:$minor */
+        if (unlink(filename) < 0 && errno != ENOENT)
+                return log_debug_errno(errno, "Failed to remove '%s': %m", filename);
+
+        return 0;
+}
+
+int udev_node_apply_permissions(struct udev_device *dev, bool apply_mac,
+                                mode_t mode, uid_t uid, gid_t gid,
+                                struct udev_list *seclabel_list) {
         const char *devnode = udev_device_get_devnode(dev);
         dev_t devnum = udev_device_get_devnum(dev);
         bool apply_mode, apply_uid, apply_gid;
@@ -441,42 +497,5 @@ static int node_permissions_apply(struct udev_device *dev, bool apply_mac,
         if (r < 0)
                 log_debug_errno(r, "Failed to adjust timestamp of node %s: %m", devnode);
 
-        return r;
-}
-
-void udev_node_add(struct udev_device *dev, bool apply_mac,
-                   mode_t mode, uid_t uid, gid_t gid,
-                   struct udev_list *seclabel_list) {
-        char filename[UTIL_PATH_SIZE];
-        struct udev_list_entry *list_entry;
-
-        log_debug("Handling device node '%s', devnum=%s", udev_device_get_devnode(dev), udev_device_get_id_filename(dev));
-
-        if (node_permissions_apply(dev, apply_mac, mode, uid, gid, seclabel_list) < 0)
-                return;
-
-        /* always add /dev/{block,char}/$major:$minor */
-        snprintf(filename, sizeof(filename), "/dev/%s/%u:%u",
-                 streq(udev_device_get_subsystem(dev), "block") ? "block" : "char",
-                 major(udev_device_get_devnum(dev)), minor(udev_device_get_devnum(dev)));
-        node_symlink(dev, udev_device_get_devnode(dev), filename);
-
-        /* create/update symlinks, add symlinks to name index */
-        udev_list_entry_foreach(list_entry, udev_device_get_devlinks_list_entry(dev))
-                        link_update(dev, udev_list_entry_get_name(list_entry), true);
-}
-
-void udev_node_remove(struct udev_device *dev) {
-        struct udev_list_entry *list_entry;
-        char filename[UTIL_PATH_SIZE];
-
-        /* remove/update symlinks, remove symlinks from name index */
-        udev_list_entry_foreach(list_entry, udev_device_get_devlinks_list_entry(dev))
-                link_update(dev, udev_list_entry_get_name(list_entry), false);
-
-        /* remove /dev/{block,char}/$major:$minor */
-        snprintf(filename, sizeof(filename), "/dev/%s/%u:%u",
-                 streq(udev_device_get_subsystem(dev), "block") ? "block" : "char",
-                 major(udev_device_get_devnum(dev)), minor(udev_device_get_devnum(dev)));
-        unlink(filename);
+        return 0;
 }
