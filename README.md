@@ -1,9 +1,9 @@
 ADOPTION NOTICE (2021-09-14)
 
 Currently eudev is in the process of being adopted by a newly formed
-project by Alpine and Devuan contributors. Some of the below links
-and/or contacts may be outdated until the process is complete and
-all the infra set up.
+project by Alpine, Devuan and Gentoo contributors (a-z order). Some
+of the below links and/or contacts may be outdated until the process
+is complete and all the infra set up.
 
 As of now we are hanging on IRC: Libera/#devuan-eudev
 
