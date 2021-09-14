@@ -55,7 +55,6 @@ noinst_HEADERS = \
 	gpt.h \
 	hashmap.h \
 	id128-util.h \
-	ioprio.h \
 	json-util.h \
 	json-writer.h \
 	label.h \
@@ -65,6 +64,7 @@ noinst_HEADERS = \
 	main-func.h \
 	mempool.h \
 	missing.h \
+	missing_ioprio.h \
 	mkdir.h \
 	MurmurHash2.h \
 	os-util.h \

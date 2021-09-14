@@ -54,8 +54,8 @@
 
 #include "macro.h"
 #include "util.h"
-#include "ioprio.h"
 #include "missing.h"
+#include "missing_ioprio.h"
 #include "log.h"
 #include "strv.h"
 #include "mkdir.h"
