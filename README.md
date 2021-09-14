@@ -1,3 +1,16 @@
+ADOPTION NOTICE (2021-09-14)
+
+Currently eudev is in the process of being adopted by a newly formed
+project by Alpine and Devuan contributors. Some of the below links
+and/or contacts may be outdated until the process is complete and
+all the infra set up.
+
+As of now we are hanging on IRC: Libera/#devuan-eudev
+
+	Boian Bonev
+
+==========
+
 IMPORTANT DEPRECATION NOTICE (2021-08-20)
 
 Currently eudev is no longer being supported.  Eudev was started, in
