@@ -68,9 +68,14 @@ int sysctl_write(const char *property, const char *value) {
         assert(property);
         assert(value);
 
-        log_debug("Setting '%s' to '%s'", property, value);
-
         p = strjoina("/proc/sys/", property);
+
+        path_simplify(p);
+        if (!path_is_normalized(p))
+                return -EINVAL;
+
+        log_debug("Setting '%s' to '%s'", p, value);
+
         return write_string_file(p, value);
 }
 
