@@ -423,29 +423,26 @@ static int do_scsi_page0_inquiry(struct udev *udev,
         return 0;
 }
 
-/*
- * The caller checks that serial is long enough to include the vendor +
- * model.
- */
-static int prepend_vendor_model(struct udev *udev,
-                                struct scsi_id_device *dev_scsi, char *serial)
-{
-        int ind;
+static int append_vendor_model(
+                const struct scsi_id_device *dev_scsi,
+                char buf[static VENDOR_LENGTH + MODEL_LENGTH]) {
 
-        strncpy(serial, dev_scsi->vendor, VENDOR_LENGTH);
-        strncat(serial, dev_scsi->model, MODEL_LENGTH);
-        ind = strlen(serial);
+        assert(dev_scsi);
+        assert(buf);
 
-        /*
-         * This is not a complete check, since we are using strncat/cpy
-         * above, ind will never be too large.
-         */
-        if (ind != (VENDOR_LENGTH + MODEL_LENGTH)) {
-                log_debug("%s: expected length %d, got length %d",
-                     dev_scsi->kernel, (VENDOR_LENGTH + MODEL_LENGTH), ind);
-                return -1;
+        if (strnlen(dev_scsi->vendor, VENDOR_LENGTH) != VENDOR_LENGTH) {
+                log_debug("%s: bad vendor string \"%s\"",
+                          dev_scsi->kernel, dev_scsi->vendor);
+                return -EINVAL;
         }
-        return ind;
+        if (strnlen(dev_scsi->model, MODEL_LENGTH) != MODEL_LENGTH) {
+                log_debug("%s: bad model string \"%s\"",
+                          dev_scsi->kernel, dev_scsi->model);
+                return -EINVAL;
+        }
+        memcpy(buf, dev_scsi->vendor, VENDOR_LENGTH);
+        memcpy(buf + VENDOR_LENGTH, dev_scsi->model, MODEL_LENGTH);
+        return VENDOR_LENGTH + MODEL_LENGTH;
 }
 
 /*
@@ -528,7 +525,7 @@ static int check_fill_0x83_id(struct udev *udev,
          * included in the identifier.
          */
         if (id_search->id_type == SCSI_ID_VENDOR_SPECIFIC)
-                if (prepend_vendor_model(udev, dev_scsi, &serial[1]) < 0)
+                if (append_vendor_model(dev_scsi, serial + 1) < 0)
                         return 1;
 
         i = 4; /* offset to the start of the identifier */
@@ -768,7 +765,7 @@ static int do_scsi_page80_inquiry(struct udev *udev,
         len = buf[3];
         if (serial) {
                 serial[0] = 'S';
-                ser_ind = prepend_vendor_model(udev, dev_scsi, serial + 1);
+                ser_ind = append_vendor_model(dev_scsi, serial + 1);
                 if (ser_ind < 0)
                         return 1;
                 ser_ind++; /* for the leading 'S' */
