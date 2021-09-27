@@ -831,7 +831,7 @@ int scsi_std_inquiry(struct udev *udev,
         dev_scsi->model[16] = '\0';
         memcpy(dev_scsi->revision, buf + 32, 4);
         dev_scsi->revision[4] = '\0';
-        sprintf(dev_scsi->type,"%x", buf[0] & 0x1f);
+        dev_scsi->type = buf[0] & 0x1f;
 
 out:
         close(fd);
