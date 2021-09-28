@@ -1,0 +1,66 @@
+# this can and should be optimized, the setup steps can be cached in docker,
+# and that should be broken out, annoyingly, though, I can't do that with
+# proper interjob dependency tracking without exposing tokens to third parties
+# possibly
+name: test whether eudev builds
+
+on:
+  push:
+    branches: '*'
+  pull_request:
+    branches: '*'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        distro: ['dyne/devuan:beowulf', 'alpine:latest']
+    container:
+      image: ${{ matrix.distro }}
+    steps:
+      - name: install prerequisites (alpine)
+        if: ${{ matrix.distro == 'alpine:latest' }}
+        run: >-
+          apk --no-cache add \
+            build-base \
+            gperf \
+            glib-dev \
+            linux-headers \
+            kmod-dev \
+            gobject-introspection-dev \
+            util-linux-dev \
+            perl \
+            autoconf \
+            libxslt \
+            automake
+
+      - name: install prerequisites (devuan)
+        if: ${{ matrix.distro == 'dyne/devuan:beowulf' }}
+        run: >-
+          apt-get update && apt-get install -y \
+            build-essential \
+            libblkid-dev \
+            libkmod-dev \
+            libselinux1-dev \
+            autoconf \
+            automake \
+            xsltproc \
+            gperf \
+            libglib-object-introspection-perl \
+            libglib2.0-dev \
+            linux-headers-amd64 \
+            libtool
+
+      - name: checkout
+        uses: actions/checkout@v2
+      - name: generate configure script
+        run: ./autogen.sh
+      - name: configure
+        run: ./configure
+      - name: make
+        run: make -j$(($(nproc)+1))
