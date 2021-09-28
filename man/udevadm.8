@@ -80,6 +80,26 @@ to identify the specified device\&. Valid
 \fBall\fR\&.
 .RE
 .PP
+\fB\-\-property=\fR\fB\fINAME\fR\fR
+.RS 4
+When showing device properties using the
+\fB\-\-query=property\fR
+option, limit display to properties specified in the argument\&. The argument should be a comma\-separated list of property names\&. If not specified, all known properties are shown\&.
+.RE
+.PP
+\fB\-\-value\fR
+.RS 4
+When showing device properties using the
+\fB\-\-query=property\fR
+option, print only their values, and skip the property name and
+=\&.
+.sp
+Cannot be used together with
+\fB\-x/\-\-export\fR
+or
+\fB\-P/\-\-export\-prefix\fR\&.
+.RE
+.PP
 \fB\-p\fR, \fB\-\-path=\fR\fB\fIDEVPATH\fR\fR
 .RS 4
 The

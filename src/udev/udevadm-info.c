@@ -30,6 +30,7 @@
 #include <sys/types.h>
 #include <sys/sysmacros.h>
 
+#include "strv.h"
 #include "udev.h"
 #include "udev-util.h"
 #include "udevadm-util.h"
@@ -401,6 +402,8 @@ static void help(void) {
                "       path                     sysfs device path\n"
                "       property                 The device properties\n"
                "       all                      All values\n"
+               "     --property=NAME          Show only properties by this name\n"
+               "     --value                  When showing properties, print only their values\n"
                "  -p --path=SYSPATH           sysfs device path used for query or attribute walk\n"
                "  -n --name=NAME              Node or symlink name used for query or attribute walk\n"
                "  -r --root                   Prepend dev directory to path names\n"
@@ -418,13 +421,20 @@ static void help(void) {
 
 static int uinfo(struct udev *udev, int argc, char *argv[]) {
         _cleanup_udev_device_unref_ struct udev_device *device = NULL;
+        _cleanup_strv_free_ char **properties = NULL;
         bool root = 0;
         bool export = 0;
+        bool value = false;
         const char *export_prefix = NULL;
         char name[UTIL_PATH_SIZE];
         struct udev_list_entry *list_entry;
         usec_t wait_for_initialization_timeout = 0;
         int c, r;
+
+        enum {
+                ARG_PROPERTY = 0x100,
+                ARG_VALUE,
+        };
 
         static const struct option options[] = {
                 { "name",              required_argument, NULL, 'n' },
@@ -437,6 +447,8 @@ static int uinfo(struct udev *udev, int argc, char *argv[]) {
                 { "device-id-of-file", required_argument, NULL, 'd' },
                 { "export",            no_argument,       NULL, 'x' },
                 { "export-prefix",     required_argument, NULL, 'P' },
+                { "property",          required_argument, NULL, ARG_PROPERTY },
+                { "value",             no_argument,       NULL, ARG_VALUE },
                 { "wait-for-initialization", optional_argument, NULL, 'w' },
                 { "version",           no_argument,       NULL, 'V' },
                 { "help",              no_argument,       NULL, 'h' },
@@ -459,6 +471,26 @@ static int uinfo(struct udev *udev, int argc, char *argv[]) {
 
         while ((c = getopt_long(argc, argv, "aced:n:p:q:rxP:w::Vh", options, NULL)) >= 0)
                 switch (c) {
+                case ARG_PROPERTY:
+                        /* Make sure that if the empty property list was specified, we won't show any
+                           properties. */
+                        if (isempty(optarg) && !properties) {
+                                properties = new0(char*, 1);
+                                if (!properties) {
+                                        log_oom();
+                                        return 1;
+                                }
+                        } else {
+                                r = strv_split_and_extend(&properties, optarg, ",", true);
+                                if (r < 0) {
+                                        log_oom();
+                                        return 1;
+                                }
+                        }
+                        break;
+                case ARG_VALUE:
+                        value = true;
+                        break;
                 case 'n': {
                         if (device != NULL) {
                                 fprintf(stderr, "device already specified\n");
@@ -544,6 +576,11 @@ static int uinfo(struct udev *udev, int argc, char *argv[]) {
                         return 1;
                 }
 
+        if (export && value) {
+                log_error("-x/--export or -P/--export-prefix cannot be used with --value");
+                return 1;
+        }
+
         switch (action) {
         case ACTION_QUERY:
                 if (!device) {
@@ -595,6 +632,11 @@ static int uinfo(struct udev *udev, int argc, char *argv[]) {
                 case QUERY_PROPERTY:
                         list_entry = udev_device_get_properties_list_entry(device);
                         while (list_entry != NULL) {
+                                if (properties && !strv_contains(properties, udev_list_entry_get_name(list_entry))) {
+                                        list_entry = udev_list_entry_get_next(list_entry);
+                                        continue;
+                                }
+
                                 if (export) {
                                         const char *prefix = export_prefix;
 
@@ -603,9 +645,10 @@ static int uinfo(struct udev *udev, int argc, char *argv[]) {
                                         printf("%s%s='%s'\n", prefix,
                                                udev_list_entry_get_name(list_entry),
                                                udev_list_entry_get_value(list_entry));
-                                } else {
+                                } else if (value)
+                                        printf("%s\n", udev_list_entry_get_value(list_entry));
+                                else
                                         printf("%s=%s\n", udev_list_entry_get_name(list_entry), udev_list_entry_get_value(list_entry));
-                                }
                                 list_entry = udev_list_entry_get_next(list_entry);
                         }
                         break;
