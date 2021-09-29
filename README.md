@@ -26,6 +26,28 @@ the repo may contact me at blueness@gentoo.org.
 
 ==========
 
+BUILD INSTRUCTIONS
+
+To build eudev, first install any required dependencies. The dependencies for eudev's build process and how to install them are listed in the BUILD file. Then download the eudev source code and perform the following commands:
+
+$ ./autogen.sh
+$ ./configure
+$ make
+
+Optionally, eudev can be installed by running
+
+$ sudo make install
+
+And removed by running
+
+$ sudo make uninstall
+
+For further details on building and install eudev, please see the BUILD file.
+
+
+==========
+
+BACKGROUND INFORMATION
 
 This git repo is a fork of git://anongit.freedesktop.org/systemd/systemd
 with the aim of isolating udev from any particular flavor of system
