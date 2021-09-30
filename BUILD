@@ -2,7 +2,9 @@ Building eudev
 ===================
 
 The following instructions provide the steps needed to acquire and build the eudev
-software on the Debian, Devuan, and compatible Linux distributions.
+software on the Debian, Devuan, and compatible Linux distributions. Similar instructions 
+apply to other distributions, though, the package names and the syntax of the
+package manager on other distributions differ.
 
 Please note that command examples in this document use the following convention. Commands
 prefixed by a "$" symbol are to be run as a regular, user. Commands with a "#" prefix
