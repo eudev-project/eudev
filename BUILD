@@ -18,10 +18,10 @@ This can be accomplished by running the following two commands:
 
 # apt-get update
 
-# apt-get install build-essential pkg-config docbook-xsl\
-          docbook-xml m4 automake autoconf intltool gperf\
-          gnu-efi libcap-dev libselinux1-dev libacl1-dev\
-          libkmod-dev libblkid-dev gobject-introspection\
+# apt-get install build-essential pkg-config docbook-xsl \
+          docbook-xml m4 automake autoconf intltool gperf \
+          gnu-efi libcap-dev libselinux1-dev libacl1-dev \
+          libkmod-dev libblkid-dev gobject-introspection \
           libglib-object-introspection-perl xsltproc 
 
 
