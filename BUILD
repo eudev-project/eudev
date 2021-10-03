@@ -1,5 +1,5 @@
 Building eudev
-===================
+==============
 
 The following instructions provide the steps needed to acquire and build the eudev
 software on the Debian, Devuan, and compatible Linux distributions. Similar instructions 
@@ -13,7 +13,7 @@ used instead of logging into the root account.
 
 
 1. Installing dependencies
-============================
+==========================
 
 The first thing we need to do is install the dependencies required to build eudev. 
 This can be accomplished by running the following two commands:
@@ -29,7 +29,7 @@ This can be accomplished by running the following two commands:
 
 
 2. Downloading the source code
-================================
+==============================
 
 There are two common approaches to downloading the project's source code. The first
 is to visit the eudev GitHub releases page (https://github.com/eudev-project/eudev/releases)
@@ -50,7 +50,7 @@ $ git clone https://github.com/eudev-project/eudev.git
 
 
 3. Configuring and building eudev
-==================================
+=================================
 
 To build the eudev source code, run the following commands:
 
@@ -73,7 +73,7 @@ $ make
 
 
 4. Install eudev
-=================
+================
 
 Please note that, in most situations, people will not wish to install eudev manually.
 This work is typically performed by your distribution's package manager. Installing
@@ -85,7 +85,7 @@ If you really wish to proceed and install eudev manually, you can do so by runni
 
 
 5. Removing eudev
-==================
+=================
 
 Please note that removing eudev can damage your system.
 
