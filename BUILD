@@ -2,7 +2,7 @@ Building eudev
 ==============
 
 The following instructions provide the steps needed to acquire and build the eudev
-software on the Debian, Devuan, and compatible Linux distributions. Similar instructions 
+software on the Debian, Devuan, and compatible Linux distributions. Similar instructions
 apply to other distributions, though, the package names and the syntax of the
 package manager on other distributions differ.
 
@@ -15,7 +15,7 @@ used instead of logging into the root account.
 1. Installing dependencies
 ==========================
 
-The first thing we need to do is install the dependencies required to build eudev. 
+The first thing we need to do is install the dependencies required to build eudev.
 This can be accomplished by running the following two commands:
 
 # apt-get update
@@ -24,7 +24,7 @@ This can be accomplished by running the following two commands:
           docbook-xml m4 automake autoconf intltool gperf \
           gnu-efi libcap-dev libselinux1-dev libacl1-dev \
           libkmod-dev libblkid-dev gobject-introspection \
-          libglib-object-introspection-perl xsltproc 
+          libglib-object-introspection-perl xsltproc
 
 
 
