@@ -11,6 +11,7 @@ XSLTPROC_FLAGS="--stringparam man.output.quietly 1 \
 --stringparam man.copyright.section.enabled 0"
 
 xslt_proc() {
+	[ "$V" = 1 ] && echo $XSLTPROC -o $1.$2 $XSLTPROC_FLAGS http://docbook.sourceforge.net/release/xsl/current/manpages/docbook.xsl $1.xml
 	$XSLTPROC -o $1.$2 $XSLTPROC_FLAGS http://docbook.sourceforge.net/release/xsl/current/manpages/docbook.xsl $1.xml
 }
 
