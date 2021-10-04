@@ -24,7 +24,7 @@ This can be accomplished by running the following two commands:
           docbook-xml m4 automake autoconf intltool gperf \
           gnu-efi libcap-dev libselinux1-dev libacl1-dev \
           libkmod-dev libblkid-dev gobject-introspection \
-          libglib-object-introspection-perl xsltproc
+          libglib-object-introspection-perl libtool xsltproc
 
 
 
