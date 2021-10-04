@@ -16,15 +16,76 @@ then sudo may be used instead of logging into the root account.
 ==========================
 
 The first thing we need to do is install the dependencies required to build
-eudev. This can be accomplished by running the following two commands:
+eudev. This can be accomplished by running the following commands depending on
+the Linux distribution:
 
-# apt-get update
 
-# apt-get install build-essential pkg-config docbook-xsl \
-          docbook-xml m4 automake autoconf intltool gperf \
-          gnu-efi libcap-dev libselinux1-dev libacl1-dev \
-          libkmod-dev libblkid-dev gobject-introspection \
-          libglib-object-introspection-perl libtool xsltproc
+1.1. Alpine
+-----------
+
+# apk --no-cache add \
+      autoconf \
+      automake \
+      build-base \
+      glib-dev \
+      gobject-introspection-dev \
+      gperf \
+      kmod-dev \
+      libxslt \
+      linux-headers \
+      perl \
+      util-linux-dev
+
+
+1.2. ArchLinux
+--------------
+
+# pacman -S --needed \
+         autoconf \
+         automake \
+         gawk \
+         gcc \
+         glib2 \
+         gperf \
+         kmod \
+         libxslt \
+         libtool \
+         linux-headers \
+         m4 \
+         make \
+         sed \
+         util-linux
+
+
+1.3. Debian/Devuan/Ubuntu or other derivatives
+----------------------------------------------
+
+# apt-get update && apt-get install \
+          autoconf \
+          automake \
+          build-essential \
+          docbook-xml \
+          docbook-xsl \
+          gnu-efi \
+          gobject-introspection \
+          gperf \
+          intltool \
+          libacl1-dev \
+          libblkid-dev \
+          libcap-dev \
+          libglib-object-introspection-perl \
+          libkmod-dev \
+          libselinux1-dev \
+          libtool \
+          m4 \
+          pkg-config \
+          xsltproc
+
+
+1.4. Gentoo
+-----------
+
+# TODO
 
 
 2. Downloading the source code
