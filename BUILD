@@ -1,22 +1,22 @@
 Building eudev
 ==============
 
-The following instructions provide the steps needed to acquire and build the eudev
-software on the Debian, Devuan, and compatible Linux distributions. Similar instructions
-apply to other distributions, though, the package names and the syntax of the
-package manager on other distributions differ.
+The following instructions provide the steps needed to acquire and build the
+eudev software on different Linux distributions. Similar instructions apply to
+other distributions, not included here, though the package names and the syntax
+of the package manager may vary.
 
-Please note that command examples in this document use the following convention. Commands
-prefixed by a "$" symbol are to be run as a regular, user. Commands with a "#" prefix
-need to be run as the root user. If your user has sudo access then sudo may be
-used instead of logging into the root account.
+Please note that command examples in this document use the following convention.
+Commands prefixed by a "$" symbol are to be run as a regular, user. Commands
+with a "#" prefix need to be run as the root user. If your user has sudo access
+then sudo may be used instead of logging into the root account.
 
 
 1. Installing dependencies
 ==========================
 
-The first thing we need to do is install the dependencies required to build eudev.
-This can be accomplished by running the following two commands:
+The first thing we need to do is install the dependencies required to build
+eudev. This can be accomplished by running the following two commands:
 
 # apt-get update
 
@@ -27,24 +27,23 @@ This can be accomplished by running the following two commands:
           libglib-object-introspection-perl libtool xsltproc
 
 
-
 2. Downloading the source code
 ==============================
 
-There are two common approaches to downloading the project's source code. The first
-is to visit the eudev GitHub releases page (https://github.com/eudev-project/eudev/releases)
-and downloading the latest tar.gz archive file. Then unpack the downloaded archive. For
-example, if we downloaded eudev version 3.2.10 we could unpack the archive using the
-following command:
+There are two common approaches to downloading the project's source code. The
+first is to visit the eudev GitHub releases page
+
+	https://github.com/eudev-project/eudev/releases
+
+and downloading the latest eudev-*.tar.xz archive file. Then unpack the
+downloaded archive. For example, if we downloaded eudev version 3.2.10 we could
+unpack the archive using the following command:
 
 $ tar xf eudev-3.2.10.tar.gz
 
-
-Alternatively, we can download the latest source code by using git. This is probably the
-better option for developers. Here we install the git source control program and
-use it to download the latest eudev source code:
-
-# apt-get install git
+Alternatively, we can download the latest source code by using git. This is
+the recommended option for developers. Here we use the git source control
+program and use it to download the latest eudev source code:
 
 $ git clone https://github.com/eudev-project/eudev.git
 
@@ -61,9 +60,9 @@ $ ./autogen.sh
 $ ./configure
 
 Please note that, by default, the configure script will assume we want to place
-eudev under the /usr directory. If this is not accurate, we can supply an alternative
-location using the "--prefix" flag. For instance, to place eudev under the /usr/local
-directory tree, run the following:
+eudev under the /usr directory. If this is not accurate, we can supply an
+alternative location using the "--prefix" flag. For instance, to place eudev
+under the /usr/local directory tree, run the following:
 
 $ ./configure --prefix /usr/local
 
@@ -75,11 +74,15 @@ $ make
 4. Install eudev
 ================
 
-Please note that, in most situations, people will not wish to install eudev manually.
-This work is typically performed by your distribution's package manager. Installing
-eudev manually can break your operating system.
+*** WARNING ****
+Installing eudev manually can break your operating system.
 
-If you really wish to proceed and install eudev manually, you can do so by running:
+Please note that, in most situations, people will not wish to install eudev
+manually. This work is typically performed by your distribution's package
+manager.
+
+If you really wish to proceed and install eudev manually, you can do so by
+running:
 
 # make install
 
