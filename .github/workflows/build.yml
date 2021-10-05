@@ -64,3 +64,5 @@ jobs:
         run: ./configure
       - name: make
         run: make -j$(($(nproc)+1))
+      - name: check
+        run: make check
