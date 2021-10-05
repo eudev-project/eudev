@@ -55,4 +55,4 @@ Committers (alphabetical order by last name):
     Richard Yao         (ryao)              <ryao@gentoo.org>
 
 ## Build status
-[![Build Status](https://travis-ci.org/gentoo/eudev.svg?branch=master)](https://travis-ci.org/gentoo/eudev)
+[![Build Status](https://github.com/eudev-project/eudev/actions/workflows/build.yml/badge.svg)](https://github.com/eudev-project/eudev/actions)
