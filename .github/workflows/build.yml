@@ -2,7 +2,7 @@
 # and that should be broken out, annoyingly, though, I can't do that with
 # proper interjob dependency tracking without exposing tokens to third parties
 # possibly
-name: test whether eudev builds
+name: build
 
 on:
   push:
