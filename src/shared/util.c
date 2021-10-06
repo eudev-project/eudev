@@ -1725,7 +1725,7 @@ int tempfn_xxxxxx(const char *p, char **ret) {
          *         /foo/bar/.#waldoXXXXXX
          */
 
-        fn = basename((char*)p);
+        fn = eudev_basename(p);
         if (!filename_is_valid(fn))
                 return -EINVAL;
 
@@ -1966,4 +1966,12 @@ void cmsg_close_all(struct msghdr *mh) {
         for (cmsg = CMSG_FIRSTHDR(mh); cmsg; cmsg = CMSG_NXTHDR(mh, cmsg))
                 if (cmsg->cmsg_level == SOL_SOCKET && cmsg->cmsg_type == SCM_RIGHTS)
                         close_many((int*) CMSG_DATA(cmsg), (cmsg->cmsg_len - CMSG_LEN(0)) / sizeof(int));
+}
+
+const char *eudev_basename(const char *filename) {
+        const char *p = strrchr(filename, '/');
+
+        if (p)
+                return p + 1;
+        return filename;
 }
