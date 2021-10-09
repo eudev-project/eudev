@@ -65,4 +65,4 @@ jobs:
       - name: make
         run: make -j$(($(nproc)+1))
       - name: check
-        run: make check
+        run: make check; cat test/udev-test.pl.log
