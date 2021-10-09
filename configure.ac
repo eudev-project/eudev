@@ -23,7 +23,7 @@ AC_PROG_SED
 AC_PROG_GREP
 AC_PROG_AWK
 
-AC_PROG_CC_C99
+AC_PROG_CC
 AS_IF([test "x$ac_cv_prog_cc_c99" = "xno"], [
         AC_MSG_ERROR([no C99 compiler found, $PACKAGE requires a C99 compiler.])
 ])
