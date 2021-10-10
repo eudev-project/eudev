@@ -1,32 +1,3 @@
-ADOPTION NOTICE (2021-09-14)
-
-Currently eudev is in the process of being adopted by a newly formed project by Alpine, Devuan and Gentoo contributors (a-z order). Some of the below links and/or contacts may be outdated until the process is complete and all the infra set up.
-
-As of now we are hanging on [Libera.Chat](https://libera.chat/):  
-ircs://irc.libera.chat:6697/#eudev  
-https://web.libera.chat/#eudev
-
-	Boian Bonev
-
-==========
-
-IMPORTANT DEPRECATION NOTICE (2021-08-20)
-
-Currently eudev is no longer being supported.  Eudev was started, in
-part because systemd did not build on musl-libc systems and a fork
-of the udev portion of systemd was required.  Currently systemd can
-be built on musl systems with patches from the openembedded team, and
-the need to maintain a separate fork is no longer pressing.
-
-Nonetheless, many distros have adopted eudev as their device manager
-and so may want to continue using it.  Anyone interested in inheriting
-the repo may contact me at blueness@gentoo.org.
-
-	Anthony G. Basile
-
-==========
-
-
 This git repo is a fork of git://anongit.freedesktop.org/systemd/systemd
 with the aim of isolating udev from any particular flavor of system
 initialization.  In this case, the isolation is from systemd.
@@ -34,25 +5,37 @@ initialization.  In this case, the isolation is from systemd.
 This is a project started by Gentoo developers and testing is currently being
 done mostly on OpenRC.  We welcome contribution from others using a variety of
 system initializations to ensure eudev remains system initialization and
-distribution neutral.
+distribution neutral.  On 2021-08-20 Gentoo decided to abandon eudev and a new
+project was established on 2021-09-14 by Alpine, Devuan and Gentoo
+contributors (a-z order).
 
-Homepage: https://wiki.gentoo.org/wiki/Project:Eudev
+Homepage: https://github.com/eudev-project/eudev
 
-Tarballs of releases: http://dev.gentoo.org/~blueness/eudev/
+Tarballs of releases: https://github.com/eudev-project/eudev/releases  
+Old releases (archive): http://dev.gentoo.org/~blueness/eudev/
 
 Contact: You can email us as a group below.
 
-IRC: Freenode/#gentoo-udev
+The eudev community gathers on [Libera.Chat](https://libera.chat/):  
+ircs://irc.libera.chat:6697/#eudev  
+https://web.libera.chat/#eudev
 
-Committers (alphabetical order by last name):
 
+Active team members (alphabetical order by last name):
+
+    Arsen Asenović      (Arsen)             <arsen@aarsen.me>
     Luca Barbato        (lu_zero)           <lu_zero@gentoo.org>
     Anthony G. Basile   (blueness)          <blueness@gentoo.org>
-    Francisco Izquierdo (klondike)          <klondike@gentoo.org>
-    Ian Stakenvicius    (axs)               <axs@gentoo.org>
-    Matthew Thode       (prometheanfire)    <prometheanfire@gentoo.org>
-    Tony Vroon          (chainsaw)          <tony@linx.net>
-    Richard Yao         (ryao)              <ryao@gentoo.org>
+    Boian Bonev         (bb|hcb)            <boian@bonev.com>
+    Ariadne Conill      (Ariadne)           <ariadne@dereferenced.org>
+
+Emeritus team members (alphabetical order by last name):
+
+    Francisco Izquierdo (klondike)          klondike@gentoo.org
+    Ian Stakenvicius    (axs)               axs@gentoo.org
+    Matthew Thode       (prometheanfire)    prometheanfire@gentoo.org
+    Tony Vroon          (chainsaw)          tony@linx.net
+    Richard Yao         (ryao)              ryao@gentoo.org
 
 ## Build status
 [![Build Status](https://github.com/eudev-project/eudev/actions/workflows/build.yml/badge.svg)](https://github.com/eudev-project/eudev/actions)
