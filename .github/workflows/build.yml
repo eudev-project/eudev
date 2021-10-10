@@ -37,7 +37,8 @@ jobs:
             perl \
             autoconf \
             libxslt \
-            automake
+            automake \
+            tree
 
       - name: install prerequisites (devuan)
         if: ${{ matrix.distro == 'dyne/devuan:beowulf' }}
@@ -54,7 +55,8 @@ jobs:
             libglib-object-introspection-perl \
             libglib2.0-dev \
             linux-headers-amd64 \
-            libtool
+            libtool \
+            tree
 
       - name: checkout
         uses: actions/checkout@v2
