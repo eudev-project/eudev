@@ -34,7 +34,7 @@
 #include "missing.h"
 
 #ifdef HAVE_SELINUX
-DEFINE_TRIVIAL_CLEANUP_FUNC(security_context_t, freecon);
+DEFINE_TRIVIAL_CLEANUP_FUNC(char *, freecon);
 DEFINE_TRIVIAL_CLEANUP_FUNC(context_t, context_free);
 
 #define _cleanup_security_context_free_ _cleanup_(freeconp)
@@ -149,7 +149,7 @@ int mac_selinux_fix(const char *path, bool ignore_enoent, bool ignore_erofs) {
 
         r = lstat(path, &st);
         if (r >= 0) {
-                _cleanup_security_context_free_ security_context_t fcon = NULL;
+                _cleanup_security_context_free_ char * fcon = NULL;
 
                 r = selabel_lookup_raw(label_hnd, &fcon, path, st.st_mode);
 
@@ -192,7 +192,7 @@ int mac_selinux_apply(const char *path, const char *label) {
         if (!mac_selinux_use())
                 return 0;
 
-        if (setfilecon(path, (security_context_t) label) < 0) {
+        if (setfilecon(path, label) < 0) {
                 log_enforcing("Failed to set SELinux security context %s on path %s: %m", label, path);
                 if (security_getenforce() == 1)
                         return -errno;
@@ -205,7 +205,7 @@ int mac_selinux_get_create_label_from_exe(const char *exe, char **label) {
         int r = -EOPNOTSUPP;
 
 #ifdef HAVE_SELINUX
-        _cleanup_security_context_free_ security_context_t mycon = NULL, fcon = NULL;
+        _cleanup_security_context_free_ char *mycon = NULL, *fcon = NULL;
         security_class_t sclass;
 
         assert(exe);
@@ -223,7 +223,7 @@ int mac_selinux_get_create_label_from_exe(const char *exe, char **label) {
                 return -errno;
 
         sclass = string_to_security_class("process");
-        r = security_compute_create(mycon, fcon, sclass, (security_context_t *) label);
+        r = security_compute_create(mycon, fcon, sclass, label);
         if (r < 0)
                 return -errno;
 #endif
@@ -252,7 +252,7 @@ int mac_selinux_get_child_mls_label(int socket_fd, const char *exe, const char *
         int r = -EOPNOTSUPP;
 
 #ifdef HAVE_SELINUX
-        _cleanup_security_context_free_ security_context_t mycon = NULL, peercon = NULL, fcon = NULL;
+        _cleanup_security_context_free_ char *mycon = NULL, *peercon = NULL, *fcon = NULL;
         _cleanup_context_free_ context_t pcon = NULL, bcon = NULL;
         security_class_t sclass;
         const char *range = NULL;
@@ -302,7 +302,7 @@ int mac_selinux_get_child_mls_label(int socket_fd, const char *exe, const char *
                 return -ENOMEM;
 
         sclass = string_to_security_class("process");
-        r = security_compute_create(mycon, fcon, sclass, (security_context_t *) label);
+        r = security_compute_create(mycon, fcon, sclass, label);
         if (r < 0)
                 return -errno;
 #endif
@@ -316,7 +316,7 @@ void mac_selinux_free(char *label) {
         if (!mac_selinux_use())
                 return;
 
-        freecon((security_context_t) label);
+        freecon(label);
 #endif
 }
 
@@ -324,7 +324,7 @@ int mac_selinux_create_file_prepare(const char *path, mode_t mode) {
         int r = 0;
 
 #ifdef HAVE_SELINUX
-        _cleanup_security_context_free_ security_context_t filecon = NULL;
+        _cleanup_security_context_free_ char *filecon = NULL;
 
         assert(path);
 
@@ -384,7 +384,7 @@ int mac_selinux_create_socket_prepare(const char *label) {
 
         assert(label);
 
-        if (setsockcreatecon((security_context_t) label) < 0) {
+        if (setsockcreatecon(label) < 0) {
                 log_enforcing("Failed to set SELinux security context %s for sockets: %m", label);
 
                 if (security_getenforce() == 1)
@@ -412,7 +412,7 @@ int mac_selinux_mkdir(const char *path, mode_t mode) {
         /* Creates a directory and labels it according to the SELinux policy */
 
 #ifdef HAVE_SELINUX
-        _cleanup_security_context_free_ security_context_t fcon = NULL;
+        _cleanup_security_context_free_ char *fcon = NULL;
         int r;
 
         assert(path);
@@ -462,7 +462,7 @@ int mac_selinux_bind(int fd, const struct sockaddr *addr, socklen_t addrlen) {
         /* Binds a socket and label its file system object according to the SELinux policy */
 
 #ifdef HAVE_SELINUX
-        _cleanup_security_context_free_ security_context_t fcon = NULL;
+        _cleanup_security_context_free_ char *fcon = NULL;
         const struct sockaddr_un *un;
         char *path;
         int r;
