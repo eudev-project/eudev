@@ -57,3 +57,4 @@ test/udev-test.pl.log
 test/udev-test.pl.trs
 
 eudev-*.tar.gz
+eudev-*.tar.gz.asc
