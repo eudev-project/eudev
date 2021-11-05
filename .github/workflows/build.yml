@@ -19,7 +19,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        distro: ['dyne/devuan:beowulf', 'alpine:latest']
+        distro: ['dyne/devuan:chimaera', 'alpine:latest']
     container:
       image: ${{ matrix.distro }}
     steps:
@@ -41,7 +41,7 @@ jobs:
             tree
 
       - name: install prerequisites (devuan)
-        if: ${{ matrix.distro == 'dyne/devuan:beowulf' }}
+        if: ${{ matrix.distro == 'dyne/devuan:chimaera' }}
         run: >-
           apt-get update && apt-get install -y \
             build-essential \
