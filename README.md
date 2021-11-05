@@ -2,7 +2,7 @@ This git repo is a fork of git://anongit.freedesktop.org/systemd/systemd
 with the aim of isolating udev from any particular flavor of system
 initialization.  In this case, the isolation is from systemd.
 
-This is a project started by Gentoo developers and testing is currently being
+This is a project started by Gentoo developers and testing was initially being
 done mostly on OpenRC.  We welcome contribution from others using a variety of
 system initializations to ensure eudev remains system initialization and
 distribution neutral.  On 2021-08-20 Gentoo decided to abandon eudev and a new
@@ -14,12 +14,9 @@ Homepage: https://github.com/eudev-project/eudev
 Tarballs of releases: https://github.com/eudev-project/eudev/releases  
 Old releases (archive): http://dev.gentoo.org/~blueness/eudev/
 
-Contact: You can email us as a group below.
-
 The eudev community gathers on [Libera.Chat](https://libera.chat/):  
 ircs://irc.libera.chat:6697/#eudev  
 https://web.libera.chat/#eudev
-
 
 Active team members (alphabetical order by last name):
 
@@ -31,11 +28,11 @@ Active team members (alphabetical order by last name):
 
 Emeritus team members (alphabetical order by last name):
 
-    Francisco Izquierdo (klondike)          klondike@gentoo.org
-    Ian Stakenvicius    (axs)               axs@gentoo.org
-    Matthew Thode       (prometheanfire)    prometheanfire@gentoo.org
-    Tony Vroon          (chainsaw)          tony@linx.net
-    Richard Yao         (ryao)              ryao@gentoo.org
+    Francisco Izquierdo (klondike)          <klondike@gentoo.org>
+    Ian Stakenvicius    (axs)               <axs@gentoo.org>
+    Matthew Thode       (prometheanfire)    <prometheanfire@gentoo.org>
+    Tony Vroon          (chainsaw)          <tony@linx.net>
+    Richard Yao         (ryao)              <ryao@gentoo.org>
 
 ## Build status
 [![Build Status](https://github.com/eudev-project/eudev/actions/workflows/build.yml/badge.svg)](https://github.com/eudev-project/eudev/actions)
