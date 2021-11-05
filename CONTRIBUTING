@@ -91,6 +91,10 @@ You can delete a remote branch by doing
 	Reported-by: Snoopy Coderdog <charlie@brown.org>
 	Signed-off-by: Anthony G. Basile <blueness@gentoo.org>
 
+Patches cherry-picked from systemd-udev must reference the commit hash of
+the version committed into systemd-udev git, *not* the version in the systemd
+PR.
+
 If you commit using
 
 	git commit -s
@@ -108,21 +112,12 @@ doing
 Then push it to your public repo.
 
 
-4.a Open an issue at (using GitHub)
+4. Open a pull request at GitHub
 
-	https://github.com/gentoo/eudev/issues?state=open
+	https://github.com/eudev-project/eudev/compare
 
-And request a pull of your clean commit.  A team member will review it,
-discuss it and commit it to master or reject it.
+A team member will review it, discuss it and commit it to master or reject it.
 
-
-4.b Send to mailing list (using git format-patch)
-Make sure you are subscribe on the mailing list. If you do not, send an email to
-	eudev+subscribe@lists.gentoo.org
-and follow instructions.
-
-When sending patches to mailing list, use
-	git send-email --to eudev@lists.gentoo.org 0001-foo-bar.patch
 
 5. eudev is a peer-reviewed project.  So even team members must ask another
 team member to sign-off and commit your work.  The only exception are trivial
