@@ -57,6 +57,8 @@
 #    define __NR_getrandom 352
 #  elif defined(__s390x__)
 #    define __NR_getrandom 349
+#  elif defined(__powerpc__)
+#    define __NR_getrandom 359
 #  else
 #    warning "__NR_getrandom unknown for your architecture"
 #    define __NR_getrandom 0xffffffff
