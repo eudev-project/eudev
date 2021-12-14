@@ -13,6 +13,7 @@ autom4te.cache
 compile
 config.*
 configure
+configure~
 libtool
 stamp-h1
 
