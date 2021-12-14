@@ -232,6 +232,8 @@ AC_SUBST(sushell)
 
 # selinux-util.c uses struct mallinfo which is not available for all C libraries (musl).
 AC_CHECK_FUNCS([mallinfo])
+# mallinfo is deprecated, prefer to use mallinfo2 when available
+AC_CHECK_FUNCS([mallinfo2])
 
 # ------------------------------------------------------------------------------
 

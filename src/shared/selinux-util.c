@@ -69,7 +69,9 @@ int mac_selinux_init(const char *prefix) {
 #ifdef HAVE_SELINUX
         usec_t before_timestamp, after_timestamp;
 
-#ifdef HAVE_MALLINFO
+#ifdef HAVE_MALLINFO2
+        struct mallinfo2 before_mallinfo, after_mallinfo;
+#elif HAVE_MALLINFO
         struct mallinfo before_mallinfo, after_mallinfo;
 #endif
 
@@ -79,7 +81,9 @@ int mac_selinux_init(const char *prefix) {
         if (label_hnd)
                 return 0;
 
-#ifdef HAVE_MALLINFO
+#ifdef HAVE_MALLINFO2
+        before_mallinfo = mallinfo2();
+#elif HAVE_MALLINFO
         before_mallinfo = mallinfo();
 #endif
 
@@ -100,15 +104,19 @@ int mac_selinux_init(const char *prefix) {
         } else  {
                 char timespan[FORMAT_TIMESPAN_MAX];
 
-#ifdef HAVE_MALLINFO
+#if defined(HAVE_MALLINFO)|defined(HAVE_MALLINFO2)
                 int l;
 #endif
 
                 after_timestamp = now(CLOCK_MONOTONIC);
 
-#ifdef HAVE_MALLINFO
+#ifdef HAVE_MALLINFO2
+                after_mallinfo = mallinfo2();
+#elif HAVE_MALLINFO
                 after_mallinfo = mallinfo();
+#endif
 
+#if defined(HAVE_MALLINFO)|defined(HAVE_MALLINFO2)
                 l = after_mallinfo.uordblks > before_mallinfo.uordblks ? after_mallinfo.uordblks - before_mallinfo.uordblks : 0;
 
                 log_debug("Successfully loaded SELinux database in %s, size on heap is %iK.",
