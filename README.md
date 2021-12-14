@@ -7,7 +7,7 @@ done mostly on OpenRC.  We welcome contribution from others using a variety of
 system initializations to ensure eudev remains system initialization and
 distribution neutral.  On 2021-08-20 Gentoo decided to abandon eudev and a new
 project was established on 2021-09-14 by Alpine, Devuan and Gentoo
-contributors (a-z order).
+contributors (alphabetical order).
 
 Homepage: https://github.com/eudev-project/eudev
 
