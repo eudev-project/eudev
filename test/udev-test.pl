@@ -1455,6 +1455,17 @@ TAG=="good", SYMLINK+="found"
 EOF
         },
         {
+                desc            => "IMPORT{program} drops truncated last line",
+                devpath         => "/devices/pci0000:00/0000:00:1f.2/host0/target0:0:0/0:0:0:0/block/sda",
+                exp_name        => "found",
+                not_exp_name    => "bad",
+                rules           => <<EOF
+KERNEL=="sda", IMPORT{program}="/bin/sh -c 'echo TRUNC_OK=yes; printf TRUNC_BAD=; yes x | head -c 400000 | tr -d [:space:]'"
+KERNEL=="sda", ENV{TRUNC_OK}=="yes", ENV{TRUNC_BAD}!="?*", SYMLINK+="found"
+KERNEL=="sda", ENV{TRUNC_BAD}=="?*", SYMLINK+="bad"
+EOF
+        },
+        {
                 desc            => "PROGRAM with too many arguments",
                 devpath         => "/devices/pci0000:00/0000:00:1f.2/host0/target0:0:0/0:0:0:0/block/sda",
                 exp_name        => "found",

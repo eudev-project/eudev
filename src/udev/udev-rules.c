@@ -649,6 +649,7 @@ static int import_program_into_properties(struct udev_event *event,
         char **envp;
         _cleanup_free_ char *result = NULL;
         char *line;
+        bool truncated = false;
         int err;
 
         result = malloc(IMPORT_PROGRAM_SIZE);
@@ -656,9 +657,20 @@ static int import_program_into_properties(struct udev_event *event,
                 return -ENOMEM;
 
         envp = udev_device_get_properties_envp(dev);
-        err = udev_event_spawn(event, timeout_usec, timeout_warn_usec, program, envp, sigmask, result, IMPORT_PROGRAM_SIZE);
+        err = udev_event_spawn(event, timeout_usec, timeout_warn_usec, program, envp, sigmask, result, IMPORT_PROGRAM_SIZE, &truncated);
         if (err < 0)
                 return err;
+
+        if (truncated) {
+                log_debug("Result of '%s' is too long and truncated, ignoring the last line of the result.", program);
+
+                /* Drop the last line. */
+                line = strrchr(result, '\n');
+                if (line)
+                        line[0] = '\0';
+                else
+                        result[0] = '\0';
+        }
 
         line = result;
         while (line != NULL) {
@@ -2355,7 +2367,7 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                                   rules_str(rules, rule->rule.filename_off),
                                   rule->rule.filename_line);
 
-                        if (udev_event_spawn(event, timeout_usec, timeout_warn_usec, program, envp, sigmask, result, sizeof(result)) < 0) {
+                        if (udev_event_spawn(event, timeout_usec, timeout_warn_usec, program, envp, sigmask, result, sizeof(result), NULL) < 0) {
                                 if (cur->key.op != OP_NOMATCH)
                                         goto nomatch;
                         } else {

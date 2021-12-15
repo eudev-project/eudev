@@ -451,7 +451,7 @@ static void spawn_read(struct udev_event *event,
                        usec_t timeout_usec,
                        const char *cmd,
                        int fd_stdout, int fd_stderr,
-                       char *result, size_t ressize) {
+                       char *result, size_t ressize, bool *ret_truncated) {
         _cleanup_close_ int fd_ep = -1;
         struct epoll_event ep_outpipe = {
                 .events = EPOLLIN,
@@ -576,6 +576,9 @@ static void spawn_read(struct udev_event *event,
         /* return the child's stdout string */
         if (result != NULL)
                 result[respos] = '\0';
+
+        if (ret_truncated)
+                *ret_truncated = truncated;
 }
 
 static int spawn_wait(struct udev_event *event,
@@ -720,7 +723,7 @@ int udev_event_spawn(struct udev_event *event,
                      usec_t timeout_usec,
                      usec_t timeout_warn_usec,
                      const char *cmd, char **envp, const sigset_t *sigmask,
-                     char *result, size_t ressize) {
+                     char *result, size_t ressize, bool *ret_truncated) {
         int outpipe[2] = {-1, -1};
         int errpipe[2] = {-1, -1};
         pid_t pid;
@@ -798,7 +801,7 @@ int udev_event_spawn(struct udev_event *event,
                            timeout_usec,
                            cmd,
                            outpipe[READ_END], errpipe[READ_END],
-                           result, ressize);
+                           result, ressize, ret_truncated);
 
                 err = spawn_wait(event, timeout_usec, timeout_warn_usec, cmd, pid);
         }
@@ -1089,7 +1092,7 @@ void udev_event_execute_run(struct udev_event *event, usec_t timeout_usec, usec_
                         }
 
                         envp = udev_device_get_properties_envp(event->dev);
-                        udev_event_spawn(event, timeout_usec, timeout_warn_usec, command, envp, sigmask, NULL, 0);
+                        udev_event_spawn(event, timeout_usec, timeout_warn_usec, command, envp, sigmask, NULL, 0, NULL);
                 }
         }
 }
