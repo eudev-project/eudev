@@ -722,6 +722,8 @@ static void cleanup_dir(DIR *dir, mode_t mask, int depth) {
         if (depth <= 0)
                 return;
 
+        assert(dir);
+
         dfd = dirfd(dir);
         if (dfd < 0)
                 return;
@@ -729,9 +731,9 @@ static void cleanup_dir(DIR *dir, mode_t mask, int depth) {
         for (dent = readdir(dir); dent != NULL; dent = readdir(dir)) {
                 struct stat stats;
 
-                if (dent->d_name[0] == '.')
+                if (streq(dent->d_name, ".") || streq(dent->d_name, ".."))
                         continue;
-                if (fstatat(dfd, dent->d_name, &stats, AT_SYMLINK_NOFOLLOW) != 0)
+                if (fstatat(dfd, dent->d_name, &stats, AT_SYMLINK_NOFOLLOW) < 0)
                         continue;
                 if ((stats.st_mode & mask) != 0)
                         continue;
