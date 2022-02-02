@@ -36,10 +36,10 @@ udevadm \- udev management tool
 \fBudevadm monitor \fR\fB[options]\fR
 .HP \w'\fBudevadm\ hwdb\ \fR\fB[options]\fR\ 'u
 \fBudevadm hwdb \fR\fB[options]\fR
-.HP \w'\fBudevadm\ test\ \fR\fB[options]\fR\fB\ \fR\fB\fIdevpath\fR\fR\ 'u
-\fBudevadm test \fR\fB[options]\fR\fB \fR\fB\fIdevpath\fR\fR
-.HP \w'\fBudevadm\ test\-builtin\ \fR\fB[options]\fR\fB\ \fR\fB\fIcommand\fR\fR\fB\ \fR\fB\fIdevpath\fR\fR\ 'u
-\fBudevadm test\-builtin \fR\fB[options]\fR\fB \fR\fB\fIcommand\fR\fR\fB \fR\fB\fIdevpath\fR\fR
+.HP \w'\fBudevadm\ test\ \fR\fB[options]\fR\fB\ \fR\fB\fIdevpath\fR\fR\fB|\fR\fB\fIfile\fR\fR\ 'u
+\fBudevadm test \fR\fB[options]\fR\fB \fR\fB\fIdevpath\fR\fR\fB|\fR\fB\fIfile\fR\fR
+.HP \w'\fBudevadm\ test\-builtin\ \fR\fB[options]\fR\fB\ \fR\fB\fIcommand\fR\fR\fB\ \fR\fB\fIdevpath\fR\fR\fB|\fR\fB\fIfile\fR\fR\ 'u
+\fBudevadm test\-builtin \fR\fB[options]\fR\fB \fR\fB\fIcommand\fR\fR\fB \fR\fB\fIdevpath\fR\fR\fB|\fR\fB\fIfile\fR\fR
 .HP \w'\fBudevadm\ verify\ \fR\fB[options]\fR\fB\ \fR\fB[\fIfile\fR\&.\&.\&.]\fR\ 'u
 \fBudevadm verify \fR\fB[options]\fR\fB \fR\fB[\fIfile\fR\&.\&.\&.]\fR
 .HP \w'\fBudevadm\ cat\ \fR\fB[options]\fR\fB\ \fR\fB[\fIfile\fR\&.\&.\&.]\fR\ 'u
@@ -758,9 +758,21 @@ Specify the exact location where to write the compiled database\&.
 .RS 4
 Print help text\&.
 .RE
-.SS "udevadm test [\fIoptions\fR] [\fIdevpath\fR]"
+.SS "udevadm test [\fIoptions\fR] [\fIdevpath\fR|\fIfile\fR]"
 .PP
 Simulate a udev event run for the given device, and print debug output\&.
+.PP
+The device may be given as its path in
+/sys, with or without the
+/sys
+prefix, e\&.g\&.
+/sys/class/net/eth0
+or
+/class/net/eth0, also a directory of a driver like
+/sys/bus/pci/drivers/e1000e, or as a device node or a symlink to it in
+/dev, e\&.g\&.
+/dev/sda\&. The same applies to
+\fBudevadm test\-builtin\fR\&.
 .PP
 This command does not change the system: network interfaces are not renamed and do not get alternative names, device nodes, their permissions and their symlinks are not changed, sysfs attributes and sysctls are not written, and the udev database is not updated\&. Programs specified by
 \fIRUN\fR
@@ -832,7 +844,7 @@ Print version\&.
 .RS 4
 Print help text\&.
 .RE
-.SS "udevadm test\-builtin [\fIoptions\fR] [\fIcommand\fR] [\fIdevpath\fR]"
+.SS "udevadm test\-builtin [\fIoptions\fR] [\fIcommand\fR] [\fIdevpath\fR|\fIfile\fR]"
 .PP
 Run a built\-in command
 \fICOMMAND\fR

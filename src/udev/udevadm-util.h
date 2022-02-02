@@ -21,9 +21,15 @@
 #include "terminal-util.h"
 #include "udev.h"
 
+/* Like systemd's find_device(): the device of a path in /dev or /sys, see device_new_from_path(),
+ * or of that path below prefix. Sets errno on failure, EINVAL if id is not a path. */
 struct udev_device *find_device(struct udev *udev,
                                 const char *id,
                                 const char *prefix);
+
+/* Like systemd's find_device_with_action(): the device of find_device() below /sys, with the
+ * properties of its uevent file and the action set. Sets errno on failure. */
+struct udev_device *find_device_with_action(struct udev *udev, const char *id, const char *action);
 
 /* Like systemd's device_is_processed(): 1 if udevd processed the device, i.e. it has an entry in the
  * udev database without ID_PROCESSING=1, which udevd sets while it processes the device, e.g. while

@@ -27,36 +27,84 @@
 #include "udev-util.h"
 #include "udevadm-util.h"
 
+/* Like systemd's sd_device_new_from_path(): the path of a device node in /dev or of a symlink to
+ * one, or a sysfs path, also a relative one or a symlink to one. Sets errno on failure, like systemd
+ * ENODEV if the path does not exist, or is neither a device node in /dev nor a path in /sys. */
+static struct udev_device *device_new_from_path(struct udev *udev, const char *path) {
+        _cleanup_free_ char *resolved = NULL;
+        struct stat st;
+
+        assert(udev);
+        assert(path);
+
+        resolved = realpath(path, NULL);
+        if (!resolved) {
+                if (errno == ENOENT)
+                        errno = ENODEV;
+                return NULL;
+        }
+
+        if (!isempty(path_startswith(resolved, "/dev/")) && stat(resolved, &st) >= 0) {
+                if (S_ISBLK(st.st_mode))
+                        return udev_device_new_from_devnum(udev, 'b', st.st_rdev);
+                if (S_ISCHR(st.st_mode))
+                        return udev_device_new_from_devnum(udev, 'c', st.st_rdev);
+        }
+
+        if (isempty(path_startswith(resolved, "/sys/"))) {
+                errno = ENODEV;
+                return NULL;
+        }
+
+        return udev_device_new_from_syspath(udev, resolved);
+}
+
 struct udev_device *find_device(struct udev *udev,
                                 const char *id,
                                 const char *prefix) {
+        struct udev_device *dev;
 
         assert(udev);
         assert(id);
 
-        if (prefix && !startswith(id, prefix))
-                id = strjoina(prefix, id);
+        dev = device_new_from_path(udev, id);
+        if (dev)
+                return dev;
 
-        if (startswith(id, "/dev/")) {
-                struct stat statbuf;
-                char type;
+        if (prefix && !path_startswith(id, prefix)) {
+                _cleanup_free_ char *path = NULL;
 
-                if (stat(id, &statbuf) < 0)
+                path = path_join(prefix, id);
+                if (!path) {
+                        errno = ENOMEM;
                         return NULL;
+                }
 
-                if (S_ISBLK(statbuf.st_mode))
-                        type = 'b';
-                else if (S_ISCHR(statbuf.st_mode))
-                        type = 'c';
-                else
-                        return NULL;
+                dev = device_new_from_path(udev, path);
+                if (dev)
+                        return dev;
+        }
 
-                return udev_device_new_from_devnum(udev, type, statbuf.st_rdev);
-        } else if (startswith(id, "/sys/"))
-                return udev_device_new_from_syspath(udev, id);
+        /* systemd tries a device unit name if the argument is not a path, eudev has none. */
+        if (!strchr(id, '/'))
+                errno = EINVAL;
 
-        errno = EINVAL;
         return NULL;
+}
+
+struct udev_device *find_device_with_action(struct udev *udev, const char *id, const char *action) {
+        _cleanup_udev_device_unref_ struct udev_device *dev = NULL;
+
+        assert(udev);
+        assert(id);
+        assert(action);
+
+        dev = find_device(udev, id, "/sys");
+        if (!dev)
+                return NULL;
+
+        /* A new device with the properties of the uevent file and the action. */
+        return udev_device_new_from_synthetic_event(udev, udev_device_get_syspath(dev), action);
 }
 
 int device_is_processed(struct udev_device *dev) {

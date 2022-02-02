@@ -56,7 +56,6 @@ static int adm_builtin(struct udev *udev, int argc, char *argv[]) {
         const char *action = "add";
         char *command = NULL;
         char *syspath = NULL;
-        char filename[UTIL_PATH_SIZE];
         struct udev_device *dev = NULL;
         enum udev_builtin_cmd cmd;
         int rc = EXIT_SUCCESS, c, r;
@@ -91,7 +90,7 @@ static int adm_builtin(struct udev *udev, int argc, char *argv[]) {
 
         syspath = argv[optind++];
         if (syspath == NULL) {
-                fprintf(stderr, "syspath missing\n");
+                fprintf(stderr, "device is missing\n");
                 rc = 3;
                 goto out;
         }
@@ -106,16 +105,9 @@ static int adm_builtin(struct udev *udev, int argc, char *argv[]) {
                 goto out;
         }
 
-        /* add /sys if needed */
-        if (!startswith(syspath, "/sys"))
-                strscpyl(filename, sizeof(filename), "/sys", syspath, NULL);
-        else
-                strscpy(filename, sizeof(filename), syspath);
-        util_remove_trailing_chars(filename, '/');
-
-        dev = udev_device_new_from_synthetic_event(udev, filename, action);
+        dev = find_device_with_action(udev, syspath, action);
         if (dev == NULL) {
-                fprintf(stderr, "unable to open device '%s'\n\n", filename);
+                log_error_errno(errno > 0 ? errno : ENODEV, "Failed to open device '%s': %m", syspath);
                 rc = 4;
                 goto out;
         }

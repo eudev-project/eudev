@@ -41,7 +41,7 @@ static void maybe_insert_empty_line(void) {
 
 static void help(void) {
 
-        printf("%s test OPTIONS <syspath>\n\n"
+        printf("%s test [OPTIONS] DEVPATH|FILE\n\n"
                "Test an event run.\n"
                "  -h --help                            Show this help\n"
                "  -V --version                         Show package version\n"
@@ -53,7 +53,6 @@ static void help(void) {
 
 static int adm_test(struct udev *udev, int argc, char *argv[]) {
         int resolve_names = 1;
-        char filename[UTIL_PATH_SIZE];
         const char *action = "add";
         const char *syspath = NULL;
         _cleanup_udev_rules_unref_ struct udev_rules *rules = NULL;
@@ -145,16 +144,9 @@ static int adm_test(struct udev *udev, int argc, char *argv[]) {
                 goto out;
         }
 
-        /* add /sys if needed */
-        if (!startswith(syspath, "/sys"))
-                strscpyl(filename, sizeof(filename), "/sys", syspath, NULL);
-        else
-                strscpy(filename, sizeof(filename), syspath);
-        util_remove_trailing_chars(filename, '/');
-
-        dev = udev_device_new_from_synthetic_event(udev, filename, action);
+        dev = find_device_with_action(udev, syspath, action);
         if (dev == NULL) {
-                fprintf(stderr, "unable to open device '%s'\n", filename);
+                log_error_errno(errno > 0 ? errno : ENODEV, "Failed to open device '%s': %m", syspath);
                 rc = 4;
                 goto out;
         }

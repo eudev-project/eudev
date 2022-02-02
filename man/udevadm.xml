@@ -52,10 +52,10 @@
       <command>udevadm hwdb <optional>options</optional></command>
     </cmdsynopsis>
     <cmdsynopsis>
-      <command>udevadm test <optional>options</optional> <replaceable>devpath</replaceable></command>
+      <command>udevadm test <optional>options</optional> <replaceable>devpath</replaceable>|<replaceable>file</replaceable></command>
     </cmdsynopsis>
     <cmdsynopsis>
-      <command>udevadm test-builtin <optional>options</optional> <replaceable>command</replaceable> <replaceable>devpath</replaceable></command>
+      <command>udevadm test-builtin <optional>options</optional> <replaceable>command</replaceable> <replaceable>devpath</replaceable>|<replaceable>file</replaceable></command>
     </cmdsynopsis>
     <cmdsynopsis>
       <command>udevadm verify <optional>options</optional> <optional><replaceable>file</replaceable>...</optional></command>
@@ -930,9 +930,15 @@
 
     <refsect2><title>udevadm test
       <arg choice="opt"><replaceable>options</replaceable></arg>
-      <arg><replaceable>devpath</replaceable></arg>
+      <arg><replaceable>devpath</replaceable>|<replaceable>file</replaceable></arg>
     </title>
       <para>Simulate a udev event run for the given device, and print debug output.</para>
+      <para>The device may be given as its path in <filename>/sys</filename>, with or without the
+      <filename>/sys</filename> prefix, e.g. <filename>/sys/class/net/eth0</filename> or
+      <filename>/class/net/eth0</filename>, also a directory of a driver like
+      <filename>/sys/bus/pci/drivers/e1000e</filename>, or as a device node or a symlink to it in
+      <filename>/dev</filename>, e.g. <filename>/dev/sda</filename>. The same applies to
+      <command>udevadm test-builtin</command>.</para>
       <para>This command does not change the system: network interfaces are not
       renamed and do not get alternative names, device nodes, their permissions and their symlinks are not changed,
       sysfs attributes and sysctls are not written, and the udev database is not
@@ -1008,7 +1014,7 @@
     <refsect2><title>udevadm test-builtin
       <arg choice="opt"><replaceable>options</replaceable></arg>
       <arg><replaceable>command</replaceable></arg>
-      <arg><replaceable>devpath</replaceable></arg>
+      <arg><replaceable>devpath</replaceable>|<replaceable>file</replaceable></arg>
     </title>
       <para>Run a built-in command <replaceable>COMMAND</replaceable>
       for device <replaceable>DEVPATH</replaceable>, and print debug
