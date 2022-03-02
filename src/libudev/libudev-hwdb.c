@@ -31,6 +31,7 @@
 
 #include "libudev-private.h"
 #include "libudev-hwdb-def.h"
+#include "fileio.h"
 
 /**
  * SECTION:libudev-hwdb
@@ -500,8 +501,12 @@ static struct udev_hwdb *hwdb_new(struct udev *udev, char *bin_paths) {
                 r = log_debug_errno(errno, "Failed to stat %s: %m", hwdb_bin_path);
                 goto fail;
         }
-        if ((size_t)hwdb->st.st_size < offsetof(struct trie_header_f, strings_len) + 8) {
+        if (hwdb->st.st_size < (off_t) offsetof(struct trie_header_f, strings_len) + 8) {
                 r = log_debug_errno(EIO, "File %s is too short.", hwdb_bin_path);
+                goto fail;
+        }
+        if (file_offset_beyond_memory_size(hwdb->st.st_size)) {
+                r = log_debug_errno(EFBIG, "File %s is too long.", hwdb_bin_path);
                 goto fail;
         }
 

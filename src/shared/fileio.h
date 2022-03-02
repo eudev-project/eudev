@@ -44,6 +44,12 @@ int read_virtual_file(const char *filename, size_t max_size, char **ret_contents
 
 int read_line(FILE *f, size_t limit, char **ret);
 
+static inline bool file_offset_beyond_memory_size(off_t x) {
+        if (x < 0) /* off_t is signed, filter that out */
+                return false;
+        return (uint64_t) x > (uint64_t) SIZE_MAX;
+}
+
 int write_string_stream(FILE *f, const char *line);
 int write_string_file(const char *fn, const char *line);
 int read_one_line_file(const char *fn, char **line);
