@@ -192,6 +192,15 @@ Type of event to be triggered\&. The default value is
 \fBchange\fR\&.
 .RE
 .PP
+\fB\-\-prioritized\-subsystem=\fR\fB\fISUBSYSTEM\fR\fI[,\fISUBSYSTEM\fR\&...]\fR\fR
+.RS 4
+Takes a comma separated list of subsystems\&. When triggering events for devices, the devices from the specified subsystems and their parents are triggered first\&. For example, if
+\fB\-\-prioritized\-subsystem=block,net\fR, then firstly all block devices and their parents are triggered, in the next all network devices and their parents are triggered, and lastly the other devices are triggered\&. This option can be specified multiple times, and in that case the lists of the subsystems will be merged\&. That is,
+\fB\-\-prioritized\-subsystem=block \-\-prioritized\-subsystem=net\fR
+is equivalent to
+\fB\-\-prioritized\-subsystem=block,net\fR\&.
+.RE
+.PP
 \fB\-s\fR, \fB\-\-subsystem\-match=\fR\fB\fISUBSYSTEM\fR\fR
 .RS 4
 Trigger events for devices which belong to a matching subsystem\&. This option can be specified multiple times and supports shell style pattern matching\&.

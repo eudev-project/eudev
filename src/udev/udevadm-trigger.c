@@ -116,17 +116,150 @@ static int write_uevent(const char *filename, const char *action, const char *uu
         return 0;
 }
 
-static int exec_list(struct udev_enumerate *udev_enumerate, const char *action, Set *settle_set) {
+/* Like sd-device-enumerator with prioritized subsystems: the devices of each prioritized subsystem
+ * and their parents come first, in the order the subsystems were specified, then all other
+ * devices. The devices within each group keep the order of the enumeration. */
+static int prioritize_subsystems(struct udev *udev, char **list, char **prioritized_subsystems, char ***ret) {
+        _cleanup_hashmap_free_ Hashmap *index = NULL;
+        _cleanup_free_ bool *taken = NULL, *group = NULL;
+        _cleanup_strv_free_ char **subsystems = NULL;
+        char **sorted = NULL, **s;
+        size_t n, i, k = 0;
+        int r;
+
+        n = strv_length(list);
+
+        taken = new0(bool, n);
+        group = new0(bool, n);
+        subsystems = new0(char*, n + 1);
+        sorted = new0(char*, n + 1);
+        index = hashmap_new(&string_hash_ops);
+        if (!taken || !group || !subsystems || !sorted || !index) {
+                free(sorted);
+                return -ENOMEM;
+        }
+
+        for (i = 0; i < n; i++) {
+                _cleanup_udev_device_unref_ struct udev_device *dev = NULL;
+                const char *subsystem = NULL;
+
+                r = hashmap_put(index, list[i], UINT_TO_PTR(i + 1));
+                if (r < 0 && r != -EEXIST) {
+                        free(sorted);
+                        return r;
+                }
+
+                dev = udev_device_new_from_syspath(udev, list[i]);
+                if (dev)
+                        subsystem = udev_device_get_subsystem(dev);
+                /* Keep the array NULL terminated for strv_free(), use "" for no subsystem. */
+                subsystems[i] = strdup(subsystem ?: "");
+                if (!subsystems[i]) {
+                        free(sorted);
+                        return -ENOMEM;
+                }
+        }
+
+        STRV_FOREACH(s, prioritized_subsystems) {
+                for (i = 0; i < n; i++) {
+                        _cleanup_free_ char *p = NULL;
+
+                        if (taken[i] || !streq(subsystems[i], *s))
+                                continue;
+
+                        group[i] = true;
+
+                        /* Also take the parents, which are in the list. */
+                        p = strdup(list[i]);
+                        if (!p) {
+                                free(sorted);
+                                return -ENOMEM;
+                        }
+                        for (;;) {
+                                char *slash;
+                                unsigned j;
+
+                                slash = strrchr(p, '/');
+                                if (!slash || slash == p)
+                                        break;
+                                *slash = '\0';
+
+                                j = PTR_TO_UINT(hashmap_get(index, p));
+                                if (j > 0 && !taken[j - 1])
+                                        group[j - 1] = true;
+                        }
+                }
+
+                for (i = 0; i < n; i++)
+                        if (group[i]) {
+                                sorted[k++] = list[i];
+                                taken[i] = true;
+                                group[i] = false;
+                        }
+        }
+
+        for (i = 0; i < n; i++)
+                if (!taken[i])
+                        sorted[k++] = list[i];
+
+        /* The strings are now owned by the new list. */
+        for (i = 0; i < n; i++)
+                list[i] = NULL;
+
+        *ret = sorted;
+        return 0;
+}
+
+/* Returns the syspaths of the devices to trigger, in the order to trigger them. */
+static int build_list(struct udev *udev, struct udev_enumerate *udev_enumerate,
+                      char **prioritized_subsystems, char ***ret) {
+        _cleanup_strv_free_ char **list = NULL;
         struct udev_list_entry *entry;
+        size_t n = 0;
+        int r;
+
+        udev_list_entry_foreach(entry, udev_enumerate_get_list_entry(udev_enumerate))
+                n++;
+
+        list = new0(char*, n + 1);
+        if (!list)
+                return -ENOMEM;
+
+        n = 0;
+        udev_list_entry_foreach(entry, udev_enumerate_get_list_entry(udev_enumerate)) {
+                list[n] = strdup(udev_list_entry_get_name(entry));
+                if (!list[n])
+                        return -ENOMEM;
+                n++;
+        }
+
+        if (!strv_isempty(prioritized_subsystems)) {
+                char **sorted = NULL;
+
+                r = prioritize_subsystems(udev, list, prioritized_subsystems, &sorted);
+                if (r < 0)
+                        return r;
+
+                strv_free(list);
+                list = sorted;
+        }
+
+        *ret = list;
+        list = NULL;
+        return 0;
+}
+
+static int exec_list(char **list, const char *action, Set *settle_set) {
+        char **entry;
         int uuid_supported = -1;
         int r, ret = 0;
 
-        udev_list_entry_foreach(entry, udev_enumerate_get_list_entry(udev_enumerate)) {
+        STRV_FOREACH(entry, list) {
                 char filename[UTIL_PATH_SIZE];
                 char id[UUID_STRING_MAX] = "";
                 const char *syspath;
 
-                syspath = udev_list_entry_get_name(entry);
+                syspath = *entry;
                 if (verbose)
                         printf("%s\n", syspath);
                 if (dry_run)
@@ -297,6 +430,8 @@ static void help(void) {
                "     --wait-daemon[=SECONDS]        Wait for udevd daemon to be initialized\n"
                "                                    before triggering uevents\n"
                "     --uuid                         Print synthetic uevent UUID\n"
+               "     --prioritized-subsystem=SUBSYSTEM[,SUBSYSTEM…]\n"
+               "                                    Trigger devices from a matching subsystem first\n"
                , program_invocation_short_name);
 }
 
@@ -305,6 +440,7 @@ static int adm_trigger(struct udev *udev, int argc, char *argv[]) {
                 ARG_NAME = 0x100,
                 ARG_PING,
                 ARG_UUID,
+                ARG_PRIORITIZED_SUBSYSTEM,
         };
 
         static const struct option options[] = {
@@ -327,6 +463,7 @@ static int adm_trigger(struct udev *udev, int argc, char *argv[]) {
                 { "help",              no_argument,       NULL, 'h'      },
                 { "version",           no_argument,       NULL, 'V'      },
                 { "uuid",              no_argument,       NULL, ARG_UUID },
+                { "prioritized-subsystem", required_argument, NULL, ARG_PRIORITIZED_SUBSYSTEM },
                 {}
         };
         enum {
@@ -343,6 +480,7 @@ static int adm_trigger(struct udev *udev, int argc, char *argv[]) {
         usec_t ping_timeout_usec = 5 * USEC_PER_SEC;
         bool ping = false;
         _cleanup_set_free_free_ Set *settle_set = NULL;
+        _cleanup_strv_free_ char **list = NULL, **prioritized_subsystems = NULL;
         int c, r;
 
         udev_enumerate = udev_enumerate_new(udev);
@@ -426,6 +564,14 @@ static int adm_trigger(struct udev *udev, int argc, char *argv[]) {
 
                 case ARG_UUID:
                         arg_uuid = true;
+                        break;
+
+                case ARG_PRIORITIZED_SUBSYSTEM:
+                        r = strv_split_and_extend(&prioritized_subsystems, optarg, ",", true);
+                        if (r < 0) {
+                                log_error_errno(r, "Failed to parse prioritized subsystem '%s': %m", optarg);
+                                return 1;
+                        }
                         break;
 
                 case ARG_PING:
@@ -546,7 +692,13 @@ static int adm_trigger(struct udev *udev, int argc, char *argv[]) {
         default:
                 assert_not_reached("device_type");
         }
-        r = exec_list(udev_enumerate, action, settle_set);
+        r = build_list(udev, udev_enumerate, prioritized_subsystems, &list);
+        if (r < 0) {
+                log_error_errno(r, "Failed to list the devices to trigger: %m");
+                return 1;
+        }
+
+        r = exec_list(list, action, settle_set);
         if (r < 0)
                 return 1;
 
