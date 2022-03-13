@@ -83,4 +83,6 @@ KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"
 
 SUBSYSTEM=="ptp", ATTR{clock_name}=="KVM virtual PTP", SYMLINK += "ptp_kvm"
 
+SUBSYSTEM=="ptp", ATTR{clock_name}=="hyperv", SYMLINK += "ptp_hyperv"
+
 LABEL="default_end"
