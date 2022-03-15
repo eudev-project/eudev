@@ -928,15 +928,16 @@ does not probe a block device while changes are made to it, for example partitio
 \fB\-\-lock\fR
 switch\&.
 .PP
+While another program holds an exclusive lock on a block device,
 \fBudevd\fR
-skips the events of a block device while another program holds an exclusive lock on it, it does not handle them later\&.
-\fBudevadm lock\fR
-opens the devices for writing, so that when the locks are released, a watched device (see
+postpones the events of the device and of its partitions, and handles them once the lock is released\&. It tries again every 200 ms, and at once when it receives a new event for the device or one of its partitions, or, for a watched device (see
 OPTIONS+="watch"
 in
-\fBudev\fR(7)) gets a
-change
-event, which is handled\&.
+\fBudev\fR(7)), when the device is closed after it was opened for writing, as
+\fBudevadm lock\fR
+does\&.
+\fBudevadm settle\fR
+waits for the postponed events too\&. If the device is still locked 3 minutes after the first try, the event is dropped: it is passed on to listeners as it was received from the kernel, and the entry of the device in the udev database stays as it was after its previous event\&.
 .PP
 The command expects at least one block device specified via
 \fB\-\-device=\fR

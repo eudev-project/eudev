@@ -8,6 +8,10 @@
 /* Block device helpers, after src/shared/blockdev-util.c and src/shared/btrfs-util.c of systemd. */
 
 int block_device_is_whole_disk(struct udev_device *dev);
+/* The device itself if it is a whole disk, or its parent device if it is a partition: -ENOTBLK if the device
+ * is not a block device, -ENODEV if the parent device does not exist (anymore), -ENXIO if it is not a whole
+ * disk. The returned device is not referenced. */
+int block_device_get_whole_disk(struct udev_device *dev, struct udev_device **ret);
 int blockdev_partscan_enabled(struct udev_device *dev);
 
 int block_get_whole_disk(dev_t d, dev_t *ret);

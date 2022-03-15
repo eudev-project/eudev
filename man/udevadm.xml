@@ -1177,12 +1177,16 @@
       <citerefentry project='man-pages'><refentrytitle>sfdisk</refentrytitle><manvolnum>8</manvolnum></citerefentry>'s
       <option>--lock</option> switch.</para>
 
-      <para><command>udevd</command> skips the events of a block device while another program
-      holds an exclusive lock on it, it does not handle them later. <command>udevadm lock</command>
-      opens the devices for writing, so that when the locks are released, a watched device (see
-      <literal>OPTIONS+="watch"</literal> in
-      <citerefentry><refentrytitle>udev</refentrytitle><manvolnum>7</manvolnum></citerefentry>)
-      gets a <literal>change</literal> event, which is handled.</para>
+      <para>While another program holds an exclusive lock on a block device, <command>udevd</command>
+      postpones the events of the device and of its partitions, and handles them once the lock is
+      released. It tries again every 200 ms, and at once when it receives a new event for the device or
+      one of its partitions, or, for a watched device (see <literal>OPTIONS+="watch"</literal> in
+      <citerefentry><refentrytitle>udev</refentrytitle><manvolnum>7</manvolnum></citerefentry>), when the
+      device is closed after it was opened for writing, as <command>udevadm lock</command> does.
+      <command>udevadm settle</command> waits for the postponed events too. If the device is still locked
+      3 minutes after the first try, the event is dropped: it is passed on to listeners as it was received
+      from the kernel, and the entry of the device in the udev database stays as it was after its
+      previous event.</para>
 
       <para>The command expects at least one block device specified via <option>--device=</option> or
       <option>--backing=</option>, and a command line to execute as arguments.</para>

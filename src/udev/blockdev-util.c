@@ -40,6 +40,33 @@ int block_device_is_whole_disk(struct udev_device *dev) {
         return streq_ptr(udev_device_get_devtype(dev), "disk");
 }
 
+int block_device_get_whole_disk(struct udev_device *dev, struct udev_device **ret) {
+        int r;
+
+        assert(dev);
+        assert(ret);
+
+        /* Do not unref returned udev_device object. */
+
+        r = block_device_is_whole_disk(dev);
+        if (r < 0)
+                return r;
+        if (r == 0) {
+                dev = udev_device_get_parent(dev);
+                if (!dev) /* Already removed? Let's return a recognizable error. */
+                        return -ENODEV;
+
+                r = block_device_is_whole_disk(dev);
+                if (r < 0)
+                        return r;
+                if (r == 0)
+                        return -ENXIO;
+        }
+
+        *ret = dev;
+        return 0;
+}
+
 int blockdev_partscan_enabled(struct udev_device *dev) {
         unsigned capability;
         int r, ext_range;

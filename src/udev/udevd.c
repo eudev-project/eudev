@@ -50,10 +50,17 @@
 
 #include "udev.h"
 #include "udev-util.h"
+#include "blockdev-util.h"
 #include "def.h"
 #include "dev-setup.h"
 #include "fileio.h"
 #include "hashmap.h"
+
+#define EVENT_REQUEUE_INTERVAL_USEC (200 * USEC_PER_MSEC)
+#define EVENT_REQUEUE_TIMEOUT_USEC  (3 * USEC_PER_MINUTE)
+
+/* Device is absent or "empty". We get -ENOMEDIUM from CD/DVD devices, also in VMs. */
+#define ERRNO_IS_DEVICE_ABSENT_OR_EMPTY(r) IN_SET(abs(r), ENODEV, ENXIO, ENOENT, ENOMEDIUM)
 
 static struct udev_rules *rules;
 static struct udev_ctrl *udev_ctrl;
@@ -84,6 +91,7 @@ enum event_state {
         EVENT_UNDEF,
         EVENT_QUEUED,
         EVENT_RUNNING,
+        EVENT_LOCKED,
 };
 
 struct event {
@@ -102,7 +110,15 @@ struct event {
         bool is_block;
         usec_t start_usec;
         bool warned;
+
+        /* Used when the device is locked by another program. */
+        usec_t requeue_next_usec;
+        usec_t requeue_timeout_usec;
+        char *whole_disk;
 };
+
+/* the number of events in state EVENT_LOCKED */
+static unsigned n_locked_events;
 
 static inline struct event *node_to_event(struct udev_list_node *node) {
         return container_of(node, struct event, node);
@@ -129,13 +145,33 @@ struct worker {
 };
 
 /* passed from worker to main process */
-struct worker_message {
+enum event_result {
+        EVENT_RESULT_SUCCESS,
+        EVENT_RESULT_FAILED,
+        EVENT_RESULT_TRY_AGAIN, /* when the block device is locked by another process. */
 };
+
+struct worker_message {
+        enum event_result result;
+        /* with EVENT_RESULT_TRY_AGAIN, the device node of the locked whole disk */
+        char whole_disk[UTIL_PATH_SIZE];
+};
+
+static void event_unset_whole_disk(struct event *event) {
+        if (event->state == EVENT_LOCKED) {
+                assert(n_locked_events > 0);
+                n_locked_events--;
+        }
+
+        free(event->whole_disk);
+        event->whole_disk = NULL;
+}
 
 static void event_free(struct event *event) {
         if (!event)
                 return;
 
+        event_unset_whole_disk(event);
         udev_list_node_remove(&event->node);
         udev_device_unref(event->dev);
 
@@ -218,10 +254,150 @@ static void worker_attach_event(struct worker *worker, struct event *event) {
         event->worker = worker;
 }
 
-static int worker_send_message(int fd) {
-        struct worker_message message = {};
+static int worker_send_message(int fd, enum event_result result, const char *whole_disk) {
+        struct worker_message message = {
+                .result = result,
+        };
+
+        if (whole_disk)
+                strscpy(message.whole_disk, sizeof(message.whole_disk), whole_disk);
 
         return loop_write(fd, &message, sizeof(message), false);
+}
+
+/* Like udev_get_whole_disk() of systemd: returns 1 and the whole disk device and its device node, if the
+ * events of the device are processed with a lock on the whole disk, otherwise 0. */
+static int udev_get_whole_disk(struct udev_device *dev, struct udev_device **ret_device, const char **ret_devname) {
+        struct udev_device *whole_disk;
+        const char *val;
+        int r;
+
+        assert(dev);
+
+        if (streq_ptr(udev_device_get_action(dev), "remove"))
+                goto irrelevant;
+
+        /* Exclude the following devices:
+         * For "dm-", see the comment added by e918a1b5a94f270186dca59156354acd2a596494.
+         * For "md", see the commit message of 2e5b17d01347d3c3118be2b8ad63d20415dbb1f0,
+         * but not sure the assumption is still valid even when partitions are created on the md
+         * devices, surprisingly which seems to be possible, see PR #22973.
+         * For "drbd", see the commit message of fee854ee8ccde0cd28e0f925dea18cce35f3993d. */
+        val = udev_device_get_sysname(dev);
+        if (!val)
+                return log_debug_errno(ENOENT, "%s: Failed to check sysname: %m", udev_device_get_devpath(dev));
+        if (startswith(val, "dm-") || startswith(val, "md") || startswith(val, "drbd"))
+                goto irrelevant;
+
+        r = block_device_get_whole_disk(dev, &whole_disk);
+        if (IN_SET(r,
+                   -ENOTBLK, /* The device is not a block device. */
+                   -ENODEV   /* The whole disk device was not found, it may already be removed. */))
+                goto irrelevant;
+        if (r < 0)
+                return log_debug_errno(r, "%s: Failed to get whole disk device: %m", udev_device_get_devpath(dev));
+
+        val = udev_device_get_devnode(whole_disk);
+        if (!val)
+                return log_debug_errno(ENOENT, "%s: Failed to get devname: %m", udev_device_get_devpath(dev));
+
+        if (ret_device)
+                *ret_device = whole_disk;
+        if (ret_devname)
+                *ret_devname = val;
+        return 1;
+
+irrelevant:
+        if (ret_device)
+                *ret_device = NULL;
+        if (ret_devname)
+                *ret_devname = NULL;
+        return 0;
+}
+
+/* Like sd_device_open() of systemd: opens the device node of the block device, and checks that it is the
+ * block device node with the device number of the device. */
+static int device_open_block(struct udev_device *dev, int flags) {
+        _cleanup_close_ int fd = -1;
+        struct stat st;
+
+        fd = open(udev_device_get_devnode(dev), flags);
+        if (fd < 0)
+                return -errno;
+
+        if (fstat(fd, &st) < 0)
+                return -errno;
+
+        if (!S_ISBLK(st.st_mode) || st.st_rdev != udev_device_get_devnum(dev))
+                return -ENXIO;
+
+        return TAKE_FD(fd);
+}
+
+/* Takes a shared lock on the whole disk of a block device. Returns 1 and the file descriptor of the whole
+ * disk that holds the lock, 0 and -1 if the event is processed without a lock, and -EAGAIN and the device
+ * node of the whole disk, if another process holds a lock on it. */
+static int worker_lock_whole_disk(struct udev_device *dev, int *ret_fd, const char **ret_whole_disk) {
+        _cleanup_close_ int fd = -1;
+        struct udev_device *dev_whole_disk;
+        const char *whole_disk;
+        int r;
+
+        assert(dev);
+        assert(ret_fd);
+        assert(ret_whole_disk);
+
+        /* Take a shared lock on the device node; this establishes a concept of device "ownership" to
+         * serialize device access. External processes holding an exclusive lock will cause udev to skip the
+         * event handling; in the case udev acquired the lock, the external process can block until udev has
+         * finished its event handling. */
+
+        /* Do not try to lock device on remove event, as the device node specified by DEVNAME= has already
+         * been removed, and may already be assigned to another device. Consider the case e.g. a USB stick
+         * memory was unplugged and then another one is plugged. */
+        if (streq_ptr(udev_device_get_action(dev), "remove"))
+                goto nolock;
+
+        r = udev_get_whole_disk(dev, &dev_whole_disk, &whole_disk);
+        if (r < 0)
+                return r;
+        if (r == 0)
+                goto nolock;
+
+        fd = device_open_block(dev_whole_disk, O_RDONLY|O_CLOEXEC|O_NONBLOCK|O_NOCTTY|O_NOFOLLOW);
+        if (fd < 0) {
+                bool ignore = ERRNO_IS_DEVICE_ABSENT_OR_EMPTY(fd);
+
+                log_debug_errno(fd, "%s: Failed to open '%s'%s: %m", udev_device_get_devpath(dev), whole_disk,
+                                ignore ? ", ignoring" : "");
+                if (!ignore)
+                        return fd;
+
+                goto nolock;
+        }
+
+        if (flock(fd, LOCK_SH|LOCK_NB) < 0) {
+                if (errno != EAGAIN)
+                        return log_debug_errno(errno, "%s: Failed to flock(%s): %m", udev_device_get_devpath(dev), whole_disk);
+
+                log_debug_errno(errno, "%s: Block device %s is currently locked, requeuing the event.",
+                                udev_device_get_devpath(dev), whole_disk);
+
+                *ret_fd = -1;
+                *ret_whole_disk = whole_disk;
+                return -EAGAIN;
+        }
+
+        log_debug("%s: Successfully took flock(LOCK_SH) for %s, it will be released after the event has been processed.",
+                  udev_device_get_devpath(dev), whole_disk);
+        *ret_fd = TAKE_FD(fd);
+        *ret_whole_disk = NULL;
+        return 1;
+
+nolock:
+        *ret_fd = -1;
+        *ret_whole_disk = NULL;
+        return 0;
 }
 
 static void worker_spawn(struct event *event) {
@@ -296,6 +472,8 @@ static void worker_spawn(struct event *event) {
 
                 for (;;) {
                         struct udev_event *udev_event;
+                        enum event_result result = EVENT_RESULT_SUCCESS;
+                        const char *whole_disk = NULL;
                         int fd_lock = -1;
 
                         log_debug("seq %llu running", udev_device_get_seqnum(dev));
@@ -315,30 +493,25 @@ static void worker_spawn(struct event *event) {
                                 udev_event->exec_delay = arg_exec_delay;
 
                         /*
-                         * Take a shared lock on the device node; this establishes
-                         * a concept of device "ownership" to serialize device
-                         * access. External processes holding an exclusive lock will
-                         * cause udev to skip the event handling; in the case udev
-                         * acquired the lock, the external process can block until
-                         * udev has finished its event handling.
+                         * If this is a block device and the device is locked currently via the BSD advisory locks,
+                         * someone else is using it exclusively. We don't run our udev rules now to not interfere.
+                         * Instead of processing the event, we requeue the event and will try again after a delay.
+                         *
+                         * The user-facing side of this: https://systemd.io/BLOCK_DEVICE_LOCKING
                          */
-                        if (!streq_ptr(udev_device_get_action(dev), "remove") &&
-                            streq_ptr("block", udev_device_get_subsystem(dev)) &&
-                            !startswith(udev_device_get_sysname(dev), "dm-") &&
-                            !startswith(udev_device_get_sysname(dev), "md")) {
-                                struct udev_device *d = dev;
+                        r = worker_lock_whole_disk(dev, &fd_lock, &whole_disk);
+                        if (r == -EAGAIN) {
+                                result = EVENT_RESULT_TRY_AGAIN;
+                                goto skip;
+                        }
+                        if (r < 0) {
+                                log_warning_errno(r, "seq %llu: Failed to process device, ignoring: %m",
+                                                  udev_device_get_seqnum(dev));
+                                result = EVENT_RESULT_FAILED;
 
-                                if (streq_ptr("partition", udev_device_get_devtype(d)))
-                                        d = udev_device_get_parent(d);
-
-                                if (d) {
-                                        fd_lock = open(udev_device_get_devnode(d), O_RDONLY|O_CLOEXEC|O_NOFOLLOW|O_NONBLOCK);
-                                        if (fd_lock >= 0 && flock(fd_lock, LOCK_SH|LOCK_NB) < 0) {
-                                                log_debug_errno(errno, "Unable to flock(%s), skipping event handling: %m", udev_device_get_devnode(d));
-                                                safe_close(fd_lock);
-                                                goto skip;
-                                        }
-                                }
+                                /* broadcast the (unprocessed) event to libudev listeners */
+                                udev_monitor_send_device(worker_monitor, NULL, dev);
+                                goto skip;
                         }
 
                         /* apply rules, create node, symlinks */
@@ -385,7 +558,7 @@ skip:
                         log_set_max_level(udev_event->default_log_level);
 
                         /* send udevd the result of the event execution */
-                        r = worker_send_message(worker_watch[WRITE_END]);
+                        r = worker_send_message(worker_watch[WRITE_END], result, whole_disk);
                         if (r < 0)
                                 log_error_errno(r, "failed to send result of seq %llu to main daemon: %m",
                                                 udev_device_get_seqnum(dev));
@@ -635,6 +808,129 @@ static void event_queue_cleanup(struct udev *udev __attribute__((unused)), enum 
         }
 }
 
+/* Like device_broadcast_on_error() of systemd: when the event failed, delete the state of the device from
+ * disk and forward the kernel event without amending it. */
+static void event_broadcast_on_error(struct event *event) {
+        /* delete state from disk */
+        udev_device_delete_db(event->dev);
+        udev_device_tag_index(event->dev, false);
+        /* forward kernel event without amending it, the manager does not change the device of the event;
+         * on exit, the monitor is already closed */
+        if (monitor)
+                udev_monitor_send_device(monitor, NULL, event->dev);
+}
+
+/* Returns the time in milliseconds until the next locked event is to be requeued, 0 if one is due now, or -1
+ * if there are no locked events. */
+static int locked_events_timeout(void) {
+        struct udev_list_node *loop;
+        usec_t now_usec, next_usec = USEC_INFINITY;
+
+        if (n_locked_events == 0)
+                return -1;
+
+        udev_list_node_foreach(loop, &event_list) {
+                struct event *event = node_to_event(loop);
+
+                if (event->state == EVENT_LOCKED && event->requeue_next_usec < next_usec)
+                        next_usec = event->requeue_next_usec;
+        }
+
+        if (next_usec == USEC_INFINITY)
+                return -1;
+
+        now_usec = now(CLOCK_MONOTONIC);
+        if (next_usec <= now_usec)
+                return 0;
+
+        /* round up, the events are due when the timeout expires */
+        next_usec = (next_usec - now_usec + USEC_PER_MSEC - 1) / USEC_PER_MSEC;
+        return next_usec > INT_MAX ? INT_MAX : (int) next_usec;
+}
+
+static void manager_requeue_locked_events(void) {
+        struct udev_list_node *loop;
+        usec_t now_usec;
+
+        if (n_locked_events == 0)
+                return;
+
+        now_usec = now(CLOCK_MONOTONIC);
+
+        udev_list_node_foreach(loop, &event_list) {
+                struct event *event = node_to_event(loop);
+
+                if (event->state != EVENT_LOCKED || event->requeue_next_usec > now_usec)
+                        continue;
+
+                event_unset_whole_disk(event);
+                event->state = EVENT_QUEUED;
+        }
+}
+
+static void manager_requeue_locked_events_by_device(struct udev_device *dev) {
+        struct udev_list_node *loop;
+        const char *devname;
+
+        /* When a new event for a block device is queued or we get an inotify event, assume that the
+         * device is not locked anymore. The assumption may not be true, but that should not cause any
+         * issues, as in that case events will be requeued soon. */
+
+        if (n_locked_events == 0)
+                return;
+
+        if (udev_get_whole_disk(dev, NULL, &devname) <= 0)
+                return;
+
+        udev_list_node_foreach(loop, &event_list) {
+                struct event *event = node_to_event(loop);
+
+                if (event->state != EVENT_LOCKED || !streq(event->whole_disk, devname))
+                        continue;
+
+                event_unset_whole_disk(event);
+                event->state = EVENT_QUEUED;
+        }
+}
+
+static int event_enter_locked(struct event *event, const char *whole_disk) {
+        char buf[FORMAT_TIMESPAN_MAX];
+        usec_t now_usec;
+        char *copy;
+
+        assert(event);
+        assert(event->state == EVENT_RUNNING);
+
+        /* add a short delay to suppress busy loop */
+        now_usec = now(CLOCK_MONOTONIC);
+
+        if (event->requeue_timeout_usec > 0 && event->requeue_timeout_usec <= now_usec)
+                return log_warning_errno(ETIMEDOUT,
+                                         "%s: The underlying block device is locked by a process more than %s, skipping event (SEQNUM=%llu, ACTION=%s).",
+                                         event->devpath,
+                                         format_timespan(buf, sizeof(buf), EVENT_REQUEUE_TIMEOUT_USEC, USEC_PER_MINUTE),
+                                         event->seqnum, strna(udev_device_get_action(event->dev)));
+
+        event->requeue_next_usec = usec_add(now_usec, EVENT_REQUEUE_INTERVAL_USEC);
+        if (event->requeue_timeout_usec == 0)
+                event->requeue_timeout_usec = usec_add(now_usec, EVENT_REQUEUE_TIMEOUT_USEC);
+
+        if (isempty(whole_disk))
+                return log_warning_errno(EBADMSG,
+                                         "%s: Unexpected message from worker received, skipping event (SEQNUM=%llu, ACTION=%s).",
+                                         event->devpath, event->seqnum, strna(udev_device_get_action(event->dev)));
+
+        copy = strdup(whole_disk);
+        if (!copy)
+                return log_oom();
+
+        free(event->whole_disk);
+        event->whole_disk = copy;
+        event->state = EVENT_LOCKED;
+        n_locked_events++;
+        return 0;
+}
+
 static void worker_returned(int fd_worker) {
         assert(fd_worker >= 0);
 
@@ -650,6 +946,7 @@ static void worker_returned(int fd_worker) {
                 ssize_t size;
                 struct ucred *ucred = NULL;
                 struct worker *worker;
+                struct event *event;
 
                 memzero(&iovec, sizeof(struct iovec));
                 iovec.iov_base = &msg;
@@ -702,7 +999,24 @@ static void worker_returned(int fd_worker) {
                         worker->state = WORKER_IDLE;
 
                 /* worker returned */
-                event_free(worker->event);
+                event = worker->event;
+                if (event && msg.result == EVENT_RESULT_TRY_AGAIN) {
+                        /* The worker cannot lock the device, keep the event until the device is unlocked. */
+                        worker->event = NULL;
+                        event->worker = NULL;
+
+                        msg.whole_disk[sizeof(msg.whole_disk) - 1] = '\0';
+                        if (event_enter_locked(event, msg.whole_disk) < 0) {
+                                /* eudev: the rules did not run for this event, so the database and the tag
+                                 * index still describe the device as of its previous event. Keep them, and
+                                 * only pass the skipped event on to listeners, as systemd did before
+                                 * v258; on exit, the monitor is already closed. */
+                                if (monitor)
+                                        udev_monitor_send_device(monitor, NULL, event->dev);
+                                event_free(event);
+                        }
+                } else
+                        event_free(event);
         }
 }
 
@@ -939,8 +1253,10 @@ static int handle_inotify(struct udev *udev) {
                         continue;
 
                 log_debug("inotify event: %x for %s", e->mask, udev_device_get_devnode(dev));
-                if (e->mask & IN_CLOSE_WRITE)
+                if (e->mask & IN_CLOSE_WRITE) {
+                        manager_requeue_locked_events_by_device(dev);
                         synthesize_change(dev);
+                }
 
                 /* Do not handle IN_IGNORED here. It should be handled by worker in 'remove' uevent;
                  * udev_event_execute_rules() -> udev_watch_end(). */
@@ -994,12 +1310,7 @@ static void handle_signal(struct udev *udev __attribute__((unused)), int signo) 
                         if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
                                 if (worker->event) {
                                         log_error("worker ["PID_FMT"] failed while handling '%s'", pid, worker->event->devpath);
-                                        /* delete state from disk */
-                                        udev_device_delete_db(worker->event->dev);
-                                        udev_device_tag_index(worker->event->dev, false);
-                                        /* forward kernel event without amending it, the manager does not
-                                         * change the device of the event */
-                                        udev_monitor_send_device(monitor, NULL, worker->event->dev);
+                                        event_broadcast_on_error(worker->event);
                                 }
                         }
 
@@ -1462,8 +1773,9 @@ int main(int argc, char *argv[]) {
                                 fd_inotify = -1;
                         }
 
-                        /* discard queued events and kill workers */
+                        /* discard queued and locked events and kill workers */
                         event_queue_cleanup(udev, EVENT_QUEUED);
+                        event_queue_cleanup(udev, EVENT_LOCKED);
                         worker_kill(true);
 
                         /* exit after all has cleaned up */
@@ -1476,8 +1788,15 @@ int main(int argc, char *argv[]) {
                         /* we are idle */
                         timeout = -1;
                 } else {
+                        int requeue_timeout;
+
                         /* kill idle or hanging workers */
                         timeout = 3 * MSEC_PER_SEC;
+
+                        /* requeue the events of locked block devices after a delay */
+                        requeue_timeout = locked_events_timeout();
+                        if (requeue_timeout >= 0 && requeue_timeout < timeout)
+                                timeout = requeue_timeout;
                 }
 
                 /* tell settle that we are busy or idle */
@@ -1575,8 +1894,14 @@ int main(int argc, char *argv[]) {
                                 udev_device_ensure_usec_initialized(dev, NULL);
                                 if (event_queue_insert(dev) < 0)
                                         udev_device_unref(dev);
+                                else
+                                        manager_requeue_locked_events_by_device(dev);
                         }
                 }
+
+                /* requeue the events of locked block devices, whose delay passed */
+                if (!udev_exit)
+                        manager_requeue_locked_events();
 
                 /* start new events */
                 if (!udev_list_node_is_empty(&event_list) && !udev_exit && !stop_exec_queue) {
