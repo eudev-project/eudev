@@ -63,6 +63,9 @@
     <cmdsynopsis>
       <command>udevadm cat <optional>options</optional> <optional><replaceable>file</replaceable>...</optional></command>
     </cmdsynopsis>
+    <cmdsynopsis>
+      <command>udevadm wait <optional>options</optional> <replaceable>device|syspath</replaceable>...</command>
+    </cmdsynopsis>
   </refsynopsisdiv>
 
   <refsect1><title>Description</title>
@@ -1020,6 +1023,74 @@
             <citerefentry><refentrytitle>udev.conf</refentrytitle><manvolnum>5</manvolnum></citerefentry>,
             rather than udev rules files. When specified, no udev rules file can be specified.
             </para>
+          </listitem>
+        </varlistentry>
+
+        <varlistentry>
+          <term><option>-V</option></term>
+          <term><option>--version</option></term>
+          <listitem>
+            <para>Print version.</para>
+          </listitem>
+        </varlistentry>
+
+        <varlistentry>
+          <term><option>-h</option></term>
+          <term><option>--help</option></term>
+          <listitem>
+            <para>Print help text.</para>
+          </listitem>
+        </varlistentry>
+      </variablelist>
+    </refsect2>
+
+    <refsect2><title>udevadm wait
+      <arg choice="opt"><replaceable>options</replaceable></arg>
+      <arg choice="plain" rep="repeat"><replaceable>device|syspath</replaceable></arg>
+    </title>
+
+      <para>Wait for devices or device symlinks being created and initialized by
+      <command>udevd</command>. Each device path must start with
+      <literal>/dev/</literal> or <literal>/sys/</literal>, e.g. <literal>/dev/sda</literal>,
+      <literal>/dev/disk/by-path/pci-0000:3c:00.0-nvme-1-part1</literal>,
+      <literal>/sys/devices/pci0000:00/0000:00:1f.6/net/eth0</literal>, or
+      <literal>/sys/class/net/eth0</literal>. This can take multiple devices. This may be useful for
+      waiting for devices being processed by <command>udevd</command> after e.g. partitioning
+      or formatting the devices.</para>
+
+      <variablelist>
+        <varlistentry>
+          <term><option>-t</option></term>
+          <term><option>--timeout=<replaceable>SECONDS</replaceable></option></term>
+          <listitem>
+            <para>Maximum number of seconds to wait for the specified devices or device symlinks being
+            created, initialized, or removed. The default value is <literal>infinity</literal>.</para>
+          </listitem>
+        </varlistentry>
+
+        <varlistentry>
+          <term><option>--initialized=<replaceable>BOOL</replaceable></option></term>
+          <listitem>
+            <para>Check if <command>udevd</command> initialized devices. Defaults to true. When
+            false, the command only checks if the specified devices exist. Set false to this setting if
+            there is no udev rules for the specified devices, as the devices will never be considered
+            as initialized in that case. See Initialized Devices section below for more details.</para>
+          </listitem>
+        </varlistentry>
+
+        <varlistentry>
+          <term><option>--removed</option></term>
+          <listitem>
+            <para>When specified, the command wait for devices being removed instead of created or
+            initialized. If this is specified, <option>--initialized=</option> will be ignored.</para>
+          </listitem>
+        </varlistentry>
+
+        <varlistentry>
+          <term><option>--settle</option></term>
+          <listitem>
+            <para>When specified, also watches the udev event queue, and wait for all queued events
+            being processed by <command>udevd</command>.</para>
           </listitem>
         </varlistentry>
 

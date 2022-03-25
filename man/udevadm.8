@@ -44,6 +44,8 @@ udevadm \- udev management tool
 \fBudevadm verify \fR\fB[options]\fR\fB \fR\fB[\fIfile\fR\&.\&.\&.]\fR
 .HP \w'\fBudevadm\ cat\ \fR\fB[options]\fR\fB\ \fR\fB[\fIfile\fR\&.\&.\&.]\fR\ 'u
 \fBudevadm cat \fR\fB[options]\fR\fB \fR\fB[\fIfile\fR\&.\&.\&.]\fR
+.HP \w'\fBudevadm\ wait\ \fR\fB[options]\fR\fB\ \fR\fB\fIdevice|syspath\fR\fR\fB\&.\&.\&.\fR\ 'u
+\fBudevadm wait \fR\fB[options]\fR\fB \fR\fB\fIdevice|syspath\fR\fR\fB\&.\&.\&.\fR
 .SH "DESCRIPTION"
 .PP
 \fBudevadm\fR
@@ -819,6 +821,55 @@ Only print the "interesting" parts of the configuration files, skipping comments
 .RS 4
 Shows
 \fBudev.conf\fR(5), rather than udev rules files\&. When specified, no udev rules file can be specified\&.
+.RE
+.PP
+\fB\-V\fR, \fB\-\-version\fR
+.RS 4
+Print version\&.
+.RE
+.PP
+\fB\-h\fR, \fB\-\-help\fR
+.RS 4
+Print help text\&.
+.RE
+.SS "udevadm wait [\fIoptions\fR] \fIdevice|syspath\fR..."
+.PP
+Wait for devices or device symlinks being created and initialized by
+\fBudevd\fR\&. Each device path must start with
+/dev/
+or
+/sys/, e\&.g\&.
+/dev/sda,
+/dev/disk/by\-path/pci\-0000:3c:00\&.0\-nvme\-1\-part1,
+/sys/devices/pci0000:00/0000:00:1f\&.6/net/eth0, or
+/sys/class/net/eth0\&. This can take multiple devices\&. This may be useful for waiting for devices being processed by
+\fBudevd\fR
+after e\&.g\&. partitioning or formatting the devices\&.
+.PP
+\fB\-t\fR, \fB\-\-timeout=\fR\fB\fISECONDS\fR\fR
+.RS 4
+Maximum number of seconds to wait for the specified devices or device symlinks being created, initialized, or removed\&. The default value is
+infinity\&.
+.RE
+.PP
+\fB\-\-initialized=\fR\fB\fIBOOL\fR\fR
+.RS 4
+Check if
+\fBudevd\fR
+initialized devices\&. Defaults to true\&. When false, the command only checks if the specified devices exist\&. Set false to this setting if there is no udev rules for the specified devices, as the devices will never be considered as initialized in that case\&. See Initialized Devices section below for more details\&.
+.RE
+.PP
+\fB\-\-removed\fR
+.RS 4
+When specified, the command wait for devices being removed instead of created or initialized\&. If this is specified,
+\fB\-\-initialized=\fR
+will be ignored\&.
+.RE
+.PP
+\fB\-\-settle\fR
+.RS 4
+When specified, also watches the udev event queue, and wait for all queued events being processed by
+\fBudevd\fR\&.
 .RE
 .PP
 \fB\-V\fR, \fB\-\-version\fR
