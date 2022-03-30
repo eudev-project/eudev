@@ -40,6 +40,9 @@
 
 #define CREATE_LINK_MAX_RETRIES        128
 #define CREATE_STACK_LINK_MAX_RETRIES  128
+/* Three different errors for "this device does not quite exist" */
+#define ERRNO_IS_DEVICE_ABSENT(r) IN_SET(abs(r), ENODEV, ENXIO, ENOENT)
+
 #define UDEV_NODE_HASH_KEY ((const uint8_t[16]) { 0xb9, 0x6a, 0xf1, 0xce, 0x40, 0x31, 0x44, 0x1a, \
                                                    0x9e, 0x19, 0xec, 0x8b, 0xae, 0xf3, 0xe3, 0x2f })
 
@@ -486,11 +489,42 @@ int udev_node_remove(struct udev_device *dev) {
         return 0;
 }
 
+/* Like systemd's sd_device_open() with O_PATH: opens the device node of the device with O_PATH, and
+ * checks that it is a block or character device node, as the subsystem of the device says, with the
+ * device number of the device. */
+static int device_open_node_opath(struct udev_device *dev) {
+        _cleanup_close_ int fd = -1;
+        const char *devnode;
+        struct stat st;
+        dev_t devnum;
+
+        assert(dev);
+
+        devnode = udev_device_get_devnode(dev);
+        devnum = udev_device_get_devnum(dev);
+        if (!devnode || major(devnum) == 0)
+                return -ENOEXEC;
+
+        fd = open(devnode, O_PATH|O_CLOEXEC);
+        if (fd < 0)
+                return -errno;
+
+        if (fstat(fd, &st) < 0)
+                return -errno;
+
+        if (st.st_rdev != devnum)
+                return -ENXIO;
+
+        if (streq_ptr(udev_device_get_subsystem(dev), "block") ? !S_ISBLK(st.st_mode) : !S_ISCHR(st.st_mode))
+                return -ENXIO;
+
+        return TAKE_FD(fd);
+}
+
 int udev_node_apply_permissions(struct udev_device *dev, bool apply_mac,
                                 mode_t mode, uid_t uid, gid_t gid,
                                 struct udev_list *seclabel_list) {
         const char *devnode = udev_device_get_devnode(dev);
-        dev_t devnum = udev_device_get_devnum(dev);
         bool apply_mode, apply_uid, apply_gid;
         _cleanup_close_ int node_fd = -1;
         struct stat stats;
@@ -502,25 +536,18 @@ int udev_node_apply_permissions(struct udev_device *dev, bool apply_mac,
         else
                 mode |= S_IFCHR;
 
-        node_fd = open(devnode, O_PATH|O_NOFOLLOW|O_CLOEXEC);
+        node_fd = device_open_node_opath(dev);
         if (node_fd < 0) {
-                if (errno == ENOENT) {
-                        log_debug_errno(errno, "Device node %s is missing, skipping handling.", devnode);
+                if (ERRNO_IS_DEVICE_ABSENT(node_fd)) {
+                        log_debug_errno(node_fd, "Device node %s is missing, skipping handling.", devnode);
                         return 0; /* This is necessarily racey, so ignore missing the device */
                 }
 
-                return log_debug_errno(errno, "Cannot open node %s: %m", devnode);
+                return log_debug_errno(node_fd, "Cannot open node %s: %m", devnode);
         }
 
         if (fstat(node_fd, &stats) < 0)
                 return log_debug_errno(errno, "cannot stat() node %s: %m", devnode);
-
-        if ((mode != MODE_INVALID && (stats.st_mode & S_IFMT) != (mode & S_IFMT)) || stats.st_rdev != devnum) {
-                log_debug("Found node '%s' with non-matching devnum %s, skipping handling.",
-                          devnode, udev_device_get_id_filename(dev));
-                return 0; /* We might process a device that already got replaced by the time we have a look
-                           * at it, handle this gracefully and step away. */
-        }
 
         apply_mode = mode != MODE_INVALID && (stats.st_mode & 0777) != (mode & 0777);
         apply_uid = uid != UID_INVALID && stats.st_uid != uid;
