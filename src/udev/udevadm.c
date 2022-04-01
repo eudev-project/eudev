@@ -55,6 +55,7 @@ static const struct udevadm_cmd *udevadm_cmds[] = {
         &udevadm_verify,
         &udevadm_cat,
         &udevadm_wait,
+        &udevadm_lock,
         &udevadm_version,
         &udevadm_help,
 };

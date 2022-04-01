@@ -288,7 +288,7 @@ int block_get_originating(dev_t dt, dev_t *ret) {
         return 0;
 }
 
-static int btrfs_get_block_device_fd(int fd, dev_t *ret) {
+int btrfs_get_block_device_fd(int fd, dev_t *ret) {
 #ifdef HAVE_LINUX_BTRFS_H
         struct btrfs_ioctl_fs_info_args fsi = {};
         struct statfs sfs;

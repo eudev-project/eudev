@@ -38,6 +38,7 @@ udevadm_SOURCES = \
 	udevadm-verify.c \
 	udevadm-cat.c \
 	udevadm-wait.c \
+	udevadm-lock.c \
 	udevadm-util.c \
 	udevadm-util.h
 

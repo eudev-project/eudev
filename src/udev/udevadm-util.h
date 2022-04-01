@@ -66,6 +66,7 @@ typedef enum Glyph {
         GLYPH_TREE_RIGHT,
         GLYPH_TREE_SPACE,
         GLYPH_VERTICAL_DOTTED,
+        GLYPH_ELLIPSIS,
         _GLYPH_MAX,
 } Glyph;
 

@@ -46,6 +46,8 @@ udevadm \- udev management tool
 \fBudevadm cat \fR\fB[options]\fR\fB \fR\fB[\fIfile\fR\&.\&.\&.]\fR
 .HP \w'\fBudevadm\ wait\ \fR\fB[options]\fR\fB\ \fR\fB\fIdevice|syspath\fR\fR\fB\&.\&.\&.\fR\ 'u
 \fBudevadm wait \fR\fB[options]\fR\fB \fR\fB\fIdevice|syspath\fR\fR\fB\&.\&.\&.\fR
+.HP \w'\fBudevadm\ lock\ \fR\fB[options]\fR\fB\ \fR\fB\fIcommand\fR\fR\fB\&.\&.\&.\fR\ 'u
+\fBudevadm lock \fR\fB[options]\fR\fB \fR\fB\fIcommand\fR\fR\fB\&.\&.\&.\fR
 .SH "DESCRIPTION"
 .PP
 \fBudevadm\fR
@@ -881,6 +883,80 @@ Print version\&.
 .RS 4
 Print help text\&.
 .RE
+.SS "udevadm lock [\fIoptions\fR] \fIcommand\fR..."
+.PP
+\fBudevadm lock\fR
+takes an (advisory) exclusive lock on a block device (or all specified devices), as per
+\m[blue]\fBLocking Block Device Access\fR\m[]\&\s-2\u[2]\d\s+2
+and invokes a program with the locks taken\&. When the invoked program exits the locks are automatically released and its return value is propagated as exit code of
+\fBudevadm lock\fR\&.
+.PP
+This tool is in particular useful to ensure that
+\fBudevd\fR(8)
+does not probe a block device while changes are made to it, for example partitions created or file systems formatted\&. Note that many tools that interface with block devices natively support taking relevant locks, see for example
+\fBsfdisk\fR(8)\*(Aqs
+\fB\-\-lock\fR
+switch\&.
+.PP
+\fBudevd\fR
+skips the events of a block device while another program holds an exclusive lock on it, it does not handle them later\&.
+\fBudevadm lock\fR
+opens the devices for writing, so that when the locks are released, a watched device (see
+OPTIONS+="watch"
+in
+\fBudev\fR(7)) gets a
+change
+event, which is handled\&.
+.PP
+The command expects at least one block device specified via
+\fB\-\-device=\fR
+or
+\fB\-\-backing=\fR, and a command line to execute as arguments\&.
+.PP
+\fB\-\-device=\fR\fB\fIDEVICE\fR\fR, \fB\-d \fR\fB\fIDEVICE\fR\fR
+.RS 4
+Takes a path to a device node of the device to lock\&. This switch may be used multiple times (and in combination with
+\fB\-\-backing=\fR) in order to lock multiple devices\&. If a partition block device node is specified the containing "whole" block device is automatically determined and used for the lock, as per the specification\&. If multiple devices are specified, they are deduplicated, sorted by the major/minor of their device nodes and then locked in order\&.
+.sp
+This switch must be used at least once, to specify at least one device to lock\&. (Alternatively, use
+\fB\-\-backing=\fR, see below\&.)
+.RE
+.PP
+\fB\-\-backing=\fR\fB\fIPATH\fR\fR, \fB\-b \fR\fB\fIPATH\fR\fR
+.RS 4
+If a path to a device node is specified, identical to
+\fB\-\-device=\fR\&. However, this switch alternatively accepts a path to a regular file or directory, in which case the block device of the file system the file/directory resides on is automatically determined and used as if it was specified with
+\fB\-\-device=\fR\&.
+.RE
+.PP
+\fB\-\-timeout=\fR\fB\fISECS\fR\fR, \fB\-t \fR\fB\fISECS\fR\fR
+.RS 4
+Specifies how long to wait at most until all locks can be taken\&. Takes a value in seconds, or in the usual supported time units, e\&.g\&.
+500ms
+or
+1min 30s\&. If specified as zero the lock is attempted and if not successful the invocation will immediately fail\&. If passed as
+infinity
+(the default) the invocation will wait indefinitely until the lock can be acquired\&. If the lock cannot be taken in the specified time the specified command will not be executed and the invocation will fail\&.
+.RE
+.PP
+\fB\-\-print\fR, \fB\-p\fR
+.RS 4
+Instead of locking the specified devices and executing a command, just print the device paths that would be locked, and execute no command\&. This command is useful to determine the "whole" block device in case a partition block device is specified\&. The devices will be sorted by their device node major number as primary ordering key and the minor number as secondary ordering key (i\&.e\&. they are shown in the order they\*(Aqd be locked)\&. Note that the number of lines printed here can be less than the number of
+\fB\-\-device=\fR
+and
+\fB\-\-backing=\fR
+switches specified in case these resolve to the same "whole" devices\&.
+.RE
+.PP
+\fB\-V\fR, \fB\-\-version\fR
+.RS 4
+Print version\&.
+.RE
+.PP
+\fB\-h\fR, \fB\-\-help\fR
+.RS 4
+Print help text\&.
+.RE
 .SH "INITIALIZED DEVICES"
 .PP
 Initialized devices are those for which at least one udev rule already completed execution \(en for any action but
@@ -897,4 +973,9 @@ action is seen for them (which removes their entry in the udev device database)\
 jq
 .RS 4
 \%https://jqlang.github.io/jq/manual/
+.RE
+.IP " 2." 4
+Locking Block Device Access
+.RS 4
+\%https://systemd.io/BLOCK_DEVICE_LOCKING
 .RE

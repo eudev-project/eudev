@@ -266,3 +266,4 @@ extern const struct udevadm_cmd udevadm_test_builtin;
 extern const struct udevadm_cmd udevadm_verify;
 extern const struct udevadm_cmd udevadm_cat;
 extern const struct udevadm_cmd udevadm_wait;
+extern const struct udevadm_cmd udevadm_lock;
