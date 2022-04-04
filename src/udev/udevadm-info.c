@@ -25,6 +25,7 @@
 #include <dirent.h>
 #include <errno.h>
 #include <getopt.h>
+#include <inttypes.h>
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -130,23 +131,80 @@ static int print_device_chain(struct udev_device *device) {
         return 0;
 }
 
+static int device_get_diskseq(struct udev_device *device, uint64_t *ret) {
+        const char *s;
+        uint64_t q;
+
+        /* Like sd_device_get_diskseq(): the kernel passes the sequence number of block devices in
+         * the DISKSEQ uevent property. */
+        s = udev_device_get_property_value(device, "DISKSEQ");
+        if (!s)
+                return -ENOENT;
+
+        if (safe_atou64(s, &q) < 0)
+                return -EINVAL;
+
+        *ret = q;
+        return 0;
+}
+
 static void print_record(struct udev_device *device) {
-        const char *str;
-        int i;
+        const char *str, *subsys;
+        dev_t devnum;
+        uint64_t q;
+        int ifi;
         struct udev_list_entry *list_entry;
+
+        /* We don't show syspath here, because it's identical to devpath (modulo the "/sys" prefix).
+         *
+         * We don't show action/seqnum here because that only makes sense for records synthesized from
+         * uevents, not for those synthesized from database entries.
+         *
+         * We don't show sysattrs here, because they can be expensive and potentially issue expensive driver
+         * IO. */
 
         printf("P: %s\n", udev_device_get_devpath(device));
 
+        str = udev_device_get_sysname(device);
+        if (str)
+                printf("M: %s\n", str);
+
+        str = udev_device_get_sysnum(device);
+        if (str)
+                printf("R: %s\n", str);
+
+        subsys = udev_device_get_subsystem(device);
+        if (subsys)
+                printf("U: %s\n", subsys);
+
+        str = udev_device_get_devtype(device);
+        if (str)
+                printf("T: %s\n", str);
+
+        devnum = udev_device_get_devnum(device);
+        if (major(devnum) > 0)
+                printf("D: %c %u:%u\n", streq_ptr(subsys, "block") ? 'b' : 'c', major(devnum), minor(devnum));
+
+        ifi = udev_device_get_ifindex(device);
+        if (ifi > 0)
+                printf("I: %i\n", ifi);
+
         str = udev_device_get_devnode(device);
-        if (str != NULL)
+        if (str != NULL) {
                 printf("N: %s\n", str + strlen("/dev/"));
 
-        i = udev_device_get_devlink_priority(device);
-        if (i != 0)
-                printf("L: %i\n", i);
+                printf("L: %i\n", udev_device_get_devlink_priority(device));
 
-        udev_list_entry_foreach(list_entry, udev_device_get_devlinks_list_entry(device))
-                printf("S: %s\n", udev_list_entry_get_name(list_entry) + strlen("/dev/"));
+                udev_list_entry_foreach(list_entry, udev_device_get_devlinks_list_entry(device))
+                        printf("S: %s\n", udev_list_entry_get_name(list_entry) + strlen("/dev/"));
+        }
+
+        if (device_get_diskseq(device, &q) >= 0)
+                printf("Q: %" PRIu64 "\n", q);
+
+        str = udev_device_get_driver(device);
+        if (str)
+                printf("V: %s\n", str);
 
         udev_list_entry_foreach(list_entry, udev_device_get_properties_list_entry(device))
                 printf("E: %s=%s\n",
