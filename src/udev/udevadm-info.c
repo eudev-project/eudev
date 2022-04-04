@@ -161,50 +161,63 @@ static void print_record(struct udev_device *device) {
          * uevents, not for those synthesized from database entries.
          *
          * We don't show sysattrs here, because they can be expensive and potentially issue expensive driver
-         * IO. */
+         * IO.
+         *
+         * Coloring: let's be conservative with coloring. Let's use it to group related fields. Right now:
+         *
+         *     • highlight fields that give the device a name
+         *     • green for fields that categorize the device into subsystem/devtype and similar
+         *     • cyan for fields about associated device nodes/symlinks/network interfaces and such
+         *     • magenta for block device diskseq
+         *     • yellow for driver info
+         *     • no color for regular properties */
 
-        printf("P: %s\n", udev_device_get_devpath(device));
+        printf("P: %s%s%s\n", ansi_highlight(), udev_device_get_devpath(device), ansi_normal());
 
         str = udev_device_get_sysname(device);
         if (str)
-                printf("M: %s\n", str);
+                printf("M: %s%s%s\n", ansi_highlight(), str, ansi_normal());
 
         str = udev_device_get_sysnum(device);
         if (str)
-                printf("R: %s\n", str);
+                printf("R: %s%s%s\n", ansi_highlight(), str, ansi_normal());
 
         subsys = udev_device_get_subsystem(device);
         if (subsys)
-                printf("U: %s\n", subsys);
+                printf("U: %s%s%s\n", ansi_highlight_green(), subsys, ansi_normal());
 
         str = udev_device_get_devtype(device);
         if (str)
-                printf("T: %s\n", str);
+                printf("T: %s%s%s\n", ansi_highlight_green(), str, ansi_normal());
 
         devnum = udev_device_get_devnum(device);
         if (major(devnum) > 0)
-                printf("D: %c %u:%u\n", streq_ptr(subsys, "block") ? 'b' : 'c', major(devnum), minor(devnum));
+                printf("D: %s%c %u:%u%s\n",
+                       ansi_highlight_cyan(),
+                       streq_ptr(subsys, "block") ? 'b' : 'c', major(devnum), minor(devnum),
+                       ansi_normal());
 
         ifi = udev_device_get_ifindex(device);
         if (ifi > 0)
-                printf("I: %i\n", ifi);
+                printf("I: %s%i%s\n", ansi_highlight_cyan(), ifi, ansi_normal());
 
         str = udev_device_get_devnode(device);
         if (str != NULL) {
-                printf("N: %s\n", str + strlen("/dev/"));
+                printf("N: %s%s%s\n", ansi_highlight_cyan(), str + strlen("/dev/"), ansi_normal());
 
-                printf("L: %i\n", udev_device_get_devlink_priority(device));
+                printf("L: %s%i%s\n", ansi_highlight_cyan(), udev_device_get_devlink_priority(device), ansi_normal());
 
                 udev_list_entry_foreach(list_entry, udev_device_get_devlinks_list_entry(device))
-                        printf("S: %s\n", udev_list_entry_get_name(list_entry) + strlen("/dev/"));
+                        printf("S: %s%s%s\n", ansi_highlight_cyan(),
+                               udev_list_entry_get_name(list_entry) + strlen("/dev/"), ansi_normal());
         }
 
         if (device_get_diskseq(device, &q) >= 0)
-                printf("Q: %" PRIu64 "\n", q);
+                printf("Q: %s%" PRIu64 "%s\n", ansi_highlight_magenta(), q, ansi_normal());
 
         str = udev_device_get_driver(device);
         if (str)
-                printf("V: %s\n", str);
+                printf("V: %s%s%s\n", ansi_highlight_yellow(), str, ansi_normal());
 
         udev_list_entry_foreach(list_entry, udev_device_get_properties_list_entry(device))
                 printf("E: %s=%s\n",
