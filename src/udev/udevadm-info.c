@@ -1186,7 +1186,9 @@ static int uinfo(struct udev *udev, int argc, char *argv[]) {
                         else
                                 log_error("Unknown device \"%s\".", *p);
 
-                        return 4;
+                        if (ret == 0)
+                                ret = 4;
+                        continue;
                 }
 
                 if (wait_for_initialization(&device, wait_for_initialization_timeout) < 0)
