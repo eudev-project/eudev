@@ -15,6 +15,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <langinfo.h>
+#include <locale.h>
 #include <poll.h>
 
 #include "udev-util.h"
@@ -169,3 +171,62 @@ DEFINE_ANSI_FUNC(highlight_blue,    "\x1B[0;1;34m")
 DEFINE_ANSI_FUNC(highlight_magenta, "\x1B[0;1;35m")
 DEFINE_ANSI_FUNC(highlight_cyan,    "\x1B[0;1;36m")
 DEFINE_ANSI_FUNC(grey,              "\x1B[0;90m")
+
+static bool is_locale_utf8_impl(void) {
+        const char *set;
+
+        /* Note that we default to 'true' here, since today UTF8 is pretty much supported everywhere. */
+
+        if (!setlocale(LC_ALL, ""))
+                return true;
+
+        set = nl_langinfo(CODESET);
+        if (!set || streq(set, "UTF-8"))
+                return true;
+
+        set = setlocale(LC_CTYPE, NULL);
+        if (!set)
+                return true;
+
+        /* Unless LC_CTYPE is explicitly overridden, return true. Because here CTYPE is effectively unset
+         * and everything can do to UTF-8 nowadays. */
+        return (streq(set, "C") || streq(set, "POSIX")) &&
+                !getenv("LC_ALL") &&
+                !getenv("LC_CTYPE") &&
+                !getenv("LANG");
+}
+
+bool is_locale_utf8(void) {
+        static int cached = -1;
+
+        if (cached < 0)
+                cached = is_locale_utf8_impl();
+
+        return cached;
+}
+
+const char *glyph(Glyph code) {
+        static const char* const draw_table[2][_GLYPH_MAX] = {
+                /* ASCII fallback */
+                [false] = {
+                        [GLYPH_TREE_VERTICAL]   = "| ",
+                        [GLYPH_TREE_BRANCH]     = "|-",
+                        [GLYPH_TREE_RIGHT]      = "`-",
+                        [GLYPH_TREE_SPACE]      = "  ",
+                        [GLYPH_VERTICAL_DOTTED] = ":",
+                },
+
+                /* UTF-8 */
+                [true] = {
+                        [GLYPH_TREE_VERTICAL]   = "\u2502 ",        /* │ */
+                        [GLYPH_TREE_BRANCH]     = "\u251c\u2500",   /* ├─ */
+                        [GLYPH_TREE_RIGHT]      = "\u2514\u2500",   /* └─ */
+                        [GLYPH_TREE_SPACE]      = "  ",
+                        [GLYPH_VERTICAL_DOTTED] = "\u2506",         /* ┆ */
+                },
+        };
+
+        assert(code >= 0 && code < _GLYPH_MAX);
+
+        return draw_table[is_locale_utf8()][code];
+}

@@ -38,3 +38,17 @@ const char *ansi_highlight_blue(void);
 const char *ansi_highlight_magenta(void);
 const char *ansi_highlight_cyan(void);
 const char *ansi_grey(void);
+
+/* Tree drawing glyphs, as systemd's glyph-util.h has them. UTF-8 box drawing characters are used
+ * unless the locale's character set is not UTF-8, like systemd's is_locale_utf8() decides. */
+typedef enum Glyph {
+        GLYPH_TREE_VERTICAL,
+        GLYPH_TREE_BRANCH,
+        GLYPH_TREE_RIGHT,
+        GLYPH_TREE_SPACE,
+        GLYPH_VERTICAL_DOTTED,
+        _GLYPH_MAX,
+} Glyph;
+
+bool is_locale_utf8(void);
+const char *glyph(Glyph code);

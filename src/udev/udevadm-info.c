@@ -31,10 +31,14 @@
 #include <sys/types.h>
 #include <sys/sysmacros.h>
 
+#include "path-util.h"
 #include "strv.h"
 #include "udev.h"
 #include "udev-util.h"
 #include "udevadm-util.h"
+
+/* Put a limit on --tree descent level to not exhaust our stack */
+#define TREE_DEPTH_MAX 64
 
 static bool skip_attribute(const char *name) {
         static const char* const skip[] = {
@@ -148,7 +152,7 @@ static int device_get_diskseq(struct udev_device *device, uint64_t *ret) {
         return 0;
 }
 
-static void print_record(struct udev_device *device) {
+static void print_record(struct udev_device *device, const char *prefix) {
         const char *str, *subsys;
         dev_t devnum;
         uint64_t q;
@@ -172,58 +176,65 @@ static void print_record(struct udev_device *device) {
          *     • yellow for driver info
          *     • no color for regular properties */
 
-        printf("P: %s%s%s\n", ansi_highlight(), udev_device_get_devpath(device), ansi_normal());
+        if (!prefix)
+                prefix = "";
+
+        printf("%sP: %s%s%s\n", prefix, ansi_highlight(), udev_device_get_devpath(device), ansi_normal());
 
         str = udev_device_get_sysname(device);
         if (str)
-                printf("M: %s%s%s\n", ansi_highlight(), str, ansi_normal());
+                printf("%sM: %s%s%s\n", prefix, ansi_highlight(), str, ansi_normal());
 
         str = udev_device_get_sysnum(device);
         if (str)
-                printf("R: %s%s%s\n", ansi_highlight(), str, ansi_normal());
+                printf("%sR: %s%s%s\n", prefix, ansi_highlight(), str, ansi_normal());
 
         subsys = udev_device_get_subsystem(device);
         if (subsys)
-                printf("U: %s%s%s\n", ansi_highlight_green(), subsys, ansi_normal());
+                printf("%sU: %s%s%s\n", prefix, ansi_highlight_green(), subsys, ansi_normal());
 
         str = udev_device_get_devtype(device);
         if (str)
-                printf("T: %s%s%s\n", ansi_highlight_green(), str, ansi_normal());
+                printf("%sT: %s%s%s\n", prefix, ansi_highlight_green(), str, ansi_normal());
 
         devnum = udev_device_get_devnum(device);
         if (major(devnum) > 0)
-                printf("D: %s%c %u:%u%s\n",
+                printf("%sD: %s%c %u:%u%s\n",
+                       prefix,
                        ansi_highlight_cyan(),
                        streq_ptr(subsys, "block") ? 'b' : 'c', major(devnum), minor(devnum),
                        ansi_normal());
 
         ifi = udev_device_get_ifindex(device);
         if (ifi > 0)
-                printf("I: %s%i%s\n", ansi_highlight_cyan(), ifi, ansi_normal());
+                printf("%sI: %s%i%s\n", prefix, ansi_highlight_cyan(), ifi, ansi_normal());
 
         str = udev_device_get_devnode(device);
         if (str != NULL) {
-                printf("N: %s%s%s\n", ansi_highlight_cyan(), str + strlen("/dev/"), ansi_normal());
+                printf("%sN: %s%s%s\n", prefix, ansi_highlight_cyan(), str + strlen("/dev/"), ansi_normal());
 
-                printf("L: %s%i%s\n", ansi_highlight_cyan(), udev_device_get_devlink_priority(device), ansi_normal());
+                printf("%sL: %s%i%s\n", prefix, ansi_highlight_cyan(), udev_device_get_devlink_priority(device), ansi_normal());
 
                 udev_list_entry_foreach(list_entry, udev_device_get_devlinks_list_entry(device))
-                        printf("S: %s%s%s\n", ansi_highlight_cyan(),
+                        printf("%sS: %s%s%s\n", prefix, ansi_highlight_cyan(),
                                udev_list_entry_get_name(list_entry) + strlen("/dev/"), ansi_normal());
         }
 
         if (device_get_diskseq(device, &q) >= 0)
-                printf("Q: %s%" PRIu64 "%s\n", ansi_highlight_magenta(), q, ansi_normal());
+                printf("%sQ: %s%" PRIu64 "%s\n", prefix, ansi_highlight_magenta(), q, ansi_normal());
 
         str = udev_device_get_driver(device);
         if (str)
-                printf("V: %s%s%s\n", ansi_highlight_yellow(), str, ansi_normal());
+                printf("%sV: %s%s%s\n", prefix, ansi_highlight_yellow(), str, ansi_normal());
 
         udev_list_entry_foreach(list_entry, udev_device_get_properties_list_entry(device))
-                printf("E: %s=%s\n",
+                printf("%sE: %s=%s\n",
+                       prefix,
                        udev_list_entry_get_name(list_entry),
                        udev_list_entry_get_value(list_entry));
-        printf("\n");
+
+        if (isempty(prefix))
+                printf("\n");
 }
 
 static int stat_device(const char *name, bool export, const char *prefix) {
@@ -257,7 +268,7 @@ static int export_devices(struct udev *udev) {
 
                 device = udev_device_new_from_syspath(udev, udev_list_entry_get_name(list_entry));
                 if (device != NULL) {
-                        print_record(device);
+                        print_record(device, NULL);
                         udev_device_unref(device);
                 }
         }
@@ -461,6 +472,158 @@ static int wait_for_initialization(struct udev_device **device, usec_t timeout_u
         return 0;
 }
 
+static int draw_tree(
+                struct udev_device *parent,
+                struct udev_device *const array[], size_t n,
+                const char *prefix,
+                unsigned level);
+
+static int output_tree_device(
+                struct udev_device *device,
+                const char *str,
+                const char *prefix,
+                bool more,
+                struct udev_device *const array[], size_t n,
+                unsigned level) {
+
+        _cleanup_free_ char *subprefix = NULL, *subsubprefix = NULL;
+
+        assert(device);
+        assert(str);
+
+        if (!prefix)
+                prefix = "";
+
+        printf("%s%s%s\n", prefix, glyph(more ? GLYPH_TREE_BRANCH : GLYPH_TREE_RIGHT), str);
+
+        subprefix = strjoin(prefix, glyph(more ? GLYPH_TREE_VERTICAL : GLYPH_TREE_SPACE), NULL);
+        if (!subprefix)
+                return log_oom();
+
+        subsubprefix = strjoin(subprefix, glyph(GLYPH_VERTICAL_DOTTED), " ", NULL);
+        if (!subsubprefix)
+                return log_oom();
+
+        print_record(device, subsubprefix);
+
+        return draw_tree(device, array, n, subprefix, level + 1);
+}
+
+static int draw_tree(
+                struct udev_device *parent,
+                struct udev_device *const array[], size_t n,
+                const char *prefix,
+                unsigned level) {
+
+        const char *parent_path;
+        size_t i = 0;
+        int r;
+
+        if (n == 0)
+                return 0;
+
+        assert(array);
+
+        parent_path = parent ? udev_device_get_devpath(parent) : NULL;
+
+        if (level > TREE_DEPTH_MAX) {
+                log_warning("Eliding tree below '%s', too deep.", parent_path ?: "n/a");
+                return 0;
+        }
+
+        while (i < n) {
+                struct udev_device *device = array[i];
+                const char *device_path, *str;
+                bool more = false;
+                size_t j;
+
+                device_path = udev_device_get_devpath(device);
+
+                /* Scan through the subsequent devices looking children of the device we are looking at. */
+                for (j = i + 1; j < n; j++) {
+                        const char *next_path = udev_device_get_devpath(array[j]);
+
+                        if (!path_startswith(next_path, device_path)) {
+                                more = !parent_path || path_startswith(next_path, parent_path);
+                                break;
+                        }
+                }
+
+                /* Determine the string to display for this node. If we are at the top of the tree, the full
+                 * device path so far, otherwise just the part suffixing the parent's device path. */
+                str = parent ? path_startswith(device_path, parent_path) : device_path;
+                assert(str);
+
+                r = output_tree_device(device, str, prefix, more, array + i + 1, j - i - 1, level);
+                if (r < 0)
+                        return r;
+
+                i = j;
+        }
+
+        return 0;
+}
+
+static int print_tree(struct udev *udev, struct udev_device *below) {
+        _cleanup_udev_enumerate_unref_ struct udev_enumerate *e = NULL;
+        struct udev_list_entry *entry;
+        struct udev_device **array = NULL;
+        size_t n = 0, n_allocated = 0, i;
+        int r;
+
+        e = udev_enumerate_new(udev);
+        if (!e)
+                return log_error_errno(ENOMEM, "Failed to allocate device enumerator: %m");
+
+        if (below) {
+                r = udev_enumerate_add_match_parent(e, below);
+                if (r < 0)
+                        return log_error_errno(r, "Failed to install parent enumerator match: %m");
+        }
+
+        r = udev_enumerate_scan_devices(e);
+        if (r >= 0)
+                r = udev_enumerate_scan_subsystems(e);
+        if (r < 0)
+                return log_error_errno(r, "Failed to scan for devices and subsystems: %m");
+
+        udev_list_entry_foreach(entry, udev_enumerate_get_list_entry(e)) {
+                struct udev_device *d;
+
+                /* Devices that are gone meanwhile are skipped. */
+                d = udev_device_new_from_syspath(udev, udev_list_entry_get_name(entry));
+                if (!d)
+                        continue;
+
+                if (!GREEDY_REALLOC(array, n_allocated, n + 1)) {
+                        udev_device_unref(d);
+                        r = log_oom();
+                        goto finish;
+                }
+
+                array[n++] = d;
+        }
+
+        if (n == 0) {
+                log_info("No items.");
+                r = 0;
+                goto finish;
+        }
+
+        r = draw_tree(NULL, array, n, NULL, 0);
+        if (r < 0)
+                goto finish;
+
+        printf("\n%zu items shown.\n", n);
+        r = 0;
+
+finish:
+        for (i = 0; i < n; i++)
+                udev_device_unref(array[i]);
+        free(array);
+        return r;
+}
+
 static void help(void) {
 
         printf("%s info [OPTIONS] [DEVPATH|FILE]\n\n"
@@ -480,6 +643,7 @@ static void help(void) {
                "  -r --root                   Prepend dev directory to path names\n"
                "  -a --attribute-walk         Print all key matches walking along the chain\n"
                "                              of parent devices\n"
+               "  -t --tree                   Show tree of devices\n"
                "  -d --device-id-of-file=FILE Print major:minor of device containing this file\n"
                "  -x --export                 Export key/value pairs\n"
                "  -P --export-prefix          Export the key name with a prefix\n"
@@ -512,6 +676,7 @@ static int uinfo(struct udev *udev, int argc, char *argv[]) {
                 { "path",              required_argument, NULL, 'p' },
                 { "query",             required_argument, NULL, 'q' },
                 { "attribute-walk",    no_argument,       NULL, 'a' },
+                { "tree",              no_argument,       NULL, 't' },
                 { "cleanup-db",        no_argument,       NULL, 'c' },
                 { "export-db",         no_argument,       NULL, 'e' },
                 { "root",              no_argument,       NULL, 'r' },
@@ -530,6 +695,7 @@ static int uinfo(struct udev *udev, int argc, char *argv[]) {
                 ACTION_QUERY,
                 ACTION_ATTRIBUTE_WALK,
                 ACTION_DEVICE_ID_FILE,
+                ACTION_TREE,
         } action = ACTION_QUERY;
 
         enum query_type {
@@ -540,7 +706,7 @@ static int uinfo(struct udev *udev, int argc, char *argv[]) {
                 QUERY_ALL,
         } query = QUERY_ALL;
 
-        while ((c = getopt_long(argc, argv, "aced:n:p:q:rxP:w::Vh", options, NULL)) >= 0)
+        while ((c = getopt_long(argc, argv, "atced:n:p:q:rxP:w::Vh", options, NULL)) >= 0)
                 switch (c) {
                 case ARG_PROPERTY:
                         /* Make sure that if the empty property list was specified, we won't show any
@@ -613,6 +779,9 @@ static int uinfo(struct udev *udev, int argc, char *argv[]) {
                         break;
                 case 'a':
                         action = ACTION_ATTRIBUTE_WALK;
+                        break;
+                case 't':
+                        action = ACTION_TREE;
                         break;
                 case 'e':
                         export_devices(udev);
@@ -728,7 +897,7 @@ static int uinfo(struct udev *udev, int argc, char *argv[]) {
                         }
                         break;
                 case QUERY_ALL:
-                        print_record(device);
+                        print_record(device, NULL);
                         break;
                 default:
                         assert_not_reached("unknown query type");
@@ -752,6 +921,19 @@ static int uinfo(struct udev *udev, int argc, char *argv[]) {
                 break;
         case ACTION_DEVICE_ID_FILE:
                 if (stat_device(name, export, export_prefix) != 0)
+                        return 1;
+                break;
+        case ACTION_TREE:
+                if (!device && argv[optind]) {
+                        device = find_device(udev, argv[optind], NULL);
+                        if (!device) {
+                                fprintf(stderr, "Unknown device, --name=, --path=, or absolute path in /dev/ or /sys expected.\n");
+                                return 4;
+                        }
+                }
+                if (device && wait_for_initialization(&device, wait_for_initialization_timeout) < 0)
+                        return 1;
+                if (print_tree(udev, device) < 0)
                         return 1;
                 break;
         }

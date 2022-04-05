@@ -142,6 +142,11 @@ query\&.
 Print all sysfs properties of the specified device that can be used in udev rules to match the specified device\&. It prints all devices along the chain, up to the root of sysfs that can be used in udev rules\&.
 .RE
 .PP
+\fB\-t\fR, \fB\-\-tree\fR
+.RS 4
+Display a sysfs tree\&. This recursively iterates through the sysfs hierarchy and displays it in a tree structure\&. If a path is specified only the subtree below that directory is shown\&. This will show both device and subsystem items\&.
+.RE
+.PP
 \fB\-x\fR, \fB\-\-export\fR
 .RS 4
 Print output as key/value pairs\&. Values are enclosed in single quotes\&.
