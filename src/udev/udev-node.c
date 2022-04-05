@@ -647,3 +647,65 @@ int udev_node_apply_permissions(struct udev_device *dev, bool apply_mac,
 
         return udev_node_apply_permissions_impl(node_fd, devnode, apply_mac, mode, uid, gid, seclabel_list);
 }
+
+int static_node_apply_permissions(
+                const char *name,
+                mode_t mode,
+                uid_t uid,
+                gid_t gid,
+                char **tags) {
+
+        _cleanup_free_ char *unescaped_filename = NULL;
+        _cleanup_close_ int node_fd = -1;
+        const char *devnode;
+        struct stat stats;
+        char **t;
+        int r;
+
+        assert(name);
+
+        if (uid == UID_INVALID && gid == GID_INVALID && mode == MODE_INVALID && !tags)
+                return 0;
+
+        devnode = strjoina("/dev/", name);
+
+        node_fd = open(devnode, O_PATH|O_CLOEXEC);
+        if (node_fd < 0) {
+                if (errno != ENOENT)
+                        return log_error_errno(errno, "Failed to open %s: %m", devnode);
+                return 0;
+        }
+
+        if (fstat(node_fd, &stats) < 0)
+                return log_error_errno(errno, "Failed to stat %s: %m", devnode);
+
+        if (!S_ISBLK(stats.st_mode) && !S_ISCHR(stats.st_mode)) {
+                log_warning("%s is neither block nor character device, ignoring.", devnode);
+                return 0;
+        }
+
+        if (!strv_isempty(tags)) {
+                unescaped_filename = xescape(name, "/.");
+                if (!unescaped_filename)
+                        return log_oom();
+        }
+
+        /* export the tags to a directory as symlinks, allowing otherwise dead nodes to be tagged */
+        STRV_FOREACH(t, tags) {
+                _cleanup_free_ char *p = NULL;
+
+                p = path_join(UDEV_ROOT_RUN "/udev/static_node-tags/", *t, unescaped_filename);
+                if (!p)
+                        return log_oom();
+
+                r = mkdir_parents(p, 0755);
+                if (r < 0)
+                        return log_error_errno(r, "Failed to create parent directory for %s: %m", p);
+
+                r = symlink(devnode, p);
+                if (r < 0 && errno != EEXIST)
+                        return log_error_errno(errno, "Failed to create symlink %s -> %s: %m", p, devnode);
+        }
+
+        return udev_node_apply_permissions_impl(node_fd, devnode, false, mode, uid, gid, NULL);
+}

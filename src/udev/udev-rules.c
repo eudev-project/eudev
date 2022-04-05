@@ -3373,7 +3373,6 @@ int udev_rules_apply_static_dev_perms(struct udev_rules *rules) {
         gid_t gid = 0;
         mode_t mode = 0;
         _cleanup_strv_free_ char **tags = NULL;
-        char **t;
         FILE *f = NULL;
         _cleanup_free_ char *path = NULL;
         int r = 0;
@@ -3414,76 +3413,18 @@ int udev_rules_apply_static_dev_perms(struct udev_rules *rules) {
                                 goto finish;
 
                         break;
-                case TK_A_STATIC_NODE: {
-                        char device_node[UTIL_PATH_SIZE];
-                        char tags_dir[UTIL_PATH_SIZE];
-                        char tag_symlink[UTIL_PATH_SIZE];
-                        struct stat stats;
-
+                case TK_A_STATIC_NODE:
                         /* we assure, that the permissions tokens are sorted before the static token */
 
-                        if (mode == 0 && uid == 0 && gid == 0 && tags == NULL)
-                                goto next;
-
-                        strscpyl(device_node, sizeof(device_node), "/dev/", rules_str(rules, cur->key.value_off), NULL);
-                        if (stat(device_node, &stats) != 0)
-                                break;
-                        if (!S_ISBLK(stats.st_mode) && !S_ISCHR(stats.st_mode))
-                                break;
-
-                        /* export the tags to a directory as symlinks, allowing otherwise dead nodes to be tagged */
-                        if (tags) {
-                                STRV_FOREACH(t, tags) {
-                                        _cleanup_free_ char *unescaped_filename = NULL;
-
-                                        strscpyl(tags_dir, sizeof(tags_dir), UDEV_ROOT_RUN "/udev/static_node-tags/", *t, "/", NULL);
-                                        r = udev_mkdir_p(tags_dir, 0755);
-                                        if (r < 0)
-                                                return log_error_errno(r, "failed to create %s: %m", tags_dir);
-
-                                        unescaped_filename = xescape(rules_str(rules, cur->key.value_off), "/.");
-
-                                        strscpyl(tag_symlink, sizeof(tag_symlink), tags_dir, unescaped_filename, NULL);
-                                        r = symlink(device_node, tag_symlink);
-                                        if (r < 0 && errno != EEXIST)
-                                                return log_error_errno(errno, "failed to create symlink %s -> %s: %m",
-                                                                       tag_symlink, device_node);
-                                        else
-                                                r = 0;
-                                }
-                        }
-
-                        /* don't touch the permissions if only the tags were set */
-                        if (mode == 0 && uid == 0 && gid == 0)
-                                break;
-
-                        if (mode == 0) {
-                                if (gid > 0)
-                                        mode = 0660;
-                                else
-                                        mode = 0600;
-                        }
-                        if (mode != (stats.st_mode & 01777)) {
-                                r = chmod(device_node, mode);
-                                if (r < 0) {
-                                        log_error("failed to chmod '%s' %#o", device_node, mode);
-                                        return -errno;
-                                } else
-                                        log_debug("chmod '%s' %#o", device_node, mode);
-                        }
-
-                        if ((uid != 0 && uid != stats.st_uid) || (gid != 0 && gid != stats.st_gid)) {
-                                r = chown(device_node, uid, gid);
-                                if (r < 0) {
-                                        log_error("failed to chown '%s' %u %u ", device_node, uid, gid);
-                                        return -errno;
-                                } else
-                                        log_debug("chown '%s' %u %u", device_node, uid, gid);
-                        }
-
-                        utimensat(AT_FDCWD, device_node, NULL, 0);
+                        /* 0 means not set here, as it always did for static nodes */
+                        r = static_node_apply_permissions(rules_str(rules, cur->key.value_off),
+                                                          mode != 0 ? mode : MODE_INVALID,
+                                                          uid != 0 ? uid : UID_INVALID,
+                                                          gid != 0 ? gid : GID_INVALID,
+                                                          tags);
+                        if (r < 0)
+                                goto finish;
                         break;
-                }
                 case TK_END:
                         goto finish;
                 }
