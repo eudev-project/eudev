@@ -531,11 +531,6 @@ int udev_node_apply_permissions(struct udev_device *dev, bool apply_mac,
         struct udev_list_entry *entry;
         int r;
 
-        if (streq(udev_device_get_subsystem(dev), "block"))
-                mode |= S_IFBLK;
-        else
-                mode |= S_IFCHR;
-
         node_fd = device_open_node_opath(dev);
         if (node_fd < 0) {
                 if (ERRNO_IS_DEVICE_ABSENT(node_fd)) {
