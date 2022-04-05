@@ -541,6 +541,10 @@ static int udev_node_apply_permissions_impl(
         if (fstat(node_fd, &stats) < 0)
                 return log_debug_errno(errno, "cannot stat() node %s: %m", devnode);
 
+        /* If group is set, but mode is not set, "upgrade" mode for the group. */
+        if (mode == MODE_INVALID && gid != GID_INVALID && gid > 0)
+                mode = 0660;
+
         apply_mode = mode != MODE_INVALID && (stats.st_mode & 0777) != (mode & 0777);
         apply_uid = uid != UID_INVALID && stats.st_uid != uid;
         apply_gid = gid != GID_INVALID && stats.st_gid != gid;
