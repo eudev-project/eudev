@@ -521,25 +521,22 @@ static int device_open_node_opath(struct udev_device *dev) {
         return TAKE_FD(fd);
 }
 
-int udev_node_apply_permissions(struct udev_device *dev, bool apply_mac,
-                                mode_t mode, uid_t uid, gid_t gid,
-                                struct udev_list *seclabel_list) {
-        const char *devnode = udev_device_get_devnode(dev);
+static int udev_node_apply_permissions_impl(
+                int node_fd,
+                const char *devnode,
+                bool apply_mac,
+                mode_t mode,
+                uid_t uid,
+                gid_t gid,
+                struct udev_list *seclabel_list) {
+
         bool apply_mode, apply_uid, apply_gid;
-        _cleanup_close_ int node_fd = -1;
         struct stat stats;
         struct udev_list_entry *entry;
         int r;
 
-        node_fd = device_open_node_opath(dev);
-        if (node_fd < 0) {
-                if (ERRNO_IS_DEVICE_ABSENT(node_fd)) {
-                        log_debug_errno(node_fd, "Device node %s is missing, skipping handling.", devnode);
-                        return 0; /* This is necessarily racey, so ignore missing the device */
-                }
-
-                return log_debug_errno(node_fd, "Cannot open node %s: %m", devnode);
-        }
+        assert(node_fd >= 0);
+        assert(devnode);
 
         if (fstat(node_fd, &stats) < 0)
                 return log_debug_errno(errno, "cannot stat() node %s: %m", devnode);
@@ -576,7 +573,7 @@ int udev_node_apply_permissions(struct udev_device *dev, bool apply_mac,
                                   mode != MODE_INVALID ? mode & 0777 : stats.st_mode & 0777);
 
                 /* apply SECLABEL{$module}=$label */
-                udev_list_entry_foreach(entry, udev_list_get_entry(seclabel_list)) {
+                udev_list_entry_foreach(entry, seclabel_list ? udev_list_get_entry(seclabel_list) : NULL) {
                         const char *name, *label;
                         int q;
 
@@ -620,4 +617,29 @@ int udev_node_apply_permissions(struct udev_device *dev, bool apply_mac,
                 log_debug_errno(r, "Failed to adjust timestamp of node %s: %m", devnode);
 
         return 0;
+}
+
+int udev_node_apply_permissions(struct udev_device *dev, bool apply_mac,
+                                mode_t mode, uid_t uid, gid_t gid,
+                                struct udev_list *seclabel_list) {
+        _cleanup_close_ int node_fd = -1;
+        const char *devnode;
+
+        assert(dev);
+
+        devnode = udev_device_get_devnode(dev);
+        if (!devnode)
+                return log_debug_errno(ENOENT, "Failed to get devname: %m");
+
+        node_fd = device_open_node_opath(dev);
+        if (node_fd < 0) {
+                if (ERRNO_IS_DEVICE_ABSENT(node_fd)) {
+                        log_debug_errno(node_fd, "Device node %s is missing, skipping handling.", devnode);
+                        return 0; /* This is necessarily racey, so ignore missing the device */
+                }
+
+                return log_debug_errno(node_fd, "Cannot open node %s: %m", devnode);
+        }
+
+        return udev_node_apply_permissions_impl(node_fd, devnode, apply_mac, mode, uid, gid, seclabel_list);
 }
