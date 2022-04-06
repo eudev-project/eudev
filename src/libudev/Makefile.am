@@ -10,6 +10,7 @@ AM_CPPFLAGS = \
 	-DUDEV_CONF_FILE=\"$(udevconffile)\" \
 	-DUDEV_HWDB_BIN=\"$(udevhwdbbin)\" \
 	-DUDEV_VERSION=$(UDEV_VERSION) \
+	-DUDEV_LIBEXEC_DIR=\"$(udevlibexecdir)\" \
 	-I $(top_srcdir)/src/shared
 
 lib_LTLIBRARIES = \

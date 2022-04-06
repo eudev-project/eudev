@@ -256,6 +256,11 @@ static int trie_search_f(struct udev_hwdb *hwdb, const char *search) {
         return 0;
 }
 
+static const char hwdb_bin_paths[] =
+    "/etc/udev/hwdb.bin\0"
+    UDEV_LIBEXEC_DIR "/hwdb.bin\0";
+
+
 /**
  * udev_hwdb_new:
  * @udev: udev library context
@@ -266,6 +271,7 @@ static int trie_search_f(struct udev_hwdb *hwdb, const char *search) {
  **/
 _public_ struct udev_hwdb *udev_hwdb_new(struct udev *udev) {
         struct udev_hwdb *hwdb;
+        const char *hwdb_bin_path;
         const char sig[] = HWDB_SIG;
 
         hwdb = new0(struct udev_hwdb, 1);
@@ -275,30 +281,43 @@ _public_ struct udev_hwdb *udev_hwdb_new(struct udev *udev) {
         hwdb->refcount = 1;
         udev_list_init(udev, &hwdb->properties_list, true);
 
-        hwdb->f = fopen(UDEV_HWDB_BIN, "re");
+        /* find hwdb.bin in hwdb_bin_paths */
+        NULSTR_FOREACH(hwdb_bin_path, hwdb_bin_paths) {
+                hwdb->f = fopen(hwdb_bin_path, "re");
+                if (hwdb->f)
+                        break;
+                else if (errno == ENOENT)
+                        continue;
+                else {
+                        log_debug("error reading %s", hwdb_bin_path);
+                        udev_hwdb_unref(hwdb);
+                        return NULL;
+                }
+        }
+
         if (!hwdb->f) {
-                log_debug(UDEV_HWDB_BIN " does not exist, please run udevadm hwdb --update");
+                log_debug("%s does not exist, please run udevadm hwdb --update", hwdb_bin_path);
                 udev_hwdb_unref(hwdb);
                 return NULL;
         }
 
         if (fstat(fileno(hwdb->f), &hwdb->st) < 0 ||
             (size_t)hwdb->st.st_size < offsetof(struct trie_header_f, strings_len) + 8) {
-                log_debug_errno(errno, "error reading " UDEV_HWDB_BIN ": %m");
+                log_debug_errno(errno, "error reading %s: %m", hwdb_bin_path);
                 udev_hwdb_unref(hwdb);
                 return NULL;
         }
 
         hwdb->map = mmap(0, hwdb->st.st_size, PROT_READ, MAP_SHARED, fileno(hwdb->f), 0);
         if (hwdb->map == MAP_FAILED) {
-                log_debug_errno(errno, "error mapping " UDEV_HWDB_BIN ": %m");
+                log_debug_errno(errno, "error mapping %s: %m", hwdb_bin_path);
                 udev_hwdb_unref(hwdb);
                 return NULL;
         }
 
         if (memcmp(hwdb->map, sig, sizeof(hwdb->head->signature)) != 0 ||
             (size_t)hwdb->st.st_size != le64toh(hwdb->head->file_size)) {
-                log_debug("error recognizing the format of " UDEV_HWDB_BIN);
+                log_debug("error recognizing the format of %s", hwdb_bin_path);
                 udev_hwdb_unref(hwdb);
                 return NULL;
         }
@@ -352,13 +371,24 @@ _public_ struct udev_hwdb *udev_hwdb_unref(struct udev_hwdb *hwdb) {
 }
 
 bool udev_hwdb_validate(struct udev_hwdb *hwdb) {
+        bool found = false;
+        const char* p;
         struct stat st;
 
         if (!hwdb)
                 return false;
         if (!hwdb->f)
                 return false;
-        if (stat("/etc/udev/hwdb.bin", &st) < 0)
+
+        /* if hwdb.bin doesn't exist anywhere, we need to update */
+        NULSTR_FOREACH(p, hwdb_bin_paths) {
+                if (stat(p, &st) >= 0) {
+                        found = true;
+                        break;
+                }
+        }
+
+        if (!found)
                 return true;
 
         if (timespec_load(&hwdb->st.st_mtim) != timespec_load(&st.st_mtim))
