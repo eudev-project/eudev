@@ -51,6 +51,8 @@ jobs:
             autoconf \
             automake \
             xsltproc \
+            docbook-xml \
+            docbook-xsl \
             gperf \
             libglib-object-introspection-perl \
             libglib2.0-dev \
