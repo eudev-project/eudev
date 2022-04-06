@@ -185,7 +185,7 @@ static inline size_t IOVEC_INCREMENT(struct iovec *i, unsigned n, size_t k) {
         return k;
 }
 
- /* Because statfs.t_type can be int on some architecures, we have to cast
+ /* Because statfs.t_type can be int on some architectures, we have to cast
   * the const magic to the type, otherwise the compiler warns about
   * signed/unsigned comparison, because the magic can be 32 bit unsigned.
  */
