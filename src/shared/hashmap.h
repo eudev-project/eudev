@@ -33,7 +33,7 @@
  * necessary to instantiate an object for each Hashmap use.
  *
  * If ENABLE_DEBUG_HASHMAP is defined (by configuring with --enable-debug=hashmap),
- * the implemention will:
+ * the implementation will:
  * - store extra data for debugging and statistics (see tools/gdb-sd_dump_hashmaps.py)
  * - perform extra checks for invalid use of iterators
  */
@@ -86,8 +86,8 @@ unsigned long trivial_hash_func(const void *p, const uint8_t hash_key[HASH_KEY_S
 int trivial_compare_func(const void *a, const void *b) _const_;
 extern const struct hash_ops trivial_hash_ops;
 
-/* 32bit values we can always just embedd in the pointer itself, but
- * in order to support 32bit archs we need store 64bit values
+/* 32bit values we can always just embed in the pointer itself, but
+ * in order to support 32bit archs we need to store 64bit values
  * indirectly, since they don't fit in a pointer. */
 unsigned long uint64_hash_func(const void *p, const uint8_t hash_key[HASH_KEY_SIZE]) _pure_;
 int uint64_compare_func(const void *a, const void *b) _pure_;
