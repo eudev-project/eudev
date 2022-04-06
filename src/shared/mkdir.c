@@ -69,7 +69,7 @@ int mkdir_parents_internal(const char *prefix, const char *path, mode_t mode, mk
 
 	char buf[PATH_MAX + 1];
 	p = buf;
-	assert(e-path < sizeof(buf));
+	assert(e-path < (ssize_t)sizeof(buf));
 	memcpy(buf, path, e-path);
 	buf[e-path] = 0;
 

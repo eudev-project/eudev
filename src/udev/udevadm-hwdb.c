@@ -422,7 +422,7 @@ static int trie_store(struct trie *trie, const char *filename) {
 }
 
 static int insert_data(struct trie *trie, struct udev_list *match_list,
-                       char *line, const char *filename) {
+                       char *line, const char *filename __attribute__((unused))) {
         char *value;
         struct udev_list_entry *entry;
 

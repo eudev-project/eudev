@@ -86,7 +86,7 @@ out:
         return err;
 }
 
-int main(int argc, char *argv[]) {
+int main(int argc __attribute__((unused)), char *argv[]) {
         _cleanup_udev_unref_ struct udev *udev = NULL;
         _cleanup_udev_event_unref_ struct udev_event *event = NULL;
         _cleanup_udev_device_unref_ struct udev_device *dev = NULL;

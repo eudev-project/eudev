@@ -215,7 +215,7 @@ static int syspath_cmp(const void *p1, const void *p2)
 }
 
 /* For devices that should be moved to the absolute end of the list */
-static bool devices_delay_end(struct udev *udev, const char *syspath)
+static bool devices_delay_end(struct udev *udev __attribute__((unused)), const char *syspath)
 {
         static const char *delay_device_list[] = {
                 "/block/md",
@@ -234,7 +234,7 @@ static bool devices_delay_end(struct udev *udev, const char *syspath)
 /* For devices that should just be moved a little bit later, just
  * before the point where some common path prefix changes. Returns the
  * number of characters that make up that common prefix */
-static size_t devices_delay_later(struct udev *udev, const char *syspath)
+static size_t devices_delay_later(struct udev *udev __attribute__((unused)), const char *syspath)
 {
         const char *c;
 

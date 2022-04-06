@@ -87,7 +87,7 @@ static void extract_info(struct udev_device *dev, const char *devpath, bool test
  * @param attr sysfs attribute name (e. g. "capabilities/key")
  * @param bitmask: Output array which has a sizeof of bitmask_size
  */
-static void get_cap_mask(struct udev_device *dev,
+static void get_cap_mask(struct udev_device *dev __attribute__((unused)),
                          struct udev_device *pdev, const char* attr,
                          unsigned long *bitmask, size_t bitmask_size,
                          bool test) {
@@ -312,7 +312,7 @@ static bool test_key(struct udev_device *dev,
         return ret;
 }
 
-static int builtin_input_id(struct udev_device *dev, int argc, char *argv[], bool test) {
+static int builtin_input_id(struct udev_device *dev, int argc __attribute__((unused)), char *argv[] __attribute__((unused)), bool test) {
         struct udev_device *pdev;
         unsigned long bitmask_ev[NBITS(EV_MAX)];
         unsigned long bitmask_abs[NBITS(ABS_MAX)];

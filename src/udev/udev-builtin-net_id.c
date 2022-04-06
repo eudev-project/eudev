@@ -192,7 +192,7 @@ static int dev_pci_slot(struct udev_device *dev, struct netnames *names) {
         char *s;
         const char *attr;
         struct udev_device *pci = NULL;
-        char slots[256], str[256];
+        char slots[256], str[520];
         _cleanup_closedir_ DIR *dir = NULL;
         struct dirent *dent;
         int hotplug_slot = 0, err = 0;
@@ -452,7 +452,7 @@ static int ieee_oui(struct udev_device *dev, struct netnames *names, bool test) 
         return 0;
 }
 
-static int builtin_net_id(struct udev_device *dev, int argc, char *argv[], bool test) {
+static int builtin_net_id(struct udev_device *dev, int argc __attribute__((unused)), char *argv[] __attribute__((unused)), bool test) {
         const char *s;
         const char *p;
         unsigned int i;

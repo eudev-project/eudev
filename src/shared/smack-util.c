@@ -45,7 +45,7 @@ bool mac_smack_use(void) {
 #endif
 }
 
-int mac_smack_apply(const char *path, const char *label) {
+int mac_smack_apply(const char *path, const char *label __attribute__((unused))) {
         int r = 0;
 
         assert(path);
@@ -65,7 +65,7 @@ int mac_smack_apply(const char *path, const char *label) {
         return r;
 }
 
-int mac_smack_apply_fd(int fd, const char *label) {
+int mac_smack_apply_fd(int fd, const char *label __attribute__((unused))) {
         int r = 0;
 
         assert(fd >= 0);
@@ -85,7 +85,7 @@ int mac_smack_apply_fd(int fd, const char *label) {
         return r;
 }
 
-int mac_smack_apply_ip_out_fd(int fd, const char *label) {
+int mac_smack_apply_ip_out_fd(int fd, const char *label __attribute__((unused))) {
         int r = 0;
 
         assert(fd >= 0);
@@ -105,7 +105,7 @@ int mac_smack_apply_ip_out_fd(int fd, const char *label) {
         return r;
 }
 
-int mac_smack_apply_ip_in_fd(int fd, const char *label) {
+int mac_smack_apply_ip_in_fd(int fd, const char *label __attribute__((unused))) {
         int r = 0;
 
         assert(fd >= 0);
@@ -125,7 +125,7 @@ int mac_smack_apply_ip_in_fd(int fd, const char *label) {
         return r;
 }
 
-int mac_smack_apply_pid(pid_t pid, const char *label) {
+int mac_smack_apply_pid(pid_t pid __attribute__((unused)), const char *label) {
 
 #ifdef HAVE_SMACK
         const char *p;
@@ -147,7 +147,7 @@ int mac_smack_apply_pid(pid_t pid, const char *label) {
         return r;
 }
 
-int mac_smack_fix(const char *path, bool ignore_enoent, bool ignore_erofs) {
+int mac_smack_fix(const char *path, bool ignore_enoent __attribute__((unused)), bool ignore_erofs __attribute__((unused))) {
 
 #ifdef HAVE_SMACK
         struct stat st;

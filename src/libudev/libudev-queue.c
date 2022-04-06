@@ -139,7 +139,7 @@ _public_ struct udev *udev_queue_get_udev(struct udev_queue *udev_queue)
  *
  * Returns: 0.
  **/
-_public_ unsigned long long int udev_queue_get_kernel_seqnum(struct udev_queue *udev_queue)
+_public_ unsigned long long int udev_queue_get_kernel_seqnum(struct udev_queue *udev_queue __attribute__((unused)))
 {
         return 0;
 }
@@ -152,7 +152,7 @@ _public_ unsigned long long int udev_queue_get_kernel_seqnum(struct udev_queue *
  *
  * Returns: 0.
  **/
-_public_ unsigned long long int udev_queue_get_udev_seqnum(struct udev_queue *udev_queue)
+_public_ unsigned long long int udev_queue_get_udev_seqnum(struct udev_queue *udev_queue __attribute__((unused)))
 {
         return 0;
 }
@@ -165,7 +165,7 @@ _public_ unsigned long long int udev_queue_get_udev_seqnum(struct udev_queue *ud
  *
  * Returns: a flag indicating if udev is active.
  **/
-_public_ int udev_queue_get_udev_is_active(struct udev_queue *udev_queue)
+_public_ int udev_queue_get_udev_is_active(struct udev_queue *udev_queue __attribute__((unused)))
 {
         return access(UDEV_ROOT_RUN "/udev/control", F_OK) >= 0;
 }
@@ -178,7 +178,7 @@ _public_ int udev_queue_get_udev_is_active(struct udev_queue *udev_queue)
  *
  * Returns: a flag indicating if udev is currently handling events.
  **/
-_public_ int udev_queue_get_queue_is_empty(struct udev_queue *udev_queue)
+_public_ int udev_queue_get_queue_is_empty(struct udev_queue *udev_queue __attribute__((unused)))
 {
         return access(UDEV_ROOT_RUN "/udev/queue", F_OK) < 0;
 }
@@ -195,7 +195,7 @@ _public_ int udev_queue_get_queue_is_empty(struct udev_queue *udev_queue)
  * Returns: a flag indicating if udev is currently handling events.
  **/
 _public_ int udev_queue_get_seqnum_sequence_is_finished(struct udev_queue *udev_queue,
-                                               unsigned long long int start, unsigned long long int end)
+                                               unsigned long long int start __attribute__((unused)), unsigned long long int end __attribute__((unused)))
 {
         return udev_queue_get_queue_is_empty(udev_queue);
 }
@@ -210,7 +210,7 @@ _public_ int udev_queue_get_seqnum_sequence_is_finished(struct udev_queue *udev_
  *
  * Returns: a flag indicating if udev is currently handling events.
  **/
-_public_ int udev_queue_get_seqnum_is_finished(struct udev_queue *udev_queue, unsigned long long int seqnum)
+_public_ int udev_queue_get_seqnum_is_finished(struct udev_queue *udev_queue, unsigned long long int seqnum __attribute__((unused)))
 {
         return udev_queue_get_queue_is_empty(udev_queue);
 }
@@ -223,7 +223,7 @@ _public_ int udev_queue_get_seqnum_is_finished(struct udev_queue *udev_queue, un
  *
  * Returns: NULL.
  **/
-_public_ struct udev_list_entry *udev_queue_get_queued_list_entry(struct udev_queue *udev_queue)
+_public_ struct udev_list_entry *udev_queue_get_queued_list_entry(struct udev_queue *udev_queue __attribute__((unused)))
 {
         return NULL;
 }

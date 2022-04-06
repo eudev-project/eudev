@@ -154,6 +154,7 @@ bool hidden_file(const char *filename) _pure_;
 
 /* For basic lookup tables with strictly enumerated entries */
 #define _DEFINE_STRING_TABLE_LOOKUP_TO_STRING(name,type,scope)          \
+        __attribute__((unused))                                         \
         scope const char *name##_to_string(type i) {                    \
                 if (i < 0 || i >= (type) ELEMENTSOF(name##_table))      \
                         return NULL;                                    \
@@ -161,6 +162,7 @@ bool hidden_file(const char *filename) _pure_;
         }
 
 #define _DEFINE_STRING_TABLE_LOOKUP_FROM_STRING(name,type,scope)        \
+        __attribute__((unused))                                         \
         scope type name##_from_string(const char *s) {                  \
                 type i;                                                 \
                 if (!s)                                                 \

@@ -584,7 +584,7 @@ static bool is_devpath_busy(struct event *event) {
         return false;
 }
 
-static void event_queue_start(struct udev *udev) {
+static void event_queue_start(struct udev *udev __attribute__((unused))) {
         struct udev_list_node *loop;
 
         udev_list_node_foreach(loop, &event_list) {
@@ -601,7 +601,7 @@ static void event_queue_start(struct udev *udev) {
         }
 }
 
-static void event_queue_cleanup(struct udev *udev, enum event_state match_type) {
+static void event_queue_cleanup(struct udev *udev __attribute__((unused)), enum event_state match_type) {
         struct udev_list_node *loop, *tmp;
 
         udev_list_node_foreach_safe(loop, tmp, &event_list) {
@@ -920,7 +920,7 @@ static int handle_inotify(struct udev *udev) {
         return 0;
 }
 
-static void handle_signal(struct udev *udev, int signo) {
+static void handle_signal(struct udev *udev __attribute__((unused)), int signo) {
         switch (signo) {
         case SIGINT:
         case SIGTERM:

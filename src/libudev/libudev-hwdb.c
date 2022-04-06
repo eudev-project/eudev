@@ -379,7 +379,7 @@ bool udev_hwdb_validate(struct udev_hwdb *hwdb) {
  *
  * Returns: a udev_list_entry.
  */
-_public_ struct udev_list_entry *udev_hwdb_get_properties_list_entry(struct udev_hwdb *hwdb, const char *modalias, unsigned int flags) {
+_public_ struct udev_list_entry *udev_hwdb_get_properties_list_entry(struct udev_hwdb *hwdb, const char *modalias, unsigned int flags __attribute__((unused))) {
         int err;
 
         if (!hwdb || !hwdb->f) {

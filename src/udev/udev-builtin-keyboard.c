@@ -185,7 +185,7 @@ static int open_device(const char *devnode) {
         return fd;
 }
 
-static int builtin_keyboard(struct udev_device *dev, int argc, char *argv[], bool test) {
+static int builtin_keyboard(struct udev_device *dev, int argc __attribute__((unused)), char *argv[] __attribute__((unused)), bool test __attribute__((unused))) {
         struct udev_list_entry *entry;
         unsigned release[1024];
         unsigned release_count = 0;

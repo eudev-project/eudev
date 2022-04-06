@@ -126,7 +126,7 @@ static bool is_mounted(const char *device)
         return mounted;
 }
 
-static void info_scsi_cmd_err(struct udev *udev, const char *cmd, int err)
+static void info_scsi_cmd_err(struct udev *udev __attribute__((unused)), const char *cmd, int err)
 {
         if (err == -1) {
                 log_debug("%s failed", cmd);
@@ -144,7 +144,7 @@ struct scsi_cmd {
         struct sg_io_hdr sg_io;
 };
 
-static void scsi_cmd_init(struct udev *udev, struct scsi_cmd *cmd)
+static void scsi_cmd_init(struct udev *udev __attribute__((unused)), struct scsi_cmd *cmd)
 {
         memzero(cmd, sizeof(struct scsi_cmd));
         cmd->cgc.quiet = 1;
@@ -156,7 +156,7 @@ static void scsi_cmd_init(struct udev *udev, struct scsi_cmd *cmd)
         cmd->sg_io.flags = SG_FLAG_LUN_INHIBIT | SG_FLAG_DIRECT_IO;
 }
 
-static void scsi_cmd_set(struct udev *udev, struct scsi_cmd *cmd, size_t i, unsigned char arg)
+static void scsi_cmd_set(struct udev *udev __attribute__((unused)), struct scsi_cmd *cmd, size_t i, unsigned char arg)
 {
         cmd->sg_io.cmd_len = i + 1;
         cmd->cgc.cmd[i] = arg;
@@ -164,7 +164,7 @@ static void scsi_cmd_set(struct udev *udev, struct scsi_cmd *cmd, size_t i, unsi
 
 #define CHECK_CONDITION 0x01
 
-static int scsi_cmd_run(struct udev *udev, struct scsi_cmd *cmd, int fd, unsigned char *buf, size_t bufsize)
+static int scsi_cmd_run(struct udev *udev __attribute__((unused)), struct scsi_cmd *cmd, int fd, unsigned char *buf, size_t bufsize)
 {
         int ret = 0;
 
@@ -190,7 +190,7 @@ static int scsi_cmd_run(struct udev *udev, struct scsi_cmd *cmd, int fd, unsigne
         return ret;
 }
 
-static int media_lock(struct udev *udev, int fd, bool lock)
+static int media_lock(struct udev *udev __attribute__((unused)), int fd, bool lock)
 {
         int err;
 
@@ -223,7 +223,7 @@ static int media_eject(struct udev *udev, int fd)
         return 0;
 }
 
-static int cd_capability_compat(struct udev *udev, int fd)
+static int cd_capability_compat(struct udev *udev __attribute__((unused)), int fd)
 {
         int capability;
 
@@ -250,7 +250,7 @@ static int cd_capability_compat(struct udev *udev, int fd)
         return 0;
 }
 
-static int cd_media_compat(struct udev *udev, int fd)
+static int cd_media_compat(struct udev *udev __attribute__((unused)), int fd)
 {
         if (ioctl(fd, CDROM_DRIVE_STATUS, CDSL_CURRENT) != CDS_DISC_OK) {
                 log_debug("CDROM_DRIVE_STATUS != CDS_DISC_OK");
@@ -285,7 +285,7 @@ static int cd_inquiry(struct udev *udev, int fd)
         return 0;
 }
 
-static void feature_profile_media(struct udev *udev, int cur_profile)
+static void feature_profile_media(struct udev *udev __attribute__((unused)), int cur_profile)
 {
         switch (cur_profile) {
         case 0x03:
@@ -394,7 +394,7 @@ static void feature_profile_media(struct udev *udev, int cur_profile)
         }
 }
 
-static int feature_profiles(struct udev *udev, const unsigned char *profiles, size_t size)
+static int feature_profiles(struct udev *udev __attribute__((unused)), const unsigned char *profiles, size_t size)
 {
         unsigned int i;
 
