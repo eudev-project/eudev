@@ -3,4 +3,5 @@ Description: eudev
 Version: @UDEV_VERSION@
 prefix=@prefix@
 exec_prefix=@exec_prefix@
-udevdir=@udevlibexecdir@
+udev_dir=@udevlibexecdir@
+udevdir=${udev_dir}
