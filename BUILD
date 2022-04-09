@@ -85,7 +85,22 @@ the Linux distribution:
 1.4. Gentoo
 -----------
 
-# TODO
+# emerge -u \
+    docbook-xml-dtd \
+    docbook-xml-dtd \
+    docbook-xsl-stylesheets \
+    gobject-introspection \
+    gperf \
+    kmod \
+    libselinux \
+    libxslt \
+    linux-headers \
+    make \
+    perl \
+    tree \
+    util-linux \
+    virtual/libcrypt \
+    virtual/pkgconfig
 
 
 2. Downloading the source code
