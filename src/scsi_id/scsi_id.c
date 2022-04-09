@@ -155,7 +155,7 @@ static int argc_count(char *opts)
  *
  * vendor and model can end in '\n'.
  */
-static int get_file_options(struct udev *udev,
+static int get_file_options(struct udev *udev __attribute__((unused)),
                             const char *vendor, const char *model,
                             int *argc, char ***newargv)
 {
@@ -320,7 +320,7 @@ static void help(void) {
 
 }
 
-static int set_options(struct udev *udev,
+static int set_options(struct udev *udev __attribute__((unused)),
                        int argc, char **argv,
                        char *maj_min_dev)
 {
@@ -410,7 +410,7 @@ static int set_options(struct udev *udev,
 }
 
 static int per_dev_options(struct udev *udev,
-                           struct scsi_id_device *dev_scsi, int *good_bad, int *page_code)
+                           struct scsi_id_device *dev_scsi __attribute__((unused)), int *good_bad, int *page_code)
 {
         int retval;
         int newargc;

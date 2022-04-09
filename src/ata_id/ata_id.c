@@ -330,7 +330,7 @@ static void disk_identify_fixup_uint16 (uint8_t identify[512], unsigned int offs
  * Returns: 0 if the data was successfully obtained, otherwise
  * non-zero with errno set.
  */
-static int disk_identify(struct udev *udev,
+static int disk_identify(struct udev *udev __attribute__((unused)),
                          int fd,
                          uint8_t out_identify[512],
                          int *out_is_packet_device)

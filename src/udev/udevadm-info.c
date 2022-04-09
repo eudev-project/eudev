@@ -221,7 +221,7 @@ static void cleanup_dir(DIR *dir, mode_t mask, int depth) {
         }
 }
 
-static void cleanup_db(struct udev *udev) {
+static void cleanup_db(struct udev *udev __attribute__((unused))) {
         DIR *dir;
 
         unlink(UDEV_ROOT_RUN "/udev/queue.bin");

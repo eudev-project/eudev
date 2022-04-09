@@ -444,8 +444,8 @@ static void dump_rules(struct udev_rules *rules) {
                 dump_token(rules, &rules->tokens[i]);
 }
 #else
-static inline void dump_token(struct udev_rules *rules, struct token *token) {}
-static inline void dump_rules(struct udev_rules *rules) {}
+static inline void dump_token(struct udev_rules *rules __attribute__((unused)), struct token *token __attribute__((unused))) {}
+static inline void dump_rules(struct udev_rules *rules __attribute__((unused))) {}
 #endif /* DEBUG */
 
 static int add_token(struct udev_rules *rules, struct token *token) {
@@ -757,7 +757,7 @@ static int attr_subst_subdir(char *attr, size_t len) {
         return found;
 }
 
-static int get_key(struct udev *udev, char **line, char **key, enum operation_type *op, char **value) {
+static int get_key(struct udev *udev __attribute__((unused)), char **line, char **key, enum operation_type *op, char **value) {
         char *linepos;
         char *temp;
         unsigned i, j;
@@ -859,7 +859,7 @@ static int get_key(struct udev *udev, char **line, char **key, enum operation_ty
 }
 
 /* extract possible KEY{attr} */
-static const char *get_key_attribute(struct udev *udev, char *str) {
+static const char *get_key_attribute(struct udev *udev __attribute__((unused)), char *str) {
         char *pos;
         char *attr;
 

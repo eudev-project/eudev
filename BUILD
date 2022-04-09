@@ -135,16 +135,24 @@ $ ./autogen.sh
 
 $ ./configure
 
-Please note that, by default, the configure script will assume we want to place
-eudev under the /usr directory. If this is not accurate, we can supply an
-alternative location using the "--prefix" flag. For instance, to place eudev
-under the /usr/local directory tree, run the following:
+Please note that building eudev requires a modern C compiler like gcc or clang.
+Any other C compiler that conforms to the standards should work but that path
+is not well tested and may require little tweaks to the code.
+
+Please note that configure will install eudev under /usr by default. In case
+that the desired installation directory is different that may be changed by
+using the "--prefix" option as shown in the example below. To place eudev under
+/usr/local, run the following:
 
 $ ./configure --prefix /usr/local
 
-Once eudev has been configured we can then perform the build.
+Once eudev has been configured run make to build it:
 
 $ make
+
+Or alternatively, using more cores in parallel:
+
+$ make -j 16
 
 
 4. Install eudev

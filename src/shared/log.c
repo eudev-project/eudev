@@ -238,12 +238,12 @@ void log_set_max_level(int level) {
 
 static int write_to_console(
                 int level,
-                int error,
+                int error __attribute__((unused)),
                 const char *file,
                 int line,
-                const char *func,
-                const char *object_field,
-                const char *object,
+                const char *func __attribute__((unused)),
+                const char *object_field __attribute__((unused)),
+                const char *object __attribute__((unused)),
                 const char *buffer) {
 
         char location[64], prefix[1 + DECIMAL_STR_MAX(int) + 2];
@@ -299,12 +299,12 @@ static int write_to_console(
 
 static int write_to_syslog(
                 int level,
-                int error,
-                const char *file,
-                int line,
-                const char *func,
-                const char *object_field,
-                const char *object,
+                int error __attribute__((unused)),
+                const char *file __attribute__((unused)),
+                int line __attribute__((unused)),
+                const char *func __attribute__((unused)),
+                const char *object_field __attribute__((unused)),
+                const char *object __attribute__((unused)),
                 const char *buffer) {
 
         char header_priority[1 + DECIMAL_STR_MAX(int) + 2], header_time[64], header_pid[1 + DECIMAL_STR_MAX(pid_t) + 4];
@@ -362,12 +362,12 @@ static int write_to_syslog(
 
 static int write_to_kmsg(
                 int level,
-                int error,
-                const char*file,
-                int line,
-                const char *func,
-                const char *object_field,
-                const char *object,
+                int error __attribute__((unused)),
+                const char *file __attribute__((unused)),
+                int line __attribute__((unused)),
+                const char *func __attribute__((unused)),
+                const char *object_field __attribute__((unused)),
+                const char *object __attribute__((unused)),
                 const char *buffer) {
 
         char header_priority[1 + DECIMAL_STR_MAX(int) + 2], header_pid[1 + DECIMAL_STR_MAX(pid_t) + 4];

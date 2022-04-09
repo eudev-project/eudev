@@ -33,7 +33,7 @@
 
 static struct kmod_ctx *ctx = NULL;
 
-static int load_module(struct udev *udev, const char *alias) {
+static int load_module(struct udev *udev __attribute__((unused)), const char *alias) {
         struct kmod_list *list = NULL;
         struct kmod_list *l;
         int err;
@@ -63,11 +63,11 @@ static int load_module(struct udev *udev, const char *alias) {
         return err;
 }
 
-_printf_(6,0) static void udev_kmod_log(void *data, int priority, const char *file, int line, const char *fn, const char *format, va_list args) {
+_printf_(6,0) static void udev_kmod_log(void *data __attribute__((unused)), int priority, const char *file, int line, const char *fn, const char *format, va_list args) {
         log_internalv(priority, 0, file, line, fn, format, args);
 }
 
-static int builtin_kmod(struct udev_device *dev, int argc, char *argv[], bool test) {
+static int builtin_kmod(struct udev_device *dev, int argc, char *argv[], bool test __attribute__((unused))) {
         struct udev *udev = udev_device_get_udev(dev);
         int i;
 
@@ -103,13 +103,13 @@ static int builtin_kmod_init(struct udev *udev) {
 }
 
 /* called on udev shutdown and reload request */
-static void builtin_kmod_exit(struct udev *udev) {
+static void builtin_kmod_exit(struct udev *udev __attribute__((unused))) {
         log_debug("Unload module index");
         ctx = kmod_unref(ctx);
 }
 
 /* called every couple of seconds during event activity; 'true' if config has changed */
-static bool builtin_kmod_validate(struct udev *udev) {
+static bool builtin_kmod_validate(struct udev *udev __attribute__((unused))) {
         log_debug("Validate module index");
         if (!ctx)
                 return false;

@@ -576,7 +576,7 @@ out:
         return parent;
 }
 
-static int builtin_path_id(struct udev_device *dev, int argc, char *argv[], bool test) {
+static int builtin_path_id(struct udev_device *dev, int argc __attribute__((unused)), char *argv[] __attribute__((unused)), bool test) {
         struct udev_device *parent;
         char *path = NULL;
         bool supported_transport = false;

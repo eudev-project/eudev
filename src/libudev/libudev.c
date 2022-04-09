@@ -221,10 +221,10 @@ _public_ struct udev *udev_unref(struct udev *udev) {
  * This function is deprecated.
  *
  **/
-_public_ void udev_set_log_fn(struct udev *udev,
+_public_ void udev_set_log_fn(struct udev *udev __attribute__((unused)),
                      void (*log_fn)(struct udev *udev,
                                     int priority, const char *file, int line, const char *fn,
-                                    const char *format, va_list args)) {
+                                    const char *format, va_list args) __attribute__((unused))) {
         return;
 }
 
@@ -235,7 +235,7 @@ _public_ void udev_set_log_fn(struct udev *udev,
  * This function is deprecated.
  *
  **/
-_public_ int udev_get_log_priority(struct udev *udev) {
+_public_ int udev_get_log_priority(struct udev *udev __attribute__((unused))) {
         return log_get_max_level();
 }
 
@@ -247,6 +247,6 @@ _public_ int udev_get_log_priority(struct udev *udev) {
  * This function is deprecated.
  *
  **/
-_public_ void udev_set_log_priority(struct udev *udev, int priority) {
+_public_ void udev_set_log_priority(struct udev *udev __attribute__((unused)), int priority) {
         log_set_max_level(priority);
 }

@@ -80,7 +80,7 @@ bool udev_builtin_validate(struct udev *udev) {
         return false;
 }
 
-void udev_builtin_list(struct udev *udev) {
+void udev_builtin_list(struct udev *udev __attribute__((unused))) {
         unsigned int i;
 
         for (i = 0; i < ELEMENTSOF(builtins); i++)

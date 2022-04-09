@@ -26,7 +26,7 @@
 
 #include "udev.h"
 
-static int adm_version(struct udev *udev, int argc, char *argv[]) {
+static int adm_version(struct udev *udev __attribute__((unused)), int argc __attribute__((unused)), char *argv[] __attribute__((unused))) {
         printf("%s\n", UDEV_VERSION);
         return 0;
 }
@@ -56,7 +56,7 @@ static const struct udevadm_cmd *udevadm_cmds[] = {
         &udevadm_help,
 };
 
-static int adm_help(struct udev *udev, int argc, char *argv[]) {
+static int adm_help(struct udev *udev __attribute__((unused)), int argc __attribute__((unused)), char *argv[] __attribute__((unused))) {
         unsigned int i;
 
         printf("%s [--help] [--version] [--debug] COMMAND [COMMAND OPTIONS]\n\n"

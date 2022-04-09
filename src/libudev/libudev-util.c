@@ -111,7 +111,7 @@ int util_resolve_subsys_kernel(struct udev *udev, const char *string,
         return 0;
 }
 
-ssize_t util_get_sys_core_link_value(struct udev *udev, const char *slink, const char *syspath, char *value, size_t size)
+ssize_t util_get_sys_core_link_value(struct udev *udev __attribute__((unused)), const char *slink, const char *syspath, char *value, size_t size)
 {
         char path[UTIL_PATH_SIZE];
         char target[UTIL_PATH_SIZE];
@@ -130,7 +130,7 @@ ssize_t util_get_sys_core_link_value(struct udev *udev, const char *slink, const
         return strscpy(value, size, pos);
 }
 
-int util_resolve_sys_link(struct udev *udev, char *syspath, size_t size)
+int util_resolve_sys_link(struct udev *udev __attribute__((unused)), char *syspath, size_t size)
 {
         char link_target[UTIL_PATH_SIZE];
 

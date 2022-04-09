@@ -65,7 +65,7 @@ static inline struct _mate *node_to_mate(struct udev_list_node *node)
         return container_of(node, struct _mate, node);
 }
 
-noreturn static void sig_alrm(int signo)
+noreturn static void sig_alrm(int signo __attribute__((unused)))
 {
         exit(4);
 }

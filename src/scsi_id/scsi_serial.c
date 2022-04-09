@@ -104,8 +104,8 @@ static int do_scsi_page80_inquiry(struct udev *udev,
                                   struct scsi_id_device *dev_scsi, int fd,
                                   char *serial, char *serial_short, int max_len);
 
-static int sg_err_category_new(struct udev *udev,
-                               int scsi_status, int msg_status, int
+static int sg_err_category_new(struct udev *udev __attribute__((unused)),
+                               int scsi_status, int msg_status __attribute__((unused)), int
                                host_status, int driver_status, const
                                unsigned char *sense_buffer, int sb_len)
 {
@@ -169,7 +169,7 @@ static int sg_err_category4(struct udev *udev, struct sg_io_v4 *hp) {
                                    hp->response_len);
 }
 
-static int scsi_dump_sense(struct udev *udev,
+static int scsi_dump_sense(struct udev *udev __attribute__((unused)),
                            struct scsi_id_device *dev_scsi,
                            unsigned char *sense_buffer, int sb_len) {
         int s;
@@ -449,7 +449,7 @@ static int append_vendor_model(
  * check_fill_0x83_id - check the page 0x83 id, if OK allocate and fill
  * serial number.
  */
-static int check_fill_0x83_id(struct udev *udev,
+static int check_fill_0x83_id(struct udev *udev __attribute__((unused)),
                               struct scsi_id_device *dev_scsi,
                               unsigned char *page_83,
                               const struct scsi_id_search_values
@@ -560,11 +560,11 @@ static int check_fill_0x83_id(struct udev *udev,
 }
 
 /* Extract the raw binary from VPD 0x83 pre-SPC devices */
-static int check_fill_0x83_prespc3(struct udev *udev,
-                                   struct scsi_id_device *dev_scsi,
+static int check_fill_0x83_prespc3(struct udev *udev __attribute__((unused)),
+                                   struct scsi_id_device *dev_scsi __attribute__((unused)),
                                    unsigned char *page_83,
                                    const struct scsi_id_search_values
-                                   *id_search, char *serial, char *serial_short, int max_len) {
+                                   *id_search __attribute__((unused)), char *serial, char *serial_short, int max_len) {
         int i, j;
 
         serial[0] = hex_str[SCSI_ID_NAA];
@@ -674,7 +674,7 @@ static int do_scsi_page83_inquiry(struct udev *udev,
  */
 static int do_scsi_page83_prespc3_inquiry(struct udev *udev,
                                           struct scsi_id_device *dev_scsi, int fd,
-                                          char *serial, char *serial_short, int len) {
+                                          char *serial, char *serial_short __attribute__((unused)), int len __attribute__((unused))) {
         int retval;
         int i, j;
         unsigned char page_83[SCSI_INQ_BUFF_LEN];

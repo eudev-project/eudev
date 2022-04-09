@@ -406,7 +406,7 @@ out:
         return l;
 }
 
-static int spawn_exec(struct udev_event *event,
+static int spawn_exec(struct udev_event *event __attribute__((unused)),
                       const char *cmd, char *const argv[], char **envp, const sigset_t *sigmask,
                       int fd_stdout, int fd_stderr) {
         _cleanup_close_ int fd = -1;
@@ -671,7 +671,7 @@ out:
         return err;
 }
 
-int udev_build_argv(struct udev *udev, char *cmd, int *argc, char *argv[]) {
+int udev_build_argv(struct udev *udev __attribute__((unused)), char *cmd, int *argc, char *argv[]) {
         int i = 0;
         char *pos;
 
@@ -810,7 +810,7 @@ out:
 int udev_rules_assigning_name_to(struct udev_rules *rules,const char *match_name);
 #endif
 
-static int rename_netif_dev_fromname_toname(struct udev_device *dev,const char *oldname,const char *name) {
+static int rename_netif_dev_fromname_toname(struct udev_device *dev __attribute__((unused)),const char *oldname,const char *name) {
         int r;
         int sk;
         struct ifreq ifr;

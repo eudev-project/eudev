@@ -36,7 +36,7 @@ static int inotify_fd = -1;
  * set to cloexec since we need our children to be able to add
  * watches for us
  */
-int udev_watch_init(struct udev *udev) {
+int udev_watch_init(struct udev *udev __attribute__((unused))) {
         inotify_fd = inotify_init1(IN_CLOEXEC);
         if (inotify_fd < 0)
                 log_error_errno(errno, "inotify_init failed: %m");
@@ -92,7 +92,7 @@ unlink:
         }
 }
 
-void udev_watch_begin(struct udev *udev, struct udev_device *dev) {
+void udev_watch_begin(struct udev *udev __attribute__((unused)), struct udev_device *dev) {
         char filename[UTIL_PATH_SIZE];
         int wd;
         int r;
@@ -118,7 +118,7 @@ void udev_watch_begin(struct udev *udev, struct udev_device *dev) {
         udev_device_set_watch_handle(dev, wd);
 }
 
-void udev_watch_end(struct udev *udev, struct udev_device *dev) {
+void udev_watch_end(struct udev *udev __attribute__((unused)), struct udev_device *dev) {
         int wd;
         char filename[UTIL_PATH_SIZE];
 
