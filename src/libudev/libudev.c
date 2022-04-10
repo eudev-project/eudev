@@ -174,6 +174,7 @@ _public_ struct udev *udev_new(void) {
                                 continue;
                         }
                 }
+                fclose(f);
         }
 
         return udev;
