@@ -70,13 +70,9 @@ static int create_symlink(const char *target, const char *slink) {
 }
 
 static int node_symlink(struct udev_device *dev, const char *devnode, const char *slink) {
-        struct stat st;
-        char target[UTIL_PATH_SIZE];
-        char *s;
-        size_t l;
+        _cleanup_free_ char *target = NULL;
         const char *id, *slink_tmp;
-        int i = 0;
-        int tail = 0;
+        struct stat st;
         int r;
 
         assert(dev);
@@ -92,22 +88,9 @@ static int node_symlink(struct udev_device *dev, const char *devnode, const char
                 return log_debug_errno(errno, "Failed to lstat() '%s': %m", slink);
 
         /* use relative link */
-        target[0] = '\0';
-        while (devnode[i] && (devnode[i] == slink[i])) {
-                if (devnode[i] == '/')
-                        tail = i+1;
-                i++;
-        }
-        s = target;
-        l = sizeof(target);
-        while (slink[i] != '\0') {
-                if (slink[i] == '/')
-                        l = strpcpy(&s, l, "../");
-                i++;
-        }
-        l = strscpy(s, l, &devnode[tail]);
-        if (l == 0)
-                return log_debug_errno(EINVAL, "Failed to get relative path from '%s' to '%s': %m", slink, devnode);
+        r = path_make_relative_parent(slink, devnode, &target);
+        if (r < 0)
+                return log_debug_errno(r, "Failed to get relative path from '%s' to '%s': %m", slink, devnode);
 
         id = udev_device_get_id_filename(dev);
         if (!id)
