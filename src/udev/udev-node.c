@@ -29,6 +29,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/sysmacros.h>
+#include <sys/file.h>
 
 #include "path-util.h"
 #include "mkdir.h"
@@ -38,36 +39,11 @@
 #include "smack-util.h"
 #include "unaligned.h"
 
-#define CREATE_LINK_MAX_RETRIES        128
-
 /* Three different errors for "this device does not quite exist" */
 #define ERRNO_IS_DEVICE_ABSENT(r) IN_SET(abs(r), ENODEV, ENXIO, ENOENT)
 
 #define UDEV_NODE_HASH_KEY ((const uint8_t[16]) { 0xb9, 0x6a, 0xf1, 0xce, 0x40, 0x31, 0x44, 0x1a, \
                                                    0x9e, 0x19, 0xec, 0x8b, 0xae, 0xf3, 0xe3, 0x2f })
-
-static int create_symlink(const char *target, const char *slink) {
-        int r = -ENOENT;
-
-        assert(target);
-        assert(slink);
-
-        for (unsigned i = 0; i < CREATE_LINK_MAX_RETRIES; i++) {
-                r = mkdir_parents_label(slink, 0755);
-                if (r == -ENOENT)
-                        continue;
-                if (r < 0)
-                        return r;
-
-                mac_selinux_create_file_prepare(slink, S_IFLNK);
-                r = RET_NERRNO(symlink(target, slink));
-                mac_selinux_create_file_clear();
-                if (r != -ENOENT)
-                        return r;
-        }
-
-        return r;
-}
 
 static int node_symlink(struct udev_device *dev, const char *devnode, const char *slink) {
         _cleanup_free_ char *target = NULL;
@@ -104,7 +80,13 @@ static int node_symlink(struct udev_device *dev, const char *devnode, const char
         slink_tmp = strjoina(slink, ".tmp-", id);
         (void) unlink(slink_tmp);
 
-        r = create_symlink(target, slink_tmp);
+        r = mkdir_parents_label(slink_tmp, 0755);
+        if (r < 0)
+                return log_debug_errno(r, "Failed to create parent directory of '%s': %m", slink_tmp);
+
+        mac_selinux_create_file_prepare(slink_tmp, S_IFLNK);
+        r = RET_NERRNO(symlink(target, slink_tmp));
+        mac_selinux_create_file_clear();
         if (r < 0)
                 return log_debug_errno(r, "Failed to create symlink '%s' to '%s': %m", slink_tmp, target);
 
@@ -266,7 +248,7 @@ static int stack_directory_update(struct udev_device *dev, int fd, bool add) {
                 }
         }
 
-        return 0;
+        return 1; /* Updated. */
 }
 
 static int stack_directory_open(const char *dirname) {
@@ -282,6 +264,21 @@ static int stack_directory_open(const char *dirname) {
         fd = open_mkdir_at(AT_FDCWD, dirname, O_CLOEXEC | O_DIRECTORY | O_NOFOLLOW | O_RDONLY, 0755);
         if (fd < 0)
                 return fd;
+
+        return TAKE_FD(fd);
+}
+
+static int stack_directory_lock(int dirfd) {
+        _cleanup_close_ int fd = -1;
+
+        assert(dirfd >= 0);
+
+        fd = openat(dirfd, ".lock", O_CLOEXEC | O_NOFOLLOW | O_RDONLY | O_CREAT, 0600);
+        if (fd < 0)
+                return -errno;
+
+        if (flock(fd, LOCK_EX) < 0)
+                return -errno;
 
         return TAKE_FD(fd);
 }
@@ -371,8 +368,8 @@ static int stack_directory_get_name(const char *slink, char **ret) {
 }
 
 static int link_update(struct udev_device *dev, const char *slink, bool add) {
-        _cleanup_free_ char *dirname = NULL, *target = NULL;
-        _cleanup_close_ int dirfd = -1;
+        _cleanup_free_ char *dirname = NULL, *devnode = NULL;
+        _cleanup_close_ int dirfd = -1, lockfd = -1;
         int r;
 
         assert(dev);
@@ -386,24 +383,28 @@ static int link_update(struct udev_device *dev, const char *slink, bool add) {
         if (dirfd < 0)
                 return log_debug_errno(dirfd, "Failed to open stack directory '%s': %m", dirname);
 
+        lockfd = stack_directory_lock(dirfd);
+        if (lockfd < 0)
+                return log_debug_errno(lockfd, "Failed to lock stack directory '%s': %m", dirname);
+
         r = stack_directory_update(dev, dirfd, add);
         if (r < 0)
                 return log_debug_errno(r, "Failed to update stack directory '%s': %m", dirname);
 
-        r = stack_directory_find_prioritized_devnode(dev, dirname, add, &target);
+        r = stack_directory_find_prioritized_devnode(dev, dirname, add, &devnode);
         if (r < 0)
-                return log_debug_errno(r, "Failed to determine highest priority for symlink '%s': %m", slink);
-        if (r == 0) {
-                log_debug("No reference left for '%s', removing", slink);
+                return log_debug_errno(r, "Failed to determine device node with the highest priority for '%s': %m", slink);
+        if (r > 0)
+                return node_symlink(dev, devnode, slink);
 
-                if (unlink(slink) < 0 && errno != ENOENT)
-                        log_debug_errno(errno, "Failed to remove '%s', ignoring: %m", slink);
+        log_debug("No reference left for '%s', removing", slink);
 
-                (void) rmdir_parents(slink, "/dev");
-                return 0;
-        }
+        if (unlink(slink) < 0 && errno != ENOENT)
+                log_debug_errno(errno, "Failed to remove '%s', ignoring: %m", slink);
 
-        return node_symlink(dev, target, slink);
+        (void) rmdir_parents(slink, "/dev");
+
+        return 0;
 }
 
 static bool device_has_devlink(struct udev_device *dev, const char *devlink) {
