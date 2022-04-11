@@ -39,7 +39,7 @@
 #include "unaligned.h"
 
 #define CREATE_LINK_MAX_RETRIES        128
-#define CREATE_STACK_LINK_MAX_RETRIES  128
+
 /* Three different errors for "this device does not quite exist" */
 #define ERRNO_IS_DEVICE_ABSENT(r) IN_SET(abs(r), ENODEV, ENXIO, ENOENT)
 
@@ -158,14 +158,8 @@ static int link_find_prioritized(struct udev_device *dev, bool add, const char *
         }
 
         dir = opendir(stackdir);
-        if (!dir) {
-                if (errno == ENOENT) {
-                        *ret = TAKE_PTR(target);
-                        return !!*ret;
-                }
-
+        if (!dir)
                 return -errno;
-        }
 
         id = udev_device_get_id_filename(dev);
         if (!id)
@@ -240,64 +234,64 @@ static int link_find_prioritized(struct udev_device *dev, bool add, const char *
         return !!*ret;
 }
 
-static int update_stack_directory(struct udev_device *dev, const char *dirname, bool add) {
-        _cleanup_free_ char *filename = NULL, *data = NULL, *buf = NULL;
-        const char *devname, *id;
-        int priority, r;
+static int stack_directory_update(struct udev_device *dev, int fd, bool add) {
+        const char *id;
 
         assert(dev);
-        assert(dirname);
+        assert(fd >= 0);
 
         id = udev_device_get_id_filename(dev);
         if (!id)
-                return log_debug_errno(ENODEV, "Failed to get device id: %m");
+                return -ENODEV;
 
-        filename = path_join(dirname, id);
-        if (!filename)
-                return log_oom();
+        if (add) {
+                _cleanup_free_ char *data = NULL, *buf = NULL;
+                const char *devname;
+                int priority;
 
-        if (!add) {
-                if (unlink(filename) < 0 && errno != ENOENT)
-                        log_debug_errno(errno, "Failed to remove %s, ignoring: %m", filename);
+                devname = udev_device_get_devnode(dev);
+                if (!devname)
+                        return -ENOENT;
 
-                (void) rmdir(dirname);
-                return 0;
-        }
+                priority = udev_device_get_devlink_priority(dev);
 
-        devname = udev_device_get_devnode(dev);
-        if (!devname)
-                return log_debug_errno(ENOENT, "Failed to get device node: %m");
+                if (asprintf(&data, "%i:%s", priority, devname) < 0)
+                        return -ENOMEM;
 
-        priority = udev_device_get_devlink_priority(dev);
+                if (readlinkat_malloc(fd, id, &buf) >= 0 && streq(buf, data))
+                        return 0; /* Unchanged. */
 
-        if (asprintf(&data, "%i:%s", priority, devname) < 0)
-                return log_oom();
+                (void) unlinkat(fd, id, 0);
 
-        if (readlink_malloc(filename, &buf) >= 0 && streq(buf, data))
-                return 0;
+                if (symlinkat(data, fd, id) < 0)
+                        return -errno;
 
-        if (unlink(filename) < 0 && errno != ENOENT)
-                log_debug_errno(errno, "Failed to remove %s, ignoring: %m", filename);
-
-        for (unsigned j = 0; j < CREATE_STACK_LINK_MAX_RETRIES; j++) {
-                /* This may fail with -ENOENT when the parent directory is removed during
-                 * creating the file by another udevd worker. */
-                r = udev_mkdir_p(dirname, 0755);
-                if (r == -ENOENT)
-                        continue;
-                if (r < 0)
-                        return log_debug_errno(r, "Failed to create directory %s: %m", dirname);
-
-                if (symlink(data, filename) < 0) {
+        } else {
+                if (unlinkat(fd, id, 0) < 0) {
                         if (errno == ENOENT)
-                                continue;
-                        return log_debug_errno(errno, "Failed to create symbolic link %s: %m", filename);
+                                return 0; /* Unchanged. */
+                        return -errno;
                 }
-
-                return 0;
         }
 
-        return log_debug_errno(ELOOP, "Failed to create symbolic link %s: %m", filename);
+        return 0;
+}
+
+static int stack_directory_open(const char *dirname) {
+        _cleanup_close_ int fd = -1;
+        int r;
+
+        assert(dirname);
+
+        r = mkdir_parents(dirname, 0755);
+        if (r < 0)
+                return r;
+
+        fd = open_mkdir_at(AT_FDCWD, dirname, O_CLOEXEC | O_DIRECTORY | O_NOFOLLOW | O_RDONLY, 0755);
+        if (fd < 0)
+                return fd;
+
+        return TAKE_FD(fd);
 }
 
 static char urlsafe_base64char(int x) {
@@ -386,6 +380,7 @@ static int stack_directory_get_name(const char *slink, char **ret) {
 
 static int link_update(struct udev_device *dev, const char *slink, bool add) {
         _cleanup_free_ char *dirname = NULL, *target = NULL;
+        _cleanup_close_ int dirfd = -1;
         int r;
 
         assert(dev);
@@ -395,9 +390,13 @@ static int link_update(struct udev_device *dev, const char *slink, bool add) {
         if (r < 0)
                 return log_debug_errno(r, "Failed to build stack directory name for '%s': %m", slink);
 
-        r = update_stack_directory(dev, dirname, add);
+        dirfd = stack_directory_open(dirname);
+        if (dirfd < 0)
+                return log_debug_errno(dirfd, "Failed to open stack directory '%s': %m", dirname);
+
+        r = stack_directory_update(dev, dirfd, add);
         if (r < 0)
-                return r;
+                return log_debug_errno(r, "Failed to update stack directory '%s': %m", dirname);
 
         r = link_find_prioritized(dev, add, dirname, &target);
         if (r < 0)
