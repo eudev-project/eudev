@@ -240,57 +240,6 @@ static int link_find_prioritized(struct udev_device *dev, bool add, const char *
         return !!*ret;
 }
 
-static char urlsafe_base64char(int x) {
-        static const char table[64] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-                                      "abcdefghijklmnopqrstuvwxyz"
-                                      "0123456789-_";
-        return table[x & 63];
-}
-
-static size_t udev_node_escape_path(const char *src, char *dest, size_t size) {
-        size_t i, j;
-        uint8_t out[8];
-        uint64_t h;
-
-        assert(src);
-        assert(dest);
-        assert(size >= 12);
-
-        for (i = 0, j = 0; src[i] != '\0'; i++) {
-                if (src[i] == '/') {
-                        if (j+4 >= size - 12 + 1)
-                                goto toolong;
-                        memcpy(&dest[j], "\\x2f", 4);
-                        j += 4;
-                } else if (src[i] == '\\') {
-                        if (j+4 >= size - 12 + 1)
-                                goto toolong;
-                        memcpy(&dest[j], "\\x5c", 4);
-                        j += 4;
-                } else {
-                        if (j+1 >= size - 12 + 1)
-                                goto toolong;
-                        dest[j] = src[i];
-                        j++;
-                }
-        }
-        dest[j] = '\0';
-        return j;
-
-toolong:
-        /* If the input path is too long to encode as a filename, then let's suffix with a string
-         * generated from the hash of the path. */
-
-        siphash24(out, src, strlen(src) + 1, UDEV_NODE_HASH_KEY);
-        h = unaligned_read_le64(out);
-
-        for (unsigned k = 0; k <= 10; k++)
-                dest[size - k - 2] = urlsafe_base64char((h >> (k * 6)) & 63);
-
-        dest[size - 1] = '\0';
-        return size - 1;
-}
-
 static int update_stack_directory(struct udev_device *dev, const char *dirname, bool add) {
         _cleanup_free_ char *filename = NULL, *data = NULL, *buf = NULL;
         const char *devname, *id;
@@ -349,6 +298,57 @@ static int update_stack_directory(struct udev_device *dev, const char *dirname, 
         }
 
         return log_debug_errno(ELOOP, "Failed to create symbolic link %s: %m", filename);
+}
+
+static char urlsafe_base64char(int x) {
+        static const char table[64] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+                                      "abcdefghijklmnopqrstuvwxyz"
+                                      "0123456789-_";
+        return table[x & 63];
+}
+
+static size_t udev_node_escape_path(const char *src, char *dest, size_t size) {
+        size_t i, j;
+        uint8_t out[8];
+        uint64_t h;
+
+        assert(src);
+        assert(dest);
+        assert(size >= 12);
+
+        for (i = 0, j = 0; src[i] != '\0'; i++) {
+                if (src[i] == '/') {
+                        if (j+4 >= size - 12 + 1)
+                                goto toolong;
+                        memcpy(&dest[j], "\\x2f", 4);
+                        j += 4;
+                } else if (src[i] == '\\') {
+                        if (j+4 >= size - 12 + 1)
+                                goto toolong;
+                        memcpy(&dest[j], "\\x5c", 4);
+                        j += 4;
+                } else {
+                        if (j+1 >= size - 12 + 1)
+                                goto toolong;
+                        dest[j] = src[i];
+                        j++;
+                }
+        }
+        dest[j] = '\0';
+        return j;
+
+toolong:
+        /* If the input path is too long to encode as a filename, then let's suffix with a string
+         * generated from the hash of the path. */
+
+        siphash24(out, src, strlen(src) + 1, UDEV_NODE_HASH_KEY);
+        h = unaligned_read_le64(out);
+
+        for (unsigned k = 0; k <= 10; k++)
+                dest[size - k - 2] = urlsafe_base64char((h >> (k * 6)) & 63);
+
+        dest[size - 1] = '\0';
+        return size - 1;
 }
 
 /* manage "stack of names" with possibly specified device priorities */
