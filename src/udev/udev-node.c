@@ -351,36 +351,49 @@ toolong:
         return size - 1;
 }
 
-/* manage "stack of names" with possibly specified device priorities */
-static int link_update(struct udev_device *dev, const char *slink_in, bool add) {
-        _cleanup_free_ char *slink = NULL, *dirname = NULL, *target = NULL;
-        const char *slink_name;
+static int stack_directory_get_name(const char *slink, char **ret) {
+        _cleanup_free_ char *s = NULL, *dirname = NULL;
         char name_enc[NAME_MAX+1];
-        int r;
+        const char *name;
 
-        assert(dev);
-        assert(slink_in);
+        assert(slink);
+        assert(ret);
 
-        slink = strdup(slink_in);
-        if (!slink)
-                return log_oom();
+        s = strdup(slink);
+        if (!s)
+                return -ENOMEM;
 
-        path_simplify(slink);
+        path_simplify(s);
 
-        slink_name = path_startswith(slink, "/dev");
-        if (!slink_name ||
-            empty_or_root(slink_name) ||
-            !path_is_normalized(slink_name)) {
-                log_debug("Invalid symbolic link of device node: %s", slink);
+        if (!path_is_normalized(s))
                 return -EINVAL;
-        }
+
+        name = path_startswith(s, "/dev");
+        if (empty_or_root(name))
+                return -EINVAL;
 
         /* The name of the stack directory is the escaped path below /dev including its leading
          * slash, e.g. \x2fdisk\x2fby-id\x2f..., as eudev has always named it. */
-        (void) udev_node_escape_path(strjoina("/", slink_name), name_enc, sizeof(name_enc));
+        udev_node_escape_path(strjoina("/", name), name_enc, sizeof(name_enc));
+
         dirname = path_join(UDEV_ROOT_RUN "/udev/links", name_enc);
         if (!dirname)
-                return log_oom();
+                return -ENOMEM;
+
+        *ret = TAKE_PTR(dirname);
+        return 0;
+}
+
+static int link_update(struct udev_device *dev, const char *slink, bool add) {
+        _cleanup_free_ char *dirname = NULL, *target = NULL;
+        int r;
+
+        assert(dev);
+        assert(slink);
+
+        r = stack_directory_get_name(slink, &dirname);
+        if (r < 0)
+                return log_debug_errno(r, "Failed to build stack directory name for '%s': %m", slink);
 
         r = update_stack_directory(dev, dirname, add);
         if (r < 0)
