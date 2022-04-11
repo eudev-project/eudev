@@ -69,8 +69,8 @@ static int create_symlink(const char *target, const char *slink) {
         return r;
 }
 
-static int node_symlink(struct udev_device *dev, const char *node, const char *slink) {
-        struct stat stats;
+static int node_symlink(struct udev_device *dev, const char *devnode, const char *slink) {
+        struct stat st;
         char target[UTIL_PATH_SIZE];
         char *s;
         size_t l;
@@ -80,20 +80,21 @@ static int node_symlink(struct udev_device *dev, const char *node, const char *s
         int r;
 
         assert(dev);
-        assert(node);
+        assert(devnode);
         assert(slink);
 
-        if (lstat(slink, &stats) >= 0) {
-                if (!S_ISLNK(stats.st_mode))
+        if (lstat(slink, &st) >= 0) {
+                if (!S_ISLNK(st.st_mode))
                         return log_debug_errno(EEXIST,
-                                               "Conflicting inode '%s' found, link to '%s' will not be created.", slink, node);
+                                               "Conflicting inode '%s' found, link to '%s' will not be created.",
+                                               slink, devnode);
         } else if (errno != ENOENT)
                 return log_debug_errno(errno, "Failed to lstat() '%s': %m", slink);
 
         /* use relative link */
         target[0] = '\0';
-        while (node[i] && (node[i] == slink[i])) {
-                if (node[i] == '/')
+        while (devnode[i] && (devnode[i] == slink[i])) {
+                if (devnode[i] == '/')
                         tail = i+1;
                 i++;
         }
@@ -104,9 +105,9 @@ static int node_symlink(struct udev_device *dev, const char *node, const char *s
                         l = strpcpy(&s, l, "../");
                 i++;
         }
-        l = strscpy(s, l, &node[tail]);
+        l = strscpy(s, l, &devnode[tail]);
         if (l == 0)
-                return log_debug_errno(EINVAL, "Failed to get relative path from '%s' to '%s': %m", slink, node);
+                return log_debug_errno(EINVAL, "Failed to get relative path from '%s' to '%s': %m", slink, devnode);
 
         id = udev_device_get_id_filename(dev);
         if (!id)
@@ -128,36 +129,36 @@ static int node_symlink(struct udev_device *dev, const char *node, const char *s
         return 0;
 }
 
-static int link_find_prioritized(struct udev_device *dev, bool add, const char *stackdir, char **ret) {
+static int stack_directory_find_prioritized_devnode(struct udev_device *dev, const char *dirname, bool add, char **ret) {
         struct udev *udev = udev_device_get_udev(dev);
         _cleanup_closedir_ DIR *dir = NULL;
-        _cleanup_free_ char *target = NULL;
-        struct dirent *dent;
+        _cleanup_free_ char *devnode = NULL;
+        struct dirent *de;
         int r, priority = 0;
         const char *id;
 
         assert(dev);
-        assert(stackdir);
+        assert(dirname);
         assert(ret);
 
         /* Find device node of device with highest priority. This returns 1 if a device found, 0 if no
-         * device found, or a negative errno. */
+         * device found, or a negative errno on error. */
 
         if (add) {
-                const char *devnode;
+                const char *n;
 
                 priority = udev_device_get_devlink_priority(dev);
 
-                devnode = udev_device_get_devnode(dev);
-                if (!devnode)
+                n = udev_device_get_devnode(dev);
+                if (!n)
                         return -ENOENT;
 
-                target = strdup(devnode);
-                if (!target)
+                devnode = strdup(n);
+                if (!devnode)
                         return -ENOMEM;
         }
 
-        dir = opendir(stackdir);
+        dir = opendir(dirname);
         if (!dir)
                 return -errno;
 
@@ -165,76 +166,75 @@ static int link_find_prioritized(struct udev_device *dev, bool add, const char *
         if (!id)
                 return -ENODEV;
 
-        for (dent = readdir(dir); dent; dent = readdir(dir)) {
+        for (de = readdir(dir); de; de = readdir(dir)) {
                 int tmp_prio;
 
-                if (dent->d_name[0] == '.')
+                if (de->d_name[0] == '.')
                         continue;
 
                 /* skip ourself */
-                if (streq(dent->d_name, id))
+                if (streq(de->d_name, id))
                         continue;
 
-                if (dent->d_type == DT_LNK) {
+                if (de->d_type == DT_LNK) {
                         _cleanup_free_ char *buf = NULL;
-                        char *devnode;
+                        char *colon;
 
                         /* New format. The devnode and priority can be obtained from symlink. */
 
-                        r = readlinkat_malloc(dirfd(dir), dent->d_name, &buf);
+                        r = readlinkat_malloc(dirfd(dir), de->d_name, &buf);
                         if (r < 0) {
-                                log_debug_errno(r, "Failed to read symlink %s, ignoring: %m", dent->d_name);
+                                log_debug_errno(r, "Failed to read symlink %s, ignoring: %m", de->d_name);
                                 continue;
                         }
 
-                        devnode = strchr(buf, ':');
-                        if (!devnode || devnode == buf)
+                        colon = strchr(buf, ':');
+                        if (!colon || colon == buf)
                                 continue;
 
-                        *(devnode++) = '\0';
-                        if (!path_startswith(devnode, "/dev"))
-                                continue;
+                        *colon = '\0';
 
                         if (safe_atoi(buf, &tmp_prio) < 0)
                                 continue;
 
-                        if (target && tmp_prio <= priority)
+                        if (devnode && tmp_prio <= priority)
                                 continue;
 
-                        r = free_and_strdup(&target, devnode);
+                        r = free_and_strdup(&devnode, colon + 1);
                         if (r < 0)
                                 return r;
 
-                } else if (dent->d_type == DT_REG) {
+                } else if (de->d_type == DT_REG) {
                         _cleanup_udev_device_unref_ struct udev_device *tmp_dev = NULL;
-                        const char *devnode;
+                        const char *val;
 
                         /* Old format. The devnode and priority must be obtained from uevent and
                          * udev database files. */
 
-                        tmp_dev = udev_device_new_from_device_id(udev, dent->d_name);
+                        tmp_dev = udev_device_new_from_device_id(udev, de->d_name);
                         if (!tmp_dev)
                                 continue;
 
                         tmp_prio = udev_device_get_devlink_priority(tmp_dev);
 
-                        if (target && tmp_prio <= priority)
+                        if (devnode && tmp_prio <= priority)
                                 continue;
 
-                        devnode = udev_device_get_devnode(tmp_dev);
-                        if (!devnode)
+                        val = udev_device_get_devnode(tmp_dev);
+                        if (!val)
                                 continue;
 
-                        r = free_and_strdup(&target, devnode);
+                        r = free_and_strdup(&devnode, val);
                         if (r < 0)
                                 return r;
+
                 } else
                         continue;
 
                 priority = tmp_prio;
         }
 
-        *ret = TAKE_PTR(target);
+        *ret = TAKE_PTR(devnode);
         return !!*ret;
 }
 
@@ -402,7 +402,7 @@ static int link_update(struct udev_device *dev, const char *slink, bool add) {
         if (r < 0)
                 return log_debug_errno(r, "Failed to update stack directory '%s': %m", dirname);
 
-        r = link_find_prioritized(dev, add, dirname, &target);
+        r = stack_directory_find_prioritized_devnode(dev, dirname, add, &target);
         if (r < 0)
                 return log_debug_errno(r, "Failed to determine highest priority for symlink '%s': %m", slink);
         if (r == 0) {
