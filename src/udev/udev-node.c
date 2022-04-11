@@ -76,13 +76,18 @@ static int node_symlink(struct udev_device *dev, const char *devnode, const char
         int r;
 
         assert(dev);
-        assert(devnode);
         assert(slink);
+
+        if (!devnode) {
+                devnode = udev_device_get_devnode(dev);
+                if (!devnode)
+                        return log_debug_errno(ENOENT, "Failed to get device node: %m");
+        }
 
         if (lstat(slink, &st) >= 0) {
                 if (!S_ISLNK(st.st_mode))
                         return log_debug_errno(EEXIST,
-                                               "Conflicting inode '%s' found, link to '%s' will not be created.",
+                                               "Conflicting inode '%s' found, symlink to '%s' will not be created.",
                                                slink, devnode);
         } else if (errno != ENOENT)
                 return log_debug_errno(errno, "Failed to lstat() '%s': %m", slink);
@@ -414,16 +419,9 @@ static void device_get_devpath_by_devnum(struct udev_device *dev, char *buf, siz
 int udev_node_update(struct udev_device *dev, struct udev_device *dev_old) {
         char filename[UTIL_PATH_SIZE];
         struct udev_list_entry *list_entry;
-        const char *devnode;
         int r;
 
         assert(dev);
-
-        devnode = udev_device_get_devnode(dev);
-        if (!devnode)
-                return log_debug_errno(ENOENT, "Failed to get devnode: %m");
-
-        log_debug("Handling device node '%s', devnum=%s", devnode, udev_device_get_id_filename(dev) ?: "n/a");
 
         /* update possible left-over symlinks */
         udev_list_entry_foreach(list_entry, dev_old ? udev_device_get_devlinks_list_entry(dev_old) : NULL) {
@@ -455,7 +453,7 @@ int udev_node_update(struct udev_device *dev, struct udev_device *dev_old) {
         device_get_devpath_by_devnum(dev, filename, sizeof(filename));
 
         /* always add /dev/{block,char}/$major:$minor */
-        r = node_symlink(dev, devnode, filename);
+        r = node_symlink(dev, NULL, filename);
         if (r < 0)
                 return log_warning_errno(r, "Failed to create device symlink '%s': %m", filename);
 
