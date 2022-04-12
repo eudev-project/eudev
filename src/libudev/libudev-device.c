@@ -307,7 +307,8 @@ _public_ const char *udev_device_get_subsystem(struct udev_device *udev_device)
                         udev_device_set_subsystem(udev_device, "module");
                         return udev_device->subsystem;
                 }
-                if (strstr(udev_device->devpath, "/drivers/") != NULL) {
+                if (strstr(udev_device->devpath, "/drivers/") != NULL ||
+                    endswith(udev_device->devpath, "/drivers")) {
                         udev_device_set_subsystem(udev_device, "drivers");
                         return udev_device->subsystem;
                 }
@@ -1459,6 +1460,19 @@ _public_ struct udev_device *udev_device_new_from_subsystem_sysname(struct udev 
                         driver[0] = '\0';
                         driver = &driver[1];
 
+                        /* If the sysname is "drivers", then it's the drivers directory itself that is meant. */
+                        if (streq(driver, "drivers")) {
+                                strscpyl(path, sizeof(path), "/sys/subsystem/", subsys, "/drivers", NULL);
+                                if (stat(path, &statbuf) == 0)
+                                        goto found;
+
+                                strscpyl(path, sizeof(path), "/sys/bus/", subsys, "/drivers", NULL);
+                                if (stat(path, &statbuf) == 0)
+                                        goto found;
+
+                                goto out;
+                        }
+
                         strscpyl(path, sizeof(path), "/sys/subsystem/", subsys, "/drivers/", driver, NULL);
                         if (stat(path, &statbuf) == 0)
                                 goto found;
@@ -2382,13 +2396,16 @@ int udev_device_remove_devlink(struct udev_device *udev_device, const char *devl
         return 1;
 }
 
-/* For the devices of the "drivers" pseudo-subsystem, i.e. /sys/bus/SUBSYSTEM/drivers/DRIVER, the real
- * subsystem: the path component before "/drivers/". */
+/* For the devices of the "drivers" pseudo-subsystem, i.e. /sys/bus/SUBSYSTEM/drivers/DRIVER and the
+ * directory /sys/bus/SUBSYSTEM/drivers itself, the real subsystem: the path component before
+ * "/drivers/" or "/drivers". */
 static char *device_get_drivers_subsystem(struct udev_device *udev_device)
 {
         const char *devpath = udev_device->devpath, *drivers, *p;
 
         drivers = strstr(devpath, "/drivers/");
+        if (!drivers)
+                drivers = endswith(devpath, "/drivers");
         if (!drivers)
                 return NULL;
 
