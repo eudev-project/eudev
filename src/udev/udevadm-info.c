@@ -587,6 +587,21 @@ static int print_tree(struct udev *udev, struct udev_device *below) {
         if (r < 0)
                 return log_error_errno(r, "Failed to scan for devices and subsystems: %m");
 
+        if (below) {
+                struct udev_device *parent;
+
+                /* This must be called after the scan. Like sd-device's enumerator, skip devices without
+                 * a subsystem, which a subsystem match never matches. */
+                for (parent = udev_device_get_parent(below); parent; parent = udev_device_get_parent(parent)) {
+                        if (!udev_device_get_subsystem(parent))
+                                continue;
+
+                        r = udev_enumerate_add_syspath(e, udev_device_get_syspath(parent));
+                        if (r < 0)
+                                return log_error_errno(r, "Failed to add parent devices: %m");
+                }
+        }
+
         udev_list_entry_foreach(entry, udev_enumerate_get_list_entry(e)) {
                 struct udev_device *d;
 
