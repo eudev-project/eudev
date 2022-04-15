@@ -96,8 +96,8 @@ struct event {
         unsigned long long int delaying_seqnum;
         unsigned long long int seqnum;
         const char *devpath;
-        size_t devpath_len;
         const char *devpath_old;
+        const char *devnode;
         dev_t devnum;
         int ifindex;
         bool is_block;
@@ -488,8 +488,8 @@ static int event_queue_insert(struct udev_device *dev) {
         udev_device_copy_properties(event->dev_kernel, dev);
         event->seqnum = udev_device_get_seqnum(dev);
         event->devpath = udev_device_get_devpath(dev);
-        event->devpath_len = strlen(event->devpath);
         event->devpath_old = udev_device_get_devpath_old(dev);
+        event->devnode = udev_device_get_devnode(dev);
         event->devnum = udev_device_get_devnum(dev);
         event->is_block = streq("block", udev_device_get_subsystem(dev));
         event->ifindex = udev_device_get_ifindex(dev);
@@ -515,10 +515,22 @@ static void worker_kill(void) {
         }
 }
 
+static bool devpath_conflict(const char *a, const char *b) {
+        /* This returns true when two paths are equivalent, or one is a child of another. */
+
+        if (!a || !b)
+                return false;
+
+        for (; *a != '\0' && *b != '\0'; a++, b++)
+                if (*a != *b)
+                        return false;
+
+        return *a == '/' || *b == '/' || *a == *b;
+}
+
 /* lookup event for identical, parent, child device */
 static bool is_devpath_busy(struct event *event) {
         struct udev_list_node *loop;
-        size_t common;
 
         /* check if queue contains events we depend on */
         udev_list_node_foreach(loop, &event_list) {
@@ -538,50 +550,28 @@ static bool is_devpath_busy(struct event *event) {
 
                 /* check major/minor */
                 if (major(event->devnum) != 0 && event->devnum == loop_event->devnum && event->is_block == loop_event->is_block)
-                        return true;
+                        goto set_delaying_seqnum;
 
                 /* check network device ifindex */
                 if (event->ifindex != 0 && event->ifindex == loop_event->ifindex)
-                        return true;
+                        goto set_delaying_seqnum;
 
-                /* check our old name */
-                if (event->devpath_old != NULL && streq(loop_event->devpath, event->devpath_old)) {
-                        event->delaying_seqnum = loop_event->seqnum;
-                        return true;
-                }
+                /* check for identical, parent, or child device, also with the old names */
+                if (devpath_conflict(event->devpath, loop_event->devpath) ||
+                    devpath_conflict(event->devpath, loop_event->devpath_old) ||
+                    devpath_conflict(event->devpath_old, loop_event->devpath))
+                        goto set_delaying_seqnum;
 
-                /* compare devpath */
-                common = MIN(loop_event->devpath_len, event->devpath_len);
-
-                /* one devpath is contained in the other? */
-                if (memcmp(loop_event->devpath, event->devpath, common) != 0)
-                        continue;
-
-                /* identical device event found */
-                if (loop_event->devpath_len == event->devpath_len) {
-                        /* devices names might have changed/swapped in the meantime */
-                        if (major(event->devnum) != 0 && (event->devnum != loop_event->devnum || event->is_block != loop_event->is_block))
-                                continue;
-                        if (event->ifindex != 0 && event->ifindex != loop_event->ifindex)
-                                continue;
-                        event->delaying_seqnum = loop_event->seqnum;
-                        return true;
-                }
-
-                /* parent device event found */
-                if (event->devpath[common] == '/') {
-                        event->delaying_seqnum = loop_event->seqnum;
-                        return true;
-                }
-
-                /* child device event found */
-                if (loop_event->devpath[common] == '/') {
-                        event->delaying_seqnum = loop_event->seqnum;
-                        return true;
-                }
+                /* check device node, the devnum and the devpath may be different for the same node */
+                if (event->devnode != NULL && streq_ptr(event->devnode, loop_event->devnode))
+                        goto set_delaying_seqnum;
 
                 /* no matching device */
                 continue;
+
+        set_delaying_seqnum:
+                event->delaying_seqnum = loop_event->seqnum;
+                return true;
         }
 
         return false;
