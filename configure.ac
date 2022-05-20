@@ -183,16 +183,7 @@ AC_SUBST([udevrulesdir],[${udevlibexecdir}/rules.d])
 AC_SUBST([pkgconfiglibdir], [${libdir}/pkgconfig])
 AC_SUBST([sharepkgconfigdir],[${datadir}/pkgconfig])
 
-# introspection paths
-AC_SUBST([girdir], [${datadir}/gir-1.0])
-AC_SUBST([typelibsdir], [${libdir}/girepository-1.0])
-
 AC_SUBST([rootrundir],[${with_rootrundir}])
-
-# ------------------------------------------------------------------------------
-
-GOBJECT_INTROSPECTION_CHECK([1.31.1])
-AM_CONDITIONAL([HAVE_INTROSPECTION], [test "$enable_introspection" = "yes"])
 
 # ------------------------------------------------------------------------------
 AC_ARG_ENABLE([programs],
@@ -349,9 +340,6 @@ AC_MSG_RESULT([
 
 	pkgconfiglibdir:         ${libdir}/pkgconfig
 	sharepkgconfigdir        ${datadir}/pkgconfig
-
-	girdir                   ${datadir}/gir-1.0
-	typelibsdir              ${libdir}/girepository-1.0
 ])
 
 # ------------------------------------------------------------------------------

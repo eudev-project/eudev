@@ -27,8 +27,6 @@ the Linux distribution:
       autoconf \
       automake \
       build-base \
-      glib-dev \
-      gobject-introspection-dev \
       gperf \
       kmod-dev \
       libxslt \
@@ -67,13 +65,11 @@ the Linux distribution:
           docbook-xml \
           docbook-xsl \
           gnu-efi \
-          gobject-introspection \
           gperf \
           intltool \
           libacl1-dev \
           libblkid-dev \
           libcap-dev \
-          libglib-object-introspection-perl \
           libkmod-dev \
           libselinux1-dev \
           libtool \
@@ -89,7 +85,6 @@ the Linux distribution:
     docbook-xml-dtd \
     docbook-xml-dtd \
     docbook-xsl-stylesheets \
-    gobject-introspection \
     gperf \
     kmod \
     libselinux \
