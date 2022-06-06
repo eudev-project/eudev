@@ -360,6 +360,16 @@ Compile the hardware database information located in /usr/lib/udev/hwdb\&.d/, /e
 /etc/udev/hwdb\&.bin\&. This should be done after any update to the source files; it will not be called automatically\&. The running udev daemon will detect a new database on its own and does not need to be notified about it\&.
 .RE
 .PP
+\fB\-\-usr\fR
+.RS 4
+Put the compiled database into
+/usr/lib/udev/hwdb\&.bin
+instead\&. Use this if you want to ship a pre\-compiled database in immutable system images, or don\*(Aqt use
+/etc/udev/hwdb\&.d
+and want to avoid large binary files in
+/etc\&.
+.RE
+.PP
 \fB\-t\fR, \fB\-\-test=\fR\fB\fIstring\fR\fR
 .RS 4
 Query the database with a modalias string, and print the retrieved properties\&.
