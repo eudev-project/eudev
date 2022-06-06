@@ -3,6 +3,7 @@
 SUBSYSTEM!="block", GOTO="btrfs_end"
 ACTION=="remove", GOTO="btrfs_end"
 ENV{ID_FS_TYPE}!="btrfs", GOTO="btrfs_end"
+ENV{SYSTEMD_READY}=="0", GOTO="btrfs_end"
 
 # let the kernel know about this btrfs filesystem, and check if it is complete
 IMPORT{builtin}="btrfs ready $devnode"
@@ -11,6 +12,6 @@ IMPORT{builtin}="btrfs ready $devnode"
 ENV{ID_BTRFS_READY}=="0", ENV{SYSTEMD_READY}="0"
 
 # reconsider pending devices in case when multidevice volume awaits
-ENV{ID_BTRFS_READY}=="1", RUN+="@bindir@/udevadm trigger -s block -p ID_BTRFS_READY=0"
+ENV{ID_BTRFS_READY}=="1", RUN+="{{ROOTBINDIR}}/udevadm trigger -s block -p ID_BTRFS_READY=0"
 
 LABEL="btrfs_end"
