@@ -76,8 +76,12 @@ static const char *modalias_usb(struct udev_device *dev, char *s, size_t size) {
         vn = strtol(v, NULL, 16);
         if (vn <= 0)
                 return NULL;
+        if (vn > 0xffff)
+                return NULL;
         pn = strtol(p, NULL, 16);
         if (pn <= 0)
+                return NULL;
+        if (pn > 0xffff)
                 return NULL;
         snprintf(s, size, "usb:v%04Xp%04X*", vn, pn);
         return s;
