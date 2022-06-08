@@ -262,7 +262,7 @@ static int ctrl_send(struct udev_ctrl *uctrl, enum udev_ctrl_msg_type type, int 
         int err = 0;
 
         memzero(&ctrl_msg_wire, sizeof(struct udev_ctrl_msg_wire));
-        strcpy(ctrl_msg_wire.version, "udev-" VERSION);
+        sprintf(ctrl_msg_wire.version, "%.*s", (int)(sizeof ctrl_msg_wire.version - 1), "udev-" VERSION);
         ctrl_msg_wire.magic = UDEV_CTRL_MAGIC;
         ctrl_msg_wire.type = type;
 
