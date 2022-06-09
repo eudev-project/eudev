@@ -94,30 +94,42 @@ static void usage(void)
  */
 static int prepare(char *dir, char *filename)
 {
-        char buf[512];
+        char buf[UTIL_PATH_SIZE + 1];
         int r, fd;
 
         r = mkdir(dir, 0700);
         if (r < 0 && errno != EEXIST)
                 return -errno;
 
+        /* Refuse to write to a truncated file path */
+        if (strlen(buf) + 1 + strlen(filename) > sizeof(buf) - 1)
+                return -1;
+
         snprintf(buf, sizeof(buf), "%s/%s", dir, filename);
 
-        fd = open(buf,O_RDWR|O_CREAT|O_CLOEXEC, S_IRUSR|S_IWUSR);
-        if (fd < 0)
+        fd = open(buf, O_RDWR|O_CREAT|O_CLOEXEC, S_IRUSR|S_IWUSR);
+        if (fd < 0) {
                 fprintf(stderr, "Cannot open %s: %m\n", buf);
+                return fd;
+        }
 
-        if (lockf(fd,F_TLOCK,0) < 0) {
+        if (lockf(fd, F_TLOCK, 0) < 0) {
                 if (debug)
                         fprintf(stderr, "Lock taken, wait for %d seconds\n", UDEV_ALARM_TIMEOUT);
                 if (errno == EAGAIN || errno == EACCES) {
                         alarm(UDEV_ALARM_TIMEOUT);
-                        lockf(fd, F_LOCK, 0);
+                        if (lockf(fd, F_LOCK, 0)) { /* Blocking lock also failed, cancel the alarm and fail */
+                                fprintf(stderr, "Cannot lock %s: %m\n", buf);
+                                alarm(0);
+                                close(fd);
+                                return -1;
+                        }
                         if (debug)
                                 fprintf(stderr, "Acquired lock on %s\n", buf);
                 } else {
-                        if (debug)
-                                fprintf(stderr, "Could not get lock on %s: %m\n", buf);
+                        fprintf(stderr, "Could not get lock on %s: %m\n", buf);
+                        close(fd);
+                        return -1;
                 }
         }
 
@@ -483,11 +495,16 @@ int main(int argc, char **argv)
         }
         kickout();
 
-        lseek(fd, 0, SEEK_SET);
-        ftruncate(fd, 0);
+        if (lseek(fd, 0, SEEK_SET) < 0 || ftruncate(fd, 0) < 0) { /* in the unlikely event lseek/ftruncate fail */
+                fprintf(stderr, "lseek/ftruncate %s/%s failed: %m\n", tmpdir, checkpoint);
+                close(fd);
+                return -1;
+        }
         ret = missing(fd);
 
-        lockf(fd, F_ULOCK, 0);
+        if (lockf(fd, F_ULOCK, 0)) {
+                /* this error can be safely ignored */
+        }
         close(fd);
 out:
         if (debug)
