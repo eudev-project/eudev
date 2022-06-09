@@ -108,8 +108,10 @@ static int prepare(char *dir, char *filename)
         snprintf(buf, sizeof(buf), "%s/%s", dir, filename);
 
         fd = open(buf,O_RDWR|O_CREAT|O_CLOEXEC, S_IRUSR|S_IWUSR);
-        if (fd < 0)
+        if (fd < 0) {
                 fprintf(stderr, "Cannot open %s: %m\n", buf);
+                return fd;
+        }
 
         if (lockf(fd,F_TLOCK,0) < 0) {
                 if (debug)
