@@ -107,24 +107,29 @@ static int prepare(char *dir, char *filename)
 
         snprintf(buf, sizeof(buf), "%s/%s", dir, filename);
 
-        fd = open(buf,O_RDWR|O_CREAT|O_CLOEXEC, S_IRUSR|S_IWUSR);
+        fd = open(buf, O_RDWR|O_CREAT|O_CLOEXEC, S_IRUSR|S_IWUSR);
         if (fd < 0) {
                 fprintf(stderr, "Cannot open %s: %m\n", buf);
                 return fd;
         }
 
-        if (lockf(fd,F_TLOCK,0) < 0) {
+        if (lockf(fd, F_TLOCK, 0) < 0) {
                 if (debug)
                         fprintf(stderr, "Lock taken, wait for %d seconds\n", UDEV_ALARM_TIMEOUT);
                 if (errno == EAGAIN || errno == EACCES) {
                         alarm(UDEV_ALARM_TIMEOUT);
-                        if (lockf(fd, F_LOCK, 0)) { /* TODO: implement proper error handling */
+                        if (lockf(fd, F_LOCK, 0)) { /* Blocking lock also failed, cancel the alarm and fail */
+                                fprintf(stderr, "Cannot lock %s: %m\n", buf);
+                                alarm(0);
+                                close(fd);
+                                return -1;
                         }
                         if (debug)
                                 fprintf(stderr, "Acquired lock on %s\n", buf);
                 } else {
-                        if (debug)
-                                fprintf(stderr, "Could not get lock on %s: %m\n", buf);
+                        fprintf(stderr, "Could not get lock on %s: %m\n", buf);
+                        close(fd);
+                        return -1;
                 }
         }
 
