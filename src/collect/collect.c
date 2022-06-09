@@ -495,8 +495,10 @@ int main(int argc, char **argv)
         }
         kickout();
 
-        lseek(fd, 0, SEEK_SET);
-        if (ftruncate(fd, 0)) { /* TODO: implement proper error handling */
+        if (lseek(fd, 0, SEEK_SET) < 0 || ftruncate(fd, 0) < 0) { /* in the unlikely event lseek/ftruncate fail */
+                fprintf(stderr, "lseek/ftruncate %s/%s failed: %m\n", tmpdir, checkpoint);
+                close(fd);
+                return -1;
         }
         ret = missing(fd);
 
