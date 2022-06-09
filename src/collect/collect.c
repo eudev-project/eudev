@@ -493,7 +493,8 @@ int main(int argc, char **argv)
         }
         ret = missing(fd);
 
-        if (lockf(fd, F_ULOCK, 0)) { /* TODO: implement proper error handling */
+        if (lockf(fd, F_ULOCK, 0)) {
+                /* this error can be safely ignored */
         }
         close(fd);
 out:
