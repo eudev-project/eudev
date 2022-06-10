@@ -49,7 +49,11 @@
 #if SIZEOF_TIME_T == 8
 #  define PRI_TIME PRIi64
 #elif SIZEOF_TIME_T == 4
-#  define PRI_TIME PRIu32
+#    if SIZEOF_LONG == 4
+#      define PRI_TIME "lu"
+#    else
+#      define PRI_TIME PRIu32
+#    endif
 #else
 #  error Unknown time_t size
 #endif
