@@ -46,14 +46,6 @@
 #  error Unknown gid_t size
 #endif
 
-#if SIZEOF_TIME_T == 8
-#  define PRI_TIME PRIi64
-#elif SIZEOF_TIME_T == 4
-#  define PRI_TIME PRIu32
-#else
-#  error Unknown time_t size
-#endif
-
 #if SIZEOF_RLIM_T == 8
 #  define RLIM_FMT "%" PRIu64
 #elif SIZEOF_RLIM_T == 4
