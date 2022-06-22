@@ -1337,7 +1337,7 @@
       <varlistentry>
         <term><varname>$SYSTEMD_PAGER</varname></term>
         <term><varname>$PAGER</varname></term>
-        <listitem><para>Pager to use for the output of <command>udevadm info --tree</command> when
+        <listitem><para>Pager to use for the output of <command>udevadm info</command> when
         <option>--no-pager</option> is not given, if standard output and standard error are terminals.
         <varname>$SYSTEMD_PAGER</varname> is used if set; otherwise <varname>$PAGER</varname> is used.
         If neither <varname>$SYSTEMD_PAGER</varname> nor <varname>$PAGER</varname> are set, a set of well-known

@@ -1149,11 +1149,6 @@ static int uinfo(struct udev *udev, int argc, char *argv[]) {
                 return 0;
         }
 
-        if (action == ACTION_EXPORT) {
-                export_devices(udev);
-                return 0;
-        }
-
         for (; optind < argc; optind++) {
                 r = strv_extend(&devices, argv[optind]);
                 if (r < 0) {
@@ -1163,25 +1158,34 @@ static int uinfo(struct udev *udev, int argc, char *argv[]) {
         }
 
         if (strv_isempty(devices)) {
-                if (action == ACTION_TREE) {
-                        pager_open(arg_pager_flags);
-                        if (print_tree(udev, NULL) < 0)
-                                return 1;
-                        return 0;
-                }
-
                 if (action == ACTION_QUERY) {
                         help();
                         return 2;
                 }
 
-                fprintf(stderr, "Unknown device, --name=, --path=, or absolute path in /dev/ or /sys expected.\n");
-                return 4;
+                if (action == ACTION_ATTRIBUTE_WALK) {
+                        fprintf(stderr, "Unknown device, --name=, --path=, or absolute path in /dev/ or /sys expected.\n");
+                        return 4;
+                }
         }
 
         if (IN_SET(action, ACTION_ATTRIBUTE_WALK, ACTION_TREE) && strv_length(devices) > 1) {
                 log_error("Only one device may be specified with -a/--attribute-walk and -t/--tree");
                 return 1;
+        }
+
+        pager_open(arg_pager_flags);
+
+        if (action == ACTION_EXPORT) {
+                export_devices(udev);
+                return 0;
+        }
+
+        if (strv_isempty(devices)) {
+                assert(action == ACTION_TREE);
+                if (print_tree(udev, NULL) < 0)
+                        return 1;
+                return 0;
         }
 
         ret = 0;
