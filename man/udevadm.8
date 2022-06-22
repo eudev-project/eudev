@@ -217,6 +217,11 @@ Print version\&.
 Print help text\&.
 .RE
 .PP
+\fB\-\-no\-pager\fR
+.RS 4
+Do not pipe output into a pager\&.
+.RE
+.PP
 In addition optional positional arguments can be used to specify one or more devices\&. Each one may be a device name or a sys path\&. It must start with
 /dev
 or
@@ -1058,7 +1063,10 @@ Use the given quantity of colours, subject to
 \fI$SYSTEMD_PAGER\fR, \fI$PAGER\fR
 .RS 4
 Pager to use for the output of
-\fBudevadm info \-\-tree\fR, if standard output and standard error are terminals\&.
+\fBudevadm info \-\-tree\fR
+when
+\fB\-\-no\-pager\fR
+is not given, if standard output and standard error are terminals\&.
 \fI$SYSTEMD_PAGER\fR
 is used if set; otherwise
 \fI$PAGER\fR
@@ -1071,7 +1079,8 @@ are set, a set of well\-known pager implementations is tried in turn, including
 and
 \fBmore\fR(1), until one is found\&. If no pager implementation is discovered, no pager is invoked\&. Setting those environment variables to an empty string or the value
 cat
-disables the pager\&.
+is equivalent to passing
+\fB\-\-no\-pager\fR\&.
 .sp
 Note: if
 \fI$SYSTEMD_PAGERSECURE\fR
@@ -1151,6 +1160,8 @@ Common pager commands like
 \fBsudo\fR(8), the pager becomes a security boundary\&. Care must be taken that only programs with strictly limited functionality are used as pagers, and unintended interactive features like opening or creation of new files or starting of subprocesses are not allowed\&. "Secure mode" for the pager may be enabled as described below,
 \fIif the pager supports that\fR
 (most pagers are not written in a way that takes this into consideration)\&. It is recommended to either explicitly enable "secure mode" or to completely disable the pager using
+\fB\-\-no\-pager\fR
+or
 \fIPAGER=cat\fR
 when allowing untrusted users to execute commands with elevated privileges\&.
 .sp

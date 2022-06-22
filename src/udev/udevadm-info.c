@@ -42,6 +42,7 @@
 #define TREE_DEPTH_MAX 64
 
 static JsonFormatFlags arg_json_format_flags = JSON_FORMAT_OFF;
+static PagerFlags arg_pager_flags = 0;
 
 static bool skip_attribute(const char *name) {
         static const char* const skip[] = {
@@ -877,6 +878,7 @@ static void help(void) {
                "  -c --cleanup-db             Clean up the udev database\n"
                "  -w --wait-for-initialization[=SECONDS]\n"
                "                              Wait for device to be initialized\n"
+               "     --no-pager               Do not pipe output into a pager\n"
                "     --json=pretty|short|off  Generate JSON output\n"
                , program_invocation_short_name);
 }
@@ -985,6 +987,7 @@ static int uinfo(struct udev *udev, int argc, char *argv[]) {
         enum {
                 ARG_PROPERTY = 0x100,
                 ARG_VALUE,
+                ARG_NO_PAGER,
                 ARG_JSON,
         };
 
@@ -1004,6 +1007,7 @@ static int uinfo(struct udev *udev, int argc, char *argv[]) {
                 { "value",             no_argument,       NULL, ARG_VALUE },
                 { "json",              required_argument, NULL, ARG_JSON },
                 { "wait-for-initialization", optional_argument, NULL, 'w' },
+                { "no-pager",          no_argument,       NULL, ARG_NO_PAGER },
                 { "version",           no_argument,       NULL, 'V' },
                 { "help",              no_argument,       NULL, 'h' },
                 {}
@@ -1123,6 +1127,9 @@ static int uinfo(struct udev *udev, int argc, char *argv[]) {
                 case 'h':
                         help();
                         return 0;
+                case ARG_NO_PAGER:
+                        arg_pager_flags |= PAGER_DISABLE;
+                        break;
                 default:
                         return 1;
                 }
@@ -1157,7 +1164,7 @@ static int uinfo(struct udev *udev, int argc, char *argv[]) {
 
         if (strv_isempty(devices)) {
                 if (action == ACTION_TREE) {
-                        pager_open(0);
+                        pager_open(arg_pager_flags);
                         if (print_tree(udev, NULL) < 0)
                                 return 1;
                         return 0;
