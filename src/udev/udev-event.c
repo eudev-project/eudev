@@ -724,7 +724,7 @@ int udev_event_spawn(struct udev_event *event,
         int outpipe[2] = {-1, -1};
         int errpipe[2] = {-1, -1};
         pid_t pid;
-        char arg[UTIL_PATH_SIZE];
+        char arg[UTIL_LINE_SIZE];
         char *argv[UDEV_ARGV_MAX];
         char program[UTIL_PATH_SIZE];
         int err = 0;

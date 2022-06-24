@@ -2284,7 +2284,7 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                         break;
                 }
                 case TK_M_PROGRAM: {
-                        char program[UTIL_PATH_SIZE];
+                        char program[UTIL_LINE_SIZE];
                         char **envp;
                         char result[UTIL_LINE_SIZE];
 
@@ -2325,7 +2325,7 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                         break;
                 }
                 case TK_M_IMPORT_PROG: {
-                        char import[UTIL_PATH_SIZE];
+                        char import[UTIL_LINE_SIZE];
 
                         udev_event_apply_format(event, rules_str(rules, cur->key.value_off), import, sizeof(import), false);
                         log_debug("IMPORT '%s' %s:%u",
@@ -2760,7 +2760,7 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                 case TK_A_RUN_BUILTIN:
                 case TK_A_RUN_PROGRAM: {
                         struct udev_list_entry *entry;
-                        char cmd[UTIL_PATH_SIZE];
+                        char cmd[UTIL_LINE_SIZE];
 
                         if (event->run_final)
                                 break;
