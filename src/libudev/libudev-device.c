@@ -631,6 +631,9 @@ static void udev_device_add_property_from_string_parse(struct udev_device *udev_
                                 udev_device_add_tag(udev_device, tag, current);
                         }
                 }
+        } else if (startswith(property, "UDEV_DATABASE_VERSION=")) {
+                if (safe_atou(property + strlen("UDEV_DATABASE_VERSION="), &udev_device->database_version) < 0)
+                        log_debug("Failed to parse udev database version '%s', ignoring", property);
         } else if (startswith(property, "USEC_INITIALIZED=")) {
                 udev_device_set_usec_initialized(udev_device, strtoull(&property[17], NULL, 10));
         } else if (startswith(property, "DRIVER=")) {
@@ -2307,6 +2310,15 @@ static int update_envp_monitor_buf(struct udev_device *udev_device)
         i = 0;
         s = udev_device->monitor_buf;
         l = MONITOR_BUF_SIZE;
+
+        /* append udev database version */
+        udev_device->envp[i++] = s;
+        l = strpcpyf(&s, l, "UDEV_DATABASE_VERSION=%u", LATEST_UDEV_DATABASE_VERSION);
+        if (l == 0)
+                return -EINVAL;
+        s++;
+        l--;
+
         udev_list_entry_foreach(list_entry, udev_device_get_properties_list_entry(udev_device)) {
                 const char *key;
 
