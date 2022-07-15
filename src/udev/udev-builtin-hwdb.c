@@ -230,7 +230,12 @@ static void builtin_hwdb_exit(struct udev *udev __attribute__((unused))) {
 
 /* called every couple of seconds during event activity; 'true' if config has changed */
 static bool builtin_hwdb_validate(struct udev *udev __attribute__((unused))) {
-        return udev_hwdb_validate(hwdb);
+        if (udev_hwdb_validate(hwdb)) {
+                log_debug("hwdb needs reloading.");
+                return true;
+        }
+
+        return false;
 }
 
 const struct udev_builtin udev_builtin_hwdb = {
