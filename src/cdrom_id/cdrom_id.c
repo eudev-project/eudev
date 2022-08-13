@@ -816,7 +816,7 @@ static int cd_media_toc(struct udev *udev, int fd)
         /* Take care to not iterate beyond the last valid track as specified in
          * the TOC, but also avoid going beyond the TOC length, just in case
          * the last track number is invalidly large */
-        for (p = toc+4, i = 4; i < len-8 && num_tracks > 0; i += 8, p += 8, --num_tracks) {
+        for (p = toc+4, i = 4; i + 8 <= len && num_tracks > 0; i += 8, p += 8, --num_tracks) {
                 unsigned int block;
                 unsigned int is_data_track;
 
