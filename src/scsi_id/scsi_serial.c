@@ -87,6 +87,7 @@ static const char hex_str[]="0123456789abcdef";
 #define DID_NO_CONNECT               0x01        /* Unable to connect before timeout */
 #define DID_BUS_BUSY                 0x02        /* Bus remain busy until timeout */
 #define DID_TIME_OUT                 0x03        /* Timed out for some other reason */
+#define DID_TRANSPORT_DISRUPTED      0x0e        /* Transport disrupted and should retry */
 #define DRIVER_TIMEOUT               0x06
 #define DRIVER_SENSE                 0x08        /* Sense_buffer has been set */
 
@@ -97,6 +98,7 @@ static const char hex_str[]="0123456789abcdef";
 #define SG_ERR_CAT_TIMEOUT              3
 #define SG_ERR_CAT_RECOVERED            4        /* Successful command after recovered err */
 #define SG_ERR_CAT_NOTSUPPORTED         5        /* Illegal / unsupported command */
+#define SG_ERR_CAT_RETRY                6        /* Command should be retried */
 #define SG_ERR_CAT_SENSE               98        /* Something else in the sense buffer */
 #define SG_ERR_CAT_OTHER               99        /* Some other error/warning */
 
@@ -147,6 +149,8 @@ static int sg_err_category_new(struct udev *udev __attribute__((unused)),
         if (host_status) {
                 if (IN_SET(host_status, DID_NO_CONNECT, DID_BUS_BUSY, DID_TIME_OUT))
                         return SG_ERR_CAT_TIMEOUT;
+                if (host_status == DID_TRANSPORT_DISRUPTED)
+                        return SG_ERR_CAT_RETRY;
         }
         if (driver_status) {
                 if (driver_status == DRIVER_TIMEOUT)
@@ -358,6 +362,8 @@ resend:
                 case SG_ERR_CAT_CLEAN:
                 case SG_ERR_CAT_RECOVERED:
                         retval = 0;
+                        break;
+                case SG_ERR_CAT_RETRY:
                         break;
 
                 default:
