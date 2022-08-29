@@ -91,11 +91,11 @@ static void map_keycode(int fd, const char *devnode, int scancode, const char *k
         map.scan = scancode;
         map.key = keycode_num;
 
-        log_debug("keyboard: mapping scan code %d (0x%x) to key code %d (0x%x)",
+        log_debug("keyboard: mapping scan code %u (0x%x) to key code %u (0x%x)",
                   map.scan, map.scan, map.key, map.key);
 
         if (ioctl(fd, EVIOCSKEYCODE, &map) < 0)
-                log_error_errno(errno, "Error calling EVIOCSKEYCODE on device node '%s' (scan code 0x%x, key code %d): %m", devnode, map.scan, map.key);
+                log_error_errno(errno, "Error calling EVIOCSKEYCODE on device node '%s' (scan code 0x%x, key code %u): %m", devnode, map.scan, map.key);
 }
 
 static inline char* parse_token(const char *current, int32_t *val_out) {

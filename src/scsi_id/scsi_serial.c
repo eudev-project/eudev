@@ -309,7 +309,7 @@ static int scsi_inquiry(struct udev *udev,
         int retval;
 
         if (buflen > SCSI_INQ_BUFF_LEN) {
-                log_debug("buflen %d too long", buflen);
+                log_debug("buflen %u too long", buflen);
                 return -1;
         }
 
@@ -826,7 +826,7 @@ int scsi_std_inquiry(struct udev *udev,
                 err = 2;
                 goto out;
         }
-        sprintf(dev_scsi->kernel,"%d:%d", major(statbuf.st_rdev),
+        sprintf(dev_scsi->kernel,"%u:%u", major(statbuf.st_rdev),
                 minor(statbuf.st_rdev));
 
         memzero(buf, SCSI_INQ_BUFF_LEN);

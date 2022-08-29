@@ -467,7 +467,7 @@ static struct udev_device *handle_scsi_default(struct udev_device *parent, char 
         }
         host -= basenum;
 
-        path_prepend(path, "scsi-%u:%u:%u:%u", host, bus, target, lun);
+        path_prepend(path, "scsi-%i:%i:%i:%i", host, bus, target, lun);
 out:
         free(base);
         return hostdev;
