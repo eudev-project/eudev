@@ -640,6 +640,28 @@ static bool match_parent(struct udev_enumerate *udev_enumerate, struct udev_devi
         return path_startswith(udev_device_get_devpath(dev), udev_device_get_devpath(udev_enumerate->parent_match)) != NULL;
 }
 
+static bool match_initialized(struct udev_enumerate *udev_enumerate, struct udev_device *dev)
+{
+        if (!udev_enumerate->match_is_initialized)
+                return true;
+
+        /*
+         * All devices with a device node or network interfaces
+         * possibly need udev to adjust the device node permission
+         * or context, or rename the interface before it can be
+         * reliably used from other processes.
+         *
+         * For now, we can only check these types of devices, we
+         * might not store a database, and have no way to find out
+         * for all other types of devices.
+         */
+        if (!udev_device_get_is_initialized(dev) &&
+            (major(udev_device_get_devnum(dev)) > 0 || udev_device_get_ifindex(dev) > 0))
+                return false;
+
+        return true;
+}
+
 static bool match_sysname(struct udev_enumerate *udev_enumerate, const char *sysname)
 {
         struct udev_list_entry *list_entry;
@@ -688,21 +710,8 @@ static int scan_dir_and_add_devices(struct udev_enumerate *udev_enumerate,
                 if (dev == NULL)
                         continue;
 
-                if (udev_enumerate->match_is_initialized) {
-                        /*
-                         * All devices with a device node or network interfaces
-                         * possibly need udev to adjust the device node permission
-                         * or context, or rename the interface before it can be
-                         * reliably used from other processes.
-                         *
-                         * For now, we can only check these types of devices, we
-                         * might not store a database, and have no way to find out
-                         * for all other types of devices.
-                         */
-                        if (!udev_device_get_is_initialized(dev) &&
-                            (major(udev_device_get_devnum(dev)) > 0 || udev_device_get_ifindex(dev) > 0))
-                                goto nomatch;
-                }
+                if (!match_initialized(udev_enumerate, dev))
+                        goto nomatch;
                 if (!match_parent(udev_enumerate, dev))
                         goto nomatch;
                 if (!match_tag(udev_enumerate, dev))
@@ -820,6 +829,8 @@ static int scan_devices_tags(struct udev_enumerate *udev_enumerate)
                                 goto nomatch;
                         if (!match_parent(udev_enumerate, dev))
                                 goto nomatch;
+                        if (!match_initialized(udev_enumerate, dev))
+                                goto nomatch;
                         if (!match_property(udev_enumerate, dev))
                                 goto nomatch;
                         if (!match_sysattr(udev_enumerate, dev))
@@ -846,6 +857,8 @@ static int parent_add_child(struct udev_enumerate *enumerate, const char *path)
         if (!match_subsystem(enumerate, udev_device_get_subsystem(dev)))
                 goto nomatch;
         if (!match_sysname(enumerate, udev_device_get_sysname(dev)))
+                goto nomatch;
+        if (!match_initialized(enumerate, dev))
                 goto nomatch;
         if (!match_property(enumerate, dev))
                 goto nomatch;
