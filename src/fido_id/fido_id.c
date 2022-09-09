@@ -76,7 +76,7 @@ int main(int argc, char **argv) {
         if (desc_path == NULL)
                 return log_oom();
 
-        fd = open(desc_path, O_RDONLY | O_NOFOLLOW | O_CLOEXEC);
+        fd = open(desc_path, O_RDONLY | O_NOFOLLOW | O_CLOEXEC | O_NOCTTY);
         if (fd < 0)
                 return log_error_errno(errno,
                                               "Failed to open report descriptor at '%s': %m", desc_path);
