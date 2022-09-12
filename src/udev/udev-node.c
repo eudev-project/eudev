@@ -142,6 +142,70 @@ static int node_symlink(struct udev_device *dev, const char *devnode, const char
         return 0;
 }
 
+static int stack_directory_read_one(struct udev *udev, int dirfd, const char *id, bool is_symlink, char **devnode, int *priority) {
+        int tmp_prio, r;
+
+        assert(udev);
+        assert(dirfd >= 0);
+        assert(id);
+        assert(devnode);
+        assert(priority);
+
+        if (is_symlink) {
+                _cleanup_free_ char *buf = NULL;
+                char *colon;
+
+                /* New format. The devnode and priority can be obtained from symlink. */
+
+                r = readlinkat_malloc(dirfd, id, &buf);
+                if (r < 0)
+                        return r;
+
+                colon = strchr(buf, ':');
+                if (!colon || colon == buf)
+                        return -EINVAL;
+
+                *colon = '\0';
+
+                r = safe_atoi(buf, &tmp_prio);
+                if (r < 0)
+                        return r;
+
+                if (*devnode && tmp_prio <= *priority)
+                        return 0; /* Unchanged */
+
+                r = free_and_strdup(devnode, colon + 1);
+                if (r < 0)
+                        return r;
+
+        } else {
+                _cleanup_udev_device_unref_ struct udev_device *dev = NULL;
+                const char *val;
+
+                /* Old format. The devnode and priority must be obtained from uevent and udev database. */
+
+                dev = udev_device_new_from_device_id(udev, id);
+                if (!dev)
+                        return errno > 0 ? -errno : -ENODEV;
+
+                tmp_prio = udev_device_get_devlink_priority(dev);
+
+                if (*devnode && tmp_prio <= *priority)
+                        return 0; /* Unchanged */
+
+                val = udev_device_get_devnode(dev);
+                if (!val)
+                        return -ENOENT;
+
+                r = free_and_strdup(devnode, val);
+                if (r < 0)
+                        return r;
+        }
+
+        *priority = tmp_prio;
+        return 1; /* Updated */
+}
+
 static int stack_directory_find_prioritized_devnode(struct udev_device *dev, const char *dirname, bool add, char **ret) {
         struct udev *udev = udev_device_get_udev(dev);
         _cleanup_closedir_ DIR *dir = NULL;
@@ -180,8 +244,6 @@ static int stack_directory_find_prioritized_devnode(struct udev_device *dev, con
                 return -ENODEV;
 
         for (de = readdir(dir); de; de = readdir(dir)) {
-                int tmp_prio;
-
                 if (de->d_name[0] == '.')
                         continue;
 
@@ -189,62 +251,14 @@ static int stack_directory_find_prioritized_devnode(struct udev_device *dev, con
                 if (streq(de->d_name, id))
                         continue;
 
-                if (de->d_type == DT_LNK) {
-                        _cleanup_free_ char *buf = NULL;
-                        char *colon;
-
-                        /* New format. The devnode and priority can be obtained from symlink. */
-
-                        r = readlinkat_malloc(dirfd(dir), de->d_name, &buf);
-                        if (r < 0) {
-                                log_debug_errno(r, "Failed to read symlink %s, ignoring: %m", de->d_name);
-                                continue;
-                        }
-
-                        colon = strchr(buf, ':');
-                        if (!colon || colon == buf)
-                                continue;
-
-                        *colon = '\0';
-
-                        if (safe_atoi(buf, &tmp_prio) < 0)
-                                continue;
-
-                        if (devnode && tmp_prio <= priority)
-                                continue;
-
-                        r = free_and_strdup(&devnode, colon + 1);
-                        if (r < 0)
-                                return r;
-
-                } else if (de->d_type == DT_REG) {
-                        _cleanup_udev_device_unref_ struct udev_device *tmp_dev = NULL;
-                        const char *val;
-
-                        /* Old format. The devnode and priority must be obtained from uevent and
-                         * udev database files. */
-
-                        tmp_dev = udev_device_new_from_device_id(udev, de->d_name);
-                        if (!tmp_dev)
-                                continue;
-
-                        tmp_prio = udev_device_get_devlink_priority(tmp_dev);
-
-                        if (devnode && tmp_prio <= priority)
-                                continue;
-
-                        val = udev_device_get_devnode(tmp_dev);
-                        if (!val)
-                                continue;
-
-                        r = free_and_strdup(&devnode, val);
-                        if (r < 0)
-                                return r;
-
-                } else
+                if (!IN_SET(de->d_type, DT_LNK, DT_REG))
                         continue;
 
-                priority = tmp_prio;
+                r = stack_directory_read_one(udev, dirfd(dir), de->d_name, /* is_symlink = */ de->d_type == DT_LNK, &devnode, &priority);
+                if (r < 0) {
+                        log_debug_errno(r, "Failed to read '%s/%s', ignoring: %m", dirname, de->d_name);
+                        continue;
+                }
         }
 
         *ret = TAKE_PTR(devnode);
