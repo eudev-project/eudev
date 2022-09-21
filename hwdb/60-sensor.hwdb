@@ -402,6 +402,17 @@ sensor:modalias:platform:cros-ec-accel:dmi:*svnGoogle:pnVayne*:*
 sensor:modalias:platform:cros-ec-accel:dmi:*Google_Nocturne*:*
  ACCEL_MOUNT_MATRIX=1, 0, 0; 0, -1, 0; 0, 0, 1
 
+sensor:modalias:platform:cros-ec-accel:*
+sensor:accel-display:modalias:platform:cros-ec-accel:*
+sensor:accel-display:modalias:platform:cros-ec-accel-legacy:*
+ ACCEL_MOUNT_MATRIX=-1, 0, 0; 0, -1, 0; 0, 0, -1
+
+# Base accel reports the same as display when lid angle is 180 degrees (vs 0),
+# so it needs an additional 180 degree rotation around the X axis.
+sensor:accel-base:modalias:platform:cros-ec-accel:*
+sensor:accel-base:modalias:platform:cros-ec-accel-legacy:*
+ ACCEL_MOUNT_MATRIX=-1, 0, 0; 0, 1, 0; 0, 0, 1
+
 #########################################
 # GP-electronic
 #########################################
