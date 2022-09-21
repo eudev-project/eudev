@@ -621,7 +621,7 @@ static int adm_hwdb(struct udev *udev, int argc, char *argv[]) {
 
         if (update) {
                 char **files, **f;
-                _cleanup_free_ char *hwdb_bin = UDEV_HWDB_BIN;
+                char *hwdb_bin = UDEV_HWDB_BIN;
 
                 trie = new0(struct trie, 1);
                 if (!trie) {
