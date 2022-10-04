@@ -12,6 +12,8 @@ PROGRAMS_SUBDIRS += \
 	ata_id \
 	cdrom_id \
 	collect \
+	dmi_memory_id \
+	fido_id \
 	scsi_id \
 	v4l_id
 

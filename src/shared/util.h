@@ -32,6 +32,7 @@
 #include <unistd.h>
 #include <sys/socket.h>
 #include <sys/inotify.h>
+#include <malloc.h>
 
 #include "time-util.h"
 #include "missing.h"
@@ -49,6 +50,8 @@
 #define GLOB_CHARS "*?["
 
 #define FORMAT_BYTES_MAX 8
+
+#define POINTER_MAX ((void*) UINTPTR_MAX)
 
 size_t page_size(void) _pure_;
 #define PAGE_ALIGN(l) ALIGN_TO((l), page_size())
@@ -318,6 +321,86 @@ _alloc_(2, 3) static inline void *realloc_multiply(void *p, size_t a, size_t b) 
         return realloc(p, a * b);
 }
 
+/* If for some reason more than 4M are allocated on the stack, let's abort immediately. It's better than
+ * proceeding and smashing the stack limits. Note that by default RLIMIT_STACK is 8M on Linux. */
+#define ALLOCA_MAX (4U*1024U*1024U)
+
+#define new(t, n) ((t*) malloc_multiply(sizeof(t), (n)))
+
+#define alloca_safe(n)                                                  \
+        ({                                                              \
+                size_t _nn_ = n;                                        \
+                assert(_nn_ <= ALLOCA_MAX);                             \
+                alloca(_nn_ == 0 ? 1 : _nn_);                           \
+        })                                                              \
+
+#define newa(t, n)                                                      \
+        ({                                                              \
+                size_t _n_ = n;                                         \
+                assert(!size_multiply_overflow(sizeof(t), _n_));        \
+                (t*) alloca_safe(sizeof(t)*_n_);                        \
+        })
+
+#define newa0(t, n)                                                     \
+        ({                                                              \
+                size_t _n_ = n;                                         \
+                assert(!size_multiply_overflow(sizeof(t), _n_));        \
+                (t*) alloca0((sizeof(t)*_n_));                          \
+        })
+
+#define newdup(t, p, n) ((t*) memdup_multiply(p, sizeof(t), (n)))
+
+#define newdup_suffix0(t, p, n) ((t*) memdup_suffix0_multiply(p, sizeof(t), (n)))
+
+#define free_and_replace(a, b)                  \
+        ({                                      \
+                typeof(a)* _a = &(a);           \
+                typeof(b)* _b = &(b);           \
+                free(*_a);                      \
+                *_a = *_b;                      \
+                *_b = NULL;                     \
+                0;                              \
+        })
+
+/* These are like strdupa()/strndupa(), but honour ALLOCA_MAX */
+#define strdupa_safe(s)                                                 \
+        ({                                                              \
+                const char *_t = (s);                                   \
+                (char*) memdupa_suffix0(_t, strlen(_t));                \
+        })
+
+#define strndupa_safe(s, n)                                             \
+        ({                                                              \
+                const char *_t = (s);                                   \
+                (char*) memdupa_suffix0(_t, strnlen(_t, (n)));          \
+        })
+
+#define memdupa(p, l)                           \
+        ({                                      \
+                void *_q_;                      \
+                size_t _l_ = l;                 \
+                _q_ = alloca_safe(_l_);         \
+                memcpy_safe(_q_, p, _l_);       \
+        })
+
+#define memdupa_suffix0(p, l)                   \
+        ({                                      \
+                void *_q_;                      \
+                size_t _l_ = l;                 \
+                _q_ = alloca_safe(_l_ + 1);     \
+                ((uint8_t*) _q_)[_l_] = 0;      \
+                memcpy_safe(_q_, p, _l_);       \
+        })
+
+/* Normal memcpy() requires src to be nonnull. We do nothing if n is 0. */
+static inline void *memcpy_safe(void *dst, const void *src, size_t n) {
+        if (n == 0)
+                return dst;
+        assert(src);
+        return memcpy(dst, src, n);
+}
+
+
 bool filename_is_valid(const char *p) _pure_;
 /**
  * Check if a string contains any glob patterns.
@@ -436,3 +519,278 @@ union inotify_event_buffer {
 
 void cmsg_close_all(struct msghdr *mh);
 const char *eudev_basename(const char *filename);
+
+static inline char *delete_trailing_chars(char *s, const char *bad) {
+        char *c = s;
+
+        /* Drops all specified bad characters, at the end of the string */
+
+        if (!s)
+                return NULL;
+
+        if (!bad)
+                bad = WHITESPACE;
+
+        for (char *p = s; *p; p++)
+                if (!strchr(bad, *p))
+                        c = p + 1;
+
+        *c = 0;
+
+        return s;
+}
+
+static inline char *skip_leading_chars(const char *s, const char *bad) {
+        if (!s)
+                return NULL;
+
+        if (!bad)
+                bad = WHITESPACE;
+
+        return (char*) s + strspn(s, bad);
+}
+
+static inline char *strstrip(char *s) {
+        if (!s)
+                return NULL;
+
+        /* Drops trailing whitespace. Modifies the string in place. Returns pointer to first non-space character */
+
+        return delete_trailing_chars(skip_leading_chars(s, WHITESPACE), WHITESPACE);
+}
+
+#define FLAGS_SET(v, flags) \
+        ((~(v) & (flags)) == 0)
+
+/* Evaluates to (void) if _A or _B are not constant or of different types (being integers of different sizes
+ * is also OK as long as the signedness matches) */
+#define CONST_MAX(_A, _B) \
+        (__builtin_choose_expr(                                         \
+                __builtin_constant_p(_A) &&                             \
+                __builtin_constant_p(_B) &&                             \
+                (__builtin_types_compatible_p(typeof(_A), typeof(_B)) || \
+                 (IS_UNSIGNED_INTEGER_TYPE(_A) && IS_UNSIGNED_INTEGER_TYPE(_B)) || \
+                 (IS_SIGNED_INTEGER_TYPE(_A) && IS_SIGNED_INTEGER_TYPE(_B))), \
+                ((_A) > (_B)) ? (_A) : (_B),                            \
+                VOID_0))
+
+#define IS_UNSIGNED_INTEGER_TYPE(type) \
+        (__builtin_types_compatible_p(typeof(type), unsigned char) ||   \
+         __builtin_types_compatible_p(typeof(type), unsigned short) ||  \
+         __builtin_types_compatible_p(typeof(type), unsigned) ||        \
+         __builtin_types_compatible_p(typeof(type), unsigned long) ||   \
+         __builtin_types_compatible_p(typeof(type), unsigned long long))
+
+#define IS_SIGNED_INTEGER_TYPE(type) \
+        (__builtin_types_compatible_p(typeof(type), signed char) ||   \
+         __builtin_types_compatible_p(typeof(type), signed short) ||  \
+         __builtin_types_compatible_p(typeof(type), signed) ||        \
+         __builtin_types_compatible_p(typeof(type), signed long) ||   \
+         __builtin_types_compatible_p(typeof(type), signed long long))
+
+#ifndef __COVERITY__
+#  define VOID_0 ((void)0)
+#else
+#  define VOID_0 ((void*)0)
+#endif
+
+/* Like TAKE_PTR() but for file descriptors, resetting them to -1 */
+#define TAKE_FD(fd)                             \
+        ({                                      \
+                int *_fd_ = &(fd);              \
+                int _ret_ = *_fd_;              \
+                *_fd_ = -1;                     \
+                _ret_;                          \
+        })
+
+#define assert_return(expr, r)                                          \
+        do {                                                            \
+                if (!assert_log(expr, #expr))                           \
+                        return (r);                                     \
+        } while (false)
+
+static inline int negative_errno(void) {
+        /* This helper should be used to shut up gcc if you know 'errno' is
+         * negative. Instead of "return -errno;", use "return negative_errno();"
+         * It will suppress bogus gcc warnings in case it assumes 'errno' might
+         * be 0 and thus the caller's error-handling might not be triggered. */
+        //assert_return(errno > 0, -EINVAL);
+		if (errno > 0)
+			return -EINVAL;
+        return -errno;
+}
+
+static inline int RET_NERRNO(int ret) {
+
+        /* Helper to wrap system calls in to make them return negative errno errors. This brings system call
+         * error handling in sync with how we usually handle errors in our own code, i.e. with immediate
+         * returning of negative errno. Usage is like this:
+         *
+         *     …
+         *     r = RET_NERRNO(unlink(t));
+         *     …
+         *
+         * or
+         *
+         *     …
+         *     fd = RET_NERRNO(open("/etc/fstab", O_RDONLY|O_CLOEXEC));
+         *     …
+         */
+
+        if (ret < 0)
+                return negative_errno();
+
+        return ret;
+}
+
+#define STRLEN(x) (sizeof(""x"") - sizeof(typeof(x[0])))
+
+/* The maximum length a buffer for a /proc/self/fd/<fd> path needs */
+#define PROC_FD_PATH_MAX \
+        (STRLEN("/proc/self/fd/") + DECIMAL_STR_MAX(int))
+
+#define snprintf_ok(buf, len, fmt, ...)                                \
+        ({                                                             \
+                char *_buf = (buf);                                    \
+                size_t _len = (len);                                   \
+                int _snpf = snprintf(_buf, _len, (fmt), __VA_ARGS__);  \
+                _snpf >= 0 && (size_t) _snpf < _len ? _buf : NULL;     \
+        })
+
+static inline char *format_proc_fd_path(char buf[static PROC_FD_PATH_MAX], int fd) {
+        assert(buf);
+        assert(fd >= 0);
+        assert_se(snprintf_ok(buf, PROC_FD_PATH_MAX, "/proc/self/fd/%i", fd));
+        return buf;
+}
+
+#define FORMAT_PROC_FD_PATH(fd) \
+        format_proc_fd_path((char[PROC_FD_PATH_MAX]) {}, (fd))
+
+#define READ_FULL_BYTES_MAX (64U*1024U*1024U - 1U)
+
+#define LESS_BY(a, b) __LESS_BY(UNIQ, (a), UNIQ, (b))
+#define __LESS_BY(aq, a, bq, b)                         \
+        ({                                              \
+                const typeof(a) UNIQ_T(A, aq) = (a);    \
+                const typeof(b) UNIQ_T(B, bq) = (b);    \
+                UNIQ_T(A, aq) > UNIQ_T(B, bq) ? UNIQ_T(A, aq) - UNIQ_T(B, bq) : 0; \
+        })
+
+/* Takes inspiration from Rust's Option::take() method: reads and returns a pointer, but at the same time
+ * resets it to NULL. See: https://doc.rust-lang.org/std/option/enum.Option.html#method.take */
+#define TAKE_PTR(ptr)                           \
+        ({                                      \
+                typeof(ptr) *_pptr_ = &(ptr);   \
+                typeof(ptr) _ptr_ = *_pptr_;    \
+                *_pptr_ = NULL;                 \
+                _ptr_;                          \
+        })
+
+/* This returns the number of usable bytes in a malloc()ed region as per malloc_usable_size(), in a way that
+ * is compatible with _FORTIFY_SOURCES. If _FORTIFY_SOURCES is used many memory operations will take the
+ * object size as returned by __builtin_object_size() into account. Hence, let's return the smaller size of
+ * malloc_usable_size() and __builtin_object_size() here, so that we definitely operate in safe territory by
+ * both the compiler's and libc's standards. Note that __builtin_object_size() evaluates to SIZE_MAX if the
+ * size cannot be determined, hence the MIN() expression should be safe with dynamically sized memory,
+ * too. Moreover, when NULL is passed malloc_usable_size() is documented to return zero, and
+ * __builtin_object_size() returns SIZE_MAX too, hence we also return a sensible value of 0 in this corner
+ * case. */
+#define MALLOC_SIZEOF_SAFE(x) \
+        MIN(malloc_usable_size(x), __builtin_object_size(x, 0))
+
+#if HAVE_EXPLICIT_BZERO
+static inline void* explicit_bzero_safe(void *p, size_t l) {
+        if (l > 0)
+                explicit_bzero(p, l);
+
+        return p;
+}
+#else
+typedef void *(*memset_t)(void *,int,size_t);
+
+static volatile memset_t memset_func = memset;
+
+static inline void* explicit_bzero_safe(void *p, size_t l) {
+        if (l > 0)
+                memset_func(p, '\0', l);
+
+        return p;
+}
+#endif
+
+static inline int errno_or_else(int fallback) {
+        /* To be used when invoking library calls where errno handling is not defined clearly: we return
+         * errno if it is set, and the specified error otherwise. The idea is that the caller initializes
+         * errno to zero before doing an API call, and then uses this helper to retrieve a somewhat useful
+         * error code */
+        if (errno > 0)
+                return -errno;
+
+        return -abs(fallback);
+}
+
+/* Like startswith(), but operates on arbitrary memory blocks */
+static inline void *memory_startswith(const void *p, size_t sz, const char *token) {
+        assert(token);
+
+        size_t n = strlen(token) * sizeof(char);
+        if (sz < n)
+                return NULL;
+
+        assert(p);
+
+        if (memcmp(p, token, n) != 0)
+                return NULL;
+
+        return (uint8_t*) p + n;
+}
+
+static inline size_t strlen_ptr(const char *s) {
+        if (!s)
+                return 0;
+
+        return strlen(s);
+}
+
+/* align to next higher power-of-2 (except for: 0 => 0, overflow => 0) */
+static inline unsigned long ALIGN_POWER2(unsigned long u) {
+
+        /* Avoid subtraction overflow */
+        if (u == 0)
+                return 0;
+
+        /* clz(0) is undefined */
+        if (u == 1)
+                return 1;
+
+        /* left-shift overflow is undefined */
+        if (__builtin_clzl(u - 1UL) < 1)
+                return 0;
+
+        return 1UL << (sizeof(u) * 8 - __builtin_clzl(u - 1UL));
+}
+
+static inline size_t GREEDY_ALLOC_ROUND_UP(size_t l) {
+        size_t m;
+
+        /* Round up allocation sizes a bit to some reasonable, likely larger value. This is supposed to be
+         * used for cases which are likely called in an allocation loop of some form, i.e. that repetitively
+         * grow stuff, for example strv_extend() and suchlike.
+         *
+         * Note the difference to GREEDY_REALLOC() here, as this helper operates on a single size value only,
+         * and rounds up to next multiple of 2, needing no further counter.
+         *
+         * Note the benefits of direct ALIGN_POWER2() usage: type-safety for size_t, sane handling for very
+         * small (i.e. <= 2) and safe handling for very large (i.e. > SSIZE_MAX) values. */
+
+        if (l <= 2)
+                return 2; /* Never allocate less than 2 of something.  */
+
+        m = ALIGN_POWER2(l);
+        if (m == 0) /* overflow? */
+                return l;
+
+        return m;
+}
+

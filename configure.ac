@@ -98,6 +98,7 @@ AC_CHECK_FUNCS(
 	[],
 	[AC_MSG_ERROR([*** POSIX function not found])]
 )
+AC_CHECK_FUNCS([explicit_bzero])
 AC_SEARCH_LIBS([clock_gettime], [rt], [], [AC_MSG_ERROR([*** POSIX librt not found])])
 LT_LIB_M
 
@@ -299,6 +300,8 @@ AC_CONFIG_FILES([Makefile
 	src/ata_id/Makefile
 	src/cdrom_id/Makefile
 	src/collect/Makefile
+	src/dmi_memory_id/Makefile
+	src/fido_id/Makefile
 	src/mtd_probe/Makefile
 	src/scsi_id/Makefile
 	src/v4l_id/Makefile

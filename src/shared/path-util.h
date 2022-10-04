@@ -41,3 +41,8 @@ int path_is_mount_point(const char *path, bool allow_symlink);
 bool paths_check_timestamp(const char* const* paths, usec_t *paths_ts_usec, bool update);
 
 char *prefix_root(const char *root, const char *path);
+
+char* path_extend_internal(char **x, ...);
+#define path_extend(x, ...) path_extend_internal(x, __VA_ARGS__, POINTER_MAX)
+#define path_join(...) path_extend_internal(NULL, __VA_ARGS__, POINTER_MAX)
+
