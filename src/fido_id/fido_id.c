@@ -30,8 +30,8 @@
 
 
 int main(int argc, char **argv) {
-        struct udev *config = 0;
         _cleanup_(udev_device_unrefp) struct udev_device *device = NULL;
+        _cleanup_udev_unref_ struct udev *udev;
         _cleanup_free_ char *desc_path = NULL;
         _cleanup_close_ int fd = -1;
 
@@ -47,29 +47,33 @@ int main(int argc, char **argv) {
         //log_parse_environment();
         log_open();
 
+        udev = udev_new();
+        if (udev == NULL)
+                return 1;
+
         if (argc > 2)
                 return log_error_errno(/*SYNTHETIC_ERRNO*/(EINVAL), "Usage: %s [SYSFS_PATH]", program_invocation_short_name);
 
         if (argc == 1) {
-                device = udev_device_new_from_environment( config );
-                if ( device == NULL )
+                device = udev_device_new_from_environment(udev);
+                if (device == NULL)
                         return log_error_errno(errno, "Failed to get current device from environment: %m");
         } else {
-                device = udev_device_new_from_syspath( config, argv[1] );
-                if ( device == NULL )
+                device = udev_device_new_from_syspath(udev, argv[1]);
+                if (device == NULL)
                         return log_error_errno(r, "Failed to get device from syspath: %m");
         }
 
-        hid_device = udev_device_get_parent( device );
-        if ( hid_device == NULL )
+        hid_device = udev_device_get_parent(device);
+        if (hid_device == NULL)
                 return log_error_errno(errno, "Failed to get parent HID device: %m");
 
-        sys_path = udev_device_get_syspath( hid_device );
-        if ( sys_path == NULL )
+        sys_path = udev_device_get_syspath(hid_device);
+        if (sys_path == NULL)
                 return log_error_errno(errno, "Failed to get syspath for HID device: %m");
 
-        desc_path = path_join( sys_path, "report_descriptor" );
-        if ( desc_path == NULL )
+        desc_path = path_join(sys_path, "report_descriptor");
+        if (desc_path == NULL)
                 return log_oom();
 
         fd = open(desc_path, O_RDONLY | O_NOFOLLOW | O_CLOEXEC);
