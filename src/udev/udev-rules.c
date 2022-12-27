@@ -2508,7 +2508,7 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                         struct udev_list_entry *list_entry;
                         bool match = false;
 
-                        udev_list_entry_foreach(list_entry, udev_device_get_tags_list_entry(event->dev)) {
+                        udev_list_entry_foreach(list_entry, udev_device_get_current_tags_list_entry(event->dev)) {
                                 if (match_value(rules, cur, udev_list_entry_get_name(list_entry))) {
                                         match = true;
                                         break;
@@ -2599,7 +2599,7 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                                                 struct udev_list_entry *list_entry;
                                                 bool match = false;
 
-                                                udev_list_entry_foreach(list_entry, udev_device_get_tags_list_entry(event->dev_parent)) {
+                                                udev_list_entry_foreach(list_entry, udev_device_get_current_tags_list_entry(event->dev_parent)) {
                                                         if (match_value(rules, key, udev_list_entry_get_name(list_entry))) {
                                                                 match = true;
                                                                 break;
