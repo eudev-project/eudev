@@ -122,7 +122,8 @@ static int node_symlink(struct udev_device *dev, const char *devnode, const char
         return 0;
 }
 
-static int stack_directory_read_one(struct udev *udev, int dirfd, const char *id, bool is_symlink, char **devnode, int *priority) {
+static int stack_directory_read_one(struct udev *udev, int dirfd, const char *id, char **devnode, int *priority) {
+        _cleanup_free_ char *buf = NULL;
         int tmp_prio, r;
 
         assert(udev);
@@ -131,15 +132,14 @@ static int stack_directory_read_one(struct udev *udev, int dirfd, const char *id
         assert(devnode);
         assert(priority);
 
-        if (is_symlink) {
-                _cleanup_free_ char *buf = NULL;
+        /* First, let's try to read the entry with the new format, which should replace the old format pretty
+         * quickly. */
+
+        r = readlinkat_malloc(dirfd, id, &buf);
+        if (r >= 0) {
                 char *colon;
 
-                /* New format. The devnode and priority can be obtained from symlink. */
-
-                r = readlinkat_malloc(dirfd, id, &buf);
-                if (r < 0)
-                        return r;
+                /* With the new format, the devnode and priority can be obtained from symlink itself. */
 
                 colon = strchr(buf, ':');
                 if (!colon || colon == buf)
@@ -165,7 +165,7 @@ static int stack_directory_read_one(struct udev *udev, int dirfd, const char *id
                 if (r < 0)
                         return r;
 
-        } else {
+        } else if (r == -EINVAL) { /* Not a symlink ? try the old format */
                 _cleanup_udev_device_unref_ struct udev_device *dev = NULL;
                 const char *val;
 
@@ -187,7 +187,9 @@ static int stack_directory_read_one(struct udev *udev, int dirfd, const char *id
                 r = free_and_strdup(devnode, val);
                 if (r < 0)
                         return r;
-        }
+
+        } else
+                return r == -ENOENT ? -ENODEV : r;
 
         *priority = tmp_prio;
         return 1; /* Updated */
@@ -231,21 +233,16 @@ static int stack_directory_find_prioritized_devnode(struct udev_device *dev, int
                 return -ENODEV;
 
         for (de = readdir(dir); de; de = readdir(dir)) {
-                if (de->d_name[0] == '.')
+                if (hidden_file(de->d_name))
                         continue;
 
                 /* skip ourself */
                 if (streq(de->d_name, id))
                         continue;
 
-                if (!IN_SET(de->d_type, DT_LNK, DT_REG))
-                        continue;
-
-                r = stack_directory_read_one(udev, dirfd, de->d_name, /* is_symlink = */ de->d_type == DT_LNK, &devnode, &priority);
-                if (r < 0) {
+                r = stack_directory_read_one(udev, dirfd, de->d_name, &devnode, &priority);
+                if (r < 0 && r != -ENODEV)
                         log_debug_errno(r, "Failed to read '%s', ignoring: %m", de->d_name);
-                        continue;
-                }
         }
 
         *ret = TAKE_PTR(devnode);
