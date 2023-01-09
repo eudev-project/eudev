@@ -412,7 +412,7 @@ static struct udev_list_entry *udev_device_add_property_from_string(struct udev_
 static int udev_device_set_syspath(struct udev_device *udev_device, const char *syspath)
 {
         const char *pos;
-        size_t len;
+        size_t len, n;
 
         free(udev_device->syspath);
         udev_device->syspath = strdup(syspath);
@@ -420,6 +420,11 @@ static int udev_device_set_syspath(struct udev_device *udev_device, const char *
                 return -ENOMEM;
         udev_device->devpath = udev_device->syspath + strlen("/sys");
         udev_device_add_property_internal(udev_device, "DEVPATH", udev_device->devpath);
+
+        /* clear the previous sysname and sysnum, e.g. when the device is renamed */
+        free(udev_device->sysname);
+        udev_device->sysname = NULL;
+        udev_device->sysnum = NULL;
 
         pos = strrchr(udev_device->syspath, '/');
         if (pos == NULL)
@@ -437,12 +442,13 @@ static int udev_device_set_syspath(struct udev_device *udev_device, const char *
         }
 
         /* trailing number */
-        while (len > 0 && isdigit(udev_device->sysname[--len]))
-                udev_device->sysnum = &udev_device->sysname[len];
+        n = 0;
+        while (n < len && isdigit(udev_device->sysname[len - n - 1]))
+                n++;
 
-        /* sysname is completely numeric */
-        if (len == 0)
-                udev_device->sysnum = NULL;
+        /* do not set sysnum for number only sysname */
+        if (n > 0 && n < len)
+                udev_device->sysnum = &udev_device->sysname[len - n];
 
         return 0;
 }
