@@ -418,10 +418,87 @@ static int stack_directory_open(const char *slink, int *ret_dirfd, int *ret_lock
         return 0;
 }
 
-static int link_update(struct udev_device *dev, const char *slink, bool add) {
-        _cleanup_close_ int dirfd = -1, lockfd = -1;
-        _cleanup_free_ char *devnode = NULL;
+/* Like systemd's sd_device_new_from_devname(): finds the device whose device node the specified
+ * path below /dev/, e.g. a device node symlink, resolves to. */
+static int device_new_from_devname(struct udev *udev, const char *devname, struct udev_device **ret) {
+        _cleanup_udev_device_unref_ struct udev_device *dev = NULL;
+        _cleanup_free_ char *resolved = NULL;
+        struct stat st;
+
+        assert(udev);
+        assert(devname);
+        assert(ret);
+
+        if (isempty(path_startswith(devname, "/dev/")))
+                return -EINVAL;
+
+        resolved = realpath(devname, NULL);
+        if (!resolved)
+                return ERRNO_IS_DEVICE_ABSENT(errno) ? -ENODEV : -errno;
+
+        if (isempty(path_startswith(resolved, "/dev/")))
+                return -EINVAL;
+
+        if (stat(resolved, &st) < 0)
+                return ERRNO_IS_DEVICE_ABSENT(errno) ? -ENODEV : -errno;
+
+        if (!S_ISCHR(st.st_mode) && !S_ISBLK(st.st_mode))
+                return -ENOTTY;
+
+        if (major(st.st_rdev) == 0)
+                return -ENODEV;
+
+        dev = udev_device_new_from_devnum(udev, S_ISBLK(st.st_mode) ? 'b' : 'c', st.st_rdev);
+        if (!dev)
+                return -ENODEV;
+
+        if (udev_device_get_devnum(dev) != st.st_rdev)
+                return -ENXIO;
+
+        if (streq_ptr(udev_device_get_subsystem(dev), "block") != !!S_ISBLK(st.st_mode))
+                return -ENXIO;
+
+        *ret = TAKE_PTR(dev);
+        return 0;
+}
+
+static int node_get_current(struct udev *udev, const char *slink, int dirfd, char **ret_id, int *ret_prio) {
+        _cleanup_udev_device_unref_ struct udev_device *dev = NULL;
+        _cleanup_free_ char *id_dup = NULL;
+        const char *id;
         int r;
+
+        assert(udev);
+        assert(slink);
+        assert(dirfd >= 0);
+        assert(ret_id);
+
+        r = device_new_from_devname(udev, slink, &dev);
+        if (r < 0)
+                return r;
+
+        id = udev_device_get_id_filename(dev);
+        if (!id)
+                return -ENODEV;
+
+        id_dup = strdup(id);
+        if (!id_dup)
+                return -ENOMEM;
+
+        if (ret_prio) {
+                r = stack_directory_read_one(udev, dirfd, id, NULL, ret_prio);
+                if (r < 0)
+                        return r;
+        }
+
+        *ret_id = TAKE_PTR(id_dup);
+        return 0;
+}
+
+static int link_update(struct udev_device *dev, const char *slink, bool add) {
+        _cleanup_free_ char *current_id = NULL, *devnode = NULL;
+        _cleanup_close_ int dirfd = -1, lockfd = -1;
+        int r, current_prio;
 
         assert(dev);
         assert(slink);
@@ -430,9 +507,61 @@ static int link_update(struct udev_device *dev, const char *slink, bool add) {
         if (r < 0)
                 return r;
 
+        r = node_get_current(udev_device_get_udev(dev), slink, dirfd, &current_id, add ? &current_prio : NULL);
+        if (r < 0 && !ERRNO_IS_DEVICE_ABSENT(r))
+                return log_debug_errno(r, "Failed to get the current device node priority for '%s': %m", slink);
+
         r = stack_directory_update(dev, dirfd, add);
         if (r < 0)
                 return log_debug_errno(r, "Failed to update stack directory for '%s': %m", slink);
+
+        if (current_id) {
+                const char *id;
+
+                id = udev_device_get_id_filename(dev);
+                if (!id)
+                        return log_debug_errno(ENODEV, "Failed to get device id: %m");
+
+                if (add) {
+                        int prio;
+
+                        prio = udev_device_get_devlink_priority(dev);
+
+                        if (streq(current_id, id)) {
+                                if (current_prio <= prio)
+                                        /* The devlink is ours and already exists, and the new priority is
+                                         * equal or higher than the previous. Hence, it is not necessary to
+                                         * recreate it. */
+                                        return 0;
+
+                                /* The devlink priority is downgraded. Another device may have a higher
+                                 * priority now. Let's find the device node with the highest priority. */
+                        } else {
+                                if (current_prio >= prio)
+                                        /* The devlink with equal or higher priority already exists and is
+                                         * owned by another device. Hence, it is not necessary to recreate it. */
+                                        return 0;
+
+                                /* This device has a higher priority than the current. Let's create the
+                                 * devlink to our device node. */
+                                return node_symlink(dev, NULL, slink);
+                        }
+
+                } else {
+                        if (!streq(current_id, id))
+                                /* The devlink already exists and is owned by another device. Hence, it is
+                                 * not necessary to recreate it. */
+                                return 0;
+
+                        /* The current devlink is ours, and the target device will be removed. Hence, we need
+                         * to search the device that has the highest priority. and update the devlink. */
+                }
+        } else {
+                /* The requested devlink does not exist, or the target device does not exist and the devlink
+                 * points to a non-existing device. Let's search the device that has the highest priority,
+                 * and update the devlink. */
+                ;
+        }
 
         r = stack_directory_find_prioritized_devnode(dev, dirfd, add, &devnode);
         if (r < 0)
