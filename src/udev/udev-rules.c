@@ -1526,10 +1526,6 @@ static int add_rule(struct udev_rules *rules, char *line,
                 }
 
                 if (streq(key, "SYMLINK")) {
-                        if (op == OP_REMOVE) {
-                                log_error("invalid SYMLINK operation");
-                                goto invalid;
-                        }
                         if (op < OP_MATCH_MAX)
                                 rule_add_key(&rule_tmp, TK_M_DEVLINK, op, value, NULL);
                         else
@@ -2621,20 +2617,32 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                         next = strchr(pos, ' ');
                         while (next != NULL) {
                                 next[0] = '\0';
-                                log_debug("LINK '%s' %s:%u", pos,
-                                          rules_str(rules, rule->rule.filename_off), rule->rule.filename_line);
                                 strscpyl(filename, sizeof(filename), "/dev/", pos, NULL);
-                                udev_device_add_devlink(event->dev, filename);
+                                if (cur->key.op == OP_REMOVE) {
+                                        log_debug("Dropped SYMLINK '%s' %s:%u", pos,
+                                                  rules_str(rules, rule->rule.filename_off), rule->rule.filename_line);
+                                        udev_device_remove_devlink(event->dev, filename);
+                                } else {
+                                        log_debug("LINK '%s' %s:%u", pos,
+                                                  rules_str(rules, rule->rule.filename_off), rule->rule.filename_line);
+                                        udev_device_add_devlink(event->dev, filename);
+                                }
                                 while (isspace(next[1]))
                                         next++;
                                 pos = &next[1];
                                 next = strchr(pos, ' ');
                         }
                         if (pos[0] != '\0') {
-                                log_debug("LINK '%s' %s:%u", pos,
-                                          rules_str(rules, rule->rule.filename_off), rule->rule.filename_line);
                                 strscpyl(filename, sizeof(filename), "/dev/", pos, NULL);
-                                udev_device_add_devlink(event->dev, filename);
+                                if (cur->key.op == OP_REMOVE) {
+                                        log_debug("Dropped SYMLINK '%s' %s:%u", pos,
+                                                  rules_str(rules, rule->rule.filename_off), rule->rule.filename_line);
+                                        udev_device_remove_devlink(event->dev, filename);
+                                } else {
+                                        log_debug("LINK '%s' %s:%u", pos,
+                                                  rules_str(rules, rule->rule.filename_off), rule->rule.filename_line);
+                                        udev_device_add_devlink(event->dev, filename);
+                                }
                         }
                         break;
                 }

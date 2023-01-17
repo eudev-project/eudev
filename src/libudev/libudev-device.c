@@ -1711,6 +1711,19 @@ int udev_device_add_devlink(struct udev_device *udev_device, const char *devlink
         return 0;
 }
 
+void udev_device_remove_devlink(struct udev_device *udev_device, const char *devlink)
+{
+        struct udev_list_entry *list_entry;
+
+        list_entry = udev_list_get_entry(&udev_device->devlinks_list);
+        list_entry = udev_list_entry_get_by_name(list_entry, devlink);
+        if (list_entry == NULL)
+                return;
+
+        udev_device->devlinks_uptodate = false;
+        udev_list_entry_delete(list_entry);
+}
+
 const char *udev_device_get_id_filename(struct udev_device *udev_device)
 {
         if (udev_device->id_filename == NULL) {

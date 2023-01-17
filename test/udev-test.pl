@@ -1384,6 +1384,18 @@ KERNEL=="sda", ENV{TESTENV}=="a b/c", ENV{ESCAPED}=="a_b_c", SYMLINK+="found"
 KERNEL=="sda", ENV{ESCAPED}=="a b/c", SYMLINK+="bad"
 EOF
         },
+        {
+                desc            => "SYMLINK remove operator",
+                devpath         => "/devices/pci0000:00/0000:00:1f.2/host0/target0:0:0/0:0:0:0/block/sda",
+                exp_name        => "found",
+                not_exp_name    => "bad",
+                rules           => <<EOF
+KERNEL=="sda", SYMLINK+="found bad link"
+KERNEL=="sda", SYMLINK-="bad nonexistent"
+KERNEL=="sda", SYMLINK=="link", SYMLINK!="bad", SYMLINK-="link"
+KERNEL=="sda", SYMLINK=="link", SYMLINK+="bad"
+EOF
+        },
 );
 
 sub udev {

@@ -246,7 +246,9 @@ The name to use for a network interface\&. The name of a device node cannot be c
 .PP
 \fISYMLINK\fR
 .RS 4
-The name of a symlink targeting the node\&. Every matching rule adds this value to the list of symlinks to be created\&.
+The name of a symlink targeting the node\&. Every matching rule adds this value to the list of symlinks to be created\&. With the
+\-=
+operator, the specified symlinks are removed from that list again, which allows to suppress symlinks added by earlier rules\&.
 .sp
 The set of characters to name a symlink is limited\&. Allowed characters are
 0\-9A\-Za\-z#+\-\&.:=@_/, valid UTF\-8 character sequences, and
