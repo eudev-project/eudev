@@ -40,6 +40,8 @@ src/collect/collect
 src/mtd_probe/mtd_probe
 src/scsi_id/scsi_id
 src/v4l_id/v4l_id
+src/dmi_memory_id/dmi_memory_id
+src/fido_id/fido_id
 
 src/udev/keyboard-keys-from-name.gperf
 src/udev/keyboard-keys-from-name.h
