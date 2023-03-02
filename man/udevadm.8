@@ -40,6 +40,8 @@ udevadm \- udev management tool
 \fBudevadm test \fR\fB[options]\fR\fB \fR\fB\fIdevpath\fR\fR
 .HP \w'\fBudevadm\ test\-builtin\ \fR\fB[options]\fR\fB\ \fR\fB\fIcommand\fR\fR\fB\ \fR\fB\fIdevpath\fR\fR\ 'u
 \fBudevadm test\-builtin \fR\fB[options]\fR\fB \fR\fB\fIcommand\fR\fR\fB \fR\fB\fIdevpath\fR\fR
+.HP \w'\fBudevadm\ verify\ \fR\fB[options]\fR\fB\ \fR\fB[\fIfile\fR\&.\&.\&.]\fR\ 'u
+\fBudevadm verify \fR\fB[options]\fR\fB \fR\fB[\fIfile\fR\&.\&.\&.]\fR
 .SH "DESCRIPTION"
 .PP
 \fBudevadm\fR
@@ -711,6 +713,70 @@ built\-in does not load kernel modules, the
 built\-in does not change key mappings, and the
 \fBbtrfs\fR
 built\-in only checks its arguments\&.
+.PP
+\fB\-h\fR, \fB\-\-help\fR
+.RS 4
+Print help text\&.
+.RE
+.SS "udevadm verify [\fIoptions\fR] [\fIfile\fR...]"
+.PP
+Verify syntactic, semantic, and stylistic correctness of udev rules files\&.
+.PP
+Positional arguments can be used to specify one or more files to check\&. Each argument must be an absolute path to a udev rules file or a directory that contains rules files, or a file name of udev rules file (e\&.g\&.
+50\-udev\-default\&.rules)\&. If a file name is specified, the file will be searched in the
+rules\&.d
+directories that are processed by
+\fBudevd\fR, and searched in the current working directory if not found\&. If no files are specified, the udev rules are read from the files located in the same
+rules\&.d
+directories that are processed by
+\fBudevd\fR\&. See
+\fBudev\fR(7)
+for more details about the search paths\&.
+.PP
+The exit status is
+\fB0\fR
+if all specified udev rules files are syntactically, semantically, and stylistically correct, and a non\-zero error code otherwise\&.
+.PP
+\fB\-N\fR, \fB\-\-resolve\-names=\fR\fB\fBearly\fR\fR\fB|\fR\fB\fBlate\fR\fR\fB|\fR\fB\fBnever\fR\fR
+.RS 4
+Specify when
+\fBudevadm\fR
+should resolve names of users and groups specified in udev rules\&. When set to
+\fBearly\fR
+(the default), names will be resolved when the rules are parsed\&. When set to
+\fBlate\fR, names will not be verified, as
+\fBudevd\fR
+resolves names during each event being processed\&. When set to
+\fBnever\fR, names will never be resolved and relevant rules will be ignored\&.
+.RE
+.PP
+\fB\-\-root=\fR\fB\fIPATH\fR\fR
+.RS 4
+When looking for udev rules files located in the
+rules\&.d
+directories, operate on files underneath the specified root path
+\fIPATH\fR\&. When a file name is specified, and it is not found in the
+rules\&.d
+directories, the file will be searched in the specified root path
+\fIPATH\fR, rather than the current working directory\&.
+.RE
+.PP
+\fB\-\-no\-summary\fR
+.RS 4
+Do not show summary\&.
+.RE
+.PP
+\fB\-\-no\-style\fR
+.RS 4
+Ignore style issues\&. When specified, even if style issues are found in udev rules files, the exit status is
+\fB0\fR
+if no syntactic or semantic errors are found\&.
+.RE
+.PP
+\fB\-V\fR, \fB\-\-version\fR
+.RS 4
+Print version\&.
+.RE
 .PP
 \fB\-h\fR, \fB\-\-help\fR
 .RS 4

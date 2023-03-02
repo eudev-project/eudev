@@ -26,6 +26,23 @@ struct udev_device *find_device(struct udev *udev,
 
 int device_wait_for_initialization(struct udev_device *device, usec_t timeout_usec, struct udev_device **ret);
 
+/* Like systemd's parse_path_argument() with suppress_root: makes the path absolute and
+ * returns NULL for "/". */
+int parse_root_argument(const char *s, char **ret);
+
+/* Resolves path below root, like systemd's chase() with CHASE_PREFIX_ROOT: absolute symlinks
+ * are resolved relative to root, and ".." does not leave it. The result starts with root.
+ * Without root, this is realpath(3). */
+int chase_below_root(const char *root, const char *path, char **ret);
+
+/* Like systemd's search_rules_files(): without arguments, all rules files in the rules
+ * directories below root, a file overriding the ones with the same name in later directories,
+ * except masked files, i.e. empty ones or symlinks to /dev/null. Otherwise, each argument is
+ * the name of a rules file that is searched in the rules directories, or the path of a rules
+ * file or of a directory of rules files, below root. Returns the paths as found in ret_names,
+ * and the ones with symlinks resolved in ret_paths. */
+int search_rules_files(char * const *args, const char *root, char ***ret_names, char ***ret_paths);
+
 /* Colors for the output on standard output, as systemd's ansi-color.h uses them. They
  * are empty strings unless standard output is a terminal, $NO_COLOR is not set and
  * $TERM is not "dumb". */

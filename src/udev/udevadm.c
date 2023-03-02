@@ -52,6 +52,7 @@ static const struct udevadm_cmd *udevadm_cmds[] = {
         &udevadm_hwdb,
         &udevadm_test,
         &udevadm_test_builtin,
+        &udevadm_verify,
         &udevadm_version,
         &udevadm_help,
 };

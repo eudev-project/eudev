@@ -57,6 +57,9 @@
     <cmdsynopsis>
       <command>udevadm test-builtin <optional>options</optional> <replaceable>command</replaceable> <replaceable>devpath</replaceable></command>
     </cmdsynopsis>
+    <cmdsynopsis>
+      <command>udevadm verify <optional>options</optional> <optional><replaceable>file</replaceable>...</optional></command>
+    </cmdsynopsis>
   </refsynopsisdiv>
 
   <refsect1><title>Description</title>
@@ -881,6 +884,85 @@
       built-in does not change key mappings, and the <command>btrfs</command>
       built-in only checks its arguments.</para>
       <variablelist>
+        <varlistentry>
+          <term><option>-h</option></term>
+          <term><option>--help</option></term>
+          <listitem>
+            <para>Print help text.</para>
+          </listitem>
+        </varlistentry>
+      </variablelist>
+    </refsect2>
+
+    <refsect2><title>udevadm verify
+      <arg choice="opt"><replaceable>options</replaceable></arg>
+      <arg choice="opt" rep="repeat"><replaceable>file</replaceable></arg>
+    </title>
+
+      <para>Verify syntactic, semantic, and stylistic correctness of udev rules files.</para>
+
+      <para>Positional arguments can be used to specify one or more files to check. Each argument must be an
+      absolute path to a udev rules file or a directory that contains rules files, or a file name of udev
+      rules file (e.g. <filename>50-udev-default.rules</filename>). If a file name is specified, the file will be
+      searched in the <filename>rules.d</filename> directories that are processed by
+      <command>udevd</command>, and searched in the current working directory if not found. If no
+      files are specified, the udev rules are read from the files located in the same
+      <filename>rules.d</filename> directories that are processed by <command>udevd</command>.
+      See <citerefentry><refentrytitle>udev</refentrytitle><manvolnum>7</manvolnum></citerefentry> for more
+      details about the search paths.</para>
+
+      <para>The exit status is <constant>0</constant> if all specified udev
+      rules files are syntactically, semantically, and stylistically correct,
+      and a non-zero error code otherwise.</para>
+
+      <variablelist>
+        <varlistentry>
+          <term><option>-N</option></term>
+          <term><option>--resolve-names=<constant>early</constant>|<constant>late</constant>|<constant>never</constant></option></term>
+          <listitem>
+            <para>Specify when <command>udevadm</command> should resolve names of users and groups specified
+            in udev rules. When set to <constant>early</constant> (the default), names will be resolved when
+            the rules are parsed. When set to <constant>late</constant>, names will not be verified, as
+            <command>udevd</command> resolves names during each event being processed. When set to
+            <constant>never</constant>, names will never be resolved and relevant rules will be ignored.
+            </para>
+          </listitem>
+        </varlistentry>
+
+        <varlistentry>
+          <term><option>--root=<replaceable>PATH</replaceable></option></term>
+          <listitem>
+            <para>When looking for udev rules files located in the <filename>rules.d</filename>
+            directories, operate on files underneath the specified root path <replaceable>PATH</replaceable>.
+            When a file name is specified, and it is not found in the <filename>rules.d</filename>
+            directories, the file will be searched in the specified root path
+            <replaceable>PATH</replaceable>, rather than the current working directory.</para>
+          </listitem>
+        </varlistentry>
+
+        <varlistentry>
+          <term><option>--no-summary</option></term>
+          <listitem>
+            <para>Do not show summary.</para>
+          </listitem>
+        </varlistentry>
+
+        <varlistentry>
+          <term><option>--no-style</option></term>
+          <listitem>
+            <para>Ignore style issues. When specified, even if style issues are found in udev rules files,
+            the exit status is <constant>0</constant> if no syntactic or semantic errors are found.</para>
+          </listitem>
+        </varlistentry>
+
+        <varlistentry>
+          <term><option>-V</option></term>
+          <term><option>--version</option></term>
+          <listitem>
+            <para>Print version.</para>
+          </listitem>
+        </varlistentry>
+
         <varlistentry>
           <term><option>-h</option></term>
           <term><option>--help</option></term>

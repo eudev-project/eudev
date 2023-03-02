@@ -263,3 +263,4 @@ extern const struct udevadm_cmd udevadm_monitor;
 extern const struct udevadm_cmd udevadm_hwdb;
 extern const struct udevadm_cmd udevadm_test;
 extern const struct udevadm_cmd udevadm_test_builtin;
+extern const struct udevadm_cmd udevadm_verify;
