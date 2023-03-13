@@ -34,6 +34,7 @@ libudev_shared_la_SOURCES=\
 	virt.c
 
 noinst_HEADERS = \
+	build.h \
 	conf-files.h \
 	def.h \
 	device-nodes.h \

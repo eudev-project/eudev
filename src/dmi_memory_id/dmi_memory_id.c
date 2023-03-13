@@ -646,9 +646,10 @@ static int legacy_decode(const uint8_t *buf, const char *devmem, bool no_file_of
 }
 
 static int help(void) {
-        printf("Usage: %s [options]\n"
-               " -F,--from-dump FILE   read DMI information from a binary file\n"
-               " -h,--help             print this help text\n\n",
+        printf("%s [OPTIONS...]\n\n"
+               "  -F --from-dump FILE  Read DMI information from a binary file\n"
+               "  -h --help            Show this help text\n"
+               "     --version         Show package version\n",
                program_invocation_short_name);
         return 0;
 }

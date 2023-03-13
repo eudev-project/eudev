@@ -31,12 +31,14 @@
 #include <linux/version.h>
 #include <linux/videodev2.h>
 
+#include "build.h"
 #include "util.h"
 #include "utf8.h"
 
 int main(int argc, char *argv[]) {
         static const struct option options[] = {
-                { "help", no_argument, NULL, 'h' },
+                { "help",     no_argument, NULL, 'h' },
+                { "version",  no_argument, NULL, 'v' },
                 {}
         };
         _cleanup_close_ int fd = -1;
@@ -48,11 +50,14 @@ int main(int argc, char *argv[]) {
 
                 switch (c) {
                 case 'h':
-                        printf("%s [-h,--help] <device file>\n\n"
+                        printf("%s [OPTIONS...] DEVICE\n\n"
                                "Video4Linux device identification.\n\n"
-                               "  -h  Print this message\n"
-                               , program_invocation_short_name);
+                               "  -h --help     Show this help text\n"
+                               "     --version  Show package version\n",
+                               program_invocation_short_name);
                         return 0;
+                case 'v':
+                        return version();
                 case '?':
                         return -EINVAL;
 

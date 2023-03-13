@@ -20,6 +20,7 @@
 #include <unistd.h>
 
 
+#include "build.h"
 #include "fido_id_desc.h"
 #include "libudev-private.h"
 #include "libudev.h"
@@ -34,7 +35,8 @@ static const char *arg_device = NULL;
 
 static int parse_argv(int argc, char *argv[]) {
         static const struct option options[] = {
-                { "help",   no_argument, NULL, 'h' },
+                { "help",     no_argument, NULL, 'h' },
+                { "version",  no_argument, NULL, 'v' },
                 {}
         };
         int c;
@@ -43,9 +45,12 @@ static int parse_argv(int argc, char *argv[]) {
                 switch (c) {
                 case 'h':
                         printf("%s [OPTIONS...] SYSFS_PATH\n\n"
-                               "  -h --help     Show this help text\n",
+                               "  -h --help     Show this help text\n"
+                               "     --version  Show package version\n",
                                program_invocation_short_name);
                         return 0;
+                case 'v':
+                        return version();
                 case '?':
                         return -EINVAL;
                 default:
