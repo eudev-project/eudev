@@ -318,12 +318,11 @@ static void disk_identify_fixup_uint16 (uint8_t identify[512], unsigned int offs
  * @udev: The libudev context.
  * @fd: File descriptor for the block device.
  * @out_identify: Return location for IDENTIFY data.
- * @out_is_packet_device: Return location for whether returned data is from a IDENTIFY PACKET DEVICE.
  * @ret_peripheral_device_type: Return location for the SCSI peripheral device type.
  *
  * Sends the IDENTIFY DEVICE or IDENTIFY PACKET DEVICE command to the
  * device represented by @fd. If successful, then the result will be
- * copied into @out_identify and @out_is_packet_device.
+ * copied into @out_identify.
  *
  * This routine is based on code from libatasmart, Copyright 2008
  * Lennart Poettering, LGPL v2.1.
@@ -334,15 +333,12 @@ static void disk_identify_fixup_uint16 (uint8_t identify[512], unsigned int offs
 static int disk_identify(struct udev *udev __attribute__((unused)),
                          int fd,
                          uint8_t out_identify[512],
-                         int *out_is_packet_device,
                          int *ret_peripheral_device_type)
 {
         int ret;
         uint8_t inquiry_buf[36];
         int peripheral_device_type;
         int all_nul_bytes;
-        int n;
-        int is_packet_device = 0;
 
         /* init results */
         memzero(out_identify, 512);
@@ -374,12 +370,10 @@ static int disk_identify(struct udev *udev __attribute__((unused)),
 
         /* SPC-4, section 6.4.2: Standard INQUIRY data */
         peripheral_device_type = inquiry_buf[0] & 0x1f;
-        if (peripheral_device_type == 0x05)
-          {
-            is_packet_device = 1;
-            ret = disk_identify_packet_device_command(fd, out_identify, 512);
-            goto check_nul_bytes;
-          }
+        if (peripheral_device_type == 0x05) {
+                ret = disk_identify_packet_device_command(fd, out_identify, 512);
+                goto check_nul_bytes;
+        }
         if (!IN_SET(peripheral_device_type, 0x00, 0x14)) {
                 ret = -1;
                 errno = EIO;
@@ -394,12 +388,11 @@ static int disk_identify(struct udev *udev __attribute__((unused)),
  check_nul_bytes:
          /* Check if IDENTIFY data is all NUL bytes - if so, bail */
         all_nul_bytes = 1;
-        for (n = 0; n < 512; n++) {
+        for (size_t n = 0; n < 512; n++)
                 if (out_identify[n] != '\0') {
                         all_nul_bytes = 0;
                         break;
                 }
-        }
 
         if (all_nul_bytes) {
                 ret = -1;
@@ -411,8 +404,6 @@ static int disk_identify(struct udev *udev __attribute__((unused)),
                 *ret_peripheral_device_type = peripheral_device_type;
 
 out:
-        if (out_is_packet_device != NULL)
-                *out_is_packet_device = is_packet_device;
         return ret;
 }
 
@@ -425,15 +416,11 @@ int main(int argc, char *argv[])
                 uint16_t wyde[256];
                 uint64_t octa[64];
         } identify;
-        char model[41];
-        char model_enc[256];
-        char serial[21];
-        char revision[9];
+        char model[41], model_enc[256], serial[21], revision[9];
         const char *node = NULL;
         int export = 0;
         _cleanup_close_ int fd = -1;
         uint16_t word;
-        int is_packet_device = 0;
         int peripheral_device_type = -1;
         static const struct option options[] = {
                 { "export", no_argument, NULL, 'x' },
@@ -481,7 +468,7 @@ int main(int argc, char *argv[])
                 return ignore ? 0 : 1;
         }
 
-        if (disk_identify(udev, fd, identify.byte, &is_packet_device, &peripheral_device_type) == 0) {
+        if (disk_identify(udev, fd, identify.byte, &peripheral_device_type) == 0) {
                 /*
                  * fix up only the fields from the IDENTIFY data that we are going to
                  * use and copy it into the hd_driveid struct for convenience
