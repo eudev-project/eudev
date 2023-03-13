@@ -21,6 +21,8 @@
 #define _GNU_SOURCE 1
 #endif
 
+#include <errno.h>
+#include <getopt.h>
 #include <stdio.h>
 #include <sys/ioctl.h>
 #include <mtd/mtd-user.h>
@@ -31,21 +33,53 @@
 #include <stdlib.h>
 #include "mtd_probe.h"
 
+static const char *arg_device = NULL;
+
+static int parse_argv(int argc, char *argv[]) {
+        static const struct option options[] = {
+                { "help",   no_argument, NULL, 'h' },
+                {}
+        };
+        int c;
+
+        while ((c = getopt_long(argc, argv, "h", options, NULL)) >= 0)
+                switch (c) {
+                case 'h':
+                        printf("%s /dev/mtd[n]\n\n"
+                               "  -h --help     Show this help text\n",
+                               program_invocation_short_name);
+                        return 0;
+                case '?':
+                        return -EINVAL;
+                default:
+                        assert_not_reached("Unknown option");
+                }
+
+        if (argc > 2)
+                return log_error_errno(SYNTHETIC_ERRNO(EINVAL), "Error: unexpected argument.");
+
+        arg_device = argv[optind];
+        if (!arg_device)
+                return log_error_errno(SYNTHETIC_ERRNO(EINVAL), "DEVICE argument missing.");
+
+        return 1;
+}
+
 int main(int argc, char** argv) {
         int mtd_fd = -1;
         mtd_info_t mtd_info;
+        int r;
 
-        if (argc != 2) {
-                printf("usage: mtd_probe /dev/mtd[n]\n");
-                return EXIT_FAILURE;
-        }
+        r = parse_argv(argc, argv);
+        if (r <= 0)
+                return r < 0 ? EXIT_FAILURE : 0;
 
-        mtd_fd = open(argv[1], O_RDONLY|O_CLOEXEC|O_NOCTTY);
+        mtd_fd = open(arg_device, O_RDONLY|O_CLOEXEC|O_NOCTTY);
         if (mtd_fd < 0) {
                 bool ignore = IN_SET(errno, ENODEV, ENXIO, ENOENT, ENOMEDIUM);
                 log_full_errno(ignore ? LOG_DEBUG : LOG_WARNING, errno,
                                "Failed to open device node '%s'%s: %m",
-                               argv[1], ignore ? ", ignoring" : "");
+                               arg_device, ignore ? ", ignoring" : "");
                 return ignore ? EXIT_SUCCESS : EXIT_FAILURE;
         }
 
