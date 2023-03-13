@@ -12,6 +12,7 @@
 
 #include <errno.h>
 #include <fcntl.h>
+#include <getopt.h>
 #include <linux/hid.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -29,18 +30,44 @@
 #include "udev-util.h"
 #include "udev.h"
 
+static const char *arg_device = NULL;
+
+static int parse_argv(int argc, char *argv[]) {
+        static const struct option options[] = {
+                { "help",   no_argument, NULL, 'h' },
+                {}
+        };
+        int c;
+
+        while ((c = getopt_long(argc, argv, "h", options, NULL)) >= 0)
+                switch (c) {
+                case 'h':
+                        printf("%s [OPTIONS...] SYSFS_PATH\n\n"
+                               "  -h --help     Show this help text\n",
+                               program_invocation_short_name);
+                        return 0;
+                case '?':
+                        return -EINVAL;
+                default:
+                        assert_not_reached("Unknown option");
+                }
+
+        if (argc > 2)
+                return log_error_errno(SYNTHETIC_ERRNO(EINVAL), "Error: unexpected argument.");
+
+        arg_device = argv[optind];
+        return 1;
+}
 
 static int run(int argc, char **argv) {
         _cleanup_(udev_device_unrefp) struct udev_device *device = NULL;
         _cleanup_udev_unref_ struct udev *udev = NULL;
         _cleanup_free_ char *desc_path = NULL;
         _cleanup_close_ int fd = -1;
-
         struct udev_device *hid_device;
         const char *sys_path;
         uint8_t desc[HID_MAX_DESCRIPTOR_SIZE];
         ssize_t desc_len;
-
         int r;
 
         log_set_target(LOG_TARGET_AUTO);
@@ -52,21 +79,22 @@ static int run(int argc, char **argv) {
         if (udev == NULL)
                 return log_oom();
 
-        if (argc > 2)
-                return log_error_errno(SYNTHETIC_ERRNO(EINVAL), "Usage: %s [SYSFS_PATH]", program_invocation_short_name);
+        r = parse_argv(argc, argv);
+        if (r <= 0)
+                return r;
 
         /* libudev does not set errno on all failures */
         errno = 0;
-        if (argc == 1) {
+        if (arg_device) {
+                device = udev_device_new_from_syspath(udev, arg_device);
+                if (device == NULL)
+                        return log_error_errno(errno > 0 ? errno : ENODEV,
+                                               "Failed to get device from syspath %s: %m", arg_device);
+        } else {
                 device = udev_device_new_from_environment(udev);
                 if (device == NULL)
                         return log_error_errno(errno > 0 ? errno : EINVAL,
                                                "Failed to get current device from environment: %m");
-        } else {
-                device = udev_device_new_from_syspath(udev, argv[1]);
-                if (device == NULL)
-                        return log_error_errno(errno > 0 ? errno : ENODEV,
-                                               "Failed to get device from syspath: %m");
         }
 
         errno = 0;
