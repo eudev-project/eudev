@@ -53,6 +53,9 @@
 
 #define COMMAND_TIMEOUT_MSEC (30 * 1000)
 
+static bool arg_export = false;
+static const char *arg_device = NULL;
+
 static int disk_scsi_inquiry_command(int      fd,
                                      void    *buf,
                                      size_t   buf_len)
@@ -389,44 +392,19 @@ static int disk_identify(struct udev *udev __attribute__((unused)),
         return 0;
 }
 
-int main(int argc, char *argv[])
-{
-        _cleanup_udev_unref_ struct udev *udev = NULL;
-        struct hd_driveid id;
-        union {
-                uint8_t  byte[512];
-                uint16_t wyde[256];
-                uint64_t octa[64];
-        } identify;
-        char model[41], model_enc[256], serial[21], revision[9];
-        const char *node = NULL;
-        int export = 0;
-        _cleanup_close_ int fd = -1;
-        uint16_t word;
-        int peripheral_device_type = -1;
+static int parse_argv(int argc, char *argv[]) {
         static const struct option options[] = {
                 { "export",   no_argument, NULL, 'x' },
                 { "help",     no_argument, NULL, 'h' },
                 { "version",  no_argument, NULL, 'v' },
                 {}
         };
+        int c;
 
-        log_open();
-
-        udev = udev_new();
-        if (udev == NULL)
-                return 0;
-
-        while (1) {
-                int option;
-
-                option = getopt_long(argc, argv, "xh", options, NULL);
-                if (option == -1)
-                        break;
-
-                switch (option) {
+        while ((c = getopt_long(argc, argv, "xh", options, NULL)) >= 0)
+                switch (c) {
                 case 'x':
-                        export = 1;
+                        arg_export = true;
                         break;
                 case 'h':
                         printf("%s [OPTIONS...] DEVICE\n\n"
@@ -437,21 +415,50 @@ int main(int argc, char *argv[])
                         return 0;
                 case 'v':
                         return version();
+                case '?':
+                        return -EINVAL;
+                default:
+                        assert_not_reached("Unknown option");
                 }
-        }
 
-        node = argv[optind];
-        if (node == NULL) {
-                log_error("no node specified");
-                return 1;
-        }
+        if (!argv[optind])
+                return log_error_errno(SYNTHETIC_ERRNO(EINVAL),
+                                       "DEVICE argument missing.");
 
-        fd = open(node, O_RDONLY|O_NONBLOCK|O_CLOEXEC|O_NOCTTY);
+        arg_device = argv[optind];
+        return 1;
+}
+
+int main(int argc, char *argv[])
+{
+        _cleanup_udev_unref_ struct udev *udev = NULL;
+        struct hd_driveid id;
+        union {
+                uint8_t  byte[512];
+                uint16_t wyde[256];
+                uint64_t octa[64];
+        } identify;
+        char model[41], model_enc[256], serial[21], revision[9];
+        _cleanup_close_ int fd = -1;
+        uint16_t word;
+        int peripheral_device_type = -1, r;
+
+        log_open();
+
+        udev = udev_new();
+        if (udev == NULL)
+                return 0;
+
+        r = parse_argv(argc, argv);
+        if (r <= 0)
+                return r < 0 ? 1 : 0;
+
+        fd = open(arg_device, O_RDONLY|O_NONBLOCK|O_CLOEXEC|O_NOCTTY);
         if (fd < 0) {
                 bool ignore = IN_SET(errno, ENODEV, ENXIO, ENOENT, ENOMEDIUM);
                 log_full_errno(ignore ? LOG_DEBUG : LOG_WARNING, errno,
                                "Failed to open device node '%s'%s: %m",
-                               node, ignore ? ", ignoring" : "");
+                               arg_device, ignore ? ", ignoring" : "");
                 return ignore ? 0 : 1;
         }
 
@@ -486,7 +493,7 @@ int main(int argc, char *argv[])
         } else {
                 /* If this fails, then try HDIO_GET_IDENTITY */
                 if (ioctl(fd, HDIO_GET_IDENTITY, &id) != 0) {
-                        log_debug_errno(errno, "HDIO_GET_IDENTITY failed for '%s': %m", node);
+                        log_debug_errno(errno, "%s: HDIO_GET_IDENTITY failed: %m", arg_device);
                         return 2;
                 }
         }
@@ -501,7 +508,7 @@ int main(int argc, char *argv[])
         util_replace_whitespace((char *) id.fw_rev, revision, 8);
         util_replace_chars(revision, NULL);
 
-        if (export) {
+        if (arg_export) {
                 /* Set this to convey the disk speaks the ATA protocol */
                 printf("ID_ATA=1\n");
 
