@@ -63,7 +63,7 @@ int main(int argc, char *argv[]) {
         if (device == NULL)
                 return 2;
 
-        fd = open(device, O_RDONLY);
+        fd = open(device, O_RDONLY|O_CLOEXEC|O_NOCTTY);
         if (fd < 0)
                 return 3;
 
