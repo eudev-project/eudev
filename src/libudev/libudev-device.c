@@ -1783,9 +1783,14 @@ void udev_device_set_is_initialized(struct udev_device *udev_device)
         udev_device->is_initialized = true;
 }
 
+/* All tags are managed under /run/udev/tags, and the directories there are
+ * named with tags. Hence, each tag must be a valid filename. */
 static bool is_valid_tag(const char *tag)
 {
-        return !strchr(tag, ':') && !strchr(tag, ' ');
+        return tag[0] != '\0' &&
+                tag[strspn(tag, "abcdefghijklmnopqrstuvwxyz"
+                                "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+                                "0123456789-_")] == '\0';
 }
 
 int udev_device_add_tag(struct udev_device *udev_device, const char *tag)

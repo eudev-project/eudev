@@ -2673,24 +2673,15 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                 }
                 case TK_A_TAG: {
                         char tag[UTIL_PATH_SIZE];
-                        const char *p;
 
                         udev_event_apply_format(event, rules_str(rules, cur->key.value_off), tag, sizeof(tag), false);
                         if (cur->key.op == OP_ASSIGN || cur->key.op == OP_ASSIGN_FINAL)
                                 udev_device_cleanup_tags_list(event->dev);
-                        for (p = tag; *p != '\0'; p++) {
-                                if ((*p >= 'a' && *p <= 'z') ||
-                                    (*p >= 'A' && *p <= 'Z') ||
-                                    (*p >= '0' && *p <= '9') ||
-                                    *p == '-' || *p == '_')
-                                        continue;
-                                log_error("ignoring invalid tag name '%s'", tag);
-                                break;
-                        }
                         if (cur->key.op == OP_REMOVE)
                                 udev_device_remove_tag(event->dev, tag);
-                        else
-                                udev_device_add_tag(event->dev, tag);
+                        else if (udev_device_add_tag(event->dev, tag) == -EINVAL && tag[0] != '\0')
+                                log_error("ignoring invalid tag name '%s' %s:%u", tag,
+                                          rules_str(rules, rule->rule.filename_off), rule->rule.filename_line);
                         break;
                 }
                 case TK_A_NAME: {
