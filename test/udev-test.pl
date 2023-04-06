@@ -1435,6 +1435,15 @@ KERNEL=="sda", ACTION=="add", ENV{A}="bad"
 EOF
         },
         {
+                desc            => "SYMLINK with /dev/ prefix and invalid path",
+                devpath         => "/devices/pci0000:00/0000:00:1f.2/host0/target0:0:0/0:0:0:0/block/sda",
+                exp_name        => "found",
+                not_exp_name    => "../bad",
+                rules           => <<EOF
+KERNEL=="sda", SYMLINK+="../bad /dev/found dir/../../bad"
+EOF
+        },
+        {
                 desc            => "PROGRAM with too many arguments",
                 devpath         => "/devices/pci0000:00/0000:00:1f.2/host0/target0:0:0/0:0:0:0/block/sda",
                 exp_name        => "found",

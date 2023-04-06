@@ -2055,6 +2055,57 @@ enum escape_type {
         ESCAPE_REPLACE,
 };
 
+/* Checks if a path is safe to be used as a device node symlink, i.e. it does not contain "." or
+ * ".." components or duplicated slashes. */
+static bool devlink_is_safe(const char *p) {
+        if (isempty(p))
+                return false;
+
+        if (streq(p, ".") || streq(p, ".."))
+                return false;
+
+        if (startswith(p, "../") || endswith(p, "/..") || strstr(p, "/../"))
+                return false;
+
+        if (strlen(p)+1 > PATH_MAX)
+                return false;
+
+        /* The following two checks are not really dangerous, but hey, they still are confusing */
+        if (startswith(p, "./") || endswith(p, "/.") || strstr(p, "/./"))
+                return false;
+
+        if (strstr(p, "//"))
+                return false;
+
+        return true;
+}
+
+/* Converts the value of SYMLINK= to an absolute path of the symlink below /dev/. The value may
+ * already be prefixed with "/dev/". */
+static int devlink_to_path(const char *devlink, char *path, size_t size) {
+        const char *p;
+        size_t l;
+
+        if (!devlink_is_safe(devlink))
+                return -EINVAL;
+
+        p = path_startswith(devlink, "/dev/");
+        if (!p)
+                p = devlink;
+        if (isempty(p) || p[0] == '/')
+                return -EINVAL;
+
+        if (strscpyl(path, size, "/dev/", p, NULL) == 0)
+                return -ENAMETOOLONG;
+
+        /* drop trailing slashes */
+        l = strlen(path);
+        while (l > 0 && path[l-1] == '/')
+                path[--l] = '\0';
+
+        return 0;
+}
+
 int udev_rules_apply_to_event(struct udev_rules *rules,
                               struct udev_event *event,
                               usec_t timeout_usec,
@@ -2702,8 +2753,10 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                         next = strchr(pos, ' ');
                         while (next != NULL) {
                                 next[0] = '\0';
-                                strscpyl(filename, sizeof(filename), "/dev/", pos, NULL);
-                                if (cur->key.op == OP_REMOVE) {
+                                if (devlink_to_path(pos, filename, sizeof(filename)) < 0)
+                                        log_error("invalid SYMLINK '%s', ignoring %s:%u", pos,
+                                                  rules_str(rules, rule->rule.filename_off), rule->rule.filename_line);
+                                else if (cur->key.op == OP_REMOVE) {
                                         log_debug("Dropped SYMLINK '%s' %s:%u", pos,
                                                   rules_str(rules, rule->rule.filename_off), rule->rule.filename_line);
                                         udev_device_remove_devlink(event->dev, filename);
@@ -2718,8 +2771,10 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                                 next = strchr(pos, ' ');
                         }
                         if (pos[0] != '\0') {
-                                strscpyl(filename, sizeof(filename), "/dev/", pos, NULL);
-                                if (cur->key.op == OP_REMOVE) {
+                                if (devlink_to_path(pos, filename, sizeof(filename)) < 0)
+                                        log_error("invalid SYMLINK '%s', ignoring %s:%u", pos,
+                                                  rules_str(rules, rule->rule.filename_off), rule->rule.filename_line);
+                                else if (cur->key.op == OP_REMOVE) {
                                         log_debug("Dropped SYMLINK '%s' %s:%u", pos,
                                                   rules_str(rules, rule->rule.filename_off), rule->rule.filename_line);
                                         udev_device_remove_devlink(event->dev, filename);
