@@ -2201,6 +2201,35 @@ static int devlink_to_path(const char *devlink, char *path, size_t size) {
         return 0;
 }
 
+/* Adds or removes one symlink of SYMLINK=. libudev refuses symlinks containing control characters. */
+static void apply_devlink(struct udev_device *dev, enum operation_type op, const char *link,
+                          const char *filename, unsigned int lineno) {
+        _cleanup_free_ char *escaped = NULL;
+        char path[UTIL_PATH_SIZE];
+        int r;
+
+        r = devlink_to_path(link, path, sizeof(path));
+        if (r >= 0 && op == OP_REMOVE) {
+                log_debug("Dropped SYMLINK '%s' %s:%u", link, filename, lineno);
+                udev_device_remove_devlink(dev, path);
+                return;
+        }
+        if (r >= 0) {
+                r = udev_device_add_devlink(dev, path);
+                if (r >= 0) {
+                        log_debug("LINK '%s' %s:%u", link, filename, lineno);
+                        return;
+                }
+                if (r == -ENOMEM) {
+                        log_oom();
+                        return;
+                }
+        }
+
+        escaped = cescape(link);
+        log_error("invalid SYMLINK '%s', ignoring %s:%u", escaped ?: link, filename, lineno);
+}
+
 int udev_rules_apply_to_event(struct udev_rules *rules,
                               struct udev_event *event,
                               usec_t timeout_usec,
@@ -2829,7 +2858,6 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                 }
                 case TK_A_DEVLINK: {
                         char temp[UTIL_PATH_SIZE];
-                        char filename[UTIL_PATH_SIZE];
                         char *pos, *next;
                         int count = 0;
 
@@ -2856,37 +2884,16 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                         next = strchr(pos, ' ');
                         while (next != NULL) {
                                 next[0] = '\0';
-                                if (devlink_to_path(pos, filename, sizeof(filename)) < 0)
-                                        log_error("invalid SYMLINK '%s', ignoring %s:%u", pos,
-                                                  rules_str(rules, rule->rule.filename_off), rule->rule.filename_line);
-                                else if (cur->key.op == OP_REMOVE) {
-                                        log_debug("Dropped SYMLINK '%s' %s:%u", pos,
-                                                  rules_str(rules, rule->rule.filename_off), rule->rule.filename_line);
-                                        udev_device_remove_devlink(event->dev, filename);
-                                } else {
-                                        log_debug("LINK '%s' %s:%u", pos,
-                                                  rules_str(rules, rule->rule.filename_off), rule->rule.filename_line);
-                                        udev_device_add_devlink(event->dev, filename);
-                                }
+                                apply_devlink(event->dev, cur->key.op, pos,
+                                              rules_str(rules, rule->rule.filename_off), rule->rule.filename_line);
                                 while (isspace(next[1]))
                                         next++;
                                 pos = &next[1];
                                 next = strchr(pos, ' ');
                         }
-                        if (pos[0] != '\0') {
-                                if (devlink_to_path(pos, filename, sizeof(filename)) < 0)
-                                        log_error("invalid SYMLINK '%s', ignoring %s:%u", pos,
-                                                  rules_str(rules, rule->rule.filename_off), rule->rule.filename_line);
-                                else if (cur->key.op == OP_REMOVE) {
-                                        log_debug("Dropped SYMLINK '%s' %s:%u", pos,
-                                                  rules_str(rules, rule->rule.filename_off), rule->rule.filename_line);
-                                        udev_device_remove_devlink(event->dev, filename);
-                                } else {
-                                        log_debug("LINK '%s' %s:%u", pos,
-                                                  rules_str(rules, rule->rule.filename_off), rule->rule.filename_line);
-                                        udev_device_add_devlink(event->dev, filename);
-                                }
-                        }
+                        if (pos[0] != '\0')
+                                apply_devlink(event->dev, cur->key.op, pos,
+                                              rules_str(rules, rule->rule.filename_off), rule->rule.filename_line);
                         break;
                 }
                 case TK_A_ATTR: {

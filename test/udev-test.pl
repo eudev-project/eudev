@@ -1461,6 +1461,15 @@ KERNEL=="sda", SYMLINK+="../bad /dev/found dir/../../bad"
 EOF
         },
         {
+                desc            => "SYMLINK with control characters is refused",
+                devpath         => "/devices/pci0000:00/0000:00:1f.2/host0/target0:0:0/0:0:0:0/block/sda",
+                exp_name        => "found",
+                not_exp_name    => "bad\x01link",
+                rules           => <<EOF
+KERNEL=="sda", OPTIONS="string_escape=none", SYMLINK+=e"bad\\x01link found"
+EOF
+        },
+        {
                 desc            => "invalid TAG is ignored",
                 devpath         => "/devices/pci0000:00/0000:00:1f.2/host0/target0:0:0/0:0:0:0/block/sda",
                 exp_name        => "found",

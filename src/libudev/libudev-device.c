@@ -23,6 +23,7 @@
 #include <unistd.h>
 #include <stdbool.h>
 #include <errno.h>
+#include <limits.h>
 #include <string.h>
 #include <dirent.h>
 #include <fcntl.h>
@@ -37,6 +38,7 @@
 #include "libudev.h"
 #include "libudev-private.h"
 #include "def.h"
+#include "path-util.h"
 #include "utf8.h"
 
 static int udev_device_read_uevent_file(struct udev_device *udev_device);
@@ -1878,27 +1880,115 @@ _public_ struct udev_list_entry *udev_device_get_sysattr_list_entry(struct udev_
         return udev_list_get_entry(&udev_device->sysattr_list);
 }
 
+/* Like systemd's path_is_safe(): the path is not empty, shorter than PATH_MAX, has no component
+ * longer than NAME_MAX, and no ".." component. */
+static bool devname_is_safe(const char *p)
+{
+        if (isempty(p) || strlen(p) >= PATH_MAX)
+                return false;
+
+        for (;;) {
+                size_t n;
+
+                p += strspn(p, "/");
+                if (*p == '\0')
+                        return true;
+
+                n = strcspn(p, "/");
+                if (n > NAME_MAX)
+                        return false;
+                if (n == 2 && p[0] == '.' && p[1] == '.')
+                        return false;
+                p += n;
+        }
+}
+
+/* Drops duplicated and trailing slashes and "." components of an absolute path, like systemd's
+ * path_simplify(). */
+static void devname_simplify(char *path)
+{
+        const char *f = path;
+        char *t = path;
+
+        for (;;) {
+                f += strspn(f, "/");
+                if (f[0] == '.' && IN_SET(f[1], '/', '\0')) {
+                        f++;
+                        continue;
+                }
+                if (*f == '\0')
+                        break;
+
+                *(t++) = '/';
+                while (!IN_SET(*f, '/', '\0'))
+                        *(t++) = *(f++);
+        }
+
+        if (t == path)
+                *(t++) = '/';
+        *t = '\0';
+}
+
+/* Returns the device node or symlink path prefixed with "/dev/" and simplified. The path must be
+ * safe, an absolute path must be below /dev/, and neither may contain control characters, which
+ * would break the database. */
+static int mangle_devname(const char *p, char **ret)
+{
+        char *q;
+
+        if (!devname_is_safe(p) || string_has_cc(p, NULL))
+                return -EINVAL;
+
+        /* When the path is absolute, it must start with "/dev/", but ignore "/dev/" itself. */
+        if (p[0] == '/') {
+                if (isempty(path_startswith(p, "/dev/")))
+                        return -EINVAL;
+
+                q = strdup(p);
+        } else
+                q = strjoin("/dev/", p, NULL);
+        if (!q)
+                return -ENOMEM;
+
+        devname_simplify(q);
+
+        /* "/dev/." and friends are simplified to "/dev" */
+        if (isempty(path_startswith(q, "/dev/"))) {
+                free(q);
+                return -EINVAL;
+        }
+
+        *ret = q;
+        return 0;
+}
+
 static int udev_device_set_devnode(struct udev_device *udev_device, const char *devnode)
 {
+        char *t;
+        int r;
+
+        r = mangle_devname(devnode, &t);
+        if (r < 0)
+                return r;
+
         free(udev_device->devnode);
-        if (devnode[0] != '/') {
-                if (asprintf(&udev_device->devnode, "/dev/%s", devnode) < 0)
-                        udev_device->devnode = NULL;
-        } else {
-                udev_device->devnode = strdup(devnode);
-        }
-        if (udev_device->devnode == NULL)
-                return -ENOMEM;
+        udev_device->devnode = t;
         udev_device_add_property_internal(udev_device, "DEVNAME", udev_device->devnode);
         return 0;
 }
 
 int udev_device_add_devlink(struct udev_device *udev_device, const char *devlink)
 {
+        _cleanup_free_ char *p = NULL;
         struct udev_list_entry *list_entry;
+        int r;
+
+        r = mangle_devname(devlink, &p);
+        if (r < 0)
+                return r;
 
         udev_device->devlinks_uptodate = false;
-        list_entry = udev_list_entry_add(&udev_device->devlinks_list, devlink, NULL);
+        list_entry = udev_list_entry_add(&udev_device->devlinks_list, p, NULL);
         if (list_entry == NULL)
                 return -ENOMEM;
         return 0;
@@ -1906,10 +1996,14 @@ int udev_device_add_devlink(struct udev_device *udev_device, const char *devlink
 
 void udev_device_remove_devlink(struct udev_device *udev_device, const char *devlink)
 {
+        _cleanup_free_ char *p = NULL;
         struct udev_list_entry *list_entry;
 
+        if (mangle_devname(devlink, &p) < 0)
+                return;
+
         list_entry = udev_list_get_entry(&udev_device->devlinks_list);
-        list_entry = udev_list_entry_get_by_name(list_entry, devlink);
+        list_entry = udev_list_entry_get_by_name(list_entry, p);
         if (list_entry == NULL)
                 return;
 
