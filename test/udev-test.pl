@@ -1328,6 +1328,50 @@ KERNEL=="sda", IMPORT{builtin}="path_id"
 KERNEL=="sda", ENV{ID_PATH}=="?*", SYMLINK+="disk/by-path/\$env{ID_PATH}"
 EOF
         },
+        {
+                desc            => "TAG match with alternatives and glob",
+                devpath         => "/devices/pci0000:00/0000:00:1f.2/host0/target0:0:0/0:0:0:0/block/sda",
+                exp_name        => "found",
+                not_exp_name    => "bad",
+                rules           => <<EOF
+KERNEL=="sda", TAG+="green"
+TAG=="blue|gre*", SYMLINK+="found"
+TAG=="blue|red*", SYMLINK+="bad"
+EOF
+        },
+        {
+                desc            => "TAG negative match",
+                devpath         => "/devices/pci0000:00/0000:00:1f.2/host0/target0:0:0/0:0:0:0/block/sda",
+                exp_name        => "found",
+                not_exp_name    => "bad",
+                rules           => <<EOF
+KERNEL=="sda", TAG+="green", TAG+="blue"
+TAG!="green", SYMLINK+="bad"
+TAG!="red", SYMLINK+="found"
+EOF
+        },
+        {
+                desc            => "TAGS match with glob",
+                devpath         => "/devices/pci0000:00/0000:00:1f.2/host0/target0:0:0/0:0:0:0/block/sda",
+                exp_name        => "found",
+                not_exp_name    => "bad",
+                rules           => <<EOF
+KERNEL=="sda", TAG+="green"
+TAGS=="gr*", SYMLINK+="found"
+TAGS=="blue", SYMLINK+="bad"
+EOF
+        },
+        {
+                desc            => "SYMLINK negative match",
+                devpath         => "/devices/pci0000:00/0000:00:1f.2/host0/target0:0:0/0:0:0:0/block/sda",
+                exp_name        => "found",
+                not_exp_name    => "bad",
+                rules           => <<EOF
+KERNEL=="sda", SYMLINK+="link1 link2"
+SYMLINK!="link1", SYMLINK+="bad"
+SYMLINK!="nolink", SYMLINK+="found"
+EOF
+        },
 );
 
 sub udev {

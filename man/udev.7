@@ -115,7 +115,8 @@ Match the name of a network interface\&. It can be used once the NAME key has be
 .PP
 \fISYMLINK\fR
 .RS 4
-Match the name of a symlink targeting the node\&. It can be used once a SYMLINK key has been set in one of the preceding rules\&. There may be multiple symlinks; only one needs to match\&.
+Match the name of a symlink targeting the node\&. It can be used once a SYMLINK key has been set in one of the preceding rules\&. There may be multiple symlinks; only one needs to match\&. If the operator is
+!=, the token returns true only if there is no symlink matched\&.
 .RE
 .PP
 \fISUBSYSTEM\fR
@@ -158,7 +159,8 @@ matches are specified, all of them must match on the same device\&. Trailing whi
 .PP
 \fITAGS\fR
 .RS 4
-Search the devpath upwards for a device with matching tag\&.
+Search the devpath upwards for a device with matching tag\&. If the operator is
+!=, the token returns true only if there is no tag matched\&.
 .RE
 .PP
 \fIENV{\fR\fI\fIkey\fR\fR\fI}\fR
@@ -168,7 +170,8 @@ Match against a device property value\&.
 .PP
 \fITAG\fR
 .RS 4
-Match against a device tag\&.
+Match against one of device tags\&. It can be used once a TAG key has been set in one of the preceding rules\&. There may be multiple tags; only one needs to match\&. If the operator is
+!=, the token returns true only if there is no tag matched\&.
 .RE
 .PP
 \fITEST{\fR\fI\fIoctal mode mask\fR\fR\fI}\fR

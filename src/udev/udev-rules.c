@@ -1785,7 +1785,8 @@ bool udev_rules_check_timestamp(struct udev_rules *rules) {
         return paths_check_timestamp(rules_dirs, &rules->dirs_ts_usec, true);
 }
 
-static int match_key(struct udev_rules *rules, struct token *token, const char *val) {
+/* returns whether the value matches the token's pattern, regardless of the operator */
+static bool match_value(struct udev_rules *rules, struct token *token, const char *val) {
         char *key_value = rules_str(rules, token->key.value_off);
         char *pos;
         bool match = false;
@@ -1848,8 +1849,19 @@ static int match_key(struct udev_rules *rules, struct token *token, const char *
                 match = (val[0] != '\0');
                 break;
         case GL_UNSET:
-                return -1;
+                break;
         }
+
+        return match;
+}
+
+static int match_key(struct udev_rules *rules, struct token *token, const char *val) {
+        bool match;
+
+        if (token->key.glob == GL_UNSET)
+                return -1;
+
+        match = match_value(rules, token, val);
 
         if (match && (token->key.op == OP_MATCH))
                 return 0;
@@ -1964,12 +1976,13 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                                 const char *devlink;
 
                                 devlink =  udev_list_entry_get_name(list_entry) + strlen("/dev/");
-                                if (match_key(rules, cur, devlink) == 0) {
+                                if (match_value(rules, cur, devlink)) {
                                         match = true;
                                         break;
                                 }
                         }
-                        if (!match)
+                        /* with '!=', the token matches only if no symlink matches */
+                        if (match != (cur->key.op == OP_MATCH))
                                 goto nomatch;
                         break;
                 }
@@ -2004,12 +2017,13 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                         bool match = false;
 
                         udev_list_entry_foreach(list_entry, udev_device_get_tags_list_entry(event->dev)) {
-                                if (streq(rules_str(rules, cur->key.value_off), udev_list_entry_get_name(list_entry))) {
+                                if (match_value(rules, cur, udev_list_entry_get_name(list_entry))) {
                                         match = true;
                                         break;
                                 }
                         }
-                        if (!match && (cur->key.op != OP_NOMATCH))
+                        /* with '!=', the token matches only if no tag matches */
+                        if (match != (cur->key.op == OP_MATCH))
                                 goto nomatch;
                         break;
                 }
@@ -2090,11 +2104,17 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                                                         goto try_parent;
                                                 break;
                                         case TK_M_TAGS: {
-                                                bool match = udev_device_has_tag(event->dev_parent, rules_str(rules, cur->key.value_off));
+                                                struct udev_list_entry *list_entry;
+                                                bool match = false;
 
-                                                if (match && key->key.op == OP_NOMATCH)
-                                                        goto try_parent;
-                                                if (!match && key->key.op == OP_MATCH)
+                                                udev_list_entry_foreach(list_entry, udev_device_get_tags_list_entry(event->dev_parent)) {
+                                                        if (match_value(rules, key, udev_list_entry_get_name(list_entry))) {
+                                                                match = true;
+                                                                break;
+                                                        }
+                                                }
+                                                /* with '!=', the token matches only if no tag matches */
+                                                if (match != (key->key.op == OP_MATCH))
                                                         goto try_parent;
                                                 break;
                                         }
