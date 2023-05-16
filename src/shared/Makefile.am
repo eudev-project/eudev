@@ -67,7 +67,8 @@ noinst_HEADERS = \
 	util.h \
 	utf8.h \
 	udev-util.h \
-	virt.h
+	virt.h \
+	unaligned.h
 
 libudev_shared_la_LDFLAGS = \
 	$(AM_LDFLAGS)
