@@ -28,6 +28,7 @@
 #include <sys/types.h>
 #include <sys/time.h>
 #include <sys/ioctl.h>
+#include <linux/version.h>
 #include <linux/videodev2.h>
 
 #include "util.h"
@@ -71,9 +72,11 @@ int main(int argc, char *argv[]) {
                 printf("ID_V4L_VERSION=2\n");
                 printf("ID_V4L_PRODUCT=%s\n", v2cap.card);
                 printf("ID_V4L_CAPABILITIES=:");
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,4,0)
                 if (v2cap.capabilities & V4L2_CAP_DEVICE_CAPS)
                         capabilities = v2cap.device_caps;
                 else
+#endif
                         capabilities = v2cap.capabilities;
                 if ((capabilities & V4L2_CAP_VIDEO_CAPTURE) > 0 ||
                     (capabilities & V4L2_CAP_VIDEO_CAPTURE_MPLANE) > 0)
