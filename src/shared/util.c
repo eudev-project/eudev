@@ -1673,7 +1673,7 @@ int proc_cmdline(char **ret) {
         if (detect_container(NULL) > 0)
                 return get_process_cmdline(1, 0, false, ret);
         else
-                return read_one_line_file("/proc/cmdline", ret);
+                return read_full_file("/proc/cmdline", ret, NULL);
 }
 
 int parse_proc_cmdline(int (*parse_item)(const char *key, const char *value)) {
