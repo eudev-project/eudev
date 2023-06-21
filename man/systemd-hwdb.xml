@@ -81,7 +81,8 @@
     <refsect2><title>systemd-hwdb
       <optional><replaceable>options</replaceable></optional>
       update</title>
-      <para>Update the binary database.</para>
+      <para>Update the binary database. If no hwdb files are found, the binary database is
+      removed.</para>
     </refsect2>
 
     <refsect2><title>systemd-hwdb

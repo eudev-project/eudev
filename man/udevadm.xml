@@ -883,7 +883,8 @@
             done after any update to the source files; it will not be
             called automatically. The running udev daemon will detect
             a new database on its own and does not need to be notified
-            about it.</para>
+            about it. If no hwdb files are found, the compiled database is
+            removed.</para>
           </listitem>
         </varlistentry>
         <varlistentry>

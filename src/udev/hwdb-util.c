@@ -677,6 +677,24 @@ int hwdb_update(struct udev *udev, const char *root, const char *hwdb_bin, bool 
                 log_error_errno(err, "failed to enumerate hwdb files: %m");
                 goto out;
         }
+
+        if (strv_isempty(files)) {
+                strv_free(files);
+
+                if (unlink(hwdb_bin) < 0) {
+                        if (errno != ENOENT) {
+                                err = log_error_errno(errno, "Failed to remove compiled hwdb database %s: %m", hwdb_bin);
+                                goto out;
+                        }
+
+                        log_info("No hwdb files found, skipping.");
+                } else
+                        log_info("No hwdb files found, compiled hwdb database %s removed.", hwdb_bin);
+
+                err = 0;
+                goto out;
+        }
+
         STRV_FOREACH(f, files) {
                 const char *path_in_root = *f;
 
