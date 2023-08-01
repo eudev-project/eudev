@@ -537,10 +537,13 @@ const char *udev_ctrl_get_set_env(struct udev_ctrl_msg *ctrl_msg) {
         return NULL;
 }
 
-int udev_ctrl_get_set_children_max(struct udev_ctrl_msg *ctrl_msg) {
-        if (ctrl_msg->ctrl_msg_wire.type == UDEV_CTRL_SET_CHILDREN_MAX)
-                return ctrl_msg->ctrl_msg_wire.intval;
-        return -1;
+/* Returns 1 and the requested maximum, which may be invalid (negative), if the message is SET_CHILDREN_MAX,
+ * otherwise 0. */
+int udev_ctrl_get_set_children_max(struct udev_ctrl_msg *ctrl_msg, int *ret) {
+        if (ctrl_msg->ctrl_msg_wire.type != UDEV_CTRL_SET_CHILDREN_MAX)
+                return 0;
+        *ret = ctrl_msg->ctrl_msg_wire.intval;
+        return 1;
 }
 
 int udev_ctrl_get_ping(struct udev_ctrl_msg *ctrl_msg) {

@@ -56,7 +56,7 @@
 #include "fileio.h"
 #include "hashmap.h"
 
-#define WORKER_NUM_MAX 2048U
+#define WORKER_NUM_MAX UINT64_C(2048)
 
 #define EVENT_REQUEUE_INTERVAL_USEC (200 * USEC_PER_MSEC)
 #define EVENT_REQUEUE_TIMEOUT_USEC  (3 * USEC_PER_MINUTE)
@@ -1128,6 +1128,28 @@ static void manager_revert(void) {
                 worker_kill(false);
 }
 
+static void manager_set_default_children_max(void) {
+        uint64_t cpu_limit, mem_limit, cpu_count = 1;
+        int r;
+
+        if (arg_children_max != 0)
+                return;
+
+        r = cpus_in_affinity_mask();
+        if (r < 0)
+                log_warning_errno(r, "Failed to determine number of local CPUs, ignoring: %m");
+        else
+                cpu_count = r;
+
+        cpu_limit = cpu_count * 2 + 16;
+        /* the MAX() of sys/param.h evaluates its arguments twice */
+        mem_limit = physical_memory() / (128*1024*1024);
+        mem_limit = MAX(mem_limit, UINT64_C(10));
+
+        arg_children_max = MIN(MIN(cpu_limit, mem_limit), WORKER_NUM_MAX);
+        log_debug("Set children_max to %u", arg_children_max);
+}
+
 /* receive the udevd message from userspace */
 static void handle_ctrl_msg(struct udev_ctrl *uctrl) {
         _cleanup_udev_ctrl_connection_unref_ struct udev_ctrl_connection *ctrl_conn = NULL;
@@ -1210,10 +1232,16 @@ static void handle_ctrl_msg(struct udev_ctrl *uctrl) {
                 (void) udev_ctrl_msg_reply(ctrl_msg);
         }
 
-        i = udev_ctrl_get_set_children_max(ctrl_msg);
-        if (i >= 0) {
-                log_debug("udevd message (SET_MAX_CHILDREN) received, children_max=%i", i);
-                arg_children_max = i;
+        if (udev_ctrl_get_set_children_max(ctrl_msg, &i) > 0) {
+                if (i < 0)
+                        log_warning("udevd message (SET_MAX_CHILDREN) received with invalid children_max=%i, ignoring", i);
+                else {
+                        log_debug("udevd message (SET_MAX_CHILDREN) received, children_max=%i", i);
+                        arg_children_max = i;
+
+                        /* When 0 is specified, determine the maximum based on the system resources. */
+                        manager_set_default_children_max();
+                }
         }
 
         if (udev_ctrl_get_ping(ctrl_msg) > 0) {
@@ -1765,22 +1793,7 @@ int main(int argc, char *argv[]) {
                 write_string_file("/proc/self/oom_score_adj", "-1000");
         }
 
-        if (arg_children_max == 0) {
-                unsigned long cpu_limit, mem_limit, cpu_count = 1;
-
-                r = cpus_in_affinity_mask();
-                if (r < 0)
-                        log_warning_errno(r, "Failed to determine number of local CPUs, ignoring: %m");
-                else
-                        cpu_count = r;
-
-                cpu_limit = cpu_count * 2 + 16;
-                mem_limit = MAX(physical_memory() / (128UL*1024*1024), 10U);
-
-                arg_children_max = MIN(cpu_limit, mem_limit);
-                arg_children_max = MIN(WORKER_NUM_MAX, arg_children_max);
-        }
-        log_debug("set children_max to %u", arg_children_max);
+        manager_set_default_children_max();
         default_children_max = arg_children_max;
 
         udev_list_node_init(&event_list);

@@ -193,7 +193,7 @@ int udev_ctrl_get_reload(struct udev_ctrl_msg *ctrl_msg);
 int udev_ctrl_get_ping(struct udev_ctrl_msg *ctrl_msg);
 int udev_ctrl_get_exit(struct udev_ctrl_msg *ctrl_msg);
 const char *udev_ctrl_get_set_env(struct udev_ctrl_msg *ctrl_msg);
-int udev_ctrl_get_set_children_max(struct udev_ctrl_msg *ctrl_msg);
+int udev_ctrl_get_set_children_max(struct udev_ctrl_msg *ctrl_msg, int *ret);
 int udev_ctrl_get_set_trace(struct udev_ctrl_msg *ctrl_msg);
 int udev_ctrl_get_revert(struct udev_ctrl_msg *ctrl_msg);
 
