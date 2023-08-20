@@ -1558,15 +1558,15 @@ _public_ int udev_device_set_sysattr_value(struct udev_device *udev_device, cons
         if (sysattr == NULL)
                 return -EINVAL;
         if (value == NULL) {
-        	struct udev_list_entry *list_entry;
+                struct udev_list_entry *list_entry;
 
-        	list_entry = udev_list_get_entry(&udev_device->sysattr_value_list);
-		list_entry = udev_list_entry_get_by_name(list_entry, sysattr);
-		if (list_entry != NULL)
-			udev_list_entry_delete(list_entry);
-		goto out;
-	} else
-		value_len = strlen(value);
+                list_entry = udev_list_get_entry(&udev_device->sysattr_value_list);
+                list_entry = udev_list_entry_get_by_name(list_entry, sysattr);
+                if (list_entry != NULL)
+                        udev_list_entry_delete(list_entry);
+                goto out;
+        } else
+                value_len = strlen(value);
 
         strscpyl(path, sizeof(path), udev_device_get_syspath(dev), "/", sysattr, NULL);
         if (lstat(path, &statbuf) != 0) {
