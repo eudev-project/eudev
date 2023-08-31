@@ -2601,6 +2601,10 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                 case TK_A_RUN_PROGRAM: {
                         struct udev_list_entry *entry;
 
+                        if (event->run_final)
+                                break;
+                        if (cur->key.op == OP_ASSIGN_FINAL)
+                                event->run_final = true;
                         if (cur->key.op == OP_ASSIGN || cur->key.op == OP_ASSIGN_FINAL)
                                 udev_list_cleanup(&event->run_list);
                         log_debug("RUN '%s' %s:%u",
