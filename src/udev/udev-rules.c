@@ -57,6 +57,7 @@ static const char* const rules_dirs[] = {
         "/lib/udev/rules.d",
         "/usr/lib/udev/rules.d",
 #endif
+        "/usr/local/lib/udev/rules.d",
         NULL};
 
 struct udev_rules {
