@@ -26,6 +26,10 @@ test_libudev_CPPFLAGS = \
 test_udev_SOURCES = \
 	test-udev.c
 
+test_udev_CFLAGS = \
+	$(BLKID_CFLAGS) \
+	$(SELINUX_CFLAGS)
+
 test_udev_LDADD = \
 	$(top_builddir)/src/libudev/libudev-private.la \
 	$(top_builddir)/src/udev/libudev-core.la \
@@ -33,6 +37,8 @@ test_udev_LDADD = \
 	$(SELINUX_LIBS)
 
 if HAVE_KMOD
+test_udev_CFLAGS += \
+	$(KMOD_CFLAGS)
 test_udev_LDADD += \
 	$(KMOD_LIBS)
 endif
@@ -40,7 +46,6 @@ endif
 test_udev_CPPFLAGS = \
 	-I $(top_srcdir)/src/udev \
 	$(AM_CPPFLAGS)
-
 
 TESTS = \
 	udev-test.pl \

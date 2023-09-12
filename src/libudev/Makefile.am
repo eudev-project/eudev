@@ -31,6 +31,7 @@ libudev_la_SOURCES =\
 
 libudev_la_CFLAGS = \
 	$(AM_CFLAGS) \
+	$(SELINUX_CFLAGS) \
 	-fvisibility=hidden
 
 noinst_HEADERS = \

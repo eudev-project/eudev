@@ -64,7 +64,8 @@ include_HEADERS = \
 
 libudev_core_la_CFLAGS = \
 	$(AM_CFLAGS) \
-	$(BLKID_CFLAGS)
+	$(BLKID_CFLAGS) \
+	$(SELINUX_CLFAGS)
 
 libudev_core_la_LIBADD = \
 	$(top_builddir)/src/shared/libudev_shared.la \
