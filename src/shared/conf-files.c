@@ -143,3 +143,64 @@ int conf_files_list_strv(char ***strv, const char *suffix, const char *root, con
 
         return conf_files_list_strv_internal(strv, suffix, root, copy);
 }
+
+/* Copy every non-empty path element from path_variable to
+   destination, and add a final NULL pointer. If destination is NULL,
+   then only count the number of non-empty path elements. Return
+   -ENOMEM if the copy failed, or the number of elements. */
+static ssize_t conf_files_list_follow_path (const char *path_variable, char **destination) {
+        /* This function is not using strtok_r, because two passes are
+           required: the first one to count the number of elements,
+           the second one to actually copy them once an array of the
+           correct size has been allocated. */
+        size_t n = 0;
+        if (path_variable != NULL) {
+                while (path_variable[0] == ':') {
+                      path_variable++;
+                }
+                while (path_variable[0] != '\0') {
+                        const char *end = strchr(path_variable, ':');
+                        if (end == NULL) {
+                                end = path_variable + strlen(path_variable);
+                        }
+                        if (destination != NULL) {
+                                destination[n] = strndup(path_variable, end - path_variable);
+                                if (destination[n] == NULL) {
+                                        return -ENOMEM;
+                                }
+                        }
+                        n++;
+                        path_variable = end;
+                        while (path_variable[0] == ':') {
+                                path_variable++;
+                        }
+                }
+        }
+        if (destination != NULL) {
+                destination[n] = NULL;
+        }
+        return n;
+}
+
+/* path is a colon-separated list of directories. */
+int conf_files_list_strv_path(char ***strv, const char *suffix, const char *root, const char* path) {
+        _cleanup_strv_free_ char **copy = NULL;
+
+        assert(strv);
+        assert(suffix);
+
+        ssize_t path_length = conf_files_list_follow_path(path, NULL);
+        if (path_length < 0)
+                return -ENOMEM;
+
+        copy = new0(char *, path_length + 1);
+        if (!copy)
+                return -ENOMEM;
+        ssize_t error = conf_files_list_follow_path(path, copy);
+        if (error < 0)
+                return -ENOMEM;
+
+        assert (error == path_length);
+
+        return conf_files_list_strv_internal(strv, suffix, root, copy);
+}

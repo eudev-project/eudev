@@ -356,7 +356,11 @@ Maintain the hardware database index in
 .PP
 \fB\-u\fR, \fB\-\-update\fR
 .RS 4
-Compile the hardware database information located in /usr/lib/udev/hwdb\&.d/, /etc/udev/hwdb\&.d/ and store it in
+Compile the hardware database information located in
+/etc/udev/hwdb\&.d/,
+/usr/lib/udev/hwdb\&.d/, and under the
+\fBUDEV_HWDB_PATH\fR
+path environment variable, and store it in
 /etc/udev/hwdb\&.bin\&. This should be done after any update to the source files; it will not be called automatically\&. The running udev daemon will detect a new database on its own and does not need to be notified about it\&.
 .RE
 .PP

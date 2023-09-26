@@ -35,11 +35,17 @@
  * Uses a Patricia/radix trie to index all matches for efficient lookup.
  */
 
-static const char * const conf_file_dirs[] = {
-        UDEV_HWDB_DIR,
-        UDEV_LIBEXEC_DIR "/hwdb.d",
-        NULL
-};
+static char *list_conf_file_path (void) {
+        static const char *main_hwdb_dir = UDEV_HWDB_DIR;
+        static const char *libexec_dir = UDEV_LIBEXEC_DIR "/hwdb.d";
+        const char *path_variable = getenv ("UDEV_HWDB_PATH");
+        /* UDEV_HWDB_PATH comes last, so that it cannot override
+           system settings. */
+        /* System settings can be overriden by putting the files in
+           /etc. */
+        /* path_variable may be NULL, strjoin works either way. */
+        return strjoin(main_hwdb_dir, ":", libexec_dir, ":", path_variable, NULL);
+}
 
 /* in-memory trie objects */
 struct trie {
@@ -567,7 +573,12 @@ static void help(void) {
                "  --usr                generate in " UDEV_LIBEXEC_DIR " instead of /etc/udev\n"
                "  -t,--test=MODALIAS   query database and print result\n"
                "  -r,--root=PATH       alternative root path in the filesystem\n"
-               "  -h,--help\n\n");
+               "  -h,--help\n"
+               "\n"
+               "The HWDB is searched in "
+               UDEV_HWDB_DIR ", " UDEV_LIBEXEC_DIR "/hwdb.d, "
+               "and the UDEV_HWDB_PATH search path.\n"
+               "\n");
 }
 
 static int adm_hwdb(struct udev *udev, int argc, char *argv[]) {
@@ -644,7 +655,14 @@ static int adm_hwdb(struct udev *udev, int argc, char *argv[]) {
                 }
                 trie->nodes_count++;
 
-                err = conf_files_list_strv(&files, ".hwdb", root, conf_file_dirs);
+                char *conf_file_path = list_conf_file_path ();
+                if (conf_file_path == NULL) {
+                        rc = EXIT_FAILURE;
+                        goto out;
+                }
+                err = conf_files_list_strv_path(&files, ".hwdb", root,
+                                                conf_file_path);
+                free (conf_file_path);
                 if (err < 0) {
                         log_error_errno(err, "failed to enumerate hwdb files: %m");
                         rc = EXIT_FAILURE;
