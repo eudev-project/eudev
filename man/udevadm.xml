@@ -553,6 +553,13 @@
           </listitem>
         </varlistentry>
         <varlistentry>
+          <term><option>-o</option></term>
+          <term><option>--output=<replaceable>string</replaceable></option></term>
+          <listitem>
+            <para>Specify the exact location where to write the compiled database.</para>
+          </listitem>
+        </varlistentry>
+        <varlistentry>
           <term><option>-h</option></term>
           <term><option>--help</option></term>
           <listitem>
