@@ -570,6 +570,7 @@ static int import_file(struct udev *udev, struct trie *trie, const char *filenam
 static void help(void) {
         printf("Usage: udevadm hwdb OPTIONS\n"
                "  -u,--update          update the hardware database\n"
+               "  -o,--output=.../hwdb.bin generate in .../hwdb.bin instead of /etc/udev/hwdb.bin\n"
                "  --usr                generate in " UDEV_LIBEXEC_DIR " instead of /etc/udev\n"
                "  -t,--test=MODALIAS   query database and print result\n"
                "  -r,--root=PATH       alternative root path in the filesystem\n"
@@ -589,6 +590,7 @@ static int adm_hwdb(struct udev *udev, int argc, char *argv[]) {
         static const struct option options[] = {
                 { "update", no_argument,       NULL, 'u' },
                 { "usr",    no_argument,       NULL, ARG_USR },
+                { "output", required_argument, NULL, 'o' },
                 { "test",   required_argument, NULL, 't' },
                 { "root",   required_argument, NULL, 'r' },
                 { "help",   no_argument,       NULL, 'h' },
@@ -596,19 +598,37 @@ static int adm_hwdb(struct udev *udev, int argc, char *argv[]) {
         };
         const char *test = NULL;
         const char *root = "";
-        const char *hwdb_bin_dir = "/etc/udev";
         bool update = false;
         struct trie *trie = NULL;
         int err, c;
         int rc = EXIT_SUCCESS;
 
-        while ((c = getopt_long(argc, argv, "ut:r:h", options, NULL)) >= 0)
+        _cleanup_free_ char *hwdb_bin = strdup("/etc/udev/hwdb.bin");
+        if (hwdb_bin == NULL) {
+                rc = EXIT_FAILURE;
+                goto out;
+        }
+
+        while ((c = getopt_long(argc, argv, "uo:t:r:h", options, NULL)) >= 0)
                 switch(c) {
                 case 'u':
                         update = true;
                         break;
                 case ARG_USR:
-                        hwdb_bin_dir = UDEV_LIBEXEC_DIR;
+                        free(hwdb_bin);
+                        hwdb_bin = strdup(UDEV_LIBEXEC_DIR "/hwdb.bin");
+                        if (hwdb_bin == NULL) {
+                                rc = EXIT_FAILURE;
+                                goto out;
+                        }
+                        break;
+                case 'o':
+                        free(hwdb_bin);
+                        hwdb_bin = strdup(optarg);
+                        if (hwdb_bin == NULL) {
+                                rc = EXIT_FAILURE;
+                                goto out;
+                        }
                         break;
                 case 't':
                         test = optarg;
@@ -632,7 +652,20 @@ static int adm_hwdb(struct udev *udev, int argc, char *argv[]) {
 
         if (update) {
                 char **files, **f;
-                _cleanup_free_ char *hwdb_bin = NULL;
+
+                if (strlen(root)) {
+                        /* --root has been specified, prepend it to
+                           the hwdb.bin destination file. */
+                        char *full_hwdb_bin = strjoin(root, "/", hwdb_bin, NULL);
+                        /* Do nothing if no --root, so that hwdb_bin
+                           may still be relative. */
+                        if (full_hwdb_bin == NULL) {
+                          rc = EXIT_FAILURE;
+                          goto out;
+                        }
+                        free (hwdb_bin);
+                        hwdb_bin = full_hwdb_bin;
+                }
 
                 trie = new0(struct trie, 1);
                 if (!trie) {
@@ -690,7 +723,6 @@ static int adm_hwdb(struct udev *udev, int argc, char *argv[]) {
                 log_debug("strings dedup'ed: %8zu bytes (%8zu)",
                           trie->strings->dedup_len, trie->strings->dedup_count);
 
-                hwdb_bin = strjoin(root, "/", hwdb_bin_dir, "/hwdb.bin", NULL);
                 if (!hwdb_bin) {
                         rc = EXIT_FAILURE;
                         goto out;

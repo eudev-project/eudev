@@ -47,6 +47,7 @@ struct udev_hwdb {
         struct udev *udev;
         int refcount;
 
+        char *bin_paths;
         FILE *f;
         struct stat st;
         union {
@@ -256,10 +257,28 @@ static int trie_search_f(struct udev_hwdb *hwdb, const char *search) {
         return 0;
 }
 
-static const char hwdb_bin_paths[] =
-    "/etc/udev/hwdb.bin\0"
-    UDEV_LIBEXEC_DIR "/hwdb.bin\0";
-
+static char *get_hwdb_bin_paths (void) {
+        static const char default_locations[] =
+          "/etc/udev/hwdb.bin\0"
+          UDEV_LIBEXEC_DIR "/hwdb.bin\0";
+        const char *by_env = getenv("UDEV_HWDB_BIN");
+        if (by_env != NULL) {
+                char *path = malloc(strlen(by_env) + 1
+                                    + sizeof (default_locations));
+                if (path != NULL) {
+                        memcpy(path, by_env, strlen(by_env) + 1);
+                        memcpy(path + strlen(by_env) + 1,
+                               default_locations,
+                               sizeof (default_locations));
+                }
+                return path;
+        }
+        char *path = malloc(sizeof (default_locations));
+        if (path != NULL) {
+                memcpy(path, default_locations, sizeof (default_locations));
+        }
+        return path;
+}
 
 /**
  * udev_hwdb_new:
@@ -282,7 +301,12 @@ _public_ struct udev_hwdb *udev_hwdb_new(struct udev *udev) {
         udev_list_init(udev, &hwdb->properties_list, true);
 
         /* find hwdb.bin in hwdb_bin_paths */
-        NULSTR_FOREACH(hwdb_bin_path, hwdb_bin_paths) {
+        hwdb->bin_paths = get_hwdb_bin_paths();
+        if (hwdb->bin_paths == NULL) {
+                udev_hwdb_unref(hwdb);
+                return NULL;
+        }
+        NULSTR_FOREACH(hwdb_bin_path, hwdb->bin_paths) {
                 hwdb->f = fopen(hwdb_bin_path, "re");
                 if (hwdb->f)
                         break;
@@ -363,6 +387,7 @@ _public_ struct udev_hwdb *udev_hwdb_unref(struct udev_hwdb *hwdb) {
                 return NULL;
         if (hwdb->map)
                 munmap((void *)hwdb->map, hwdb->st.st_size);
+        free(hwdb->bin_paths);
         if (hwdb->f)
                 fclose(hwdb->f);
         udev_list_cleanup(&hwdb->properties_list);
@@ -381,7 +406,7 @@ bool udev_hwdb_validate(struct udev_hwdb *hwdb) {
                 return false;
 
         /* if hwdb.bin doesn't exist anywhere, we need to update */
-        NULSTR_FOREACH(p, hwdb_bin_paths) {
+        NULSTR_FOREACH(p, hwdb->bin_paths) {
                 if (stat(p, &st) >= 0) {
                         found = true;
                         break;
