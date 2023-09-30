@@ -55,15 +55,17 @@
   </refsect1>
 
   <refsect1><title>Rules Files</title>
-      <para>The udev rules are read from the files located in the
-      system rules directory <filename>/lib/udev/rules.d</filename>,
+      <para>The udev rules are read from the files located in the system rules
+      directory <filename>/lib/udev/rules.d</filename> (additionally
+      <filename>/usr/lib/udev/rules.d</filename> when built with --enable-split-usr),
       the volatile runtime directory <filename>/run/udev/rules.d</filename>
       and the local administration directory <filename>/etc/udev/rules.d</filename>.
       All rules files are collectively sorted and processed in lexical order,
       regardless of the directories in which they live. However, files with
       identical filenames replace each other. Files in <filename>/etc</filename>
       have the highest priority, files in <filename>/run</filename> take precedence
-      over files with the same name in <filename>/lib</filename>. This can be
+      over files with the same name in <filename>/lib</filename> (or
+      <filename>/usr/lib</filename>). This can be
       used to override a system-supplied rules file with a local file if needed;
       a symlink in <filename>/etc</filename> with the same name as a rules file in
       <filename>/lib</filename>, pointing to <filename>/dev/null</filename>,
