@@ -34,7 +34,10 @@ All device information udev processes is stored in the udev database and sent ou
 .SH "RULES FILES"
 .PP
 The udev rules are read from the files located in the system rules directory
-/lib/udev/rules\&.d, the volatile runtime directory
+/lib/udev/rules\&.d
+(additionally
+/usr/lib/udev/rules\&.d
+when built with \-\-enable\-split\-usr), the volatile runtime directory
 /run/udev/rules\&.d
 and the local administration directory
 /etc/udev/rules\&.d\&. All rules files are collectively sorted and processed in lexical order, regardless of the directories in which they live\&. However, files with identical filenames replace each other\&. Files in
@@ -42,7 +45,9 @@ and the local administration directory
 have the highest priority, files in
 /run
 take precedence over files with the same name in
-/lib\&. This can be used to override a system\-supplied rules file with a local file if needed; a symlink in
+/lib
+(or
+/usr/lib)\&. This can be used to override a system\-supplied rules file with a local file if needed; a symlink in
 /etc
 with the same name as a rules file in
 /lib, pointing to
