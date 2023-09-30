@@ -688,14 +688,13 @@ static int adm_hwdb(struct udev *udev, int argc, char *argv[]) {
                 }
                 trie->nodes_count++;
 
-                char *conf_file_path = list_conf_file_path ();
+                _cleanup_free_ char *conf_file_path = list_conf_file_path ();
                 if (conf_file_path == NULL) {
                         rc = EXIT_FAILURE;
                         goto out;
                 }
                 err = conf_files_list_strv_path(&files, ".hwdb", root,
                                                 conf_file_path);
-                free (conf_file_path);
                 if (err < 0) {
                         log_error_errno(err, "failed to enumerate hwdb files: %m");
                         rc = EXIT_FAILURE;
