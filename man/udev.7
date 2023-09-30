@@ -565,7 +565,9 @@ The content of all hwdb files is read by
 and compiled to a binary database located at
 /etc/udev/hwdb\&.bin, or alternatively
 /usr/lib/udev/hwdb\&.bin
-if you want ship the compiled database in an immutable image\&. During runtime only the binary database is used\&.
+if you want ship the compiled database in an immutable image\&. If
+\fBUDEV_HWDB_BIN\fR
+is set at run\-time, and its value identifies a file in the file system, then the binary database located under this name will be used\&. During runtime only the binary database is used\&.
 .SH "SEE ALSO"
 .PP
 \fBudevd\fR(8),

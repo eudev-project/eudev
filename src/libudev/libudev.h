@@ -185,7 +185,9 @@ struct udev_list_entry *udev_queue_get_queued_list_entry(struct udev_queue *udev
 /*
  *  udev_hwdb
  *
- *  access to the static hardware properties database
+ *  access to the static hardware properties database; the database to
+ *  use can be overriden by setting the UDEV_HWDB_BIN environment
+ *  variable to its file name
  */
 struct udev_hwdb;
 struct udev_hwdb *udev_hwdb_new(struct udev *udev);
