@@ -765,7 +765,9 @@
       <citerefentry><refentrytitle>udevadm</refentrytitle><manvolnum>8</manvolnum></citerefentry>
       and compiled to a binary database located at <filename>/etc/udev/hwdb.bin</filename>,
       or alternatively <filename>/usr/lib/udev/hwdb.bin</filename> if you want ship the compiled
-      database in an immutable image.
+      database in an immutable image. If <envar>UDEV_HWDB_BIN</envar>
+      is set at run-time, and its value identifies a file in the file system, then the binary
+      database located under this name will be used.
       During runtime only the binary database is used.</para>
   </refsect1>
 
