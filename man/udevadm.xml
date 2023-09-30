@@ -538,8 +538,8 @@
           <listitem>
             <para>Put the compiled database into <filename>/usr/lib/udev/hwdb.bin</filename> instead.
             Use this if you want to ship a pre-compiled database in immutable system images, or
-            don't use <filename>/etc/udev/hwdb.d</filename> and want to avoid large binary files in
-            <filename>/etc</filename>.</para>
+            want to avoid large binary files in <filename>/etc</filename> and do not use
+            <filename>/etc/udev/hwdb.d</filename>.</para>
           </listitem>
         </varlistentry>
         <varlistentry>
