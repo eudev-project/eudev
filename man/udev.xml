@@ -35,8 +35,8 @@
 
   <refsect1><title>Description</title>
     <para>udev supplies the system software with device events, manages permissions
-    of device nodes and may create additional symlinks in the <filename>/dev</filename>
-    directory, or renames network interfaces. The kernel usually just assigns unpredictable
+    of device nodes, may create additional symlinks in the <filename>/dev</filename>
+    directory and may rename network interfaces. The kernel usually just assigns unpredictable
     device names based on the order of discovery. Meaningful symlinks or network device
     names provide a way to reliably identify devices based on their properties or
     current configuration.</para>
@@ -737,21 +737,22 @@
   <refsect1><title>Hardware Database Files</title>
       <para>The hwdb files are read from the files located in the
       system hwdb directory <filename>/usr/lib/udev/hwdb.d</filename>,
-      the volatile runtime directory <filename>/run/udev/hwdb.d</filename>
+      the volatile runtime directory <filename>/run/udev/hwdb.d</filename>,
       the local administration directory <filename>/etc/udev/hwdb.d</filename>,
-      and any other directory in the <envar>UDEV_HWDB_PATH</envar> search path variable.
-      All hwdb files are collectively sorted and processed in lexical order,
-      regardless of the directories in which they live. However, files with
-      identical filenames replace each other. Files in <filename>/etc</filename>
-      have the highest priority, files in <filename>/run</filename>
-      take precedence over files with the same name in
-      <filename>/usr/lib</filename>, and the content of
-      <envar>UDEV_HWDB_PATH</envar> comes last. This order can be
-      used to override a system-supplied hwdb file with a local file if needed;
-      a symlink in <filename>/etc</filename> with the same name as a hwdb file in
-      <filename>/usr/lib</filename>, pointing to <filename>/dev/null</filename>,
-      disables the hwdb file entirely. hwdb files must have the extension
-      <filename>.hwdb</filename>; other extensions are ignored.</para>
+      and any other directory in the <envar>UDEV_HWDB_PATH</envar> search path
+      variable. All hwdb files are collectively sorted and processed in
+      lexical order, regardless of the directories in which they live. However,
+      files with identical filenames replace each other. Files in
+      <filename>/etc</filename> have the highest priority, then files in
+      <filename>/run</filename>, <filename>/usr/lib</filename> and the ones in
+      <envar>UDEV_HWDB_PATH</envar> comes last. Files with higher priority
+      take precedence over files with the same name and lower priority.
+      This order can be used to override a system-supplied hwdb file with a
+      local file if needed; a symlink in <filename>/etc</filename> with the
+      same name as a hwdb file in <filename>/usr/lib</filename>, pointing to
+      <filename>/dev/null</filename>, disables the hwdb file entirely. hwdb
+      files must have the extension <filename>.hwdb</filename>; other
+      extensions are ignored.</para>
 
       <para>The hwdb file contains data records consisting of matches and
       associated key-value pairs. Every record in the hwdb starts with one or
@@ -766,14 +767,17 @@
       by <literal>=</literal>. An empty line signifies the end
       of a record. Lines beginning with <literal>#</literal> are ignored.</para>
 
-      <para>The content of all hwdb files is read by
-      <citerefentry><refentrytitle>udevadm</refentrytitle><manvolnum>8</manvolnum></citerefentry>
-      and compiled to a binary database located at <filename>/etc/udev/hwdb.bin</filename>,
-      or alternatively <filename>/usr/lib/udev/hwdb.bin</filename> if you want ship the compiled
-      If <envar>UDEV_HWDB_BIN</envar>
-      is set at run-time, and its value identifies a file in the file system, then the binary
-      database located under this name will be used.
-      During runtime only the binary database is used.</para>
+      <para>The content of all hwdb files is read by <citerefentry>
+      <refentrytitle>udevadm</refentrytitle><manvolnum>8</manvolnum>
+      </citerefentry> and compiled to a binary database located at
+      <filename>/etc/udev/hwdb.bin</filename>, or alternatively
+      <filename>/usr/lib/udev/hwdb.bin</filename>, if you want to ship the
+      compiled database in an immutable image by using <option>--usr</option>,
+      or anywhere on the system by using <option>--output</option>.
+      If <envar>UDEV_HWDB_BIN</envar> is set at run-time, and its value
+      identifies a file in the file system, then the binary database located
+      under this name will be used. During runtime only the binary database is
+      used.</para>
   </refsect1>
 
   <refsect1>

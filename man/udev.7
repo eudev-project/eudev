@@ -23,9 +23,9 @@
 udev \- Dynamic device management
 .SH "DESCRIPTION"
 .PP
-udev supplies the system software with device events, manages permissions of device nodes and may create additional symlinks in the
+udev supplies the system software with device events, manages permissions of device nodes, may create additional symlinks in the
 /dev
-directory, or renames network interfaces\&. The kernel usually just assigns unpredictable device names based on the order of discovery\&. Meaningful symlinks or network device names provide a way to reliably identify devices based on their properties or current configuration\&.
+directory and may rename network interfaces\&. The kernel usually just assigns unpredictable device names based on the order of discovery\&. Meaningful symlinks or network device names provide a way to reliably identify devices based on their properties or current configuration\&.
 .PP
 The udev daemon,
 \fBudevd\fR(8), receives device uevents directly from the kernel whenever a device is added or removed from the system, or it changes its state\&. When udev receives a device event, it matches its configured set of rules against various device attributes to identify the device\&. Rules that match may provide additional device information to be stored in the udev database or to be used to create meaningful symlink names\&.
@@ -539,18 +539,17 @@ character itself\&.
 .PP
 The hwdb files are read from the files located in the system hwdb directory
 /usr/lib/udev/hwdb\&.d, the volatile runtime directory
-/run/udev/hwdb\&.d
-the local administration directory
+/run/udev/hwdb\&.d, the local administration directory
 /etc/udev/hwdb\&.d, and any other directory in the
 \fBUDEV_HWDB_PATH\fR
 search path variable\&. All hwdb files are collectively sorted and processed in lexical order, regardless of the directories in which they live\&. However, files with identical filenames replace each other\&. Files in
 /etc
-have the highest priority, files in
-/run
-take precedence over files with the same name in
-/usr/lib, and the content of
+have the highest priority, then files in
+/run,
+/usr/lib
+and the ones in
 \fBUDEV_HWDB_PATH\fR
-comes last\&. This order can be used to override a system\-supplied hwdb file with a local file if needed; a symlink in
+comes last\&. Files with higher priority take precedence over files with the same name and lower priority\&. This order can be used to override a system\-supplied hwdb file with a local file if needed; a symlink in
 /etc
 with the same name as a hwdb file in
 /usr/lib, pointing to
@@ -568,11 +567,9 @@ The content of all hwdb files is read by
 \fBudevadm\fR(8)
 and compiled to a binary database located at
 /etc/udev/hwdb\&.bin, or alternatively
-/usr/lib/udev/hwdb\&.bin
-if you want ship the compiled database in an immutable image by using
+/usr/lib/udev/hwdb\&.bin, if you want to ship the compiled database in an immutable image by using
 \fB\-\-usr\fR, or anywhere on the system by using
-\fB\-\-output\fR\&. During runtime only the binary database is used\&.
-If
+\fB\-\-output\fR\&. If
 \fBUDEV_HWDB_BIN\fR
 is set at run\-time, and its value identifies a file in the file system, then the binary database located under this name will be used\&. During runtime only the binary database is used\&.
 .SH "SEE ALSO"
