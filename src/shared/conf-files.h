@@ -23,3 +23,4 @@
 #include "macro.h"
 
 int conf_files_list_strv(char ***strv, const char *suffix, const char *root, const char* const* dirs);
+int conf_files_list_strv_path(char ***strv, const char *suffix, const char *root, const char* path);
