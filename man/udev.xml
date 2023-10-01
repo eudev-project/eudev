@@ -737,14 +737,13 @@
   <refsect1><title>Hardware Database Files</title>
       <para>The hwdb files are read from the files located in the
       system hwdb directory <filename>/usr/lib/udev/hwdb.d</filename>,
-      the volatile runtime directory <filename>/run/udev/hwdb.d</filename>,
       the local administration directory <filename>/etc/udev/hwdb.d</filename>,
       and any other directory in the <envar>UDEV_HWDB_PATH</envar> search path
       variable. All hwdb files are collectively sorted and processed in
       lexical order, regardless of the directories in which they live. However,
       files with identical filenames replace each other. Files in
       <filename>/etc</filename> have the highest priority, then files in
-      <filename>/run</filename>, <filename>/usr/lib</filename> and the ones in
+      <filename>/usr/lib</filename>, and the ones in
       <envar>UDEV_HWDB_PATH</envar> comes last. Files with higher priority
       take precedence over files with the same name and lower priority.
       This order can be used to override a system-supplied hwdb file with a
