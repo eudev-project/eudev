@@ -1825,6 +1825,12 @@ _public_ struct udev_list_entry *udev_device_get_tags_list_entry(struct udev_dev
         return udev_list_get_entry(&udev_device->tags_list);
 }
 
+_public_ struct udev_list_entry *udev_device_get_current_tags_list_entry(struct udev_device *udev_device)
+{
+        // TODO: eudev database does not support current tags
+        return udev_device_get_tags_list_entry(udev_device);
+}
+
 /**
  * udev_device_has_tag:
  * @udev_device: udev device
@@ -1846,6 +1852,11 @@ _public_ int udev_device_has_tag(struct udev_device *udev_device, const char *ta
         if (udev_list_entry_get_by_name(list_entry, tag) != NULL)
                 return true;
         return false;
+}
+
+_public_ int udev_device_has_current_tag(struct udev_device *udev_device, const char *tag) {
+        // TODO: eudev database does not support current tags
+        return udev_device_has_tag(udev_device, tag);
 }
 
 #define ENVP_SIZE                        128
