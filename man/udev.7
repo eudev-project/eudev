@@ -538,21 +538,20 @@ character itself\&.
 .SH "HARDWARE DATABASE FILES"
 .PP
 The hwdb files are read from the files located in the system hwdb directory
-/usr/lib/udev/hwdb\&.d, the volatile runtime directory
-/run/udev/hwdb\&.d, the local administration directory
+/usr/lib/udev/hwdb\&.d, the local administration directory
 /etc/udev/hwdb\&.d, and any other directory in the
 \fBUDEV_HWDB_PATH\fR
 search path variable\&. All hwdb files are collectively sorted and processed in lexical order, regardless of the directories in which they live\&. However, files with identical filenames replace each other\&. Files in
 /etc
 have the highest priority, then files in
-/run,
-/usr/lib
-and the ones in
+/usr/lib, and the ones in
 \fBUDEV_HWDB_PATH\fR
 comes last\&. Files with higher priority take precedence over files with the same name and lower priority\&. This order can be used to override a system\-supplied hwdb file with a local file if needed; a symlink in
 /etc
 with the same name as a hwdb file in
-/usr/lib, pointing to
+/usr/lib
+or
+\fBUDEV_HWDB_PATH\fR, pointing to
 /dev/null, disables the hwdb file entirely\&. hwdb files must have the extension
 \&.hwdb; other extensions are ignored\&.
 .PP
