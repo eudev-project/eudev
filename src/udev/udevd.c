@@ -1135,6 +1135,22 @@ int main(int argc, char *argv[]) {
         struct epoll_event ep_worker = { .events = EPOLLIN };
         int r = 0, one = 1;
 
+        /*
+         * Ensure no file descriptor unwillingly falls in the 0..2 range
+         * Warning: DO NOT OPEN FILES BEFORE THE 3 OPENS BELOW
+         */
+        int fd_stdi = open("/dev/null", O_RDWR);
+        int fd_stdo = open("/dev/null", O_RDWR);
+        int fd_stde = open("/dev/null", O_RDWR);
+
+        /* Close only the ones that are safe to close */
+        if (fd_stdi > STDERR_FILENO)
+                close(fd_stdi);
+        if (fd_stdo > STDERR_FILENO)
+                close(fd_stdo);
+        if (fd_stde > STDERR_FILENO)
+                close(fd_stde);
+
         udev = udev_new();
         if (!udev) {
                 r = log_error_errno(errno, "could not allocate udev context: %m");
@@ -1153,9 +1169,9 @@ int main(int argc, char *argv[]) {
                 log_warning_errno(r, "failed to parse kernel command line, ignoring: %m");
 
         if (arg_debug) {
-		log_set_target(LOG_TARGET_CONSOLE);
+                log_set_target(LOG_TARGET_CONSOLE);
                 log_set_max_level(LOG_DEBUG);
-	}
+        }
 
         if (getuid() != 0) {
                 r = log_error_errno(EPERM, "root privileges required");
