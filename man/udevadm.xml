@@ -248,6 +248,64 @@
           </listitem>
         </varlistentry>
         <varlistentry>
+          <term><option>--subsystem-match<optional>=SUBSYSTEM</optional></option></term>
+          <term><option>--subsystem-nomatch<optional>=SUBSYSTEM</optional></option></term>
+          <listitem>
+            <para>When used with <option>--export-db</option>, only show devices of or not of the given
+            subsystem respectively.</para>
+          </listitem>
+        </varlistentry>
+        <varlistentry>
+          <term><option>--attr-match<optional>=FILE[=VALUE]</optional></option></term>
+          <term><option>--attr-nomatch<optional>=FILE[=VALUE]</optional></option></term>
+          <listitem>
+            <para>When used with <option>--export-db</option>, only show devices matching or not matching the
+            given attribute respectively.</para>
+          </listitem>
+        </varlistentry>
+        <varlistentry>
+          <term><option>--property-match<optional>=KEY=VALUE</optional></option></term>
+          <listitem>
+            <para>When used with <option>--export-db</option>, only show devices matching the given property
+            and value.</para>
+          </listitem>
+        </varlistentry>
+        <varlistentry>
+          <term><option>--tag-match<optional>=TAG</optional></option></term>
+          <listitem>
+            <para>When used with <option>--export-db</option>, only show devices with the given tag.</para>
+          </listitem>
+        </varlistentry>
+        <varlistentry>
+          <term><option>--sysname-match<optional>=NAME</optional></option></term>
+          <listitem>
+            <para>When used with <option>--export-db</option>, only show devices with the given
+            <literal>/sys</literal> path.</para>
+          </listitem>
+        </varlistentry>
+        <varlistentry>
+          <term><option>--name-match<optional>=NAME</optional></option></term>
+          <listitem>
+            <para>When used with <option>--export-db</option>, only show devices with the given name in
+            <literal>/dev</literal>.</para>
+          </listitem>
+        </varlistentry>
+        <varlistentry>
+          <term><option>--parent-match<optional>=NAME</optional></option></term>
+          <listitem>
+            <para>When used with <option>--export-db</option>, only show devices with the given parent
+            device.</para>
+          </listitem>
+        </varlistentry>
+        <varlistentry>
+          <term><option>--initialized-match</option></term>
+          <term><option>--initialized-nomatch</option></term>
+          <listitem>
+            <para>When used with <option>--export-db</option>, only show devices that are initialized or not
+            initialized respectively.</para>
+          </listitem>
+        </varlistentry>
+        <varlistentry>
           <term><option>--json=<replaceable>MODE</replaceable></option></term>
           <listitem>
             <para>Shows output formatted as JSON. Expects one of <literal>short</literal> (for the

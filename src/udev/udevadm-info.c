@@ -24,6 +24,7 @@
 #include <unistd.h>
 #include <dirent.h>
 #include <errno.h>
+#include <fnmatch.h>
 #include <getopt.h>
 #include <inttypes.h>
 #include <fcntl.h>
@@ -464,27 +465,273 @@ static int stat_device(const char *name, bool export, const char *prefix) {
         return 0;
 }
 
-static int export_devices(struct udev *udev) {
-        struct udev_enumerate *udev_enumerate;
-        struct udev_list_entry *list_entry;
+/* The filters of --export-db, like the matches that systemd adds to its device enumerator. */
+typedef struct ExportMatches {
+        char **attr_match;
+        char **attr_nomatch;
+        char **name_match;
+        char **parent_match;
+        char **property_match;
+        char **subsystem_match;
+        char **subsystem_nomatch;
+        char **sysname_match;
+        char **tag_match;
+        int initialized_match; /* -1 for all devices, 1 for initialized ones, 0 for the others */
+} ExportMatches;
 
-        udev_enumerate = udev_enumerate_new(udev);
-        if (udev_enumerate == NULL)
-                return -1;
-        udev_enumerate_scan_devices(udev_enumerate);
-        udev_list_entry_foreach(list_entry, udev_enumerate_get_list_entry(udev_enumerate)) {
-                struct udev_device *device;
+static void export_matches_done(ExportMatches *m) {
+        assert(m);
+
+        strv_free(m->attr_match);
+        strv_free(m->attr_nomatch);
+        strv_free(m->name_match);
+        strv_free(m->parent_match);
+        strv_free(m->property_match);
+        strv_free(m->subsystem_match);
+        strv_free(m->subsystem_nomatch);
+        strv_free(m->sysname_match);
+        strv_free(m->tag_match);
+}
+
+/* Like systemd's parse_key_value_argument(): splits KEY=VALUE, the value is NULL without "=" unless
+ * it is required. */
+static int parse_key_value_argument(const char *str, bool require_value, char **ret_key, char **ret_value) {
+        _cleanup_free_ char *k = NULL, *v = NULL;
+        const char *eq;
+
+        assert(str);
+        assert(ret_key);
+        assert(ret_value);
+
+        eq = strchr(str, '=');
+        if (!eq && require_value) {
+                log_error("Missing '=' in key/value pair %s.", str);
+                return -EINVAL;
+        }
+
+        k = eq ? strndup(str, eq - str) : strdup(str);
+        if (!k)
+                return log_oom();
+
+        if (eq) {
+                v = strdup(eq + 1);
+                if (!v)
+                        return log_oom();
+        }
+
+        if (!filename_is_valid(k)) {
+                log_error("%s is not a valid key name", k);
+                return -EINVAL;
+        }
+
+        *ret_key = k;
+        *ret_value = v;
+        k = v = NULL;
+        return 0;
+}
+
+static int add_match_parent(struct udev *udev, char ***parents, const char *s, const char *prefix) {
+        _cleanup_udev_device_unref_ struct udev_device *dev = NULL;
+
+        assert(parents);
+        assert(s);
+
+        dev = find_device(udev, s, prefix);
+        if (!dev)
+                return log_error_errno(errno > 0 ? errno : ENODEV, "Failed to open the device '%s': %m", s);
+
+        if (strv_extend(parents, udev_device_get_syspath(dev)) < 0)
+                return log_oom();
+
+        return 0;
+}
+
+static int setup_matches(struct udev *udev, struct udev_enumerate *e, const ExportMatches *m, char ***parents) {
+        char **a;
+        int r;
+
+        assert(e);
+        assert(m);
+        assert(parents);
+
+        STRV_FOREACH(a, m->name_match) {
+                r = add_match_parent(udev, parents, *a, "/dev/");
+                if (r < 0)
+                        return r;
+        }
+
+        STRV_FOREACH(a, m->parent_match) {
+                r = add_match_parent(udev, parents, *a, "/sys");
+                if (r < 0)
+                        return r;
+        }
+
+        STRV_FOREACH(a, m->subsystem_match) {
+                r = udev_enumerate_add_match_subsystem(e, *a);
+                if (r < 0)
+                        return log_error_errno(r, "Failed to add subsystem match '%s': %m", *a);
+        }
+
+        STRV_FOREACH(a, m->subsystem_nomatch) {
+                r = udev_enumerate_add_nomatch_subsystem(e, *a);
+                if (r < 0)
+                        return log_error_errno(r, "Failed to add negative subsystem match '%s': %m", *a);
+        }
+
+        STRV_FOREACH(a, m->attr_match) {
+                _cleanup_free_ char *k = NULL, *v = NULL;
+
+                r = parse_key_value_argument(*a, /* require_value= */ true, &k, &v);
+                if (r < 0)
+                        return r;
+
+                r = udev_enumerate_add_match_sysattr(e, k, v);
+                if (r < 0)
+                        return log_error_errno(r, "Failed to add sysattr match '%s=%s': %m", k, v);
+        }
+
+        STRV_FOREACH(a, m->attr_nomatch) {
+                _cleanup_free_ char *k = NULL, *v = NULL;
+
+                r = parse_key_value_argument(*a, /* require_value= */ true, &k, &v);
+                if (r < 0)
+                        return r;
+
+                r = udev_enumerate_add_nomatch_sysattr(e, k, v);
+                if (r < 0)
+                        return log_error_errno(r, "Failed to add negative sysattr match '%s=%s': %m", k, v);
+        }
+
+        STRV_FOREACH(a, m->property_match) {
+                _cleanup_free_ char *k = NULL, *v = NULL;
+
+                /* Only checked here, the devices are filtered in match_property_required(). */
+                r = parse_key_value_argument(*a, /* require_value= */ true, &k, &v);
+                if (r < 0)
+                        return r;
+        }
+
+        STRV_FOREACH(a, m->tag_match) {
+                r = udev_enumerate_add_match_tag(e, *a);
+                if (r < 0)
+                        return log_error_errno(r, "Failed to add tag match '%s': %m", *a);
+        }
+
+        STRV_FOREACH(a, m->sysname_match) {
+                r = udev_enumerate_add_match_sysname(e, *a);
+                if (r < 0)
+                        return log_error_errno(r, "Failed to add sysname match '%s': %m", *a);
+        }
+
+        return 0;
+}
+
+/* Like the required property matches of systemd's device enumerator: the device must have a property
+ * for each property name pattern, with a value that matches one of the value patterns given for that
+ * name. The libudev enumerator accepts a device with any matching property instead. */
+static bool match_property_required(struct udev_device *device, char **property_match) {
+        size_t i, j;
+
+        for (i = 0; property_match && property_match[i]; i++) {
+                const char *eq = strchr(property_match[i], '=');
+                size_t n = eq - property_match[i];
+                struct udev_list_entry *entry;
+                bool seen = false, match = false;
+
+                assert(eq);
+
+                /* Each property name is checked once, with all its value patterns. */
+                for (j = 0; j < i; j++)
+                        if (strneq(property_match[j], property_match[i], n + 1))
+                                seen = true;
+                if (seen)
+                        continue;
+
+                udev_list_entry_foreach(entry, udev_device_get_properties_list_entry(device)) {
+                        _cleanup_free_ char *pattern = strndup(property_match[i], n);
+
+                        if (!pattern)
+                                return false;
+
+                        if (fnmatch(pattern, udev_list_entry_get_name(entry), 0) != 0)
+                                continue;
+
+                        for (j = i; property_match[j]; j++)
+                                if (strneq(property_match[j], property_match[i], n + 1) &&
+                                    fnmatch(property_match[j] + n + 1, udev_list_entry_get_value(entry), 0) == 0) {
+                                        match = true;
+                                        break;
+                                }
+                        if (match)
+                                break;
+                }
+
+                if (!match)
+                        return false;
+        }
+
+        return true;
+}
+
+static int export_devices(struct udev *udev, const ExportMatches *m) {
+        _cleanup_udev_enumerate_unref_ struct udev_enumerate *e = NULL;
+        _cleanup_strv_free_ char **parents = NULL;
+        struct udev_list_entry *list_entry;
+        char **p;
+        int r;
+
+        e = udev_enumerate_new(udev);
+        if (!e)
+                return log_error_errno(errno > 0 ? errno : ENOMEM, "Failed to create device enumerator: %m");
+
+        r = setup_matches(udev, e, m, &parents);
+        if (r < 0)
+                return r;
+
+        /* libudev matches only one parent device, so scan the devices below each parent, the results
+         * are merged by the enumerator, like 'udevadm trigger' does it. */
+        if (strv_isempty(parents))
+                r = udev_enumerate_scan_devices(e);
+        else
+                STRV_FOREACH(p, parents) {
+                        _cleanup_udev_device_unref_ struct udev_device *parent = NULL;
+
+                        parent = udev_device_new_from_syspath(udev, *p);
+                        if (!parent)
+                                continue;
+
+                        r = udev_enumerate_add_match_parent(e, parent);
+                        if (r < 0)
+                                return log_error_errno(r, "Failed to add parent match '%s': %m", *p);
+
+                        r = udev_enumerate_scan_devices(e);
+                        if (r < 0)
+                                break;
+                }
+        if (r < 0)
+                return log_error_errno(r, "Failed to scan devices: %m");
+
+        udev_list_entry_foreach(list_entry, udev_enumerate_get_list_entry(e)) {
+                _cleanup_udev_device_unref_ struct udev_device *device = NULL;
 
                 device = udev_device_new_from_syspath(udev, udev_list_entry_get_name(list_entry));
-                if (device != NULL) {
-                        if (!json_format_enabled(arg_json_format_flags))
-                                print_record(device, NULL);
-                        else
-                                (void) record_to_json(device);
-                        udev_device_unref(device);
-                }
+                if (!device)
+                        continue;
+
+                if (!match_property_required(device, m->property_match))
+                        continue;
+
+                /* Devices that are gone meanwhile are skipped, as it is necessarily racy. */
+                if (m->initialized_match >= 0 &&
+                    (udev_device_get_is_initialized(device) > 0) != (m->initialized_match > 0))
+                        continue;
+
+                if (!json_format_enabled(arg_json_format_flags))
+                        print_record(device, NULL);
+                else
+                        (void) record_to_json(device);
         }
-        udev_enumerate_unref(udev_enumerate);
+
         return 0;
 }
 
@@ -880,6 +1127,22 @@ static void help(void) {
                "                              Wait for device to be initialized\n"
                "     --no-pager               Do not pipe output into a pager\n"
                "     --json=pretty|short|off  Generate JSON output\n"
+               "     --subsystem-match=SUBSYSTEM\n"
+               "                              Query devices matching a subsystem\n"
+               "     --subsystem-nomatch=SUBSYSTEM\n"
+               "                              Query devices not matching a subsystem\n"
+               "     --attr-match=FILE[=VALUE]\n"
+               "                              Query devices that match an attribute\n"
+               "     --attr-nomatch=FILE[=VALUE]\n"
+               "                              Query devices that do not match an attribute\n"
+               "     --property-match=KEY=VALUE\n"
+               "                              Query devices with matching properties\n"
+               "     --tag-match=TAG          Query devices with a matching tag\n"
+               "     --sysname-match=NAME     Query devices with this /sys path\n"
+               "     --name-match=NAME        Query devices with this /dev name\n"
+               "     --parent-match=NAME      Query devices with this parent device\n"
+               "     --initialized-match      Query devices that are already initialized\n"
+               "     --initialized-nomatch    Query devices that are not initialized yet\n"
                , program_invocation_short_name);
 }
 
@@ -975,6 +1238,9 @@ static int query_device(enum query_type query, struct udev_device *device,
 static int uinfo(struct udev *udev, int argc, char *argv[]) {
         _cleanup_strv_free_ char **devices = NULL;
         _cleanup_strv_free_ char **properties = NULL;
+        _cleanup_(export_matches_done) ExportMatches matches = {
+                .initialized_match = -1,
+        };
         bool root = 0;
         bool export = 0;
         bool value = false;
@@ -990,6 +1256,17 @@ static int uinfo(struct udev *udev, int argc, char *argv[]) {
                 ARG_VALUE,
                 ARG_NO_PAGER,
                 ARG_JSON,
+                ARG_SUBSYSTEM_MATCH,
+                ARG_SUBSYSTEM_NOMATCH,
+                ARG_ATTR_MATCH,
+                ARG_ATTR_NOMATCH,
+                ARG_PROPERTY_MATCH,
+                ARG_TAG_MATCH,
+                ARG_SYSNAME_MATCH,
+                ARG_NAME_MATCH,
+                ARG_PARENT_MATCH,
+                ARG_INITIALIZED_MATCH,
+                ARG_INITIALIZED_NOMATCH,
         };
 
         static const struct option options[] = {
@@ -1009,6 +1286,17 @@ static int uinfo(struct udev *udev, int argc, char *argv[]) {
                 { "json",              required_argument, NULL, ARG_JSON },
                 { "wait-for-initialization", optional_argument, NULL, 'w' },
                 { "no-pager",          no_argument,       NULL, ARG_NO_PAGER },
+                { "subsystem-match",   required_argument, NULL, ARG_SUBSYSTEM_MATCH },
+                { "subsystem-nomatch", required_argument, NULL, ARG_SUBSYSTEM_NOMATCH },
+                { "attr-match",        required_argument, NULL, ARG_ATTR_MATCH },
+                { "attr-nomatch",      required_argument, NULL, ARG_ATTR_NOMATCH },
+                { "property-match",    required_argument, NULL, ARG_PROPERTY_MATCH },
+                { "tag-match",         required_argument, NULL, ARG_TAG_MATCH },
+                { "sysname-match",     required_argument, NULL, ARG_SYSNAME_MATCH },
+                { "name-match",        required_argument, NULL, ARG_NAME_MATCH },
+                { "parent-match",      required_argument, NULL, ARG_PARENT_MATCH },
+                { "initialized-match", no_argument,       NULL, ARG_INITIALIZED_MATCH },
+                { "initialized-nomatch", no_argument,     NULL, ARG_INITIALIZED_NOMATCH },
                 { "version",           no_argument,       NULL, 'V' },
                 { "help",              no_argument,       NULL, 'h' },
                 {}
@@ -1131,6 +1419,41 @@ static int uinfo(struct udev *udev, int argc, char *argv[]) {
                 case ARG_NO_PAGER:
                         arg_pager_flags |= PAGER_DISABLE;
                         break;
+                case ARG_SUBSYSTEM_MATCH:
+                case ARG_SUBSYSTEM_NOMATCH:
+                case ARG_ATTR_MATCH:
+                case ARG_ATTR_NOMATCH:
+                case ARG_PROPERTY_MATCH:
+                case ARG_TAG_MATCH:
+                case ARG_SYSNAME_MATCH:
+                case ARG_NAME_MATCH:
+                case ARG_PARENT_MATCH: {
+                        char ***l =
+                                c == ARG_SUBSYSTEM_MATCH ? &matches.subsystem_match :
+                                c == ARG_SUBSYSTEM_NOMATCH ? &matches.subsystem_nomatch :
+                                c == ARG_ATTR_MATCH ? &matches.attr_match :
+                                c == ARG_ATTR_NOMATCH ? &matches.attr_nomatch :
+                                c == ARG_PROPERTY_MATCH ? &matches.property_match :
+                                c == ARG_TAG_MATCH ? &matches.tag_match :
+                                c == ARG_SYSNAME_MATCH ? &matches.sysname_match :
+                                c == ARG_NAME_MATCH ? &matches.name_match :
+                                &matches.parent_match;
+
+                        if (c == ARG_PROPERTY_MATCH && !strchr(optarg, '=')) {
+                                log_error("Expected <PROPERTY>=<value> instead of '%s'", optarg);
+                                return 1;
+                        }
+
+                        if (strv_extend(l, optarg) < 0) {
+                                log_oom();
+                                return 1;
+                        }
+                        break;
+                }
+                case ARG_INITIALIZED_MATCH:
+                case ARG_INITIALIZED_NOMATCH:
+                        matches.initialized_match = c == ARG_INITIALIZED_MATCH;
+                        break;
                 default:
                         return 1;
                 }
@@ -1182,7 +1505,8 @@ static int uinfo(struct udev *udev, int argc, char *argv[]) {
         pager_open(pager_flags);
 
         if (action == ACTION_EXPORT) {
-                export_devices(udev);
+                if (export_devices(udev, &matches) < 0)
+                        return 1;
                 return 0;
         }
 
