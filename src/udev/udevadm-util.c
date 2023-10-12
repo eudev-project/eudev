@@ -230,3 +230,13 @@ const char *glyph(Glyph code) {
 
         return draw_table[is_locale_utf8()][code];
 }
+
+int parse_json_argument(const char *s, JsonFormatFlags *ret) {
+        int r;
+
+        r = json_parse_format(s, ret);
+        if (r == -EINVAL)
+                log_error("Unknown argument to --json= switch: %s", s);
+
+        return r;
+}

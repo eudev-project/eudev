@@ -231,6 +231,15 @@
           </listitem>
         </varlistentry>
         <varlistentry>
+          <term><option>--json=<replaceable>MODE</replaceable></option></term>
+          <listitem>
+            <para>Shows output formatted as JSON. Expects one of <literal>short</literal> (for the
+            shortest possible output without any redundant whitespace or line breaks), <literal>pretty</literal>
+            (for a pretty version of the same, with indentation and line breaks) or <literal>off</literal> (to turn
+            off JSON output, the default).</para>
+          </listitem>
+        </varlistentry>
+        <varlistentry>
           <term><option>--version</option></term>
           <listitem>
             <para>Print version.</para>

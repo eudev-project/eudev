@@ -40,6 +40,8 @@
 /* Put a limit on --tree descent level to not exhaust our stack */
 #define TREE_DEPTH_MAX 64
 
+static JsonFormatFlags arg_json_format_flags = JSON_FORMAT_OFF;
+
 static bool skip_attribute(const char *name) {
         static const char* const skip[] = {
                 "uevent",
@@ -237,6 +239,42 @@ static void print_record(struct udev_device *device, const char *prefix) {
                 printf("\n");
 }
 
+static int record_to_json(struct udev_device *device) {
+        struct udev_list_entry *list_entry;
+        JsonWriter w;
+        const char *str;
+
+        assert(device);
+
+        /* We don't show any shorthand fields here as done in print_record() except for SYSNAME and SYSNUM as
+         * all the other ones have a matching property which will already be included. */
+
+        json_writer_init(&w, stdout, arg_json_format_flags);
+
+        json_writer_object_begin(&w);
+
+        str = udev_device_get_sysname(device);
+        if (str) {
+                json_writer_key(&w, "SYSNAME");
+                json_writer_string(&w, str);
+        }
+
+        str = udev_device_get_sysnum(device);
+        if (str) {
+                json_writer_key(&w, "SYSNUM");
+                json_writer_string(&w, str);
+        }
+
+        udev_list_entry_foreach(list_entry, udev_device_get_properties_list_entry(device)) {
+                json_writer_key(&w, udev_list_entry_get_name(list_entry));
+                json_writer_string(&w, udev_list_entry_get_value(list_entry));
+        }
+
+        json_writer_object_end(&w);
+
+        return json_writer_finish(&w);
+}
+
 static int stat_device(const char *name, bool export, const char *prefix) {
         struct stat statbuf;
 
@@ -268,7 +306,10 @@ static int export_devices(struct udev *udev) {
 
                 device = udev_device_new_from_syspath(udev, udev_list_entry_get_name(list_entry));
                 if (device != NULL) {
-                        print_record(device, NULL);
+                        if (!json_format_enabled(arg_json_format_flags))
+                                print_record(device, NULL);
+                        else
+                                (void) record_to_json(device);
                         udev_device_unref(device);
                 }
         }
@@ -666,6 +707,7 @@ static void help(void) {
                "  -c --cleanup-db             Clean up the udev database\n"
                "  -w --wait-for-initialization[=SECONDS]\n"
                "                              Wait for device to be initialized\n"
+               "     --json=pretty|short|off  Generate JSON output\n"
                , program_invocation_short_name);
 }
 
@@ -684,6 +726,7 @@ static int uinfo(struct udev *udev, int argc, char *argv[]) {
         enum {
                 ARG_PROPERTY = 0x100,
                 ARG_VALUE,
+                ARG_JSON,
         };
 
         static const struct option options[] = {
@@ -700,6 +743,7 @@ static int uinfo(struct udev *udev, int argc, char *argv[]) {
                 { "export-prefix",     required_argument, NULL, 'P' },
                 { "property",          required_argument, NULL, ARG_PROPERTY },
                 { "value",             no_argument,       NULL, ARG_VALUE },
+                { "json",              required_argument, NULL, ARG_JSON },
                 { "wait-for-initialization", optional_argument, NULL, 'w' },
                 { "version",           no_argument,       NULL, 'V' },
                 { "help",              no_argument,       NULL, 'h' },
@@ -711,6 +755,7 @@ static int uinfo(struct udev *udev, int argc, char *argv[]) {
                 ACTION_ATTRIBUTE_WALK,
                 ACTION_DEVICE_ID_FILE,
                 ACTION_TREE,
+                ACTION_EXPORT,
         } action = ACTION_QUERY;
 
         enum query_type {
@@ -742,6 +787,11 @@ static int uinfo(struct udev *udev, int argc, char *argv[]) {
                         break;
                 case ARG_VALUE:
                         value = true;
+                        break;
+                case ARG_JSON:
+                        r = parse_json_argument(optarg, &arg_json_format_flags);
+                        if (r <= 0)
+                                return r < 0 ? 1 : 0;
                         break;
                 case 'n': {
                         if (device != NULL) {
@@ -799,8 +849,8 @@ static int uinfo(struct udev *udev, int argc, char *argv[]) {
                         action = ACTION_TREE;
                         break;
                 case 'e':
-                        export_devices(udev);
-                        return 0;
+                        action = ACTION_EXPORT;
+                        break;
                 case 'c':
                         cleanup_db(udev);
                         return 0;
@@ -837,6 +887,9 @@ static int uinfo(struct udev *udev, int argc, char *argv[]) {
         }
 
         switch (action) {
+        case ACTION_EXPORT:
+                export_devices(udev);
+                break;
         case ACTION_QUERY:
                 if (!device) {
                         if (!argv[optind]) {
@@ -912,7 +965,10 @@ static int uinfo(struct udev *udev, int argc, char *argv[]) {
                         }
                         break;
                 case QUERY_ALL:
-                        print_record(device, NULL);
+                        if (!json_format_enabled(arg_json_format_flags))
+                                print_record(device, NULL);
+                        else
+                                (void) record_to_json(device);
                         break;
                 default:
                         assert_not_reached("unknown query type");

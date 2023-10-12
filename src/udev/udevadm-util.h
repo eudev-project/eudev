@@ -17,6 +17,7 @@
 
 #pragma once
 
+#include "json-writer.h"
 #include "udev.h"
 
 struct udev_device *find_device(struct udev *udev,
@@ -52,3 +53,8 @@ typedef enum Glyph {
 
 bool is_locale_utf8(void);
 const char *glyph(Glyph code);
+
+/* Parses the argument of --json= with json_parse_format(), and logs an unknown argument, like
+ * systemd's parse_json_argument(). Returns 1 if the argument was parsed, 0 if a list of the
+ * arguments was shown for "help", and a negative error for an unknown argument. */
+int parse_json_argument(const char *s, JsonFormatFlags *ret);
