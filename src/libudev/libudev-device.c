@@ -533,7 +533,7 @@ static void udev_device_add_property_from_string_parse(struct udev_device *udev_
                         }
                 }
         } else if (startswith(property, "USEC_INITIALIZED=")) {
-                udev_device_set_usec_initialized(udev_device, strtoull(&property[19], NULL, 10));
+                udev_device_set_usec_initialized(udev_device, strtoull(&property[17], NULL, 10));
         } else if (startswith(property, "DRIVER=")) {
                 udev_device_set_driver(udev_device, &property[7]);
         } else if (startswith(property, "ACTION=")) {
