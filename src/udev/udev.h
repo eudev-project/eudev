@@ -100,9 +100,11 @@ struct udev_event *udev_event_new(struct udev_device *dev, enum udev_event_mode 
 void udev_event_unref(struct udev_event *event);
 void event_cache_written_sysattr(struct udev_event *event, const char *attr, const char *value);
 void event_cache_written_sysctl(struct udev_event *event, const char *attr, const char *value);
+const char *udev_event_get_property_value_with_fallback(struct udev_device *dev, const char *key,
+                                                        struct udev_list *global_props);
 size_t udev_event_apply_format(struct udev_event *event,
                                const char *src, char *dest, size_t size,
-                               bool replace_whitespace);
+                               bool replace_whitespace, struct udev_list *global_props);
 int udev_event_apply_subsys_kernel(struct udev_event *event, const char *string,
                                    char *result, size_t maxsize, int read_value);
 int udev_event_spawn(struct udev_event *event,

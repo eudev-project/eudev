@@ -82,9 +82,24 @@ void event_cache_written_sysctl(struct udev_event *event, const char *attr, cons
         event_cache_written_value(&event->written_sysctl_list, attr, value);
 }
 
+/* Returns the value of the property of the device, or when the device does not have it, of the global
+ * property set with 'udevadm control --property', like systemd's device_get_property_value_with_fallback(). */
+const char *udev_event_get_property_value_with_fallback(struct udev_device *dev, const char *key,
+                                                        struct udev_list *global_props) {
+        struct udev_list_entry *entry;
+        const char *value;
+
+        value = udev_device_get_property_value(dev, key);
+        if (value || !global_props)
+                return value;
+
+        entry = udev_list_entry_get_by_name(udev_list_get_entry(global_props), key);
+        return udev_list_entry_get_value(entry);
+}
+
 size_t udev_event_apply_format(struct udev_event *event,
                                const char *src, char *dest, size_t size,
-                               bool replace_whitespace) {
+                               bool replace_whitespace, struct udev_list *global_props) {
         struct udev_device *dev = event->dev;
         enum subst_type {
                 SUBST_UNKNOWN,
@@ -394,7 +409,7 @@ subst:
                         } else {
                                 const char *value;
 
-                                value = udev_device_get_property_value(event->dev, attr);
+                                value = udev_event_get_property_value_with_fallback(event->dev, attr, global_props);
                                 if (value == NULL)
                                         break;
                                 l = strpcpy(&s, l, value);
