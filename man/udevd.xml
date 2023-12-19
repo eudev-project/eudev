@@ -104,7 +104,8 @@
           with a unit, e.g. <literal>500ms</literal>. This option
           might be useful when debugging system crashes during
           coldplug caused by loading non-working kernel
-          modules.</para>
+          modules. A delay that is not shorter than the event timeout
+          is ignored.</para>
         </listitem>
       </varlistentry>
 
@@ -114,7 +115,7 @@
           <para>Set the number of seconds to wait for events to finish, or a
           time span with a unit, e.g. <literal>5min</literal>. After this time
           the event will be terminated. The default is 180 seconds, which is
-          also used when 0 is given.</para>
+          also used when 0 or less than a millisecond is given.</para>
         </listitem>
       </varlistentry>
 

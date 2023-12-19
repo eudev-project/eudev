@@ -60,6 +60,7 @@
 #define WORKER_NUM_MAX UINT64_C(2048)
 
 #define DEFAULT_EVENT_TIMEOUT_USEC (180 * USEC_PER_SEC)
+#define MIN_EVENT_TIMEOUT_USEC     (1 * USEC_PER_MSEC)
 
 #define EVENT_REQUEUE_INTERVAL_USEC (200 * USEC_PER_MSEC)
 #define EVENT_REQUEUE_TIMEOUT_USEC  (3 * USEC_PER_MINUTE)
@@ -1186,10 +1187,33 @@ static void manager_merge_config(void) {
         arg_exec_delay_usec = config_by_kernel.exec_delay_usec ?: config_by_command.exec_delay_usec;
         arg_event_timeout_usec = config_by_kernel.timeout_usec ?: config_by_command.timeout_usec ?:
                                  DEFAULT_EVENT_TIMEOUT_USEC;
-        arg_event_timeout_warn_usec = (arg_event_timeout_usec / 3) ? : 1;
         arg_timeout_signal = config_by_kernel.timeout_signal ?: config_by_command.timeout_signal ?:
                              config_by_udev_conf.timeout_signal ?: SIGKILL;
         arg_blockdev_read_only = config_by_kernel.blockdev_read_only;
+}
+
+/* Like manager_adjust_config() of systemd: refuses a too short event timeout, and a delay of RUN that is not
+ * shorter than the timeout. */
+static void manager_adjust_config(void) {
+        char buf[FORMAT_TIMESPAN_MAX], buf2[FORMAT_TIMESPAN_MAX];
+
+        if (arg_event_timeout_usec < MIN_EVENT_TIMEOUT_USEC) {
+                log_debug("Timeout (%s) for processing event is too small, using the default: %s",
+                          format_timespan(buf, sizeof(buf), arg_event_timeout_usec, 1),
+                          format_timespan(buf2, sizeof(buf2), DEFAULT_EVENT_TIMEOUT_USEC, 1));
+
+                arg_event_timeout_usec = DEFAULT_EVENT_TIMEOUT_USEC;
+        }
+
+        if (arg_exec_delay_usec >= arg_event_timeout_usec) {
+                log_debug("Delay (%s) for executing RUN= commands is too large compared with the timeout (%s) for event execution, ignoring the delay.",
+                          format_timespan(buf, sizeof(buf), arg_exec_delay_usec, 1),
+                          format_timespan(buf2, sizeof(buf2), arg_event_timeout_usec, 1));
+
+                arg_exec_delay_usec = 0;
+        }
+
+        arg_event_timeout_warn_usec = (arg_event_timeout_usec / 3) ? : 1;
 }
 
 static void manager_set_log_level(int log_level) {
@@ -1890,6 +1914,7 @@ int main(int argc, char *argv[]) {
 
         manager_merge_config();
         log_set_max_level(manager_merge_config_log_level());
+        manager_adjust_config();
 
         if (getuid() != 0) {
                 r = log_error_errno(EPERM, "root privileges required");

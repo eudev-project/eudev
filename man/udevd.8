@@ -64,13 +64,13 @@ Limit the number of events executed in parallel\&.
 Delay the execution of
 \fIRUN\fR
 instructions by the given number of seconds, or by a time span with a unit, e\&.g\&.
-500ms\&. This option might be useful when debugging system crashes during coldplug caused by loading non\-working kernel modules\&.
+500ms\&. This option might be useful when debugging system crashes during coldplug caused by loading non\-working kernel modules\&. A delay that is not shorter than the event timeout is ignored\&.
 .RE
 .PP
 \fB\-t\fR, \fB\-\-event\-timeout=\fR
 .RS 4
 Set the number of seconds to wait for events to finish, or a time span with a unit, e\&.g\&.
-5min\&. After this time the event will be terminated\&. The default is 180 seconds, which is also used when 0 is given\&.
+5min\&. After this time the event will be terminated\&. The default is 180 seconds, which is also used when 0 or less than a millisecond is given\&.
 .RE
 .PP
 \fB\-\-timeout\-signal=\fR
