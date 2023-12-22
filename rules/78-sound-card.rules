@@ -38,6 +38,8 @@ KERNEL!="card*", GOTO="sound_end"
 ENV{SOUND_INITIALIZED}="1"
 
 IMPORT{builtin}="hwdb"
+IMPORT{builtin}="path_id"
+
 SUBSYSTEMS=="usb", IMPORT{builtin}="usb_id"
 SUBSYSTEMS=="usb", GOTO="skip_pci"
 
@@ -61,8 +63,6 @@ LABEL="skip_pci"
 # USB and firewire.
 ENV{ID_SERIAL}=="?*", ENV{ID_USB_INTERFACE_NUM}=="?*", ENV{ID_ID}="$env{ID_BUS}-$env{ID_SERIAL}-$env{ID_USB_INTERFACE_NUM}"
 ENV{ID_SERIAL}=="?*", ENV{ID_USB_INTERFACE_NUM}=="", ENV{ID_ID}="$env{ID_BUS}-$env{ID_SERIAL}"
-
-IMPORT{builtin}="path_id"
 
 # The values used here for $SOUND_FORM_FACTOR and $SOUND_CLASS should be kept
 # in sync with those defined for PulseAudio's src/pulse/proplist.h
