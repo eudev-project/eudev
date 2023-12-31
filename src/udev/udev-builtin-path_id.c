@@ -636,6 +636,15 @@ static int builtin_path_id(struct udev_device *dev, int argc __attribute__((unus
                         parent = skip_subsystem(parent, "scm");
                         supported_transport = true;
                         supported_parent = true;
+                } else if (streq(subsys, "nvme")) {
+                        const char *nsid = udev_device_get_sysattr_value(dev, "nsid");
+
+                        if (nsid) {
+                                path_prepend(&path, "nvme-%s", nsid);
+                                parent = skip_subsystem(parent, "nvme");
+                                supported_parent = true;
+                                supported_transport = true;
+                        }
                 }
 
                 parent = udev_device_get_parent(parent);
