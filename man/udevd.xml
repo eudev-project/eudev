@@ -136,6 +136,18 @@
           precedence over <varname>event_timeout=</varname> in
           <citerefentry><refentrytitle>udev.conf</refentrytitle><manvolnum>5</manvolnum></citerefentry>,
           unless it is 0.</para>
+          <para>When the timeout is reached, the worker processing the event
+          sends the timeout signal (see <option>--timeout-signal=</option>) to
+          the program of <varname>RUN</varname>, <varname>PROGRAM</varname> or
+          <varname>IMPORT{program}</varname> that is still running. If the
+          worker has not finished the event 10 seconds later,
+          <command>udevd</command> sends the timeout signal to the worker.
+          This extra time can be set with the
+          <varname>$UDEV_EXTRA_TIMEOUT_SEC</varname> environment variable of
+          <command>udevd</command>, or
+          <varname>$SYSTEMD_UDEV_EXTRA_TIMEOUT_SEC</varname> when that is not
+          set, to a time span of up to 5 hours, e.g.
+          <literal>30s</literal>.</para>
         </listitem>
       </varlistentry>
 

@@ -1237,6 +1237,48 @@ static void manager_adjust_config(void) {
         arg_event_timeout_warn_usec = (arg_event_timeout_usec / 3) ? : 1;
 }
 
+/* Like extra_timeout_usec() of systemd: the time that udevd waits after the event timeout before it kills a
+ * worker, 10 seconds, or the value of $UDEV_EXTRA_TIMEOUT_SEC, or $SYSTEMD_UDEV_EXTRA_TIMEOUT_SEC when that is
+ * not set, up to 5 hours. */
+static usec_t extra_timeout_usec(void) {
+        static usec_t saved = 10 * USEC_PER_SEC;
+        static bool parsed = false;
+        const char *name = "UDEV_EXTRA_TIMEOUT_SEC", *e;
+        usec_t timeout;
+        int r;
+
+        if (parsed)
+                return saved;
+
+        parsed = true;
+
+        e = secure_getenv(name);
+        if (!e) {
+                name = "SYSTEMD_UDEV_EXTRA_TIMEOUT_SEC";
+                e = secure_getenv(name);
+        }
+        if (!e)
+                return saved;
+
+        r = parse_sec(e, &timeout);
+        if (r < 0)
+                log_debug_errno(r, "Failed to parse $%s=%s, ignoring: %m", name, e);
+        else if (timeout > 5 * USEC_PER_HOUR) /* Add an arbitrary upper bound */
+                log_debug("Parsed $%s=%s is too large, ignoring.", name, e);
+        else
+                saved = timeout;
+
+        return saved;
+}
+
+/* Like manager_kill_worker_timeout() of systemd: the event timeout is also used as the timeout for running
+ * programs specified in IMPORT{program}=, PROGRAM=, or RUN=. Here, let's add an extra time before the manager
+ * kills a worker, to make it possible that the worker detects timed out of spawned programs, kills them, and
+ * finalizes the event. */
+static usec_t manager_kill_worker_timeout(void) {
+        return usec_add(arg_event_timeout_usec, extra_timeout_usec());
+}
+
 static void manager_set_log_level(int log_level) {
         int old = log_get_max_level(), new;
 
@@ -2293,7 +2335,7 @@ int main(int argc, char *argv[]) {
                                 ts = now(CLOCK_MONOTONIC);
 
                                 if ((ts - event->start_usec) > arg_event_timeout_warn_usec) {
-                                        if ((ts - event->start_usec) > arg_event_timeout_usec) {
+                                        if ((ts - event->start_usec) > manager_kill_worker_timeout()) {
                                                 log_error("worker ["PID_FMT"] %s timeout; kill it", worker->pid, event->devpath);
                                                 (void) kill_and_sigcont(worker->pid, arg_timeout_signal);
                                                 worker->state = WORKER_KILLED;
