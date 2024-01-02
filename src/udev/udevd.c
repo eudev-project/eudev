@@ -520,13 +520,7 @@ static void worker_spawn(struct event *event) {
                                                      &properties_list,
                                                      rules,
                                                      &sigmask_orig);
-                        if (r < 0)
-                                /* Like systemd a446e8ff2c, when the rules fail, e.g. on an error of
-                                 * IMPORT{}, do not run RUN and do not restore the inotify watch, but
-                                 * still send the (partially processed) event to the listeners. */
-                                log_warning_errno(r, "%s: Failed to process device, ignoring: %m",
-                                                  udev_device_get_sysname(dev));
-                        else {
+                        if (r >= 0) {
                                 udev_event_execute_run(udev_event,
                                                        arg_event_timeout_usec, arg_event_timeout_warn_usec,
                                                        &sigmask_orig);
@@ -540,7 +534,29 @@ static void worker_spawn(struct event *event) {
                                         else
                                                 udev_watch_end(udev, dev);
                                 }
+
+                                /* Finalize database. But do not re-create database on remove, which has been already
+                                 * removed in udev_event_execute_rules(). */
+                                if (!streq_ptr(udev_device_get_action(dev), "remove")) {
+                                        r = udev_device_add_property(dev, "ID_PROCESSING", NULL);
+                                        if (r < 0)
+                                                log_warning_errno(r, "%s: Failed to remove 'ID_PROCESSING' property: %m",
+                                                                  udev_device_get_sysname(dev));
+                                        else {
+                                                r = udev_device_update_db(dev);
+                                                if (r < 0)
+                                                        log_warning_errno(r, "%s: Failed to update database under " UDEV_ROOT_RUN "/udev/data/: %m",
+                                                                          udev_device_get_sysname(dev));
+                                        }
+                                }
                         }
+                        if (r < 0)
+                                /* Like systemd a446e8ff2c, when the rules fail, e.g. on an error of
+                                 * IMPORT{}, or the database cannot be written, RUN is not run (or the
+                                 * database not finalized after it) and the inotify watch is not restored,
+                                 * but the (partially processed) event is still sent to the listeners. */
+                                log_warning_errno(r, "%s: Failed to process device, ignoring: %m",
+                                                  udev_device_get_sysname(dev));
 
                         safe_close(fd_lock);
 

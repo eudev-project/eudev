@@ -1430,6 +1430,32 @@ int udev_event_execute_rules(struct udev_event *event,
                     streq(udev_device_get_action(dev), "move"))
                         udev_device_copy_properties(dev, event->dev_db);
 
+                /* If the database file already exists, append ID_PROCESSING property to the existing database,
+                 * to indicate that the device is being processed by udevd. */
+                if (EVENT_MODE_DESTRUCTIVE(event) && event->dev_db && udev_device_has_db(event->dev_db) > 0) {
+                        /* eudev: keep the sticky bit of OPTIONS="db_persist" of the existing database file,
+                         * which the device read from the database does not know about; the final write
+                         * follows the rules of this event. */
+                        if (udev_device_db_is_persistent(event->dev_db) > 0)
+                                udev_device_set_db_persist(event->dev_db);
+
+                        r = udev_device_add_property(event->dev_db, "ID_PROCESSING", "1");
+                        if (r < 0) {
+                                log_warning_errno(r, "%s: Failed to add 'ID_PROCESSING' property: %m",
+                                                  udev_device_get_sysname(dev));
+                                event->dev_db = udev_device_unref(event->dev_db);
+                                return r;
+                        }
+
+                        r = udev_device_update_db(event->dev_db);
+                        if (r < 0) {
+                                log_warning_errno(r, "%s: Failed to update database under " UDEV_ROOT_RUN "/udev/data/: %m",
+                                                  udev_device_get_sysname(dev));
+                                event->dev_db = udev_device_unref(event->dev_db);
+                                return r;
+                        }
+                }
+
                 r = udev_rules_apply_to_event(rules, event,
                                               timeout_usec, timeout_warn_usec,
                                               properties_list,
@@ -1606,7 +1632,22 @@ int udev_event_execute_rules(struct udev_event *event,
                                 event->dev_db = udev_device_unref(event->dev_db);
                                 return r;
                         }
+                }
 
+                /* If the database file for the device will be created below, add ID_PROCESSING=1 to indicate that
+                 * the device is still being processed by udevd, as commands specified in RUN are invoked after
+                 * the database is created. See issue #30056. */
+                if (udev_device_should_have_db(dev) && udev_list_get_entry(&event->run_list)) {
+                        r = udev_device_add_property(dev, "ID_PROCESSING", "1");
+                        if (r < 0) {
+                                log_warning_errno(r, "%s: Failed to add 'ID_PROCESSING' property: %m",
+                                                  udev_device_get_sysname(dev));
+                                event->dev_db = udev_device_unref(event->dev_db);
+                                return r;
+                        }
+                }
+
+                if (EVENT_MODE_DESTRUCTIVE(event)) {
                         r = udev_device_update_db(dev);
                         if (r < 0) {
                                 log_debug_errno(r, "%s: Failed to update database under " UDEV_ROOT_RUN "/udev/data/: %m",

@@ -275,6 +275,48 @@ int udev_device_delete_db(struct udev_device *udev_device)
         return 0;
 }
 
+/* Like device_should_have_db() of systemd: whether udev_device_update_db() writes a database file for
+ * the device, rather than removing it. */
+bool udev_device_should_have_db(struct udev_device *udev_device)
+{
+        return device_has_info(udev_device) ||
+               major(udev_device_get_devnum(udev_device)) != 0 ||
+               udev_device_get_ifindex(udev_device) != 0;
+}
+
+/* Like device_has_db() of systemd: whether the database file of the device exists. */
+int udev_device_has_db(struct udev_device *udev_device)
+{
+        const char *id;
+        char filename[UTIL_PATH_SIZE];
+
+        id = udev_device_get_id_filename(udev_device);
+        if (id == NULL)
+                return -ENODEV;
+        strscpyl(filename, sizeof(filename), UDEV_ROOT_RUN "/udev/data/", id, NULL);
+
+        return access(filename, F_OK) >= 0;
+}
+
+/* Whether the database file of the device has the sticky bit of OPTIONS="db_persist", which
+ * udev_device_update_db() sets for a device with udev_device_set_db_persist(). */
+int udev_device_db_is_persistent(struct udev_device *udev_device)
+{
+        const char *id;
+        char filename[UTIL_PATH_SIZE];
+        struct stat st;
+
+        id = udev_device_get_id_filename(udev_device);
+        if (id == NULL)
+                return -ENODEV;
+        strscpyl(filename, sizeof(filename), UDEV_ROOT_RUN "/udev/data/", id, NULL);
+
+        if (stat(filename, &st) < 0)
+                return errno == ENOENT ? false : -errno;
+
+        return (st.st_mode & S_ISVTX) != 0;
+}
+
 /* Reads a sysfs attribute. Unlike udev_device_get_sysattr_value(), returns a negative errno-style
  * error code: -ENOENT if the attribute does not exist or cannot be read. */
 int device_get_sysattr_value(struct udev_device *device, const char *sysattr, const char **ret)
