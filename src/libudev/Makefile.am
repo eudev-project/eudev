@@ -8,7 +8,7 @@ AM_CPPFLAGS = \
 	$(LIBC_CPPFLAGS) \
 	-include $(top_builddir)/config.h \
 	-DUDEV_ROOT_RUN=\"$(rootrundir)\" \
-	-DUDEV_CONF_FILE=\"$(udevconffile)\" \
+	-DUDEV_CONF_DIR=\"$(udevconfdir)\" \
 	-DUDEV_HWDB_BIN=\"$(udevhwdbbin)\" \
 	-DUDEV_VERSION=$(UDEV_VERSION) \
 	-DUDEV_LIBEXEC_DIR=\"$(udevlibexecdir)\" \

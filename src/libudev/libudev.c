@@ -27,8 +27,11 @@
 #include <ctype.h>
 #include <time.h>
 
+#include <sys/stat.h>
+
 #include "libudev.h"
 #include "libudev-private.h"
+#include "conf-files.h"
 #include "missing.h"
 #include "strv.h"
 
@@ -144,10 +147,11 @@ int udev_parse_resolve_names(const char *s, int *ret) {
         return 0;
 }
 
-static void udev_read_conf(struct udev *udev, const char *filename) {
+/* Reads the configuration file path; the messages name it filename. */
+static void udev_read_conf(struct udev *udev, const char *path, const char *filename) {
         _cleanup_fclose_ FILE *f = NULL;
 
-        f = fopen(filename, "re");
+        f = fopen(path, "re");
         if (f != NULL) {
                 /* on the heap, to keep the stack small for the programs that call udev_new() */
                 _cleanup_free_ char *line = NULL;
@@ -334,6 +338,96 @@ static void udev_read_conf(struct udev *udev, const char *filename) {
         }
 }
 
+/* The directories of udev.conf and its drop-ins, in the order of precedence, like CONF_PATHS("udev") of systemd:
+ * the drop-ins are the files ending with ".conf" in their subdirectories udev.conf.d, sorted by their names,
+ * where a file overrides the files with the same name in the later directories. UDEV_LIBEXEC_DIR is systemd's
+ * /usr/lib/udev, see also the directories of the rules files in udev-rules.c. */
+static const char* const udev_conf_dirs[] = {
+        UDEV_CONF_DIR,
+        UDEV_ROOT_RUN "/udev",
+        "/usr/local/lib/udev",
+        UDEV_LIBEXEC_DIR,
+#ifdef HAVE_SPLIT_USR
+        "/lib/udev",
+        "/usr/lib/udev",
+#endif
+        NULL
+};
+
+/* Not part of the public API, also used by udevadm cat. Returns the configuration files of udevd below root, like
+ * config_parse_config_file() of systemd for udev.conf in "udev": the main configuration file udev.conf in
+ * UDEV_CONF_DIR, as long as it is a regular file, or NULL, and the drop-ins in the directories of
+ * udev_conf_dirs. Like for the rules files, and like systemd's "udevadm cat --config", a mask, i.e. an empty file
+ * or a symlink to /dev/null, and a file that is not a regular file are left out. */
+int udev_conf_files(const char *root, ConfFile **ret_main, ConfFile ***ret_dropins, size_t *ret_n_dropins) {
+        _cleanup_strv_free_ char **dirs = NULL;
+        ConfFile *main_file = NULL;
+        size_t i;
+        int r;
+
+        assert(ret_main);
+        assert(ret_dropins);
+        assert(ret_n_dropins);
+
+        r = conf_file_new(UDEV_CONF_DIR "/udev.conf", root, CONF_FILES_REGULAR | CONF_FILES_FILTER_MASKED, &main_file);
+        if (r == -ENOMEM)
+                return r;
+
+        for (i = 0; udev_conf_dirs[i]; i++)
+                if (strv_extend(&dirs, strjoina(udev_conf_dirs[i], "/udev.conf.d")) < 0) {
+                        conf_file_free(main_file);
+                        return -ENOMEM;
+                }
+
+        r = conf_files_list_strv_full(".conf", root, CONF_FILES_REGULAR | CONF_FILES_FILTER_MASKED,
+                                      (const char * const *) dirs, ret_dropins, ret_n_dropins);
+        if (r < 0) {
+                conf_file_free(main_file);
+                return r;
+        }
+
+        *ret_main = main_file;
+        return 0;
+}
+
+/* Like config_parse_many_files() of systemd: reads the main configuration file, and then the drop-ins, see
+ * udev_conf_files(); the main file is skipped when it is one of the drop-ins, e.g. a symlink to it, which is read
+ * as such. The files are read with their symlinks resolved below root, the messages name them as found. */
+static void udev_read_conf_files(struct udev *udev, const char *root) {
+        ConfFile *main_file = NULL, **dropins = NULL;
+        size_t n_dropins = 0, i;
+        int r;
+
+        r = udev_conf_files(root, &main_file, &dropins, &n_dropins);
+        if (r < 0) {
+                log_debug_errno(r, "Failed to find the udev.conf files, ignoring: %m");
+                return;
+        }
+
+        if (main_file) {
+                struct stat st, st_dropin;
+
+                if (stat(main_file->resolved_path, &st) >= 0)
+                        for (i = 0; i < n_dropins; i++)
+                                if (stat(dropins[i]->resolved_path, &st_dropin) >= 0 &&
+                                    st.st_dev == st_dropin.st_dev && st.st_ino == st_dropin.st_ino) {
+                                        log_debug("%s: symlink to/symlinked as drop-in, will be read later.",
+                                                  main_file->original_path);
+                                        main_file = conf_file_free(main_file);
+                                        break;
+                                }
+
+                if (main_file)
+                        udev_read_conf(udev, main_file->resolved_path, main_file->original_path);
+        }
+
+        for (i = 0; i < n_dropins; i++)
+                udev_read_conf(udev, dropins[i]->resolved_path, dropins[i]->original_path);
+
+        conf_file_free(main_file);
+        conf_file_free_array(dropins, n_dropins);
+}
+
 /**
  * udev_new:
  *
@@ -355,7 +449,7 @@ _public_ struct udev *udev_new(void) {
         udev->hwdb_format = 1;
         udev->net_altnames = 1;
 
-        udev_read_conf(udev, UDEV_CONF_FILE);
+        udev_read_conf_files(udev, NULL);
 
         return udev;
 }
@@ -420,16 +514,11 @@ int udev_read_hwdb_format(const char *root) {
                 .refcount = 1,
                 .hwdb_format = 1,
         };
-        _cleanup_free_ char *filename = NULL;
         int level;
-
-        filename = strjoin(root, "/", UDEV_CONF_FILE, NULL);
-        if (filename == NULL)
-                return -ENOMEM;
 
         /* do not apply udev_log= of the configuration below the root */
         level = log_get_max_level();
-        udev_read_conf(&tmp, filename);
+        udev_read_conf_files(&tmp, root);
         log_set_max_level(level);
         free(tmp.net_naming_scheme);
         free(tmp.net_altnames_invalid);
