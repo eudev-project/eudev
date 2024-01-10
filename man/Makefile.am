@@ -18,6 +18,7 @@ MANPAGES = \
 	hwdb.7 \
 	udev.7 \
 	udev.conf.5 \
+	udev.conf.d.5 \
 	udevd.8 \
 	udevadm.8
 

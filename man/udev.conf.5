@@ -20,15 +20,59 @@
 .\" * MAIN CONTENT STARTS HERE *
 .\" -----------------------------------------------------------------
 .SH "NAME"
-udev.conf \- Configuration for device event managing daemon
+udev.conf, udev.conf.d \- Configuration for device event managing daemon
 .SH "SYNOPSIS"
 .PP
+.RS 4
 /etc/udev/udev\&.conf
+.RE
+.RS 4
+/run/udev/udev\&.conf
+.RE
+.RS 4
+/usr/lib/udev/udev\&.conf
+.RE
+.RS 4
+/etc/udev/udev\&.conf\&.d/*\&.conf
+.RE
+.RS 4
+/run/udev/udev\&.conf\&.d/*\&.conf
+.RE
+.RS 4
+/usr/lib/udev/udev\&.conf\&.d/*\&.conf
+.RE
 .SH "DESCRIPTION"
 .PP
-\fBudevd\fR(8)
-expects its main configuration file at
-/etc/udev/udev\&.conf\&. It consists of a set of variables allowing the user to override default udev values\&. All empty lines or lines beginning with \*(Aq#\*(Aq are ignored\&. The following variables can be set:
+These files contain configuration options for
+\fBudevd\fR(8)\&. The syntax of these files is very simple: a list of assignments, one per line\&. All empty lines or lines beginning with
+#
+are ignored\&.
+.PP
+The main configuration file is the first
+udev\&.conf
+found in
+/etc/udev,
+/run/udev
+and
+/usr/lib/udev
+(or
+/lib/udev, depending on the build, and both when built with \-\-enable\-split\-usr), in this order\&. The drop\-ins, the files with the extension
+\&.conf
+in the
+udev\&.conf\&.d
+subdirectories of these directories, are read after it, sorted by their names, regardless of the directories in which they live\&. A setting overrides the same setting in the files read before\&. A drop\-in in
+/etc
+replaces the drop\-ins with the same name in
+/run
+and
+/usr/lib, and one in
+/run
+replaces the one in
+/usr/lib; a symlink to
+/dev/null
+or an empty file disables them\&. Files that are not regular files are ignored\&.
+.PP
+The following options can be set:
 .PP
 \fIudev_log\fR
 .RS 4
@@ -37,6 +81,22 @@ The log level\&. Valid values are the numerical syslog priorities or their textu
 \fBinfo\fR
 and
 \fBdebug\fR\&.
+.if n \{\
+.sp
+.\}
+.RS 4
+.it 1 an-trap
+.nr an-no-space-flag 1
+.nr an-break-flag 1
+.br
+.ps +1
+\fBNote\fR
+.ps -1
+.br
+This option is also honored by
+\fBudevadm\fR(8)\&.
+.sp .5v
+.RE
 .RE
 .PP
 \fIchildren_max\fR
@@ -259,7 +319,7 @@ and
 \fIresolve_names\fR
 are ignored, with a warning when
 \fBudevd\fR
-starts\&. The file is only read when
+starts\&. The files are only read when
 \fBudevd\fR
 starts\&.
 .SH "SEE ALSO"

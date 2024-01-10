@@ -45,23 +45,52 @@
 
   <refnamediv>
     <refname>udev.conf</refname>
+    <refname>udev.conf.d</refname>
     <refpurpose>Configuration for device event managing daemon</refpurpose>
   </refnamediv>
 
   <refsynopsisdiv>
-    <para><filename>/etc/udev/udev.conf</filename></para>
+    <para>
+      <simplelist>
+        <member><filename>/etc/udev/udev.conf</filename></member>
+        <member><filename>/run/udev/udev.conf</filename></member>
+        <member><filename>/usr/lib/udev/udev.conf</filename></member>
+        <member><filename>/etc/udev/udev.conf.d/*.conf</filename></member>
+        <member><filename>/run/udev/udev.conf.d/*.conf</filename></member>
+        <member><filename>/usr/lib/udev/udev.conf.d/*.conf</filename></member>
+      </simplelist>
+    </para>
   </refsynopsisdiv>
 
   <refsect1>
     <title>Description</title>
 
+    <para>These files contain configuration options for
+      <citerefentry><refentrytitle>udevd</refentrytitle><manvolnum>8</manvolnum></citerefentry>.
+      The syntax of these files is very simple: a list
+      of assignments, one per line.
+      All empty lines or lines beginning with <literal>#</literal> are
+      ignored.
+    </para>
     <para>
-      <citerefentry><refentrytitle>udevd</refentrytitle><manvolnum>8</manvolnum></citerefentry>
-      expects its main configuration file at
-      <filename>/etc/udev/udev.conf</filename>. It consists of a set
-      of variables allowing the user to override default udev
-      values. All empty lines or lines beginning with '#' are
-      ignored. The following variables can be set:
+      The main configuration file is the first <filename>udev.conf</filename>
+      found in <filename>/etc/udev</filename>, <filename>/run/udev</filename>
+      and <filename>/usr/lib/udev</filename> (or <filename>/lib/udev</filename>,
+      depending on the build, and both when built with --enable-split-usr), in
+      this order. The drop-ins, the files
+      with the extension <filename>.conf</filename> in the
+      <filename>udev.conf.d</filename> subdirectories of these directories, are
+      read after it, sorted by their names, regardless of the directories in
+      which they live. A setting overrides the same setting in the files read
+      before. A drop-in in <filename>/etc</filename> replaces the drop-ins with
+      the same name in <filename>/run</filename> and <filename>/usr/lib</filename>,
+      and one in <filename>/run</filename> replaces the one in
+      <filename>/usr/lib</filename>; a symlink to <filename>/dev/null</filename>
+      or an empty file disables them. Files that are not regular files are
+      ignored.
+    </para>
+    <para>
+      The following options can be set:
     </para>
 
     <variablelist>
@@ -73,6 +102,12 @@
           syslog priorities or their textual representations:
           <option>err</option>, <option>info</option> and
           <option>debug</option>.</para>
+
+          <note>
+            <para>This option is also honored by
+                <citerefentry><refentrytitle>udevadm</refentrytitle><manvolnum>8</manvolnum></citerefentry>.
+            </para>
+          </note>
         </listitem>
       </varlistentry>
 
@@ -295,7 +330,7 @@
       Invalid values of <varname>children_max</varname>,
       <varname>exec_delay</varname>, <varname>event_timeout</varname> and
       <varname>resolve_names</varname> are ignored, with a warning when
-      <command>udevd</command> starts. The file is only read when
+      <command>udevd</command> starts. The files are only read when
       <command>udevd</command> starts.
     </para>
   </refsect1>
