@@ -319,6 +319,7 @@ static void disk_identify_fixup_uint16 (uint8_t identify[512], unsigned int offs
  * @fd: File descriptor for the block device.
  * @out_identify: Return location for IDENTIFY data.
  * @out_is_packet_device: Return location for whether returned data is from a IDENTIFY PACKET DEVICE.
+ * @ret_peripheral_device_type: Return location for the SCSI peripheral device type.
  *
  * Sends the IDENTIFY DEVICE or IDENTIFY PACKET DEVICE command to the
  * device represented by @fd. If successful, then the result will be
@@ -333,7 +334,8 @@ static void disk_identify_fixup_uint16 (uint8_t identify[512], unsigned int offs
 static int disk_identify(struct udev *udev __attribute__((unused)),
                          int fd,
                          uint8_t out_identify[512],
-                         int *out_is_packet_device)
+                         int *out_is_packet_device,
+                         int *ret_peripheral_device_type)
 {
         int ret;
         uint8_t inquiry_buf[36];
@@ -405,6 +407,9 @@ static int disk_identify(struct udev *udev __attribute__((unused)),
                 goto out;
         }
 
+        if (ret == 0 && ret_peripheral_device_type != NULL)
+                *ret_peripheral_device_type = peripheral_device_type;
+
 out:
         if (out_is_packet_device != NULL)
                 *out_is_packet_device = is_packet_device;
@@ -429,6 +434,7 @@ int main(int argc, char *argv[])
         _cleanup_close_ int fd = -1;
         uint16_t word;
         int is_packet_device = 0;
+        int peripheral_device_type = -1;
         static const struct option options[] = {
                 { "export", no_argument, NULL, 'x' },
                 { "help", no_argument, NULL, 'h' },
@@ -475,7 +481,7 @@ int main(int argc, char *argv[])
                 return ignore ? 0 : 1;
         }
 
-        if (disk_identify(udev, fd, identify.byte, &is_packet_device) == 0) {
+        if (disk_identify(udev, fd, identify.byte, &is_packet_device, &peripheral_device_type) == 0) {
                 /*
                  * fix up only the fields from the IDENTIFY data that we are going to
                  * use and copy it into the hd_driveid struct for convenience
@@ -677,6 +683,9 @@ int main(int argc, char *argv[])
                     identify.wyde[0] == 0x844a ||
                     (identify.wyde[83] & 0xc004) == 0x4004)
                         printf("ID_ATA_CFA=1\n");
+
+                if (peripheral_device_type >= 0)
+                        printf("ID_ATA_PERIPHERAL_DEVICE_TYPE=%d\n", peripheral_device_type);
         } else {
                 if (serial[0] != '\0')
                         printf("%s_%s\n", model, serial);
