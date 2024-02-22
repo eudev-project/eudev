@@ -355,10 +355,11 @@ static const char* const udev_conf_dirs[] = {
 };
 
 /* Not part of the public API, also used by udevadm cat. Returns the configuration files of udevd below root, like
- * config_parse_config_file() of systemd for udev.conf in "udev": the main configuration file udev.conf in
- * UDEV_CONF_DIR, as long as it is a regular file, or NULL, and the drop-ins in the directories of
- * udev_conf_dirs. Like for the rules files, and like systemd's "udevadm cat --config", a mask, i.e. an empty file
- * or a symlink to /dev/null, and a file that is not a regular file are left out. */
+ * config_parse_standard_file_with_dropins() of systemd for "udev/udev.conf": the main configuration file, the
+ * first udev.conf in the directories of udev_conf_dirs, or NULL, and the drop-ins in their subdirectories
+ * udev.conf.d. Like for the rules files, and like systemd's "udevadm cat --config", a mask, i.e. an empty file or
+ * a symlink to /dev/null, and a file that is not a regular file are left out; a masked udev.conf hides the ones
+ * in the later directories, others do not. */
 int udev_conf_files(const char *root, ConfFile **ret_main, ConfFile ***ret_dropins, size_t *ret_n_dropins) {
         _cleanup_strv_free_ char **dirs = NULL;
         ConfFile *main_file = NULL;
@@ -369,9 +370,14 @@ int udev_conf_files(const char *root, ConfFile **ret_main, ConfFile ***ret_dropi
         assert(ret_dropins);
         assert(ret_n_dropins);
 
-        r = conf_file_new(UDEV_CONF_DIR "/udev.conf", root, CONF_FILES_REGULAR | CONF_FILES_FILTER_MASKED, &main_file);
-        if (r == -ENOMEM)
-                return r;
+        for (i = 0; udev_conf_dirs[i]; i++) {
+                r = conf_file_new(strjoina(udev_conf_dirs[i], "/udev.conf"), root,
+                                  CONF_FILES_REGULAR | CONF_FILES_FILTER_MASKED, &main_file);
+                if (r >= 0 || r == -ERFKILL)
+                        break;
+                if (r == -ENOMEM)
+                        return r;
+        }
 
         for (i = 0; udev_conf_dirs[i]; i++)
                 if (strv_extend(&dirs, strjoina(udev_conf_dirs[i], "/udev.conf.d")) < 0) {
