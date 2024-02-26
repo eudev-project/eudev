@@ -845,7 +845,7 @@ static int rename_netif_dev_fromname_toname(struct udev_device *dev __attribute_
         r = ioctl(sk, SIOCSIFNAME, &ifr_tmp);
                 log_info("Temporarily renamed network interface %s to %s\n", ifr_tmp.ifr_name, ifr_tmp.ifr_newname);
 
-        /* we have changed our name so in subsequents tries i should rename my temporal name to the wanted one */
+        /* we have changed our name so in subsequent tries i should rename my temporal name to the wanted one */
         strscpy(ifr.ifr_name, IFNAMSIZ, ifr_tmp.ifr_newname);
 
         r = -errno;

@@ -1521,7 +1521,7 @@ bool in_initrd(void) {
          *
          * The second check is extra paranoia, since misdetecting an
          * initrd can have bad bad consequences due the initrd
-         * emptying when transititioning to the main systemd.
+         * emptying when transitioning to the main systemd.
          */
 
         saved = access("/etc/initrd-release", F_OK) >= 0 &&
