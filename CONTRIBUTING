@@ -46,7 +46,7 @@ want to try:
 	(drop into editor and squash commits)	# note the ^ at the end!
 	(exit editor and fix commit message)
 
-Alternatively, you can cherry-pick those commits into another prestine branch:
+Alternatively, you can cherry-pick those commits into another pristine branch:
 
 	... its good to go! ....
 
@@ -72,7 +72,7 @@ You can delete a remote branch by doing
 
 3. Your commit message should conform to the following standard:
 
-	file/changed: Concice and complete statement of the purpose
+	file/changed: Concise and complete statement of the purpose
 
 	This is the body of the commit message.  The line above is the
 	summary.  The summary should be no more than 72 chars long.  The
