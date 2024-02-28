@@ -32,6 +32,7 @@ the Linux distribution:
       libxslt \
       linux-headers \
       perl \
+      libtool \
       util-linux-dev
 
 
