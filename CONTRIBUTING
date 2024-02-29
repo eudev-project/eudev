@@ -79,7 +79,7 @@ You can delete a remote branch by doing
 	body can be more freely formatted, but make it look nice.  Make
 	sure to reference any bug reports and other contributors.  Make
 	sure the correct authorship appears.  Reference any early commits
-	by their full shaw:
+	by their full commit hash:
 
 		b52c6402b5b42620571c36c74a12dcb45ec1e0d6
 
