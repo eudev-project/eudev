@@ -57,6 +57,9 @@ AC_CHECK_HEADERS(
 	[AC_MSG_WARN([*** KERNEL header not found])]
 )
 
+# optional, src/shared/missing_ioprio.h has the definitions for kernel headers without it
+AC_CHECK_HEADERS([linux/ioprio.h])
+
 # Checks for typedefs, structures, and compiler characteristics.
 AC_TYPE_UID_T
 AC_C_INLINE
