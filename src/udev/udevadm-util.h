@@ -24,6 +24,10 @@ struct udev_device *find_device(struct udev *udev,
                                 const char *id,
                                 const char *prefix);
 
+/* Like systemd's device_is_processed(): 1 if udevd processed the device, i.e. it has an entry in the
+ * udev database without ID_PROCESSING=1, which udevd sets while it processes the device, e.g. while
+ * RUN programs run, 0 if not, or a negative error. */
+int device_is_processed(struct udev_device *dev);
 int device_wait_for_initialization(struct udev_device *device, usec_t timeout_usec, struct udev_device **ret);
 
 /* Like systemd's parse_path_argument() with suppress_root: makes the path absolute and

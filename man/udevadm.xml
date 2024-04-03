@@ -1302,6 +1302,11 @@
     <literal>remove</literal> action is seen for them (which removes their entry in the udev device
     database). Note that devices that have no udev rules are never considered initialized, but might
     still be announced via the libudev API (or similar).</para>
+
+    <para>While the udev device database has <varname>ID_PROCESSING=1</varname> for a device, that is
+    while <command>udevd</command> is still processing an event of the device, including its
+    <varname>RUN</varname> programs, the device is not yet considered initialized by
+    <command>udevadm wait</command> and <command>udevadm info --wait-for-initialization</command>.</para>
   </refsect1>
 
   <refsect1>

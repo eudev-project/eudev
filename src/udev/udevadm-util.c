@@ -60,11 +60,38 @@ struct udev_device *find_device(struct udev *udev,
                 return NULL;
 }
 
+int device_is_processed(struct udev_device *dev) {
+        const char *value;
+        int r;
+
+        assert(dev);
+
+        /* udev_device_get_is_initialized() only checks if the udev database file exists. However, even if the
+         * database file exist, udevd may be still processing the device, e.g. when the udev rules
+         * for the device have RUN tokens. See issue #30056. Hence, to check if the device is really
+         * processed by udevd, we also need to read ID_PROCESSING property. */
+
+        r = udev_device_get_is_initialized(dev);
+        if (r <= 0)
+                return r;
+
+        value = udev_device_get_property_value(dev, "ID_PROCESSING");
+        if (!value)
+                return true; /* If the property does not exist, then it means that the device is processed. */
+
+        r = parse_boolean(value);
+        if (r < 0)
+                return r;
+
+        return !r;
+}
+
 /* Like systemd's device_wait_for_initialization(): waits until udevd processed the device, i.e.
- * until it has an entry in the udev database. Returns a new reference to a device object with the
- * current state of the device. */
+ * until it has an entry in the udev database, without ID_PROCESSING=1. Returns a new reference
+ * to a device object with the current state of the device. */
 int device_wait_for_initialization(struct udev_device *device, usec_t timeout_usec, struct udev_device **ret) {
         _cleanup_udev_monitor_unref_ struct udev_monitor *monitor = NULL;
+        _cleanup_udev_device_unref_ struct udev_device *again = NULL;
         struct udev *udev = udev_device_get_udev(device);
         const char *subsystem, *sysname;
         usec_t deadline;
@@ -73,7 +100,7 @@ int device_wait_for_initialization(struct udev_device *device, usec_t timeout_us
         assert(device);
         assert(ret);
 
-        if (udev_device_get_is_initialized(device) > 0) {
+        if (device_is_processed(device) > 0) {
                 *ret = udev_device_ref(device);
                 return 0;
         }
@@ -95,10 +122,11 @@ int device_wait_for_initialization(struct udev_device *device, usec_t timeout_us
         if (r < 0)
                 return log_error_errno(r, "Failed to start device monitor: %m");
 
-        /* Check again, maybe things changed. libudev reads the db again if the device was not
-         * initialized yet. */
-        if (udev_device_get_is_initialized(device) > 0) {
-                *ret = udev_device_ref(device);
+        /* Check again, maybe things changed. Read the device again, as libudev does not read the
+         * database again when it was read already, e.g. with ID_PROCESSING=1. */
+        again = udev_device_new_from_syspath(udev, udev_device_get_syspath(device));
+        if (device_is_processed(again ?: device) > 0) {
+                *ret = udev_device_ref(again ?: device);
                 return 0;
         }
 

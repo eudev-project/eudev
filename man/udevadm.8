@@ -1012,6 +1012,17 @@ remove
 \(em that set a property or other device setting (and thus has an entry in the udev device database)\&. Devices are no longer considered initialized if a
 remove
 action is seen for them (which removes their entry in the udev device database)\&. Note that devices that have no udev rules are never considered initialized, but might still be announced via the libudev API (or similar)\&.
+.PP
+While the udev device database has
+\fIID_PROCESSING=1\fR
+for a device, that is while
+\fBudevd\fR
+is still processing an event of the device, including its
+\fIRUN\fR
+programs, the device is not yet considered initialized by
+\fBudevadm wait\fR
+and
+\fBudevadm info \-\-wait\-for\-initialization\fR\&.
 .SH "SEE ALSO"
 .PP
 \fBudev\fR(7),

@@ -57,7 +57,7 @@ static int check_device(struct udev *udev, const char *path) {
         }
 
         if (arg_wait_until == WAIT_UNTIL_INITIALIZED)
-                return udev_device_get_is_initialized(dev) > 0;
+                return device_is_processed(dev);
 
         return true;
 }
