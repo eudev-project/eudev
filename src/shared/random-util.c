@@ -31,45 +31,37 @@
 #include "util.h"
 
 int dev_urandom(void *p, size_t n) {
-        static int have_syscall = -1;
+        static bool have_getrandom = true, have_grndinsecure = true;
+        _cleanup_close_ int fd = -EBADF;
 
-        _cleanup_close_ int fd = -1;
-        int r;
+        if (n == 0)
+                return 0;
 
-        /* Gathers some randomness from the kernel. This call will
-         * never block, and will always return some data from the
-         * kernel, regardless if the random pool is fully initialized
-         * or not. It thus makes no guarantee for the quality of the
-         * returned entropy, but is good enough for or usual usecases
-         * of seeding the hash functions for hashtable */
+        for (;;) {
+                ssize_t l;
 
-        /* Use the getrandom() syscall unless we know we don't have
-         * it, or when the requested size is too large for it. */
-        if (have_syscall != 0 || (size_t) (int) n != n) {
-                r = getrandom(p, n, GRND_NONBLOCK);
-                if (r == (int) n) {
-                        have_syscall = true;
-                        return 0;
-                }
+                if (!have_getrandom)
+                        break;
 
-                if (r < 0) {
-                        if (errno == ENOSYS)
-                                /* we lack the syscall, continue with
-                                 * reading from /dev/urandom */
-                                have_syscall = false;
-                        else if (errno == EAGAIN)
-                                /* not enough entropy for now. Let's
-                                 * remember to use the syscall the
-                                 * next time, again, but also read
-                                 * from /dev/urandom for now, which
-                                 * doesn't care about the current
-                                 * amount of entropy.  */
-                                have_syscall = true;
-                        else
-                                return -errno;
-                } else
-                        /* too short read? */
-                        return -ENODATA;
+                l = getrandom(p, n, have_grndinsecure ? GRND_INSECURE : GRND_NONBLOCK);
+                if (l > 0) {
+                        if ((size_t) l == n)
+                                return 0; /* Done reading, success. */
+                        p = (uint8_t *) p + l;
+                        n -= l;
+                        continue; /* Interrupted by a signal; keep going. */
+                } else if (l == 0)
+                        break; /* Weird, so fallback to /dev/urandom. */
+                else if (errno == ENOSYS) {
+                        have_getrandom = false;
+                        break; /* No syscall, so fallback to /dev/urandom. */
+                } else if (errno == EINVAL && have_grndinsecure) {
+                        have_grndinsecure = false;
+                        continue; /* No GRND_INSECURE; fallback to GRND_NONBLOCK. */
+                } else if (errno == EAGAIN && !have_grndinsecure)
+                        break; /* Will block, but no GRND_INSECURE, so fallback to /dev/urandom. */
+
+                break; /* Unexpected, so just give up and fallback to /dev/urandom. */
         }
 
         fd = open("/dev/urandom", O_RDONLY|O_CLOEXEC|O_NOCTTY);
