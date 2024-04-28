@@ -79,6 +79,10 @@ static inline int getrandom(void *buffer, size_t count, unsigned flags) {
 #define GRND_RANDOM 0x0002
 #endif
 
+#ifndef GRND_INSECURE
+#define GRND_INSECURE 0x0004
+#endif
+
 #ifndef BTRFS_IOCTL_MAGIC
 #define BTRFS_IOCTL_MAGIC 0x94
 #endif
