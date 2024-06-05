@@ -30,6 +30,9 @@ udev.conf, udev.conf.d \- Configuration for device event managing daemon
 /run/udev/udev\&.conf
 .RE
 .RS 4
+/usr/local/lib/udev/udev\&.conf
+.RE
+.RS 4
 /usr/lib/udev/udev\&.conf
 .RE
 .RS 4
@@ -37,6 +40,9 @@ udev.conf, udev.conf.d \- Configuration for device event managing daemon
 .RE
 .RS 4
 /run/udev/udev\&.conf\&.d/*\&.conf
+.RE
+.RS 4
+/usr/local/lib/udev/udev\&.conf\&.d/*\&.conf
 .RE
 .RS 4
 /usr/lib/udev/udev\&.conf\&.d/*\&.conf
@@ -52,7 +58,8 @@ The main configuration file is the first
 udev\&.conf
 found in
 /etc/udev,
-/run/udev
+/run/udev,
+/usr/local/lib/udev
 and
 /usr/lib/udev
 (or
@@ -60,14 +67,12 @@ and
 \&.conf
 in the
 udev\&.conf\&.d
-subdirectories of these directories, are read after it, sorted by their names, regardless of the directories in which they live\&. A setting overrides the same setting in the files read before\&. A drop\-in in
+subdirectories of these directories, are read after it, sorted by their names, regardless of the directories in which they live\&. A setting overrides the same setting in the files read before\&. A drop\-in replaces the drop\-ins with the same name in the directories listed after its own: one in
 /etc
-replaces the drop\-ins with the same name in
-/run
+replaces those in
+/run,
+/usr/local/lib
 and
-/usr/lib, and one in
-/run
-replaces the one in
 /usr/lib; a symlink to
 /dev/null
 or an empty file disables them\&. Files that are not regular files are ignored\&.

@@ -54,9 +54,11 @@
       <simplelist>
         <member><filename>/etc/udev/udev.conf</filename></member>
         <member><filename>/run/udev/udev.conf</filename></member>
+        <member><filename>/usr/local/lib/udev/udev.conf</filename></member>
         <member><filename>/usr/lib/udev/udev.conf</filename></member>
         <member><filename>/etc/udev/udev.conf.d/*.conf</filename></member>
         <member><filename>/run/udev/udev.conf.d/*.conf</filename></member>
+        <member><filename>/usr/local/lib/udev/udev.conf.d/*.conf</filename></member>
         <member><filename>/usr/lib/udev/udev.conf.d/*.conf</filename></member>
       </simplelist>
     </para>
@@ -74,7 +76,8 @@
     </para>
     <para>
       The main configuration file is the first <filename>udev.conf</filename>
-      found in <filename>/etc/udev</filename>, <filename>/run/udev</filename>
+      found in <filename>/etc/udev</filename>, <filename>/run/udev</filename>,
+      <filename>/usr/local/lib/udev</filename>
       and <filename>/usr/lib/udev</filename> (or <filename>/lib/udev</filename>,
       depending on the build, and both when built with --enable-split-usr), in
       this order. The drop-ins, the files
@@ -82,10 +85,11 @@
       <filename>udev.conf.d</filename> subdirectories of these directories, are
       read after it, sorted by their names, regardless of the directories in
       which they live. A setting overrides the same setting in the files read
-      before. A drop-in in <filename>/etc</filename> replaces the drop-ins with
-      the same name in <filename>/run</filename> and <filename>/usr/lib</filename>,
-      and one in <filename>/run</filename> replaces the one in
-      <filename>/usr/lib</filename>; a symlink to <filename>/dev/null</filename>
+      before. A drop-in replaces the drop-ins with the same name in the
+      directories listed after its own: one in <filename>/etc</filename>
+      replaces those in <filename>/run</filename>,
+      <filename>/usr/local/lib</filename> and <filename>/usr/lib</filename>;
+      a symlink to <filename>/dev/null</filename>
       or an empty file disables them. Files that are not regular files are
       ignored.
     </para>
