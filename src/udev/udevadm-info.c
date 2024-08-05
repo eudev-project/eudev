@@ -79,6 +79,9 @@ static int print_all_attributes(struct udev_device *device, bool is_parent) {
 
         assert(device);
 
+        if (is_parent)
+                puts("");
+
         value = udev_device_get_devpath(device);
         printf("  looking at %sdevice '%s':\n", is_parent ? "parent " : "", value ?: "");
 
@@ -129,8 +132,6 @@ static int print_all_attributes(struct udev_device *device, bool is_parent) {
         for (i = 0; i < n_items; i++)
                 printf("    %s{%s}==\"%s\"\n", is_parent ? "ATTRS" : "ATTR", sysattrs[i].name, sysattrs[i].value);
 
-        puts("");
-
         return 0;
 }
 
@@ -146,12 +147,12 @@ static int print_device_chain(struct udev_device *device) {
                "and the attributes from one single parent device.\n"
                "\n");
 
-        r = print_all_attributes(device, false);
+        r = print_all_attributes(device, /* is_parent = */ false);
         if (r < 0)
                 return r;
 
         for (child = device; (parent = udev_device_get_parent(child)); child = parent) {
-                r = print_all_attributes(parent, true);
+                r = print_all_attributes(parent, /* is_parent = */ true);
                 if (r < 0)
                         return r;
         }
