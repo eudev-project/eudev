@@ -71,31 +71,17 @@ static int sysattr_compare(const void *a, const void *b) {
         return strcmp(x->name, y->name);
 }
 
-static int print_all_attributes(struct udev_device *device, bool is_parent) {
+static int collect_attributes(struct udev_device *device, SysAttr **ret, size_t *ret_n) {
         _cleanup_free_ SysAttr *sysattrs = NULL;
-        size_t n_items = 0, n_allocated = 0, i;
+        size_t n_items = 0, n_allocated = 0;
         struct udev_list_entry *sysattr;
-        const char *value;
 
         assert(device);
-
-        if (is_parent)
-                puts("");
-
-        value = udev_device_get_devpath(device);
-        printf("  looking at %sdevice '%s':\n", is_parent ? "parent " : "", value ?: "");
-
-        value = udev_device_get_sysname(device);
-        printf("    %s==\"%s\"\n", is_parent ? "KERNELS" : "KERNEL", value ?: "");
-
-        value = udev_device_get_subsystem(device);
-        printf("    %s==\"%s\"\n", is_parent ? "SUBSYSTEMS" : "SUBSYSTEM", value ?: "");
-
-        value = udev_device_get_driver(device);
-        printf("    %s==\"%s\"\n", is_parent ? "DRIVERS" : "DRIVER", value ?: "");
+        assert(ret);
+        assert(ret_n);
 
         udev_list_entry_foreach(sysattr, udev_device_get_sysattr_list_entry(device)) {
-                const char *name;
+                const char *name, *value;
                 size_t len;
 
                 name = udev_list_entry_get_name(sysattr);
@@ -129,6 +115,39 @@ static int print_all_attributes(struct udev_device *device, bool is_parent) {
 
         qsort_safe(sysattrs, n_items, sizeof(SysAttr), sysattr_compare);
 
+        *ret = sysattrs;
+        sysattrs = NULL;
+        *ret_n = n_items;
+        return 0;
+}
+
+static int print_all_attributes(struct udev_device *device, bool is_parent) {
+        _cleanup_free_ SysAttr *sysattrs = NULL;
+        size_t n_items = 0, i;
+        const char *value;
+        int r;
+
+        assert(device);
+
+        if (is_parent)
+                puts("");
+
+        value = udev_device_get_devpath(device);
+        printf("  looking at %sdevice '%s':\n", is_parent ? "parent " : "", value ?: "");
+
+        value = udev_device_get_sysname(device);
+        printf("    %s==\"%s\"\n", is_parent ? "KERNELS" : "KERNEL", value ?: "");
+
+        value = udev_device_get_subsystem(device);
+        printf("    %s==\"%s\"\n", is_parent ? "SUBSYSTEMS" : "SUBSYSTEM", value ?: "");
+
+        value = udev_device_get_driver(device);
+        printf("    %s==\"%s\"\n", is_parent ? "DRIVERS" : "DRIVER", value ?: "");
+
+        r = collect_attributes(device, &sysattrs, &n_items);
+        if (r < 0)
+                return r;
+
         for (i = 0; i < n_items; i++)
                 printf("    %s{%s}==\"%s\"\n", is_parent ? "ATTRS" : "ATTR", sysattrs[i].name, sysattrs[i].value);
 
@@ -153,6 +172,73 @@ static int print_device_chain(struct udev_device *device) {
 
         for (child = device; (parent = udev_device_get_parent(child)); child = parent) {
                 r = print_all_attributes(parent, /* is_parent = */ true);
+                if (r < 0)
+                        return r;
+        }
+
+        return 0;
+}
+
+static int print_all_attributes_in_json(struct udev_device *device, bool is_parent) {
+        _cleanup_free_ SysAttr *sysattrs = NULL;
+        size_t n_items = 0, i;
+        JsonWriter w;
+        int r;
+
+        assert(device);
+
+        r = collect_attributes(device, &sysattrs, &n_items);
+        if (r < 0)
+                return r;
+
+        json_writer_init(&w, stdout, arg_json_format_flags);
+
+        /* Like sd_json_variant_set_field_string() with a NULL string, a missing value is shown as null,
+         * which json_writer_string() does. */
+        json_writer_object_begin(&w);
+
+        json_writer_key(&w, "DEVPATH");
+        json_writer_string(&w, udev_device_get_devpath(device));
+
+        json_writer_key(&w, is_parent ? "KERNELS" : "KERNEL");
+        json_writer_string(&w, udev_device_get_sysname(device));
+
+        json_writer_key(&w, is_parent ? "SUBSYSTEMS" : "SUBSYSTEM");
+        json_writer_string(&w, udev_device_get_subsystem(device));
+
+        json_writer_key(&w, is_parent ? "DRIVERS" : "DRIVER");
+        json_writer_string(&w, udev_device_get_driver(device));
+
+        json_writer_key(&w, is_parent ? "ATTRS" : "ATTR");
+        if (n_items == 0)
+                /* sd_json_variant_set_field() with a NULL object, as systemd does without attributes. */
+                json_writer_null(&w);
+        else {
+                json_writer_object_begin(&w);
+                for (i = 0; i < n_items; i++) {
+                        json_writer_key(&w, sysattrs[i].name);
+                        json_writer_string(&w, sysattrs[i].value);
+                }
+                json_writer_object_end(&w);
+        }
+
+        json_writer_object_end(&w);
+
+        return json_writer_finish(&w);
+}
+
+static int print_device_chain_in_json(struct udev_device *device) {
+        struct udev_device *child, *parent;
+        int r;
+
+        assert(device);
+
+        r = print_all_attributes_in_json(device, /* is_parent = */ false);
+        if (r < 0)
+                return r;
+
+        for (child = device; (parent = udev_device_get_parent(child)); child = parent) {
+                r = print_all_attributes_in_json(parent, /* is_parent = */ true);
                 if (r < 0)
                         return r;
         }
@@ -1011,7 +1097,11 @@ static int uinfo(struct udev *udev, int argc, char *argv[]) {
                 }
                 if (wait_for_initialization(&device, wait_for_initialization_timeout) < 0)
                         return 1;
-                if (print_device_chain(device) < 0)
+                if (!json_format_enabled(arg_json_format_flags))
+                        r = print_device_chain(device);
+                else
+                        r = print_device_chain_in_json(device);
+                if (r < 0)
                         return 1;
                 break;
         case ACTION_DEVICE_ID_FILE:
