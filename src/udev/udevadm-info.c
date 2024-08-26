@@ -265,7 +265,39 @@ static int device_get_diskseq(struct udev_device *device, uint64_t *ret) {
         return 0;
 }
 
+/* Like sd_device_get_driver_subsystem(): for the devices of the "drivers" pseudo-subsystem, i.e.
+ * /sys/bus/SUBSYSTEM/drivers/DRIVER, the subsystem of the driver. */
+static int device_get_driver_subsystem(struct udev_device *device, char *buf, size_t size) {
+        const char *devpath, *drivers, *p;
+
+        assert(device);
+        assert(buf);
+
+        if (!streq_ptr(udev_device_get_subsystem(device), "drivers"))
+                return -ENOENT;
+
+        devpath = udev_device_get_devpath(device);
+        drivers = strstr(devpath, "/drivers/");
+        if (!drivers)
+                drivers = endswith(devpath, "/drivers");
+        if (!drivers)
+                return -EINVAL;
+
+        /* Find the path component immediately before the "/drivers/" string */
+        for (p = drivers; p > devpath && p[-1] != '/'; p--)
+                ;
+        if (p == drivers)
+                return -EINVAL;
+        if ((size_t) (drivers - p) >= size)
+                return -ENAMETOOLONG;
+
+        memcpy(buf, p, drivers - p);
+        buf[drivers - p] = '\0';
+        return 0;
+}
+
 static void print_record(struct udev_device *device, const char *prefix) {
+        char driver_subsystem[UTIL_NAME_SIZE];
         const char *str, *subsys;
         dev_t devnum;
         uint64_t q;
@@ -302,9 +334,17 @@ static void print_record(struct udev_device *device, const char *prefix) {
         if (str)
                 printf("%sR: %s%s%s\n", prefix, ansi_highlight(), str, ansi_normal());
 
+        /* The ID of the device in the udev database, as udevd names the files in /run/udev/data. */
+        str = udev_device_get_id_filename(device);
+        if (str)
+                printf("%sJ: %s%s%s\n", prefix, ansi_highlight(), str, ansi_normal());
+
         subsys = udev_device_get_subsystem(device);
         if (subsys)
                 printf("%sU: %s%s%s\n", prefix, ansi_highlight_green(), subsys, ansi_normal());
+
+        if (device_get_driver_subsystem(device, driver_subsystem, sizeof(driver_subsystem)) >= 0)
+                printf("%sB: %s%s%s\n", prefix, ansi_highlight_green(), driver_subsystem, ansi_normal());
 
         str = udev_device_get_devtype(device);
         if (str)
@@ -351,14 +391,16 @@ static void print_record(struct udev_device *device, const char *prefix) {
 }
 
 static int record_to_json(struct udev_device *device) {
+        char driver_subsystem[UTIL_NAME_SIZE];
         struct udev_list_entry *list_entry;
         JsonWriter w;
         const char *str;
 
         assert(device);
 
-        /* We don't show any shorthand fields here as done in print_record() except for SYSNAME and SYSNUM as
-         * all the other ones have a matching property which will already be included. */
+        /* We don't show any shorthand fields here as done in print_record() except for SYSNAME, SYSNUM,
+         * DRIVER_SUBSYSTEM, and DEVICE_ID, as all the other ones have a matching property which will already
+         * be included. */
 
         json_writer_init(&w, stdout, arg_json_format_flags);
 
@@ -373,6 +415,17 @@ static int record_to_json(struct udev_device *device) {
         str = udev_device_get_sysnum(device);
         if (str) {
                 json_writer_key(&w, "SYSNUM");
+                json_writer_string(&w, str);
+        }
+
+        if (device_get_driver_subsystem(device, driver_subsystem, sizeof(driver_subsystem)) >= 0) {
+                json_writer_key(&w, "DRIVER_SUBSYSTEM");
+                json_writer_string(&w, driver_subsystem);
+        }
+
+        str = udev_device_get_id_filename(device);
+        if (str) {
+                json_writer_key(&w, "DEVICE_ID");
                 json_writer_string(&w, str);
         }
 
