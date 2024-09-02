@@ -401,6 +401,11 @@ struct udev_ctrl_msg *udev_ctrl_receive_msg(struct udev_ctrl_connection *conn) {
 
         cmsg_close_all(&smsg);
 
+        if (size != sizeof(struct udev_ctrl_msg_wire) || (smsg.msg_flags & MSG_TRUNC)) {
+                log_error("received message with invalid length, message ignored");
+                goto err;
+        }
+
         cmsg = CMSG_FIRSTHDR(&smsg);
         cred = (struct ucred *) CMSG_DATA(cmsg);
 
