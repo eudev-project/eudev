@@ -96,6 +96,13 @@ Values are written as double quoted strings, such as ("string")\&. To include a 
 The string can be prefixed with a lowercase e (e"string\en") to mark the string as C\-style escaped, see
 \m[blue]\fBEscape sequences in C\fR\m[]\&\s-2\u[1]\d\s+2\&. For example, e"string\en" is parsed as 7 characters: 6 lowercase letters and a newline\&. This can be useful for writing special characters when a kernel driver requires them\&.
 .PP
+The string can be prefixed with a lowercase i (i"string") to mark that the string or pattern will match case\-insensitively\&. For example, i"foo" will match
+foo,
+FOO,
+FoO
+and so on\&. The prefix can be used only for match (==) or unmatch (!=) rules, e\&.g\&.
+\fIATTR{foo}==i"abcd"\fR\&.
+.PP
 Please note that
 \fBNUL\fR
 is not allowed in either string variant\&.

@@ -201,7 +201,8 @@ struct token {
                 struct {
                         enum token_type type:8;
                         enum operation_type op:8;
-                        enum string_glob_type glob:8;
+                        enum string_glob_type glob:7;
+                        bool case_insensitive:1;  /* string or pattern is matched case-insensitively */
                         enum string_subst_type subst:4;
                         enum string_subst_type attrsubst:4;
                         unsigned int value_off;
@@ -225,6 +226,8 @@ struct rule_tmp {
         struct token rule;
         struct token token[MAX_TK];
         unsigned int token_cur;
+        /* the value of the currently parsed key has the "i" prefix */
+        bool case_insensitive;
 };
 
 #ifdef DEBUG
@@ -819,11 +822,13 @@ static int attr_subst_subdir(char *attr, size_t len) {
         return found;
 }
 
-static int get_key(struct udev *udev __attribute__((unused)), char **line, char **key, enum operation_type *op, char **value) {
+static int get_key(struct udev *udev __attribute__((unused)), char **line, char **key, enum operation_type *op, char **value,
+                   bool *is_case_insensitive) {
         char *linepos;
         char *temp;
         unsigned i, j;
-        bool is_escaped;
+        bool is_escaped = false;
+        const char *k;
 
         linepos = *line;
         if (linepos == NULL || linepos[0] == '\0')
@@ -891,9 +896,20 @@ static int get_key(struct udev *udev __attribute__((unused)), char **line, char 
         if (linepos[0] == '\0')
                 return -1;
 
-        /* get the value, it may be prefixed with "e" for C-style escaped strings */
-        is_escaped = linepos[0] == 'e';
-        linepos += is_escaped;
+        /* check if the value is prefixed with:
+         * - "e" for C-style escaped strings
+         * - "i" for case insensitive match
+         *
+         * Note both e and i can be set but do not allow duplicates ("eei", "eii"). */
+        *is_case_insensitive = false;
+        for (k = linepos; *k != '"' && k < linepos + 2; k++)
+                if (*k == 'e' && !is_escaped)
+                        is_escaped = true;
+                else if (*k == 'i' && !*is_case_insensitive)
+                        *is_case_insensitive = true;
+                else
+                        return -1;
+        linepos += is_escaped + *is_case_insensitive;
 
         /* value must be double quotated */
         if (linepos[0] == '"')
@@ -971,6 +987,9 @@ static int rule_add_key(struct rule_tmp *rule_tmp, enum token_type type,
         const char *attr = NULL;
 
         memzero(token, sizeof(struct token));
+
+        if (type < TK_M_MAX)
+                token->key.case_insensitive = rule_tmp->case_insensitive;
 
         switch (type) {
         case TK_M_ACTION:
@@ -1162,8 +1181,9 @@ static int add_rule(struct udev_rules *rules, char *line,
                 char *key;
                 char *value;
                 enum operation_type op;
+                bool is_case_insensitive;
 
-                if (get_key(rules->udev, &linepos, &key, &op, &value) != 0) {
+                if (get_key(rules->udev, &linepos, &key, &op, &value, &is_case_insensitive) != 0) {
                         /* Avoid erroring on trailing whitespace. This is probably rare
                          * so save the work for the error case instead of always trying
                          * to strip the trailing whitespace with strstrip(). */
@@ -1184,6 +1204,12 @@ static int add_rule(struct udev_rules *rules, char *line,
                         }
                         break;
                 }
+
+                if (is_case_insensitive && op > OP_MATCH_MAX) {
+                        log_error("invalid prefix 'i' for '%s', the 'i' prefix can be specified only for '==' or '!=' operator", key);
+                        goto invalid;
+                }
+                rule_tmp.case_insensitive = is_case_insensitive;
 
                 if (streq(key, "ACTION")) {
                         if (op > OP_MATCH_MAX) {
@@ -1394,6 +1420,10 @@ static int add_rule(struct udev_rules *rules, char *line,
                 }
 
                 if (streq(key, "PROGRAM")) {
+                        if (is_case_insensitive) {
+                                log_error("invalid prefix 'i' for PROGRAM");
+                                goto invalid;
+                        }
                         if (op == OP_REMOVE) {
                                 log_error("invalid PROGRAM operation");
                                 goto invalid;
@@ -1419,6 +1449,10 @@ static int add_rule(struct udev_rules *rules, char *line,
                         }
                         if (op == OP_REMOVE) {
                                 log_error("invalid IMPORT operation");
+                                goto invalid;
+                        }
+                        if (is_case_insensitive) {
+                                log_error("invalid prefix 'i' for IMPORT");
                                 goto invalid;
                         }
                         if (streq(attr, "program")) {
@@ -1460,6 +1494,10 @@ static int add_rule(struct udev_rules *rules, char *line,
 
                         if (op > OP_MATCH_MAX) {
                                 log_error("invalid TEST operation");
+                                goto invalid;
+                        }
+                        if (is_case_insensitive) {
+                                log_error("invalid prefix 'i' for TEST");
                                 goto invalid;
                         }
                         attr = get_key_attribute(rules->udev, key + strlen("TEST"));
@@ -1873,10 +1911,13 @@ static bool match_value(struct udev_rules *rules, struct token *token, const cha
 
         switch (token->key.glob) {
         case GL_PLAIN:
-                match = (streq(key_value, val));
+                if (token->key.case_insensitive)
+                        match = (strcasecmp(key_value, val) == 0);
+                else
+                        match = (streq(key_value, val));
                 break;
         case GL_GLOB:
-                match = (fnmatch(key_value, val, 0) == 0);
+                match = (fnmatch(key_value, val, token->key.case_insensitive ? FNM_CASEFOLD : 0) == 0);
                 break;
         case GL_SPLIT:
                 {
@@ -1892,11 +1933,17 @@ static bool match_value(struct udev_rules *rules, struct token *token, const cha
                                 if (next != NULL) {
                                         size_t matchlen = (size_t)(next - s);
 
-                                        match = (matchlen == len && strneq(s, val, matchlen));
+                                        if (token->key.case_insensitive)
+                                                match = (matchlen == len && strncasecmp(s, val, matchlen) == 0);
+                                        else
+                                                match = (matchlen == len && strneq(s, val, matchlen));
                                         if (match)
                                                 break;
                                 } else {
-                                        match = (streq(s, val));
+                                        if (token->key.case_insensitive)
+                                                match = (strcasecmp(s, val) == 0);
+                                        else
+                                                match = (streq(s, val));
                                         break;
                                 }
                                 s = &next[1];
@@ -1915,7 +1962,7 @@ static bool match_value(struct udev_rules *rules, struct token *token, const cha
                                         pos[0] = '\0';
                                         pos = &pos[1];
                                 }
-                                match = (fnmatch(key_value, val, 0) == 0);
+                                match = (fnmatch(key_value, val, token->key.case_insensitive ? FNM_CASEFOLD : 0) == 0);
                                 if (match)
                                         break;
                                 key_value = pos;

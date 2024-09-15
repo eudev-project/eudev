@@ -1407,6 +1407,20 @@ KERNEL=="sda", ENV{A}=="x-y\ttab\\"q\\z", SYMLINK+="found"
 KERNEL=="sda", ENV{A}=="x\\x2dy*", SYMLINK+="bad"
 EOF
         },
+        {
+                desc            => "case insensitive match i\"...\"",
+                devpath         => "/devices/pci0000:00/0000:00:1f.2/host0/target0:0:0/0:0:0:0/block/sda",
+                exp_name        => "found",
+                not_exp_name    => "bad",
+                rules           => <<EOF
+KERNEL=="sda", ENV{A}="AbC"
+KERNEL==i"SDA", ENV{A}==i"abc", ATTRS{vendor}==i"ata", ATTRS{model}==ie"st\\x39*", \\
+  ENV{A}==i"x|ABC", ENV{A}==i"x*|ab?", ENV{A}!=i"abd", SYMLINK+="found"
+KERNEL=="sda", ENV{A}=="abc", SYMLINK+="bad"
+KERNEL=="sda", ENV{A}!=i"abc", SYMLINK+="bad"
+KERNEL=="sda", SYMLINK+=i"bad"
+EOF
+        },
 );
 
 sub udev {
