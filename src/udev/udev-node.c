@@ -88,6 +88,17 @@ int udev_node_cleanup(void) {
         return 0;
 }
 
+static int node_remove_symlink(struct udev_device *dev, const char *slink) {
+        assert(dev);
+        assert(slink);
+
+        if (unlink(slink) < 0 && errno != ENOENT)
+                return log_debug_errno(errno, "Failed to remove '%s': %m", slink);
+
+        (void) rmdir_parents(slink, "/dev");
+        return 0;
+}
+
 static int node_create_symlink(struct udev_device *dev, const char *devnode, const char *slink) {
         struct stat st;
         int r;
@@ -570,13 +581,7 @@ static int link_update(struct udev_device *dev, const char *slink, bool add) {
                 return node_create_symlink(dev, devnode, slink);
 
         log_debug("No reference left for '%s', removing", slink);
-
-        if (unlink(slink) < 0 && errno != ENOENT)
-                log_debug_errno(errno, "Failed to remove '%s', ignoring: %m", slink);
-
-        (void) rmdir_parents(slink, "/dev");
-
-        return 0;
+        return node_remove_symlink(dev, slink);
 }
 
 static bool device_has_devlink(struct udev_device *dev, const char *devlink) {
@@ -653,10 +658,7 @@ int udev_node_remove(struct udev_device *dev) {
         device_get_devpath_by_devnum(dev, filename, sizeof(filename));
 
         /* remove /dev/{block,char}/$major:$minor */
-        if (unlink(filename) < 0 && errno != ENOENT)
-                return log_debug_errno(errno, "Failed to remove '%s': %m", filename);
-
-        return 0;
+        return node_remove_symlink(dev, filename);
 }
 
 /* Like systemd's sd_device_open() with O_PATH: opens the device node of the device with O_PATH, and
