@@ -364,8 +364,9 @@ toolong:
 }
 
 static int stack_directory_get_name(const char *slink, char **ret) {
-        _cleanup_free_ char *s = NULL, *dirname = NULL;
+        _cleanup_free_ char *s = NULL;
         char name_enc[NAME_MAX+1];
+        char *t;
         const char *name;
 
         assert(slink);
@@ -388,44 +389,67 @@ static int stack_directory_get_name(const char *slink, char **ret) {
          * slash, e.g. \x2fdisk\x2fby-id\x2f..., as eudev has always named it. */
         udev_node_escape_path(strjoina("/", name), name_enc, sizeof(name_enc));
 
-        dirname = path_join(UDEV_ROOT_RUN "/udev/links", name_enc);
-        if (!dirname)
+        t = strdup(name_enc);
+        if (!t)
                 return -ENOMEM;
 
-        *ret = TAKE_PTR(dirname);
+        *ret = t;
         return 0;
 }
 
-static int stack_directory_open(const char *slink, int *ret_dirfd, int *ret_lockfd) {
-        _cleanup_close_ int dirfd = -1, lockfd = -1;
-        _cleanup_free_ char *dirname = NULL;
+static int stack_directory_open_and_lock(
+                const char *slink,
+                char **ret_dirpath,
+                int *ret_dirfd,
+                LockFile *ret_lockfile) {
+
+        static const char *const dirs[] = {
+                UDEV_ROOT_RUN "/udev/links/",
+                UDEV_ROOT_RUN "/udev/links.lock/",
+        };
+        _cleanup_(release_lock_file) LockFile lockfile = LOCK_FILE_INIT;
+        _cleanup_close_ int dirfd = -1;
+        _cleanup_free_ char *name = NULL, *dirpath = NULL, *lockname = NULL;
         int r;
 
         assert(slink);
+        assert(ret_dirpath);
         assert(ret_dirfd);
-        assert(ret_lockfd);
+        assert(ret_lockfile);
 
-        r = stack_directory_get_name(slink, &dirname);
+        r = stack_directory_get_name(slink, &name);
         if (r < 0)
                 return log_debug_errno(r, "Failed to build stack directory name for '%s': %m", slink);
 
-        r = mkdir_parents(dirname, 0755);
+        for (size_t i = 0; i < ELEMENTSOF(dirs); i++) {
+                r = udev_mkdir_p(dirs[i], 0755);
+                if (r < 0)
+                        return log_debug_errno(r, "Failed to create '%s': %m", dirs[i]);
+        }
+
+        /* 1. Take a lock for the stack directory. */
+        lockname = path_join(UDEV_ROOT_RUN "/udev/links.lock/", name);
+        if (!lockname)
+                return -ENOMEM;
+
+        r = make_lock_file(lockname, LOCK_EX, &lockfile);
         if (r < 0)
-                return log_debug_errno(r, "Failed to create stack directory '%s': %m", dirname);
+                return log_debug_errno(r, "Failed to create and lock '%s': %m", lockname);
 
-        dirfd = open_mkdir_at(AT_FDCWD, dirname, O_CLOEXEC | O_DIRECTORY | O_NOFOLLOW | O_RDONLY, 0755);
+        /* 2. Create and open the stack directory. Do not create the stack directory before taking a lock,
+         * otherwise the directory may be removed by another worker. */
+        dirpath = path_join(UDEV_ROOT_RUN "/udev/links/", name);
+        if (!dirpath)
+                return -ENOMEM;
+
+        dirfd = open_mkdir_at(AT_FDCWD, dirpath, O_CLOEXEC | O_DIRECTORY | O_NOFOLLOW | O_RDONLY, 0755);
         if (dirfd < 0)
-                return log_debug_errno(dirfd, "Failed to open stack directory '%s': %m", dirname);
+                return log_debug_errno(dirfd, "Failed to open stack directory '%s': %m", dirpath);
 
-        lockfd = openat(dirfd, ".lock", O_CLOEXEC | O_NOFOLLOW | O_RDONLY | O_CREAT, 0600);
-        if (lockfd < 0)
-                return log_debug_errno(errno, "Failed to create lock file for stack directory '%s': %m", dirname);
-
-        if (flock(lockfd, LOCK_EX) < 0)
-                return log_debug_errno(errno, "Failed to place a lock on lock file for %s: %m", dirname);
-
+        *ret_dirpath = TAKE_PTR(dirpath);
         *ret_dirfd = TAKE_FD(dirfd);
-        *ret_lockfd = TAKE_FD(lockfd);
+        *ret_lockfile = lockfile;
+        lockfile = LOCK_FILE_INIT;
         return 0;
 }
 
@@ -507,14 +531,21 @@ static int node_get_current(struct udev *udev, const char *slink, int dirfd, cha
 }
 
 static int link_update(struct udev_device *dev, const char *slink, bool add) {
+        /* On cleaning up,
+         * 1. close the stack directory,
+         * 2. remove the stack directory if it is empty,
+         * 3. then finally release the lock.
+         * Hence, the variables must be declared in the reverse order. */
+        _cleanup_(release_lock_file) LockFile lockfile = LOCK_FILE_INIT; /* #3 */
+        _cleanup_(rmdir_and_freep) char *dirpath = NULL; /* #2 */
+        _cleanup_close_ int dirfd = -1; /* #1 */
         _cleanup_free_ char *current_id = NULL, *devnode = NULL;
-        _cleanup_close_ int dirfd = -1, lockfd = -1;
         int r, current_prio;
 
         assert(dev);
         assert(slink);
 
-        r = stack_directory_open(slink, &dirfd, &lockfd);
+        r = stack_directory_open_and_lock(slink, &dirpath, &dirfd, &lockfile);
         if (r < 0)
                 return r;
 
