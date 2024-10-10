@@ -66,7 +66,6 @@ static int fd_inotify = -1;
 static int fd_ready = -1;
 static bool stop_exec_queue;
 static bool reload;
-static bool udev_node_needs_cleanup;
 static bool arg_debug = false;
 static int arg_daemonize = false;
 static int arg_resolve_names = 1;
@@ -591,9 +590,6 @@ static bool is_devpath_busy(struct event *event) {
 
 static void event_queue_start(struct udev *udev __attribute__((unused))) {
         struct udev_list_node *loop;
-
-        /* To make the stack directory /run/udev/links cleaned up later. */
-        udev_node_needs_cleanup = true;
 
         udev_list_node_foreach(loop, &event_list) {
                 struct event *event = node_to_event(loop);
@@ -1452,25 +1448,14 @@ int main(int argc, char *argv[]) {
                         worker_kill(true);
 
                         /* exit after all has cleaned up */
-                        if (udev_list_node_is_empty(&event_list) && hashmap_isempty(workers)) {
-                                if (udev_node_needs_cleanup) {
-                                        (void) udev_node_cleanup();
-                                        udev_node_needs_cleanup = false;
-                                }
+                        if (udev_list_node_is_empty(&event_list) && hashmap_isempty(workers))
                                 break;
-                        }
 
                         /* timeout at exit for workers to finish */
                         timeout = 30 * MSEC_PER_SEC;
                 } else if (udev_list_node_is_empty(&event_list) && hashmap_isempty(workers)) {
                         /* we are idle */
                         timeout = -1;
-
-                        /* There are no workers. */
-                        if (udev_node_needs_cleanup) {
-                                (void) udev_node_cleanup();
-                                udev_node_needs_cleanup = false;
-                        }
                 } else {
                         /* kill idle or hanging workers */
                         timeout = 3 * MSEC_PER_SEC;

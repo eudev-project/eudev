@@ -45,49 +45,6 @@
 #define UDEV_NODE_HASH_KEY ((const uint8_t[16]) { 0xb9, 0x6a, 0xf1, 0xce, 0x40, 0x31, 0x44, 0x1a, \
                                                    0x9e, 0x19, 0xec, 0x8b, 0xae, 0xf3, 0xe3, 0x2f })
 
-int udev_node_cleanup(void) {
-        _cleanup_closedir_ DIR *dir = NULL;
-        struct dirent *de;
-
-        /* This must not be called when any workers exist. It would cause a race between mkdir() called
-         * by stack_directory_lock() and unlinkat() called by this. */
-
-        dir = opendir(UDEV_ROOT_RUN "/udev/links");
-        if (!dir) {
-                if (errno == ENOENT)
-                        return 0;
-
-                return log_debug_errno(errno, "Failed to open directory '" UDEV_ROOT_RUN "/udev/links', ignoring: %m");
-        }
-
-        for (de = readdir(dir); de; de = readdir(dir)) {
-                _cleanup_free_ char *lockfile = NULL;
-
-                if (de->d_name[0] == '.')
-                        continue;
-
-                if (de->d_type != DT_DIR)
-                        continue;
-
-                /* As commented in the above, this is called when no worker exists, hence the file is not
-                 * locked. On a later uevent, the lock file will be created if necessary. So, we can safely
-                 * remove the file now. */
-                lockfile = path_join(de->d_name, ".lock");
-                if (!lockfile)
-                        return log_oom();
-
-                if (unlinkat(dirfd(dir), lockfile, 0) < 0 && errno != ENOENT) {
-                        log_debug_errno(errno, "Failed to remove '" UDEV_ROOT_RUN "/udev/links/%s', ignoring: %m", lockfile);
-                        continue;
-                }
-
-                if (unlinkat(dirfd(dir), de->d_name, AT_REMOVEDIR) < 0 && errno != ENOTEMPTY)
-                        log_debug_errno(errno, "Failed to remove '" UDEV_ROOT_RUN "/udev/links/%s', ignoring: %m", de->d_name);
-        }
-
-        return 0;
-}
-
 static int node_remove_symlink(struct udev_device *dev, const char *slink) {
         assert(dev);
         assert(slink);

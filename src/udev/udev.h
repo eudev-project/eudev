@@ -141,7 +141,6 @@ int udev_node_apply_permissions(struct udev_device *dev, bool apply_mac,
 int static_node_apply_permissions(const char *name, mode_t mode, uid_t uid, gid_t gid, char **tags);
 int udev_node_remove(struct udev_device *dev);
 int udev_node_update(struct udev_device *dev, struct udev_device *dev_old);
-int udev_node_cleanup(void);
 
 /* udev-ctrl.c */
 struct udev_ctrl;
