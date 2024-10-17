@@ -272,6 +272,11 @@ keys, see
 for more details), the final state of the device becomes easily unstable with this option\&.
 .RE
 .PP
+\fB\-\-include\-parents\fR
+.RS 4
+Trigger parent devices of found devices even if the parents will not match the filter condition\&. This is useful if we are interested to limit the coldplug activities to some devices or subsystems\&.
+.RE
+.PP
 \fB\-w\fR, \fB\-\-settle\fR
 .RS 4
 Apart from triggering events, also waits for those events to finish\&. Note that this is different from calling

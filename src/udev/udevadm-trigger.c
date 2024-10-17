@@ -44,6 +44,7 @@ static int dry_run;
 static bool arg_quiet = false;
 static bool arg_uuid = false;
 static bool arg_settle = false;
+static bool arg_include_parents = false;
 
 static enum {
         MATCH_INITIALIZED_ALL = -1, /* all devices */
@@ -216,6 +217,69 @@ static int prioritize_subsystems(struct udev *udev, char **list, char **prioriti
         return 0;
 }
 
+/* Like sd_device_enumerator_add_all_parents(): adds the parents of the listed devices, even if they
+ * do not match the filters, and sorts the list again in the order of the enumerator. */
+static int include_parents(struct udev *udev, char ***list) {
+        _cleanup_udev_enumerate_unref_ struct udev_enumerate *e = NULL;
+        _cleanup_set_free_free_ Set *added = NULL;
+        struct udev_list_entry *entry;
+        char **l = NULL, **s;
+        size_t n = 0;
+        int r;
+
+        e = udev_enumerate_new(udev);
+        added = set_new(&string_hash_ops);
+        if (!e || !added)
+                return -ENOMEM;
+
+        STRV_FOREACH(s, *list) {
+                _cleanup_udev_device_unref_ struct udev_device *dev = NULL;
+                struct udev_device *parent;
+
+                /* The device may be gone already, this is necessarily racy, so skip it then. */
+                dev = udev_device_new_from_syspath(udev, *s);
+                if (!dev)
+                        continue;
+
+                (void) udev_enumerate_add_syspath(e, *s);
+
+                for (parent = udev_device_get_parent(dev); parent; parent = udev_device_get_parent(parent)) {
+                        const char *syspath = udev_device_get_syspath(parent);
+
+                        /* All parents of an already added parent are added, too. */
+                        if (set_contains(added, syspath))
+                                break;
+
+                        r = set_put_strdup(added, syspath);
+                        if (r < 0)
+                                return r;
+
+                        (void) udev_enumerate_add_syspath(e, syspath);
+                }
+        }
+
+        udev_list_entry_foreach(entry, udev_enumerate_get_list_entry(e))
+                n++;
+
+        l = new0(char*, n + 1);
+        if (!l)
+                return -ENOMEM;
+
+        n = 0;
+        udev_list_entry_foreach(entry, udev_enumerate_get_list_entry(e)) {
+                l[n] = strdup(udev_list_entry_get_name(entry));
+                if (!l[n]) {
+                        strv_free(l);
+                        return -ENOMEM;
+                }
+                n++;
+        }
+
+        strv_free(*list);
+        *list = l;
+        return 0;
+}
+
 /* Returns the syspaths of the devices to trigger, in the order to trigger them. */
 static int build_list(struct udev *udev, struct udev_enumerate *udev_enumerate,
                       char **prioritized_subsystems, char ***ret) {
@@ -251,6 +315,12 @@ static int build_list(struct udev *udev, struct udev_enumerate *udev_enumerate,
                 if (!list[n])
                         return -ENOMEM;
                 n++;
+        }
+
+        if (arg_include_parents) {
+                r = include_parents(udev, &list);
+                if (r < 0)
+                        return r;
         }
 
         if (!strv_isempty(prioritized_subsystems)) {
@@ -446,6 +516,7 @@ static void help(void) {
                "  -y --sysname-match=NAME           Trigger devices with this /sys path\n"
                "     --name-match=NAME              Trigger devices with this /dev name\n"
                "  -b --parent-match=NAME            Trigger devices with that parent device\n"
+               "     --include-parents              Trigger parent devices of found devices\n"
                "     --initialized-match            Trigger devices that are already initialized\n"
                "     --initialized-nomatch          Trigger devices that are not initialized yet\n"
                "  -w --settle                       Wait for the triggered events to complete\n"
@@ -465,6 +536,7 @@ static int adm_trigger(struct udev *udev, int argc, char *argv[]) {
                 ARG_PRIORITIZED_SUBSYSTEM,
                 ARG_INITIALIZED_MATCH,
                 ARG_INITIALIZED_NOMATCH,
+                ARG_INCLUDE_PARENTS,
         };
 
         static const struct option options[] = {
@@ -482,6 +554,7 @@ static int adm_trigger(struct udev *udev, int argc, char *argv[]) {
                 { "sysname-match",     required_argument, NULL, 'y'      },
                 { "name-match",        required_argument, NULL, ARG_NAME },
                 { "parent-match",      required_argument, NULL, 'b'      },
+                { "include-parents",   no_argument,       NULL, ARG_INCLUDE_PARENTS },
                 { "initialized-match", no_argument,       NULL, ARG_INITIALIZED_MATCH },
                 { "initialized-nomatch", no_argument,     NULL, ARG_INITIALIZED_NOMATCH },
                 { "settle",            no_argument,       NULL, 'w'      },
@@ -590,6 +663,10 @@ static int adm_trigger(struct udev *udev, int argc, char *argv[]) {
 
                 case ARG_UUID:
                         arg_uuid = true;
+                        break;
+
+                case ARG_INCLUDE_PARENTS:
+                        arg_include_parents = true;
                         break;
 
                 case ARG_INITIALIZED_MATCH:

@@ -378,6 +378,15 @@
           </listitem>
         </varlistentry>
         <varlistentry>
+          <term><option>--include-parents</option></term>
+          <listitem>
+            <para>Trigger parent devices of found devices even if the parents
+            will not match the filter condition.
+            This is useful if we are interested to limit the coldplug activities to
+            some devices or subsystems.</para>
+          </listitem>
+        </varlistentry>
+        <varlistentry>
           <term><option>-w</option></term>
           <term><option>--settle</option></term>
           <listitem>
