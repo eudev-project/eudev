@@ -233,6 +233,8 @@ static int print_device_chain_in_json(struct udev_device *device) {
 
         assert(device);
 
+        arg_json_format_flags |= JSON_FORMAT_SEQ;
+
         r = print_all_attributes_in_json(device, /* is_parent = */ false);
         if (r < 0)
                 return r;

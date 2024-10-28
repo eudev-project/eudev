@@ -140,6 +140,14 @@ query\&.
 \fB\-a\fR, \fB\-\-attribute\-walk\fR
 .RS 4
 Print all sysfs properties of the specified device that can be used in udev rules to match the specified device\&. It prints all devices along the chain, up to the root of sysfs that can be used in udev rules\&.
+.sp
+This switch supports JSON output mode (see
+\fB\-\-json=\fR
+below)\&. Note that because this switch generates multiple JSON objects, JSON\-SEQ mode is automatically enabled (RFC7464)\&. (Note: tools such as
+\m[blue]\fBjq\fR\m[]\&\s-2\u[1]\d\s+2
+natively support JSON\-SEQ via the
+\fB\-\-seq\fR
+switch\&.)
 .RE
 .PP
 \fB\-t\fR, \fB\-\-tree\fR
@@ -696,3 +704,9 @@ action is seen for them (which removes their entry in the udev device database)\
 .PP
 \fBudev\fR(7),
 \fBudevd.service\fR(8)
+.SH "NOTES"
+.IP " 1." 4
+jq
+.RS 4
+\%https://jqlang.github.io/jq/manual/
+.RE
