@@ -62,6 +62,7 @@ static int worker_watch[2] = { -1, -1 };
 static int fd_signal = -1;
 static int fd_ep = -1;
 static int fd_inotify = -1;
+static int fd_ready = -1;
 static bool stop_exec_queue;
 static bool reload;
 static bool arg_debug = false;
@@ -76,6 +77,7 @@ static UDEV_LIST(event_list);
 Hashmap *workers;
 static struct udev_list properties_list;
 static bool udev_exit;
+static char udevd_ready_string[] = "udevd ready\n";
 
 enum event_state {
         EVENT_UNDEF,
@@ -1036,6 +1038,7 @@ static void help(void) {
                "  -V --version                Print version of the program\n"
                "  -d --daemon                 Detach and run in the background\n"
                "  -D --debug                  Enable debug output\n"
+               "  -r --ready-notify=FD        Notify readiness via file descriptor\n"
                "  -c --children-max=INT       Set maximum number of workers\n"
                "  -e --exec-delay=SECONDS     Seconds to wait before executing RUN=\n"
                "  -t --event-timeout=SECONDS  Seconds to wait before terminating an event\n"
@@ -1048,6 +1051,7 @@ static int parse_argv(int argc, char *argv[]) {
         static const struct option options[] = {
                 { "daemon",             no_argument,            NULL, 'd' },
                 { "debug",              no_argument,            NULL, 'D' },
+                { "ready-notify",       required_argument,      NULL, 'r' },
                 { "children-max",       required_argument,      NULL, 'c' },
                 { "exec-delay",         required_argument,      NULL, 'e' },
                 { "event-timeout",      required_argument,      NULL, 't' },
@@ -1103,6 +1107,11 @@ static int parse_argv(int argc, char *argv[]) {
                                 log_error("resolve-names must be early, late or never");
                                 return 0;
                         }
+                        break;
+                case 'r':
+                        r = safe_atou(optarg, &fd_ready);
+                        if (r < 0)
+                                log_warning("Invalid --ready-notify ignored: %s", optarg);
                         break;
                 case 'h':
                         help();
@@ -1370,6 +1379,20 @@ int main(int argc, char *argv[]) {
             epoll_ctl(fd_ep, EPOLL_CTL_ADD, fd_worker, &ep_worker) < 0) {
                 log_error_errno(errno, "fail to add fds to epoll: %m");
                 goto exit;
+        }
+
+        if (fd_ready != -1) {
+                size_t to_write = sizeof(udevd_ready_string) - 1;
+                char *wptr = udevd_ready_string;
+                do {
+                        int r = write(fd_ready, wptr, to_write);
+                        if (r < 0) {
+                                log_error_errno(errno, "failed to write to readiness fd: %m");
+                                break;
+                        }
+                        to_write -= r;
+                        wptr += r;
+                } while (to_write > 0);
         }
 
         for (;;) {
