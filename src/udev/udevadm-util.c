@@ -507,6 +507,7 @@ DEFINE_ANSI_FUNC(highlight_blue,    "\x1B[0;1;34m")
 DEFINE_ANSI_FUNC(highlight_magenta, "\x1B[0;1;35m")
 DEFINE_ANSI_FUNC(highlight_cyan,    "\x1B[0;1;36m")
 DEFINE_ANSI_FUNC(grey,              "\x1B[0;90m")
+DEFINE_ANSI_FUNC(highlight_grey,    "\x1B[0;1;90m")
 
 static bool is_locale_utf8_impl(void) {
         const char *set;

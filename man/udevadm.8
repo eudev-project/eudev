@@ -42,6 +42,8 @@ udevadm \- udev management tool
 \fBudevadm test\-builtin \fR\fB[options]\fR\fB \fR\fB\fIcommand\fR\fR\fB \fR\fB\fIdevpath\fR\fR
 .HP \w'\fBudevadm\ verify\ \fR\fB[options]\fR\fB\ \fR\fB[\fIfile\fR\&.\&.\&.]\fR\ 'u
 \fBudevadm verify \fR\fB[options]\fR\fB \fR\fB[\fIfile\fR\&.\&.\&.]\fR
+.HP \w'\fBudevadm\ cat\ \fR\fB[options]\fR\fB\ \fR\fB[\fIfile\fR\&.\&.\&.]\fR\ 'u
+\fBudevadm cat \fR\fB[options]\fR\fB \fR\fB[\fIfile\fR\&.\&.\&.]\fR
 .SH "DESCRIPTION"
 .PP
 \fBudevadm\fR
@@ -771,6 +773,52 @@ Do not show summary\&.
 Ignore style issues\&. When specified, even if style issues are found in udev rules files, the exit status is
 \fB0\fR
 if no syntactic or semantic errors are found\&.
+.RE
+.PP
+\fB\-V\fR, \fB\-\-version\fR
+.RS 4
+Print version\&.
+.RE
+.PP
+\fB\-h\fR, \fB\-\-help\fR
+.RS 4
+Print help text\&.
+.RE
+.SS "udevadm cat [\fIoptions\fR] [\fIfile\fR...]"
+.PP
+Show udev rules files or udev\&.conf\&.
+.PP
+Positional arguments can be used to specify one or more files to show\&. Each argument must be an absolute path to a udev rules file or a directory that contains rules files, or a file name of udev rules file (e\&.g\&.
+50\-udev\-default\&.rules)\&. If a file name is specified, the file will be searched in the
+rules\&.d
+directories that are processed by
+\fBudevd\fR, and searched in the current working directory if not found\&. If no files are specified, the udev rules are read from the files located in the same
+rules\&.d
+directories that are processed by
+\fBudevd\fR\&. See
+\fBudev\fR(7)
+for more details about the search paths\&.
+.PP
+\fB\-\-root=\fR\fB\fIPATH\fR\fR
+.RS 4
+When looking for udev rules files located in the
+rules\&.d
+directories, operate on files underneath the specified root path
+\fIPATH\fR\&. When a file name is specified, and it is not found in the
+rules\&.d
+directories, the file will be searched in the specified root path
+\fIPATH\fR, rather than the current working directory\&.
+.RE
+.PP
+\fB\-\-tldr\fR
+.RS 4
+Only print the "interesting" parts of the configuration files, skipping comments and empty lines\&.
+.RE
+.PP
+\fB\-\-config\fR
+.RS 4
+Shows
+\fBudev.conf\fR(5), rather than udev rules files\&. When specified, no udev rules file can be specified\&.
 .RE
 .PP
 \fB\-V\fR, \fB\-\-version\fR

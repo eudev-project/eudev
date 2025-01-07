@@ -36,6 +36,7 @@ udevadm_SOURCES = \
 	udevadm-test.c \
 	udevadm-test-builtin.c \
 	udevadm-verify.c \
+	udevadm-cat.c \
 	udevadm-util.c \
 	udevadm-util.h
 
