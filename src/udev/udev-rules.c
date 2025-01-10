@@ -2764,13 +2764,23 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                         if (level < 0)
                                 level = event->default_log_level;
 
-                        log_set_max_level(level);
+                        if (event->event_mode == EVENT_UDEV_WORKER)
+                                log_set_max_level(level);
+                        else {
+                                _cleanup_free_ char *level_str = NULL;
+
+                                (void) log_level_to_string_alloc(level, &level_str);
+                                log_debug("Running in test mode, skipping changing maximum log level to %s %s:%u",
+                                          level_str ?: "n/a",
+                                          rules_str(rules, rule->rule.filename_off), rule->rule.filename_line);
+                        }
 
                         if (level == LOG_DEBUG && !event->log_level_was_debug) {
                                 /* The log level becomes LOG_DEBUG at first time. Let's log basic information. */
-                                log_debug("%s: The log level is changed to 'debug' while processing device (SEQNUM=%llu, ACTION=%s)",
-                                          udev_device_get_sysname(event->dev), udev_device_get_seqnum(event->dev),
-                                          udev_device_get_action(event->dev) ?: "n/a");
+                                if (event->event_mode == EVENT_UDEV_WORKER)
+                                        log_debug("%s: The log level is changed to 'debug' while processing device (SEQNUM=%llu, ACTION=%s)",
+                                                  udev_device_get_sysname(event->dev), udev_device_get_seqnum(event->dev),
+                                                  udev_device_get_action(event->dev) ?: "n/a");
                                 event->log_level_was_debug = true;
                         }
                         break;
