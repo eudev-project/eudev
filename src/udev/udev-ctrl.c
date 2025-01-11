@@ -37,6 +37,7 @@ enum udev_ctrl_msg_type {
         UDEV_CTRL_SET_CHILDREN_MAX,
         UDEV_CTRL_PING,
         UDEV_CTRL_EXIT,
+        UDEV_CTRL_SET_TRACE,
 };
 
 struct udev_ctrl_msg_wire {
@@ -257,6 +258,12 @@ struct udev_ctrl_connection *udev_ctrl_connection_unref(struct udev_ctrl_connect
         return NULL;
 }
 
+/* udevd replies to these messages with one byte before it closes the connection. An udevd that does not know
+ * such a message closes the connection without a reply, which is how the message is found unsupported. */
+static bool ctrl_msg_type_has_reply(enum udev_ctrl_msg_type type) {
+        return type == UDEV_CTRL_SET_TRACE;
+}
+
 static int ctrl_send(struct udev_ctrl *uctrl, enum udev_ctrl_msg_type type, int intval, const char *buf, int timeout) {
         struct udev_ctrl_msg_wire ctrl_msg_wire;
         int err = 0;
@@ -305,6 +312,19 @@ static int ctrl_send(struct udev_ctrl *uctrl, enum udev_ctrl_msg_type type, int 
 
                 if (r == 0)
                         err = -ETIMEDOUT;
+                else if (ctrl_msg_type_has_reply(type)) {
+                        char reply;
+                        ssize_t n;
+
+                        n = recv(uctrl->sock, &reply, sizeof(reply), MSG_DONTWAIT);
+                        if (n < 0) {
+                                if (IN_SET(errno, EINTR, EAGAIN))
+                                        continue;
+                                err = -errno;
+                        } else if (n == 0)
+                                /* the connection was closed without a reply */
+                                err = -EOPNOTSUPP;
+                }
                 break;
         }
 out:
@@ -341,6 +361,20 @@ int udev_ctrl_send_ping(struct udev_ctrl *uctrl, int timeout) {
 
 int udev_ctrl_send_exit(struct udev_ctrl *uctrl, int timeout) {
         return ctrl_send(uctrl, UDEV_CTRL_EXIT, 0, NULL, timeout);
+}
+
+int udev_ctrl_send_set_trace(struct udev_ctrl *uctrl, bool enable, int timeout) {
+        return ctrl_send(uctrl, UDEV_CTRL_SET_TRACE, enable, NULL, timeout);
+}
+
+/* Tells the sender of a message that has a reply that udevd handled it, see ctrl_msg_type_has_reply(). */
+int udev_ctrl_msg_reply(struct udev_ctrl_msg *ctrl_msg) {
+        const char reply = 1;
+
+        if (send(ctrl_msg->conn->sock, &reply, sizeof(reply), MSG_NOSIGNAL|MSG_DONTWAIT) < 0)
+                return -errno;
+
+        return 0;
 }
 
 struct udev_ctrl_msg *udev_ctrl_receive_msg(struct udev_ctrl_connection *conn) {
@@ -487,5 +521,11 @@ int udev_ctrl_get_ping(struct udev_ctrl_msg *ctrl_msg) {
 int udev_ctrl_get_exit(struct udev_ctrl_msg *ctrl_msg) {
         if (ctrl_msg->ctrl_msg_wire.type == UDEV_CTRL_EXIT)
                 return 1;
+        return -1;
+}
+
+int udev_ctrl_get_set_trace(struct udev_ctrl_msg *ctrl_msg) {
+        if (ctrl_msg->ctrl_msg_wire.type == UDEV_CTRL_SET_TRACE)
+                return !!ctrl_msg->ctrl_msg_wire.intval;
         return -1;
 }

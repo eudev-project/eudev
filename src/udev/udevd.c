@@ -82,6 +82,8 @@ static bool arg_trace = false;
 static int default_log_level;
 /* the log level set with udevadm control, or -1 */
 static int control_log_level = -1;
+/* trace logging set with udevadm control */
+static bool control_trace = false;
 /* trace logging is enabled, then the log level is debug */
 static bool trace = false;
 static unsigned arg_children_max;
@@ -1063,7 +1065,7 @@ static void event_queue_update(void) {
 /* Like manager_merge_config_log_level() of systemd: with trace logging, the log level is debug, otherwise it is
  * the one set with udevadm control, or the default one. */
 static int manager_merge_config_log_level(void) {
-        trace = arg_trace;
+        trace = control_trace || arg_trace;
 
         if (trace)
                 return LOG_DEBUG;
@@ -1081,6 +1083,20 @@ static void manager_set_log_level(int log_level) {
                 return;
 
         log_set_max_level(new);
+        worker_kill(false);
+}
+
+static void manager_set_trace(bool enable) {
+        bool old = trace;
+        int log_level;
+
+        control_trace = enable;
+        log_level = manager_merge_config_log_level();
+
+        if (trace == old)
+                return;
+
+        log_set_max_level(log_level);
         worker_kill(false);
 }
 
@@ -1151,6 +1167,13 @@ static void handle_ctrl_msg(struct udev_ctrl *uctrl) {
                         free(key);
                 }
                 worker_kill(false);
+        }
+
+        i = udev_ctrl_get_set_trace(ctrl_msg);
+        if (i >= 0) {
+                log_debug("udevd message (SET_TRACE) received, %s", i ? "yes" : "no");
+                manager_set_trace(i);
+                (void) udev_ctrl_msg_reply(ctrl_msg);
         }
 
         i = udev_ctrl_get_set_children_max(ctrl_msg);
