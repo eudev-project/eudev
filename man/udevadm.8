@@ -837,6 +837,16 @@ Specify when udevadm should resolve names of users and groups\&. When set to
 \fBnever\fR, names will never be resolved and all devices will be owned by root\&.
 .RE
 .PP
+\fB\-D \fR\fB\fIDIR\fR\fR, \fB\-\-extra\-rules\-dir=\fR\fB\fIDIR\fR\fR
+.RS 4
+Also load udev rules files from the specified directory\&. This option can be specified multiple times\&. It may be useful for debugging udev rules by copying some udev rules files to a temporary directory, editing them, and specifying the directory with this option\&. Files found in the specified directories have a higher priority than rules files in the default
+rules\&.d
+directories used by
+\fBudevd\fR\&. See
+\fBudev\fR(7)
+for more details about the search paths\&.
+.RE
+.PP
 \fB\-\-json=\fR\fB\fIMODE\fR\fR
 .RS 4
 Shows output formatted as JSON\&. Expects one of

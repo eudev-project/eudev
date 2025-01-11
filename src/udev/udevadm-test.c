@@ -28,6 +28,8 @@
 #include <getopt.h>
 #include <sys/signalfd.h>
 
+#include "path-util.h"
+#include "strv.h"
 #include "udev.h"
 #include "udev-util.h"
 #include "udevadm-util.h"
@@ -47,6 +49,7 @@ static void help(void) {
                "  -V --version                         Show package version\n"
                "  -a --action=ACTION|help              Set action string\n"
                "  -N --resolve-names=early|late|never  When to resolve names\n"
+               "  -D --extra-rules-dir=DIR             Also load rules from the directory\n"
                "     --json=pretty|short|off           Generate JSON output\n"
                , program_invocation_short_name);
 }
@@ -54,6 +57,7 @@ static void help(void) {
 static int adm_test(struct udev *udev, int argc, char *argv[]) {
         int resolve_names = 1;
         const char *action = "add";
+        _cleanup_strv_free_ char **extra_rules_dir = NULL;
         const char *syspath = NULL;
         _cleanup_udev_rules_unref_ struct udev_rules *rules = NULL;
         _cleanup_udev_device_unref_ struct udev_device *dev = NULL;
@@ -69,6 +73,7 @@ static int adm_test(struct udev *udev, int argc, char *argv[]) {
         static const struct option options[] = {
                 { "action", required_argument, NULL, 'a' },
                 { "resolve-names", required_argument, NULL, 'N' },
+                { "extra-rules-dir", required_argument, NULL, 'D' },
                 { "json", required_argument, NULL, ARG_JSON },
                 { "help", no_argument, NULL, 'h' },
                 { "version", no_argument, NULL, 'V' },
@@ -77,7 +82,7 @@ static int adm_test(struct udev *udev, int argc, char *argv[]) {
 
         log_debug("version %s", VERSION);
 
-        while((c = getopt_long(argc, argv, "a:N:hV", options, NULL)) >= 0)
+        while((c = getopt_long(argc, argv, "a:N:D:hV", options, NULL)) >= 0)
                 switch (c) {
                 case 'a':
                         r = parse_device_action(optarg, &action);
@@ -101,6 +106,21 @@ static int adm_test(struct udev *udev, int argc, char *argv[]) {
                                 exit(EXIT_FAILURE);
                         }
                         break;
+                case 'D': {
+                        char *p;
+
+                        p = path_make_absolute_cwd(optarg);
+                        if (!p) {
+                                log_oom();
+                                exit(EXIT_FAILURE);
+                        }
+
+                        if (strv_consume(&extra_rules_dir, path_simplify(p)) < 0) {
+                                log_oom();
+                                exit(EXIT_FAILURE);
+                        }
+                        break;
+                }
                 case ARG_JSON:
                         r = parse_json_argument(optarg, &json_format_flags);
                         if (r < 0)
@@ -137,7 +157,7 @@ static int adm_test(struct udev *udev, int argc, char *argv[]) {
 
         udev_builtin_init(udev);
 
-        rules = udev_rules_new(udev, resolve_names);
+        rules = udev_rules_new_full(udev, resolve_names, extra_rules_dir);
         if (rules == NULL) {
                 fprintf(stderr, "error reading rules\n");
                 rc = 3;

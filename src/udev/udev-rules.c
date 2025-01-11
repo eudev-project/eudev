@@ -2519,9 +2519,15 @@ int udev_rules_parse_file_for_check(struct udev *udev, int resolve_names, const 
 }
 
 struct udev_rules *udev_rules_new(struct udev *udev, int resolve_names) {
+        return udev_rules_new_full(udev, resolve_names, NULL);
+}
+
+struct udev_rules *udev_rules_new_full(struct udev *udev, int resolve_names, char * const *extra_dirs) {
+        _cleanup_strv_free_ char **dirs = NULL;
         struct udev_rules *rules;
         struct udev_list file_list;
         struct token end_token;
+        const char* const* d;
         char **files, **f;
         int r;
 
@@ -2544,7 +2550,19 @@ struct udev_rules *udev_rules_new(struct udev *udev, int resolve_names) {
 
         udev_rules_check_timestamp(rules);
 
-        r = conf_files_list_strv(&files, ".rules", NULL, rules_dirs);
+        /* Like systemd's udev_rules_load(): the extra directories come first, so that their files
+         * override the ones with the same name in the rules directories. */
+        if (!strv_isempty(extra_dirs)) {
+                dirs = strv_copy(extra_dirs);
+                if (!dirs)
+                        return udev_rules_unref(rules);
+        }
+
+        for (d = rules_dirs; *d; d++)
+                if (strv_extend(&dirs, *d) < 0)
+                        return udev_rules_unref(rules);
+
+        r = conf_files_list_strv(&files, ".rules", NULL, (const char* const*) dirs);
         if (r < 0) {
                 log_error_errno(r, "failed to enumerate rules files: %m");
                 return udev_rules_unref(rules);
