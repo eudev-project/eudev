@@ -84,27 +84,33 @@ void dump_event(struct udev_event *event, FILE *f) {
                 /* The owner, group and mode are not determined for remove events, see
                  * udev_event_execute_rules(). */
                 bool perms = major(devnum) > 0 && !streq_ptr(udev_device_get_action(dev), "remove");
+                /* When not set by the rules processed so far, udev_event_execute_rules() will use these. */
+                uid_t uid = event->owner_set ? event->uid : udev_device_get_devnode_uid(dev);
+                gid_t gid = event->group_set ? event->gid : udev_device_get_devnode_gid(dev);
+                mode_t mode = event->mode_set ? event->mode :
+                              udev_device_get_devnode_mode(dev) > 0 ? udev_device_get_devnode_mode(dev) :
+                              gid > 0 ? 0660 : 0600;
 
                 if (major(devnum) > 0)
                         fprintf(f, "%sDevice node:%s\n  %s (%s %u:%u)\n", ansi_highlight(), ansi_normal(), str,
                                 streq_ptr(subsys, "block") ? "block" : "char", major(devnum), minor(devnum));
 
                 if (perms) {
-                        struct passwd *pw = getpwuid(event->uid);
+                        struct passwd *pw = getpwuid(uid);
 
                         fprintf(f, "%sDevice node owner user:%s\n  %s (uid="UID_FMT")\n", ansi_highlight(), ansi_normal(),
-                                pw ? pw->pw_name : "n/a", event->uid);
+                                pw ? pw->pw_name : "n/a", uid);
                 }
 
                 if (perms) {
-                        struct group *gr = getgrgid(event->gid);
+                        struct group *gr = getgrgid(gid);
 
                         fprintf(f, "%sDevice node owner group:%s\n  %s (gid="GID_FMT")\n", ansi_highlight(), ansi_normal(),
-                                gr ? gr->gr_name : "n/a", event->gid);
+                                gr ? gr->gr_name : "n/a", gid);
                 }
 
                 if (perms)
-                        fprintf(f, "%sDevice node permission:%s\n  %04o\n", ansi_highlight(), ansi_normal(), event->mode);
+                        fprintf(f, "%sDevice node permission:%s\n  %04o\n", ansi_highlight(), ansi_normal(), mode);
 
                 if (udev_device_get_devlinks_list_entry(dev)) {
                         fprintf(f, "%sDevice node symlinks:%s (priority=%i)\n", ansi_highlight(), ansi_normal(),
