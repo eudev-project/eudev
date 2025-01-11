@@ -46,6 +46,7 @@ noinst_LTLIBRARIES = \
         libudev-core.la
 
 libudev_core_la_SOURCES = \
+	udev-dump.c \
 	udev-event.c \
 	udev-watch.c \
 	udev-node.c \

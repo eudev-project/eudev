@@ -123,6 +123,9 @@ void udev_event_execute_run(struct udev_event *event, usec_t timeout_usec, usec_
 #define UDEV_ARGV_MAX 128
 int udev_build_argv(struct udev *udev, char *cmd, int *argc, char *argv[]);
 
+/* udev-dump.c */
+void dump_event(struct udev_event *event, FILE *f);
+
 /* udev-watch.c */
 int udev_watch_init(struct udev *udev);
 void udev_watch_restore(struct udev *udev);
