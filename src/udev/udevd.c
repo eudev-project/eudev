@@ -76,6 +76,14 @@ static bool reload;
 static bool arg_debug = false;
 static int arg_daemonize = false;
 static int arg_resolve_names = 1;
+/* udev.trace on the kernel command line */
+static bool arg_trace = false;
+/* the log level of udev.conf, the kernel command line or --debug */
+static int default_log_level;
+/* the log level set with udevadm control, or -1 */
+static int control_log_level = -1;
+/* trace logging is enabled, then the log level is debug */
+static bool trace = false;
 static unsigned arg_children_max;
 static int arg_exec_delay;
 static usec_t arg_event_timeout_usec = 180 * USEC_PER_SEC;
@@ -482,6 +490,8 @@ static void worker_spawn(struct event *event) {
                                 r = -ENOMEM;
                                 goto out;
                         }
+
+                        udev_event->trace = trace;
 
                         /* needed for SIGCHLD/SIGTERM in spawn() */
                         udev_event->fd_signal = fd_signal;
@@ -1050,6 +1060,30 @@ static void event_queue_update(void) {
         }
 }
 
+/* Like manager_merge_config_log_level() of systemd: with trace logging, the log level is debug, otherwise it is
+ * the one set with udevadm control, or the default one. */
+static int manager_merge_config_log_level(void) {
+        trace = arg_trace;
+
+        if (trace)
+                return LOG_DEBUG;
+
+        return control_log_level >= 0 ? control_log_level : default_log_level;
+}
+
+static void manager_set_log_level(int log_level) {
+        int old = log_get_max_level(), new;
+
+        control_log_level = log_level;
+        new = manager_merge_config_log_level();
+
+        if (new == old)
+                return;
+
+        log_set_max_level(new);
+        worker_kill(false);
+}
+
 /* receive the udevd message from userspace */
 static void handle_ctrl_msg(struct udev_ctrl *uctrl) {
         _cleanup_udev_ctrl_connection_unref_ struct udev_ctrl_connection *ctrl_conn = NULL;
@@ -1073,8 +1107,7 @@ static void handle_ctrl_msg(struct udev_ctrl *uctrl) {
                         log_warning("udevd message (SET_LOG_LEVEL) received with invalid log_priority=%i, ignoring", i);
                 else {
                         log_debug("udevd message (SET_LOG_LEVEL) received, log_priority=%i", i);
-                        log_set_max_level(i);
-                        worker_kill(false);
+                        manager_set_log_level(i);
                 }
         }
 
@@ -1342,6 +1375,7 @@ static void handle_signal(struct udev *udev __attribute__((unused)), int signo) 
 /*
  * read the kernel command line, in case we need to get into debug mode
  *   udev.log-priority=<level>                 syslog priority
+ *   udev.trace[=<bool>]                       trace logging, with debug level
  *   udev.children-max=<number of workers>     events are fully serialized if set to 1
  *   udev.exec-delay=<number of seconds>       delay execution of every executed program
  *   udev.event-timeout=<number of seconds>    seconds to wait before terminating an event
@@ -1351,15 +1385,29 @@ static int parse_proc_cmdline_item(const char *key, const char *value) {
 
         assert(key);
 
-        if (!value)
-                return 0;
-
         if (startswith(key, "rd."))
                 key += strlen("rd.");
 
         if (startswith(key, "udev."))
                 key += strlen("udev.");
         else
+                return 0;
+
+        if (streq(key, "trace")) {
+                if (!value)
+                        arg_trace = true;
+                else {
+                        r = parse_boolean(value);
+                        if (r < 0)
+                                log_warning("invalid udev.trace ignored: %s", value);
+                        else
+                                arg_trace = r;
+                }
+
+                return 0;
+        }
+
+        if (!value)
                 return 0;
 
         if (streq(key, "log-priority")) {
@@ -1545,6 +1593,9 @@ int main(int argc, char *argv[]) {
                 log_set_target(LOG_TARGET_CONSOLE);
                 log_set_max_level(LOG_DEBUG);
         }
+
+        default_log_level = log_get_max_level();
+        log_set_max_level(manager_merge_config_log_level());
 
         if (getuid() != 0) {
                 r = log_error_errno(EPERM, "root privileges required");

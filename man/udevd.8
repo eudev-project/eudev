@@ -113,6 +113,15 @@ environment variable, set to a boolean value\&.
 Set the log level\&.
 .RE
 .PP
+\fIudev\&.trace[=\fR\fI\fIBOOL\fR\fR\fI]\fR, \fIrd\&.udev\&.trace[=\fR\fI\fIBOOL\fR\fR\fI]\fR
+.RS 4
+Enable/disable trace logging\&. When enabled,
+\fIudev\&.log\-priority=\fR
+will be ignored, and
+debug
+level is assumed\&.
+.RE
+.PP
 \fIudev\&.children\-max=\fR, \fIrd\&.udev\&.children\-max=\fR
 .RS 4
 Limit the number of events executed in parallel\&.

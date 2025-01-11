@@ -158,6 +158,14 @@
         </listitem>
       </varlistentry>
       <varlistentry>
+        <term><varname>udev.trace[=<replaceable>BOOL</replaceable>]</varname></term>
+        <term><varname>rd.udev.trace[=<replaceable>BOOL</replaceable>]</varname></term>
+        <listitem>
+          <para>Enable/disable trace logging. When enabled, <varname>udev.log-priority=</varname> will be
+          ignored, and <literal>debug</literal> level is assumed.</para>
+        </listitem>
+      </varlistentry>
+      <varlistentry>
         <term><varname>udev.children-max=</varname></term>
         <term><varname>rd.udev.children-max=</varname></term>
         <listitem>
