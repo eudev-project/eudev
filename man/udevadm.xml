@@ -691,6 +691,12 @@
           </listitem>
         </varlistentry>
         <varlistentry>
+          <term><option>--trace=<replaceable>BOOL</replaceable></option></term>
+          <listitem>
+            <para>Enable/disable trace logging in <command>udevd</command>.</para>
+          </listitem>
+        </varlistentry>
+        <varlistentry>
           <term><option>--timeout=</option><replaceable>seconds</replaceable></term>
           <listitem>
             <para>The maximum number of seconds to wait for a reply from udevd.</para>

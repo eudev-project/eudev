@@ -41,6 +41,7 @@ static void print_help(void) {
                "  -p --property=KEY=VALUE  Set a global property for all events\n"
                "  -m --children-max=N      Maximum number of children\n"
                "     --ping                Wait for udev to respond to a ping message\n"
+               "     --trace=BOOL          Enable/disable trace logging\n"
                "     --timeout=SECONDS     Maximum time to block for a reply\n"
                , program_invocation_short_name);
 }
@@ -52,6 +53,7 @@ static int adm_control(struct udev *udev, int argc, char *argv[]) {
 
         enum {
                 ARG_PING = 0x100,
+                ARG_TRACE,
         };
 
         static const struct option options[] = {
@@ -66,6 +68,7 @@ static int adm_control(struct udev *udev, int argc, char *argv[]) {
                 { "env",              required_argument, NULL, 'p' }, /* alias for -p */
                 { "children-max",     required_argument, NULL, 'm' },
                 { "ping",             no_argument,       NULL, ARG_PING },
+                { "trace",            required_argument, NULL, ARG_TRACE },
                 { "timeout",          required_argument, NULL, 't' },
                 { "help",             no_argument,       NULL, 'h' },
                 { "version",          no_argument,       NULL, 'V' },
@@ -152,6 +155,20 @@ static int adm_control(struct udev *udev, int argc, char *argv[]) {
                                 log_error_errno(r, "Failed to connect to udev daemon: %m");
                                 rc = 2;
                         } else
+                                rc = 0;
+                        break;
+                case ARG_TRACE:
+                        r = parse_boolean(optarg);
+                        if (r < 0) {
+                                log_error_errno(r, "Failed to parse boolean argument to --trace=: %s.", optarg);
+                                return rc;
+                        }
+                        r = udev_ctrl_send_set_trace(uctrl, r, timeout);
+                        if (r == -EOPNOTSUPP)
+                                log_error("udevd does not support --trace, restart it after upgrading.");
+                        if (r < 0)
+                                rc = 2;
+                        else
                                 rc = 0;
                         break;
                 case 't': {

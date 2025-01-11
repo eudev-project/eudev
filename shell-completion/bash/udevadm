@@ -88,7 +88,7 @@ _udevadm() {
                        --prioritized-subsystem'
         [SETTLE]='-t --timeout -E --exit-if-exists'
         [CONTROL_STANDALONE]='-e --exit -s --stop-exec-queue -S --start-exec-queue -R --reload --ping'
-        [CONTROL_ARG]='-l --log-level --log-priority -p --property -m --children-max --timeout'
+        [CONTROL_ARG]='-l --log-level --log-priority -p --property -m --children-max --timeout --trace'
         [MONITOR_STANDALONE]='-k --kernel -u --udev -p --property'
         [MONITOR_ARG]='-s --subsystem-match -t --tag-match'
         [HWDB_STANDALONE]='-u --update -s --strict --usr'
@@ -211,6 +211,9 @@ _udevadm() {
                 case $prev in
                     -l|--log-level|--log-priority)
                         comps='alert crit debug emerg err info notice warning'
+                        ;;
+                    --trace)
+                        comps='yes no'
                         ;;
                     *)
                         comps=''

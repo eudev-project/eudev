@@ -76,6 +76,7 @@ _udevadm_control(){
         '(-p --property)'{-p,--property=}'[Set a global property for all events.]:KEY=VALUE' \
         '(-m --children-max=)'{-m,--children-max=}'[Set the maximum number of events.]:N' \
         '--ping[Send a ping message to udevd and wait for the reply.]' \
+        '--trace=[Enable/disable trace logging.]:BOOL' \
         '--timeout=[The maximum number of seconds to wait for a reply from udevd.]:SECONDS'
 }
 
