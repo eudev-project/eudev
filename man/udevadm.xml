@@ -1004,6 +1004,13 @@
           </listitem>
         </varlistentry>
         <varlistentry>
+          <term><option>-v</option></term>
+          <term><option>--verbose</option></term>
+          <listitem>
+            <para>Shows verbose logs in processing udev rules.</para>
+          </listitem>
+        </varlistentry>
+        <varlistentry>
           <term><option>--json=<replaceable>MODE</replaceable></option></term>
           <listitem>
             <para>Shows output formatted as JSON. Expects one of <literal>short</literal> (for the

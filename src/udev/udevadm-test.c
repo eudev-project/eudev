@@ -50,6 +50,7 @@ static void help(void) {
                "  -a --action=ACTION|help              Set action string\n"
                "  -N --resolve-names=early|late|never  When to resolve names\n"
                "  -D --extra-rules-dir=DIR             Also load rules from the directory\n"
+               "  -v --verbose                         Show verbose logs\n"
                "     --json=pretty|short|off           Generate JSON output\n"
                , program_invocation_short_name);
 }
@@ -58,6 +59,7 @@ static int adm_test(struct udev *udev, int argc, char *argv[]) {
         int resolve_names = 1;
         const char *action = "add";
         _cleanup_strv_free_ char **extra_rules_dir = NULL;
+        bool verbose = false;
         const char *syspath = NULL;
         _cleanup_udev_rules_unref_ struct udev_rules *rules = NULL;
         _cleanup_udev_device_unref_ struct udev_device *dev = NULL;
@@ -74,6 +76,7 @@ static int adm_test(struct udev *udev, int argc, char *argv[]) {
                 { "action", required_argument, NULL, 'a' },
                 { "resolve-names", required_argument, NULL, 'N' },
                 { "extra-rules-dir", required_argument, NULL, 'D' },
+                { "verbose", no_argument, NULL, 'v' },
                 { "json", required_argument, NULL, ARG_JSON },
                 { "help", no_argument, NULL, 'h' },
                 { "version", no_argument, NULL, 'V' },
@@ -82,7 +85,7 @@ static int adm_test(struct udev *udev, int argc, char *argv[]) {
 
         log_debug("version %s", VERSION);
 
-        while((c = getopt_long(argc, argv, "a:N:D:hV", options, NULL)) >= 0)
+        while((c = getopt_long(argc, argv, "a:N:D:vhV", options, NULL)) >= 0)
                 switch (c) {
                 case 'a':
                         r = parse_device_action(optarg, &action);
@@ -121,6 +124,9 @@ static int adm_test(struct udev *udev, int argc, char *argv[]) {
                         }
                         break;
                 }
+                case 'v':
+                        verbose = true;
+                        break;
                 case ARG_JSON:
                         r = parse_json_argument(optarg, &json_format_flags);
                         if (r < 0)
@@ -155,14 +161,20 @@ static int adm_test(struct udev *udev, int argc, char *argv[]) {
 
         udev_event_check_config(udev);
 
+        maybe_insert_empty_line();
+        log_info("Loading builtins...");
         udev_builtin_init(udev);
+        log_info("Loading builtins done.");
 
+        maybe_insert_empty_line();
+        log_info("Loading udev rules files...");
         rules = udev_rules_new_full(udev, resolve_names, extra_rules_dir);
         if (rules == NULL) {
                 fprintf(stderr, "error reading rules\n");
                 rc = 3;
                 goto out;
         }
+        log_info("Loading udev rules files done.");
 
         dev = find_device_with_action(udev, syspath, action);
         if (dev == NULL) {
@@ -175,6 +187,12 @@ static int adm_test(struct udev *udev, int argc, char *argv[]) {
         udev_device_set_info_loaded(dev);
 
         event = udev_event_new(dev, EVENT_UDEVADM_TEST);
+        if (!event) {
+                log_oom();
+                rc = 1;
+                goto out;
+        }
+        event->trace = verbose;
 
         sigfillset(&mask);
         sigprocmask(SIG_SETMASK, &mask, &sigmask_orig);
@@ -185,6 +203,8 @@ static int adm_test(struct udev *udev, int argc, char *argv[]) {
                 goto out;
         }
 
+        maybe_insert_empty_line();
+        log_info("Processing udev rules%s...", verbose ? "" : " (verbose logs can be shown by -v/--verbose)");
         r = udev_event_execute_rules(event,
                                      60 * USEC_PER_SEC, 20 * USEC_PER_SEC,
                                      NULL,
@@ -192,6 +212,7 @@ static int adm_test(struct udev *udev, int argc, char *argv[]) {
                                      &sigmask_orig);
         if (r < 0)
                 log_warning_errno(r, "Failed to process the rules, udevd would stop processing the event here and not run RUN: %m");
+        log_info("Processing udev rules done.");
 
         maybe_insert_empty_line();
         r = dump_event(event, json_format_flags, NULL);

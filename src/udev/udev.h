@@ -83,7 +83,8 @@ struct udev_event {
         bool run_final;
         /* the database entry was written with ID_PROCESSING=1 before the rules, see event_restore_db() */
         bool dev_db_written;
-        /* trace logging of udevd, see udev.trace and udevadm control --trace= */
+        /* trace logging, i.e. log the processing of each rule: udevd's trace mode (udev.trace,
+         * udevadm control --trace=) and 'udevadm test --verbose' */
         bool trace;
         bool log_level_was_debug;
         int default_log_level;
