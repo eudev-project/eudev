@@ -153,7 +153,7 @@ static int adm_test(struct udev *udev, int argc, char *argv[]) {
                                  &sigmask_orig);
 
         maybe_insert_empty_line();
-        dump_event(event, NULL);
+        (void) dump_event(event, JSON_FORMAT_OFF, NULL);
         maybe_insert_empty_line();
 out:
         if (event != NULL && event->fd_signal >= 0)

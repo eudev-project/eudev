@@ -24,6 +24,7 @@
 #include <signal.h>
 
 #include "macro.h"
+#include "json-writer.h"
 #include "libudev.h"
 #include "libudev-private.h"
 #include "util.h"
@@ -124,7 +125,7 @@ void udev_event_execute_run(struct udev_event *event, usec_t timeout_usec, usec_
 int udev_build_argv(struct udev *udev, char *cmd, int *argc, char *argv[]);
 
 /* udev-dump.c */
-void dump_event(struct udev_event *event, FILE *f);
+int dump_event(struct udev_event *event, JsonFormatFlags flags, FILE *f);
 
 /* udev-watch.c */
 int udev_watch_init(struct udev *udev);

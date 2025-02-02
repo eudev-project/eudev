@@ -2799,7 +2799,7 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                                 break;
                         }
 
-                        dump_event(event, f);
+                        (void) dump_event(event, JSON_FORMAT_OFF, f);
 
                         if (fclose(f) != 0)
                                 log_warning_errno(errno, "Failed to finalize memory stream, ignoring: %m");

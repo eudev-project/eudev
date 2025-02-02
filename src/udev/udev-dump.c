@@ -41,7 +41,215 @@ static const char *ansi_normal(void) {
         return use_colors() ? ANSI_HIGHLIGHT_OFF : "";
 }
 
-void dump_event(struct udev_event *event, FILE *f) {
+/* Returns the owner, group and mode of the device node, and whether they apply. They do not for remove
+ * events, see udev_event_execute_rules(). When not set by the rules processed so far,
+ * udev_event_execute_rules() will use the values of the device. */
+static bool event_get_node_perms(struct udev_event *event, uid_t *ret_uid, gid_t *ret_gid, mode_t *ret_mode) {
+        struct udev_device *dev = event->dev;
+        uid_t uid;
+        gid_t gid;
+        mode_t mode;
+
+        if (major(udev_device_get_devnum(dev)) == 0 || streq_ptr(udev_device_get_action(dev), "remove"))
+                return false;
+
+        uid = event->owner_set ? event->uid : udev_device_get_devnode_uid(dev);
+        gid = event->group_set ? event->gid : udev_device_get_devnode_gid(dev);
+        if (event->mode_set)
+                mode = event->mode;
+        else if (udev_device_get_devnode_mode(dev) > 0)
+                mode = udev_device_get_devnode_mode(dev);
+        else
+                mode = gid > 0 ? 0660 : 0600;
+
+        *ret_uid = uid;
+        *ret_gid = gid;
+        *ret_mode = mode;
+        return true;
+}
+
+static int dump_event_json(struct udev_event *event, JsonFormatFlags flags, FILE *f) {
+        struct udev_device *dev = event->dev;
+        struct udev_list_entry *entry;
+        const char *subsys, *str;
+        unsigned sysnum;
+        JsonWriter w;
+        uid_t uid;
+        gid_t gid;
+        mode_t mode;
+        int ifindex;
+
+        json_writer_init(&w, f, flags);
+        json_writer_object_begin(&w);
+
+        str = udev_device_get_devpath(dev);
+        if (str)
+                json_writer_field_string(&w, "path", str);
+
+        str = udev_device_get_sysname(dev);
+        if (str)
+                json_writer_field_string(&w, "name", str);
+
+        str = udev_device_get_sysnum(dev);
+        if (str && safe_atou(str, &sysnum) >= 0)
+                json_writer_field_unsigned(&w, "number", sysnum);
+
+        str = udev_device_get_id_filename(dev);
+        if (str)
+                json_writer_field_string(&w, "id", str);
+
+        subsys = udev_device_get_subsystem(dev);
+        if (subsys)
+                json_writer_field_string(&w, "subsystem", subsys);
+
+        str = udev_device_get_devtype(dev);
+        if (str)
+                json_writer_field_string(&w, "type", str);
+
+        str = udev_device_get_driver(dev);
+        if (str)
+                json_writer_field_string(&w, "driver", str);
+
+        str = udev_device_get_devnode(dev);
+        if (str) {
+                dev_t devnum = udev_device_get_devnum(dev);
+
+                json_writer_key(&w, "node");
+                json_writer_object_begin(&w);
+
+                json_writer_field_string(&w, "path", str);
+                json_writer_field_string(&w, "type", streq_ptr(subsys, "block") ? "block" : "char");
+
+                json_writer_key(&w, "rdev");
+                if (major(devnum) > 0) {
+                        json_writer_object_begin(&w);
+                        json_writer_field_unsigned(&w, "major", major(devnum));
+                        json_writer_field_unsigned(&w, "minor", minor(devnum));
+                        json_writer_object_end(&w);
+                } else
+                        json_writer_null(&w);
+
+                if (event_get_node_perms(event, &uid, &gid, &mode)) {
+                        struct passwd *pw = getpwuid(uid);
+                        struct group *gr = getgrgid(gid);
+                        char buf[DECIMAL_STR_MAX(unsigned)];
+
+                        json_writer_key(&w, "owner");
+                        json_writer_object_begin(&w);
+                        json_writer_field_unsigned(&w, "uid", uid);
+                        if (!pw)
+                                snprintf(buf, sizeof(buf), UID_FMT, uid);
+                        json_writer_field_string(&w, "userName", pw ? pw->pw_name : buf);
+                        json_writer_field_unsigned(&w, "gid", gid);
+                        if (!gr)
+                                snprintf(buf, sizeof(buf), GID_FMT, gid);
+                        json_writer_field_string(&w, "groupName", gr ? gr->gr_name : buf);
+                        json_writer_object_end(&w);
+
+                        snprintf(buf, sizeof(buf), "%04o", mode & ~S_IFMT);
+                        json_writer_field_string(&w, "mode", buf);
+                }
+
+                if (udev_device_get_devlinks_list_entry(dev)) {
+                        json_writer_field_integer(&w, "symlinkPriority", udev_device_get_devlink_priority(dev));
+                        json_writer_key(&w, "symlinks");
+                        json_writer_array_begin(&w);
+                        udev_list_entry_foreach(entry, udev_device_get_devlinks_list_entry(dev))
+                                json_writer_string(&w, udev_list_entry_get_name(entry));
+                        json_writer_array_end(&w);
+                }
+
+                if (udev_list_get_entry(&event->seclabel_list)) {
+                        json_writer_key(&w, "securityLabels");
+                        json_writer_array_begin(&w);
+                        udev_list_entry_foreach(entry, udev_list_get_entry(&event->seclabel_list)) {
+                                json_writer_object_begin(&w);
+                                json_writer_field_string(&w, "name", udev_list_entry_get_name(entry));
+                                json_writer_field_string(&w, "label", udev_list_entry_get_value(entry));
+                                json_writer_object_end(&w);
+                        }
+                        json_writer_array_end(&w);
+                }
+
+                json_writer_field_boolean(&w, "inotifyWatch", event->inotify_watch);
+
+                json_writer_object_end(&w);
+        }
+
+        ifindex = udev_device_get_ifindex(dev);
+        if (ifindex > 0) {
+                json_writer_key(&w, "networkInterface");
+                json_writer_object_begin(&w);
+                json_writer_field_integer(&w, "index", ifindex);
+                if (!isempty(event->name))
+                        json_writer_field_string(&w, "name", event->name);
+                json_writer_object_end(&w);
+        }
+
+        if (udev_list_get_entry(&event->written_sysattr_list)) {
+                json_writer_key(&w, "sysfsAttributes");
+                json_writer_array_begin(&w);
+                udev_list_entry_foreach(entry, udev_list_get_entry(&event->written_sysattr_list)) {
+                        json_writer_object_begin(&w);
+                        json_writer_field_string(&w, "path", udev_list_entry_get_name(entry));
+                        json_writer_field_string(&w, "value", udev_list_entry_get_value(entry));
+                        json_writer_object_end(&w);
+                }
+                json_writer_array_end(&w);
+        }
+
+        if (udev_list_get_entry(&event->written_sysctl_list)) {
+                json_writer_key(&w, "sysctl");
+                json_writer_array_begin(&w);
+                udev_list_entry_foreach(entry, udev_list_get_entry(&event->written_sysctl_list)) {
+                        json_writer_object_begin(&w);
+                        json_writer_field_string(&w, "path", udev_list_entry_get_name(entry));
+                        json_writer_field_string(&w, "value", udev_list_entry_get_value(entry));
+                        json_writer_object_end(&w);
+                }
+                json_writer_array_end(&w);
+        }
+
+        if (udev_device_get_tags_list_entry(dev)) {
+                json_writer_key(&w, "tags");
+                json_writer_array_begin(&w);
+                udev_list_entry_foreach(entry, udev_device_get_tags_list_entry(dev))
+                        json_writer_string(&w, udev_list_entry_get_name(entry));
+                json_writer_array_end(&w);
+        }
+
+        if (udev_device_get_properties_list_entry(dev)) {
+                json_writer_key(&w, "properties");
+                json_writer_array_begin(&w);
+                udev_list_entry_foreach(entry, udev_device_get_properties_list_entry(dev)) {
+                        _cleanup_free_ char *p = NULL;
+
+                        p = strjoin(udev_list_entry_get_name(entry), "=", udev_list_entry_get_value(entry), NULL);
+                        if (!p)
+                                return log_oom();
+                        json_writer_string(&w, p);
+                }
+                json_writer_array_end(&w);
+        }
+
+        if (udev_list_get_entry(&event->run_list)) {
+                json_writer_key(&w, "queuedCommands");
+                json_writer_array_begin(&w);
+                udev_list_entry_foreach(entry, udev_list_get_entry(&event->run_list)) {
+                        json_writer_object_begin(&w);
+                        json_writer_field_string(&w, "type",
+                                                 udev_list_entry_get_num(entry) < UDEV_BUILTIN_MAX ? "builtin" : "program");
+                        json_writer_field_string(&w, "command", udev_list_entry_get_name(entry));
+                        json_writer_object_end(&w);
+                }
+                json_writer_array_end(&w);
+        }
+
+        json_writer_object_end(&w);
+        return json_writer_finish(&w);
+}
+
+int dump_event(struct udev_event *event, JsonFormatFlags flags, FILE *f) {
         struct udev_device *dev = event->dev;
         struct udev_list_entry *entry;
         const char *subsys, *str;
@@ -49,6 +257,9 @@ void dump_event(struct udev_event *event, FILE *f) {
 
         if (!f)
                 f = stdout;
+
+        if (json_format_enabled(flags))
+                return dump_event_json(event, flags, f);
 
         str = udev_device_get_devpath(dev);
         if (str)
@@ -81,15 +292,10 @@ void dump_event(struct udev_event *event, FILE *f) {
         str = udev_device_get_devnode(dev);
         if (str) {
                 dev_t devnum = udev_device_get_devnum(dev);
-                /* The owner, group and mode are not determined for remove events, see
-                 * udev_event_execute_rules(). */
-                bool perms = major(devnum) > 0 && !streq_ptr(udev_device_get_action(dev), "remove");
-                /* When not set by the rules processed so far, udev_event_execute_rules() will use these. */
-                uid_t uid = event->owner_set ? event->uid : udev_device_get_devnode_uid(dev);
-                gid_t gid = event->group_set ? event->gid : udev_device_get_devnode_gid(dev);
-                mode_t mode = event->mode_set ? event->mode :
-                              udev_device_get_devnode_mode(dev) > 0 ? udev_device_get_devnode_mode(dev) :
-                              gid > 0 ? 0660 : 0600;
+                uid_t uid = 0;
+                gid_t gid = 0;
+                mode_t mode = 0;
+                bool perms = event_get_node_perms(event, &uid, &gid, &mode);
 
                 if (major(devnum) > 0)
                         fprintf(f, "%sDevice node:%s\n  %s (%s %u:%u)\n", ansi_highlight(), ansi_normal(), str,
@@ -170,4 +376,6 @@ void dump_event(struct udev_event *event, FILE *f) {
                                 fprintf(f, "  RUN{program} : %s\n", udev_list_entry_get_name(entry));
                 }
         }
+
+        return 0;
 }
