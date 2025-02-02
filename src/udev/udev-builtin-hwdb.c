@@ -220,12 +220,15 @@ static int builtin_hwdb_init(struct udev *udev) {
         hwdb = udev_hwdb_new(udev);
         if (!hwdb)
                 return -ENOMEM;
+
+        log_debug("Loaded hardware database.");
         return 0;
 }
 
 /* called on udev shutdown and reload request */
 static void builtin_hwdb_exit(struct udev *udev __attribute__((unused))) {
         hwdb = udev_hwdb_unref(hwdb);
+        log_debug("Unloaded hardware database.");
 }
 
 /* called every couple of seconds during event activity; 'true' if config has changed */
