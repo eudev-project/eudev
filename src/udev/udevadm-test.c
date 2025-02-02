@@ -47,6 +47,7 @@ static void help(void) {
                "     --version                         Show package version\n"
                "  -a --action=ACTION                   Set action string\n"
                "  -N --resolve-names=early|late|never  When to resolve names\n"
+               "     --json=pretty|short|off           Generate JSON output\n"
                , program_invocation_short_name);
 }
 
@@ -58,12 +59,18 @@ static int adm_test(struct udev *udev, int argc, char *argv[]) {
         _cleanup_udev_rules_unref_ struct udev_rules *rules = NULL;
         _cleanup_udev_device_unref_ struct udev_device *dev = NULL;
         _cleanup_udev_event_unref_ struct udev_event *event = NULL;
+        JsonFormatFlags json_format_flags = JSON_FORMAT_OFF;
         sigset_t mask, sigmask_orig;
-        int rc = 0, c;
+        int rc = 0, c, r;
+
+        enum {
+                ARG_JSON = 0x100,
+        };
 
         static const struct option options[] = {
                 { "action", required_argument, NULL, 'a' },
                 { "resolve-names", required_argument, NULL, 'N' },
+                { "json", required_argument, NULL, ARG_JSON },
                 { "help", no_argument, NULL, 'h' },
                 { "version", no_argument, NULL, 'V' },
                 {}
@@ -88,6 +95,13 @@ static int adm_test(struct udev *udev, int argc, char *argv[]) {
                                 log_error("resolve-names must be early, late or never");
                                 exit(EXIT_FAILURE);
                         }
+                        break;
+                case ARG_JSON:
+                        r = parse_json_argument(optarg, &json_format_flags);
+                        if (r < 0)
+                                exit(EXIT_FAILURE);
+                        if (r == 0)
+                                exit(EXIT_SUCCESS);
                         break;
                 case 'h':
                         help();
@@ -160,7 +174,11 @@ static int adm_test(struct udev *udev, int argc, char *argv[]) {
                                  &sigmask_orig);
 
         maybe_insert_empty_line();
-        (void) dump_event(event, JSON_FORMAT_OFF, NULL);
+        r = dump_event(event, json_format_flags, NULL);
+        if (r < 0) {
+                log_error_errno(r, "Failed to dump result: %m");
+                rc = 1;
+        }
         maybe_insert_empty_line();
 out:
         if (event != NULL && event->fd_signal >= 0)
