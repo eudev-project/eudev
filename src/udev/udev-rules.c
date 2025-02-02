@@ -2763,36 +2763,31 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                         if (match_key(rules, cur, event->program_result) != 0)
                                 goto nomatch;
                         break;
-                case TK_A_DUMP:
+                case TK_A_DUMP: {
+                        _cleanup_free_ char *buf = NULL;
+                        size_t size = 0;
+                        FILE *f;
+
                         log_info("%s: %s:%u Dumping current state:", udev_device_get_sysname(event->dev),
                                  rules_str(rules, rule->rule.filename_off), rule->rule.filename_line);
 
-                        if (event->event_mode == EVENT_UDEV_WORKER) {
-                                _cleanup_free_ char *buf = NULL;
-                                size_t size = 0;
-                                FILE *f;
-
-                                f = open_memstream(&buf, &size);
-                                if (!f) {
-                                        log_oom();
-                                        break;
-                                }
-
-                                dump_event(event, f);
-
-                                if (fclose(f) != 0)
-                                        log_warning_errno(errno, "Failed to finalize memory stream, ignoring: %m");
-                                else
-                                        log_full_long(LOG_INFO, buf);
-                        } else {
-                                puts("============================");
-                                dump_event(event, NULL);
-                                puts("============================");
+                        f = open_memstream(&buf, &size);
+                        if (!f) {
+                                log_oom();
+                                break;
                         }
+
+                        dump_event(event, f);
+
+                        if (fclose(f) != 0)
+                                log_warning_errno(errno, "Failed to finalize memory stream, ignoring: %m");
+                        else
+                                log_full_long(LOG_INFO, buf);
 
                         log_info("%s: %s:%u DONE", udev_device_get_sysname(event->dev),
                                  rules_str(rules, rule->rule.filename_off), rule->rule.filename_line);
                         break;
+                }
                 case TK_A_STRING_ESCAPE_NONE:
                         esc = ESCAPE_NONE;
                         break;
