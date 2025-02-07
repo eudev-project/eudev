@@ -96,6 +96,7 @@ static inline int device_get_sysattr_unsigned(struct udev_device *device, const 
         return device_get_sysattr_unsigned_full(device, sysattr, 0, ret);
 }
 int device_get_sysattr_bool(struct udev_device *device, const char *sysattr);
+int device_get_sysnum_unsigned(struct udev_device *device, unsigned *ret);
 
 /* libudev-monitor.c - netlink/unix socket communication  */
 int udev_monitor_disconnect(struct udev_monitor *udev_monitor);

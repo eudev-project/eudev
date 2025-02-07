@@ -337,3 +337,22 @@ int device_get_sysattr_bool(struct udev_device *device, const char *sysattr)
 
         return parse_boolean(value);
 }
+
+int device_get_sysnum_unsigned(struct udev_device *device, unsigned *ret)
+{
+        const char *s;
+        unsigned n;
+        int r;
+
+        s = udev_device_get_sysnum(device);
+        if (!s)
+                return -ENOENT;
+
+        r = safe_atou_full(s, SAFE_ATO_REFUSE_PLUS_MINUS | SAFE_ATO_REFUSE_LEADING_WHITESPACE | 10, &n);
+        if (r < 0)
+                return r;
+
+        if (ret)
+                *ret = n;
+        return 0;
+}

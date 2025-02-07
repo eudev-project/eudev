@@ -82,20 +82,18 @@ out:
 ** See drivers/scsi/scsi_scan.c::scsilun_to_int() for more details.
 */
 static int format_lun_number(struct udev_device *dev, char **path) {
-        const char *sysnum;
-        unsigned long lun;
+        unsigned lun;
+        int r;
 
-        sysnum = udev_device_get_sysnum(dev);
-        if (!sysnum)
-                return -ENOENT;
-
-        lun = strtoul(sysnum, NULL, 10);
+        r = device_get_sysnum_unsigned(dev, &lun);
+        if (r < 0)
+                return r;
 
         /* address method 0, peripheral device addressing with bus id of zero */
         if (lun < 256)
-                return path_prepend(path, "lun-%lu", lun);
+                return path_prepend(path, "lun-%u", lun);
         /* handle all other lun addressing methods by using a variant of the original lun format */
-        return path_prepend(path, "lun-0x%04lx%04lx00000000", lun & 0xffff, (lun >> 16) & 0xffff);
+        return path_prepend(path, "lun-0x%04x%04x00000000", lun & 0xffff, (lun >> 16) & 0xffff);
 }
 
 static struct udev_device *skip_subsystem(struct udev_device *dev, const char *subsys) {

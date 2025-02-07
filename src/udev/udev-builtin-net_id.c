@@ -1372,7 +1372,7 @@ static int names_mac(struct udev_device *dev, const char *prefix, enum udev_even
 
 static int names_netdevsim(struct udev_device *dev, const char *prefix, enum udev_event_mode mode) {
         struct udev_device *netdevsimdev;
-        const char *phys_port_name, *sysnum;
+        const char *phys_port_name;
         unsigned addr;
         char str[IFNAMSIZ];
         int r;
@@ -1389,13 +1389,9 @@ static int names_netdevsim(struct udev_device *dev, const char *prefix, enum ude
         if (!netdevsimdev)
                 return -ENOENT;
 
-        sysnum = udev_device_get_sysnum(netdevsimdev);
-        if (!sysnum)
-                return log_device_debug_errno(netdevsimdev, ENOENT, "Failed to get device sysnum.");
-
-        r = safe_atou_full(sysnum, SAFE_ATO_REFUSE_PLUS_MINUS | SAFE_ATO_REFUSE_LEADING_WHITESPACE | 10, &addr);
+        r = device_get_sysnum_unsigned(netdevsimdev, &addr);
         if (r < 0)
-                return log_device_debug_errno(netdevsimdev, r, "Failed to parse device sysnum: %m");
+                return log_device_debug_errno(netdevsimdev, r, "Failed to get device sysnum: %m");
 
         r = device_get_sysattr_safe_string_filtered(dev, "phys_port_name", &phys_port_name);
         if (r < 0)
