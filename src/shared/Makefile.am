@@ -9,6 +9,7 @@ libudev_shared_la_SOURCES=\
 	device-nodes.c \
 	dev-setup.c \
 	efivars.c \
+	factory-reset.c \
 	fileio.c \
 	hashmap.c \
 	id128-util.c \
@@ -44,6 +45,7 @@ noinst_HEADERS = \
 	device-nodes.h \
 	dev-setup.h \
 	efivars.h \
+	factory-reset.h \
 	fileio.h \
 	formats-util.h \
 	hashmap.h \
