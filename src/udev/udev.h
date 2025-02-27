@@ -181,6 +181,7 @@ enum udev_builtin_cmd {
         UDEV_BUILTIN_BLKID,
 #endif
         UDEV_BUILTIN_BTRFS,
+        UDEV_BUILTIN_FACTORY_RESET,
         UDEV_BUILTIN_HWDB,
         UDEV_BUILTIN_INPUT_ID,
         UDEV_BUILTIN_KEYBOARD,
@@ -206,6 +207,7 @@ struct udev_builtin {
 extern const struct udev_builtin udev_builtin_blkid;
 #endif
 extern const struct udev_builtin udev_builtin_btrfs;
+extern const struct udev_builtin udev_builtin_factory_reset;
 extern const struct udev_builtin udev_builtin_hwdb;
 extern const struct udev_builtin udev_builtin_input_id;
 extern const struct udev_builtin udev_builtin_keyboard;

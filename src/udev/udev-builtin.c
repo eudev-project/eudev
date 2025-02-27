@@ -34,6 +34,7 @@ static const struct udev_builtin *builtins[] = {
         [UDEV_BUILTIN_BLKID] = &udev_builtin_blkid,
 #endif
         [UDEV_BUILTIN_BTRFS] = &udev_builtin_btrfs,
+        [UDEV_BUILTIN_FACTORY_RESET] = &udev_builtin_factory_reset,
         [UDEV_BUILTIN_HWDB] = &udev_builtin_hwdb,
         [UDEV_BUILTIN_INPUT_ID] = &udev_builtin_input_id,
         [UDEV_BUILTIN_KEYBOARD] = &udev_builtin_keyboard,
