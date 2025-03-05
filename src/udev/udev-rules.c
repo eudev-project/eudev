@@ -1385,23 +1385,30 @@ static int add_rule(struct udev_rules *rules, char *line,
                                         goto invalid;
                         } else {
                                 static const char *blacklist[] = {
-                                        "ACTION",
-                                        "SUBSYSTEM",
-                                        "DEVTYPE",
-                                        "MAJOR",
-                                        "MINOR",
-                                        "DRIVER",
-                                        "IFINDEX",
-                                        "DEVNAME",
-                                        "DEVLINKS",
-                                        "DEVPATH",
-                                        "TAGS",
+                                        /* basic properties set by kernel, only in netlink event */
+                                        "ACTION", "SEQNUM", "SYNTH_UUID",
+                                        /* basic properties set by kernel, both in netlink event and uevent file */
+                                        "DEVPATH", "DEVPATH_OLD", "SUBSYSTEM", "DEVTYPE", "DRIVER", "MODALIAS",
+                                        /* device node */
+                                        "DEVNAME", "DEVMODE", "DEVUID", "DEVGID", "MAJOR", "MINOR",
+                                        /* block device */
+                                        "DISKSEQ", "PARTN",
+                                        /* network interface (INTERFACE_OLD is set by udevd) */
+                                        "IFINDEX", "INTERFACE", "INTERFACE_OLD",
+                                        /* basic properties set by udevd */
+                                        "DEVLINKS", "TAGS", "CURRENT_TAGS", "USEC_INITIALIZED", "UDEV_DATABASE_VERSION",
                                 };
                                 unsigned int i;
 
                                 for (i = 0; i < ELEMENTSOF(blacklist); i++) {
                                         if (!streq(attr, blacklist[i]))
                                                 continue;
+                                        log_error("invalid ENV attribute, '%s' can not be set %s:%u", attr, filename, lineno);
+                                        goto invalid;
+                                }
+                                /* Similar to SYNTH_UUID, but set based on KEY=VALUE arguments passed by userspace.
+                                 * See kernel's f36776fafbaa0094390dd4e7e3e29805e0b82730 (v4.13) */
+                                if (startswith(attr, "SYNTH_ARG_")) {
                                         log_error("invalid ENV attribute, '%s' can not be set %s:%u", attr, filename, lineno);
                                         goto invalid;
                                 }
