@@ -37,7 +37,8 @@ dist_udevrules_DATA = \
 	70-touchpad.rules \
 	75-net-description.rules \
 	78-sound-card.rules \
-	81-net-dhcp.rules
+	81-net-dhcp.rules \
+	90-image-dissect.rules
 
 if !ENABLE_RULE_GENERATOR
 dist_udevrules_DATA += \
