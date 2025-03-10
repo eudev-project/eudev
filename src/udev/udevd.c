@@ -55,6 +55,7 @@
 #include "dev-setup.h"
 #include "fileio.h"
 #include "hashmap.h"
+#include "set.h"
 
 #define WORKER_NUM_MAX UINT64_C(2048)
 
@@ -116,6 +117,8 @@ static usec_t arg_event_timeout_warn_usec = DEFAULT_EVENT_TIMEOUT_USEC / 3;
 static sigset_t sigmask_orig;
 static UDEV_LIST(event_list);
 Hashmap *workers;
+/* the processes that re-read the partition table of a disk, see synthesize_change() */
+static Set *synthesize_change_children;
 static struct udev_list properties_list;
 static bool udev_exit;
 static char udevd_ready_string[] = "udevd ready\n";
@@ -462,6 +465,8 @@ static void worker_spawn(struct event *event) {
                 event->dev = NULL;
 
                 workers_free();
+                set_free(synthesize_change_children);
+                synthesize_change_children = NULL;
                 event_queue_cleanup(udev, EVENT_UNDEF);
                 udev_monitor_unref(monitor);
                 udev_ctrl_unref(udev_ctrl);
@@ -1298,99 +1303,141 @@ static void handle_ctrl_msg(struct udev_ctrl *uctrl) {
         return;
 }
 
+static int synthesize_change_all(struct udev_device *dev) {
+        char filename[UTIL_PATH_SIZE];
+        bool part_table_read = false;
+        bool has_partitions = false;
+        int fd, r;
+        struct udev *udev = udev_device_get_udev(dev);
+        _cleanup_udev_enumerate_unref_ struct udev_enumerate *e = NULL;
+        struct udev_list_entry *item;
+
+        /*
+         * Try to re-read the partition table. This only succeeds if
+         * none of the devices is busy. The kernel returns 0 if no
+         * partition table is found, and we will not get an event for
+         * the disk.
+         */
+        fd = open(udev_device_get_devnode(dev), O_RDONLY|O_CLOEXEC|O_NOFOLLOW|O_NONBLOCK);
+        if (fd >= 0) {
+                r = flock(fd, LOCK_EX|LOCK_NB);
+                if (r >= 0)
+                        r = ioctl(fd, BLKRRPART, 0);
+
+                close(fd);
+                if (r >= 0)
+                        part_table_read = true;
+        }
+
+        /* search for partitions */
+        e = udev_enumerate_new(udev);
+        if (!e)
+                return -ENOMEM;
+
+        r = udev_enumerate_add_match_parent(e, dev);
+        if (r < 0)
+                return r;
+
+        r = udev_enumerate_add_match_subsystem(e, "block");
+        if (r < 0)
+                return r;
+
+        r = udev_enumerate_scan_devices(e);
+        if (r < 0)
+                return r;
+
+        udev_list_entry_foreach(item, udev_enumerate_get_list_entry(e)) {
+                _cleanup_udev_device_unref_ struct udev_device *d = NULL;
+
+                d = udev_device_new_from_syspath(udev, udev_list_entry_get_name(item));
+                if (!d)
+                        continue;
+
+                if (!streq_ptr("partition", udev_device_get_devtype(d)))
+                        continue;
+
+                has_partitions = true;
+                break;
+        }
+
+        /*
+         * We have partitions and re-read the table, the kernel already sent
+         * out a "change" event for the disk, and "remove/add" for all
+         * partitions.
+         */
+        if (part_table_read && has_partitions)
+                return 0;
+
+        /*
+         * We have partitions but re-reading the partition table did not
+         * work, synthesize "change" for the disk and all partitions.
+         */
+        log_debug("device %s closed, synthesising 'change'", udev_device_get_devnode(dev));
+        strscpyl(filename, sizeof(filename), udev_device_get_syspath(dev), "/uevent", NULL);
+        write_string_file(filename, "change");
+
+        udev_list_entry_foreach(item, udev_enumerate_get_list_entry(e)) {
+                _cleanup_udev_device_unref_ struct udev_device *d = NULL;
+
+                d = udev_device_new_from_syspath(udev, udev_list_entry_get_name(item));
+                if (!d)
+                        continue;
+
+                if (!streq_ptr("partition", udev_device_get_devtype(d)))
+                        continue;
+
+                log_debug("device %s closed, synthesising partition '%s' 'change'",
+                          udev_device_get_devnode(dev), udev_device_get_devnode(d));
+                strscpyl(filename, sizeof(filename), udev_device_get_syspath(d), "/uevent", NULL);
+                write_string_file(filename, "change");
+        }
+
+        return 0;
+}
+
 static int synthesize_change(struct udev_device *dev) {
         char filename[UTIL_PATH_SIZE];
+        pid_t pid;
         int r;
 
         if (streq_ptr("block", udev_device_get_subsystem(dev)) &&
             streq_ptr("disk", udev_device_get_devtype(dev)) &&
             !startswith(udev_device_get_sysname(dev), "dm-")) {
-                bool part_table_read = false;
-                bool has_partitions = false;
-                int fd;
-                struct udev *udev = udev_device_get_udev(dev);
-                _cleanup_udev_enumerate_unref_ struct udev_enumerate *e = NULL;
-                struct udev_list_entry *item;
-
-                /*
-                 * Try to re-read the partition table. This only succeeds if
-                 * none of the devices is busy. The kernel returns 0 if no
-                 * partition table is found, and we will not get an event for
-                 * the disk.
-                 */
-                fd = open(udev_device_get_devnode(dev), O_RDONLY|O_CLOEXEC|O_NOFOLLOW|O_NONBLOCK);
-                if (fd >= 0) {
-                        r = flock(fd, LOCK_EX|LOCK_NB);
-                        if (r >= 0)
-                                r = ioctl(fd, BLKRRPART, 0);
-
-                        close(fd);
-                        if (r >= 0)
-                                part_table_read = true;
+                /* Make room for the PID before forking, so that it can be stored; without it, the queue
+                 * file would not be kept while the process runs, so then re-read the partition table
+                 * synchronously, as before. */
+                r = set_ensure_allocated(&synthesize_change_children, NULL);
+                if (r >= 0)
+                        r = set_reserve(synthesize_change_children, 1);
+                if (r < 0) {
+                        log_debug_errno(r, "Failed to allocate memory to remember the process re-reading the partition table of %s, re-reading it synchronously: %m",
+                                        udev_device_get_devnode(dev));
+                        return synthesize_change_all(dev);
                 }
 
-                /* search for partitions */
-                e = udev_enumerate_new(udev);
-                if (!e)
-                        return -ENOMEM;
+                pid = fork();
+                if (pid < 0)
+                        return log_debug_errno(errno, "Failed to fork process to re-read partition table of %s: %m",
+                                               udev_device_get_devnode(dev));
+                if (pid == 0) {
+                        /* child */
+                        (void) prctl(PR_SET_NAME, "(udev-synth)");
+                        (void) prctl(PR_SET_PDEATHSIG, SIGTERM);
+                        (void) sigprocmask(SIG_SETMASK, &sigmask_orig, NULL);
 
-                r = udev_enumerate_add_match_parent(e, dev);
-                if (r < 0)
-                        return r;
+                        /* Like FORK_CLOSE_ALL_FDS of systemd: close all file descriptors above stderr. The log
+                         * is closed first, as its descriptor is closed too. */
+                        log_close();
+                        (void) close_all_fds();
 
-                r = udev_enumerate_add_match_subsystem(e, "block");
-                if (r < 0)
-                        return r;
-
-                r = udev_enumerate_scan_devices(e);
-                if (r < 0)
-                        return r;
-
-                udev_list_entry_foreach(item, udev_enumerate_get_list_entry(e)) {
-                        _cleanup_udev_device_unref_ struct udev_device *d = NULL;
-
-                        d = udev_device_new_from_syspath(udev, udev_list_entry_get_name(item));
-                        if (!d)
-                                continue;
-
-                        if (!streq_ptr("partition", udev_device_get_devtype(d)))
-                                continue;
-
-                        has_partitions = true;
-                        break;
+                        (void) synthesize_change_all(dev);
+                        _exit(EXIT_SUCCESS);
                 }
 
-                /*
-                 * We have partitions and re-read the table, the kernel already sent
-                 * out a "change" event for the disk, and "remove/add" for all
-                 * partitions.
-                 */
-                if (part_table_read && has_partitions)
-                        return 0;
-
-                /*
-                 * We have partitions but re-reading the partition table did not
-                 * work, synthesize "change" for the disk and all partitions.
-                 */
-                log_debug("device %s closed, synthesising 'change'", udev_device_get_devnode(dev));
-                strscpyl(filename, sizeof(filename), udev_device_get_syspath(dev), "/uevent", NULL);
-                write_string_file(filename, "change");
-
-                udev_list_entry_foreach(item, udev_enumerate_get_list_entry(e)) {
-                        _cleanup_udev_device_unref_ struct udev_device *d = NULL;
-
-                        d = udev_device_new_from_syspath(udev, udev_list_entry_get_name(item));
-                        if (!d)
-                                continue;
-
-                        if (!streq_ptr("partition", udev_device_get_devtype(d)))
-                                continue;
-
-                        log_debug("device %s closed, synthesising partition '%s' 'change'",
-                                  udev_device_get_devnode(dev), udev_device_get_devnode(d));
-                        strscpyl(filename, sizeof(filename), udev_device_get_syspath(d), "/uevent", NULL);
-                        write_string_file(filename, "change");
-                }
+                /* This does not fail, the room was made above. */
+                r = set_put(synthesize_change_children, UINT_TO_PTR(pid));
+                if (r < 0)
+                        log_warning_errno(r, "Failed to remember process ["PID_FMT"], ignoring: %m", pid);
 
                 return 0;
         }
@@ -1452,6 +1499,11 @@ static void handle_signal(struct udev *udev __attribute__((unused)), int signo) 
                         pid = waitpid(-1, &status, WNOHANG);
                         if (pid <= 0)
                                 break;
+
+                        if (set_remove(synthesize_change_children, UINT_TO_PTR(pid))) {
+                                log_debug("process ["PID_FMT"] re-reading the partition table exited", pid);
+                                continue;
+                        }
 
                         worker = hashmap_get(workers, UINT_TO_PTR(pid));
                         if (!worker) {
@@ -2133,6 +2185,7 @@ exit:
         if (fd_ep >= 0)
                 close(fd_ep);
         workers_free();
+        set_free(synthesize_change_children);
         event_queue_cleanup(udev, EVENT_UNDEF);
         udev_rules_unref(rules);
         udev_builtin_exit(udev);

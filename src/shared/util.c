@@ -134,6 +134,50 @@ int cpus_in_affinity_mask(void) {
         }
 }
 
+/* Like close_all_fds() of systemd without exceptions: closes all file descriptors above stderr, e.g. in a
+ * child process, like FORK_CLOSE_ALL_FDS. Call log_close() before, as the descriptors of the log are closed
+ * too. */
+int close_all_fds(void) {
+        _cleanup_closedir_ DIR *d = NULL;
+        struct dirent *de;
+        int r = 0;
+
+#ifdef __NR_close_range
+        /* Linux 5.9 or newer */
+        if (syscall(__NR_close_range, 3U, ~0U, 0) >= 0)
+                return 0;
+#endif
+
+        d = opendir("/proc/self/fd");
+        if (!d) {
+                long m;
+                int fd;
+
+                /* Without /proc, close all possible ones. */
+                m = sysconf(_SC_OPEN_MAX);
+                if (m <= 0 || m > INT_MAX)
+                        m = 65536;
+
+                for (fd = 3; fd < m; fd++)
+                        (void) close(fd);
+
+                return 0;
+        }
+
+        while ((de = readdir(d))) {
+                int fd, k;
+
+                if (safe_atoi(de->d_name, &fd) < 0 || fd <= STDERR_FILENO || fd == dirfd(d))
+                        continue;
+
+                k = close_nointr(fd);
+                if (k < 0 && k != -EBADF && r == 0)
+                        r = k;
+        }
+
+        return r;
+}
+
 bool streq_ptr(const char *a, const char *b) {
 
         /* Like streq(), but tries to make sense of NULL pointers */

@@ -1,6 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <getopt.h>
@@ -361,33 +360,6 @@ static int devname_from_devnum(struct udev *udev, dev_t devnum, char **ret) {
 
         *ret = s;
         return 0;
-}
-
-static void close_all_fds(void) {
-        _cleanup_closedir_ DIR *d = NULL;
-        struct dirent *de;
-        long max, fd;
-
-        d = opendir("/proc/self/fd");
-        if (d) {
-                while ((de = readdir(d))) {
-                        int i;
-
-                        if (safe_atoi(de->d_name, &i) < 0)
-                                continue;
-                        if (i < 3 || i == dirfd(d))
-                                continue;
-
-                        (void) close(i);
-                }
-                return;
-        }
-
-        max = sysconf(_SC_OPEN_MAX);
-        if (max <= 0)
-                max = 1024;
-        for (fd = 3; fd < max; fd++)
-                (void) close((int) fd);
 }
 
 static void reset_signals(void) {
