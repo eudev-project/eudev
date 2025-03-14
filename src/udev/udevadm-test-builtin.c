@@ -85,6 +85,12 @@ static int adm_builtin(struct udev *udev, int argc, char *argv[]) {
                         assert_not_reached("Unknown option");
                 }
 
+        if (argc - optind > 2) {
+                log_error("Expected two arguments: command string and device path.");
+                rc = EXIT_FAILURE;
+                goto out;
+        }
+
         command = argv[optind++];
         if (command == NULL) {
                 fprintf(stderr, "command missing\n");
