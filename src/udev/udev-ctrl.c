@@ -38,6 +38,7 @@ enum udev_ctrl_msg_type {
         UDEV_CTRL_PING,
         UDEV_CTRL_EXIT,
         UDEV_CTRL_SET_TRACE,
+        UDEV_CTRL_REVERT,
 };
 
 struct udev_ctrl_msg_wire {
@@ -261,7 +262,7 @@ struct udev_ctrl_connection *udev_ctrl_connection_unref(struct udev_ctrl_connect
 /* udevd replies to these messages with one byte before it closes the connection. An udevd that does not know
  * such a message closes the connection without a reply, which is how the message is found unsupported. */
 static bool ctrl_msg_type_has_reply(enum udev_ctrl_msg_type type) {
-        return type == UDEV_CTRL_SET_TRACE;
+        return IN_SET(type, UDEV_CTRL_SET_TRACE, UDEV_CTRL_REVERT);
 }
 
 static int ctrl_send(struct udev_ctrl *uctrl, enum udev_ctrl_msg_type type, int intval, const char *buf, int timeout) {
@@ -365,6 +366,10 @@ int udev_ctrl_send_exit(struct udev_ctrl *uctrl, int timeout) {
 
 int udev_ctrl_send_set_trace(struct udev_ctrl *uctrl, bool enable, int timeout) {
         return ctrl_send(uctrl, UDEV_CTRL_SET_TRACE, enable, NULL, timeout);
+}
+
+int udev_ctrl_send_revert(struct udev_ctrl *uctrl, int timeout) {
+        return ctrl_send(uctrl, UDEV_CTRL_REVERT, 0, NULL, timeout);
 }
 
 /* Tells the sender of a message that has a reply that udevd handled it, see ctrl_msg_type_has_reply(). */
@@ -527,5 +532,11 @@ int udev_ctrl_get_exit(struct udev_ctrl_msg *ctrl_msg) {
 int udev_ctrl_get_set_trace(struct udev_ctrl_msg *ctrl_msg) {
         if (ctrl_msg->ctrl_msg_wire.type == UDEV_CTRL_SET_TRACE)
                 return !!ctrl_msg->ctrl_msg_wire.intval;
+        return -1;
+}
+
+int udev_ctrl_get_revert(struct udev_ctrl_msg *ctrl_msg) {
+        if (ctrl_msg->ctrl_msg_wire.type == UDEV_CTRL_REVERT)
+                return 1;
         return -1;
 }

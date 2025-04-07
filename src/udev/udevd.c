@@ -87,6 +87,8 @@ static bool control_trace = false;
 /* trace logging is enabled, then the log level is debug */
 static bool trace = false;
 static unsigned arg_children_max;
+/* the maximum number of workers before udevadm control changes it */
+static unsigned default_children_max;
 static int arg_exec_delay;
 static usec_t arg_event_timeout_usec = 180 * USEC_PER_SEC;
 static usec_t arg_event_timeout_warn_usec = 180 * USEC_PER_SEC / 3;
@@ -1100,6 +1102,30 @@ static void manager_set_trace(bool enable) {
         worker_kill(false);
 }
 
+/* Like manager_revert() of systemd: reverts the settings of udevadm control. */
+static void manager_revert(void) {
+        int old_log_level = log_get_max_level(), log_level;
+        bool old_trace = trace, kill = false;
+
+        if (udev_list_get_entry(&properties_list)) {
+                udev_list_cleanup(&properties_list);
+                kill = true;
+        }
+
+        control_log_level = -1;
+        control_trace = false;
+        log_level = manager_merge_config_log_level();
+        arg_children_max = default_children_max;
+
+        if (log_level != old_log_level || trace != old_trace) {
+                log_set_max_level(log_level);
+                kill = true;
+        }
+
+        if (kill)
+                worker_kill(false);
+}
+
 /* receive the udevd message from userspace */
 static void handle_ctrl_msg(struct udev_ctrl *uctrl) {
         _cleanup_udev_ctrl_connection_unref_ struct udev_ctrl_connection *ctrl_conn = NULL;
@@ -1167,6 +1193,12 @@ static void handle_ctrl_msg(struct udev_ctrl *uctrl) {
                         free(key);
                 }
                 worker_kill(false);
+        }
+
+        if (udev_ctrl_get_revert(ctrl_msg) > 0) {
+                log_debug("udevd message (REVERT) received");
+                manager_revert();
+                (void) udev_ctrl_msg_reply(ctrl_msg);
         }
 
         i = udev_ctrl_get_set_trace(ctrl_msg);
@@ -1741,6 +1773,7 @@ int main(int argc, char *argv[]) {
                 }
         }
         log_debug("set children_max to %u", arg_children_max);
+        default_children_max = arg_children_max;
 
         udev_list_node_init(&event_list);
 
