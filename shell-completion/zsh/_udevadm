@@ -77,6 +77,7 @@ _udevadm_control(){
         '(-m --children-max=)'{-m,--children-max=}'[Set the maximum number of events.]:N' \
         '--ping[Send a ping message to udevd and wait for the reply.]' \
         '--trace=[Enable/disable trace logging.]:BOOL' \
+        '--revert[Revert previously set configurations.]' \
         '--timeout=[The maximum number of seconds to wait for a reply from udevd.]:SECONDS'
 }
 

@@ -697,6 +697,14 @@
           </listitem>
         </varlistentry>
         <varlistentry>
+          <term><option>--revert</option></term>
+          <listitem>
+            <para>Revert settings previously set with <command>udevadm control</command> command. When
+            specified, settings set with <option>-l/--log-level=</option>, <option>--trace</option>,
+            <option>-m/--children-max=</option>, and <option>-p/--property=</option> will be cleared.</para>
+          </listitem>
+        </varlistentry>
+        <varlistentry>
           <term><option>--timeout=</option><replaceable>seconds</replaceable></term>
           <listitem>
             <para>The maximum number of seconds to wait for a reply from udevd.</para>
