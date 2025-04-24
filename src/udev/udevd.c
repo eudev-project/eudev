@@ -1079,7 +1079,9 @@ static void worker_returned(int fd_worker) {
 static void event_queue_update(void) {
         int r;
 
-        if (!udev_list_node_is_empty(&event_list)) {
+        /* keep /run/udev/queue also while child processes are re-reading partition tables, which trigger
+         * events */
+        if (!udev_list_node_is_empty(&event_list) || !set_isempty(synthesize_change_children)) {
                 r = touch("/run/udev/queue");
                 if (r < 0)
                         log_warning_errno(r, "could not touch /run/udev/queue: %m");
