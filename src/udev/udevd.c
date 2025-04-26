@@ -945,7 +945,26 @@ static void log_event_queued(struct udev_device *dev) {
 
 static int event_queue_insert(struct udev_device *dev) {
         _cleanup_free_ char *devpath = NULL, *devpath_old = NULL, *devnode = NULL;
-        struct event *event;
+        struct udev_list_node *loop;
+        struct event *event, *prev = NULL;
+        unsigned long long int seqnum = udev_device_get_seqnum(dev);
+
+        /* The kernel sometimes sends events in a wrong order, and we may receive an event with smaller
+         * SEQNUM after one with larger SEQNUM. To workaround the issue, let's reorder events if necessary:
+         * is_devpath_busy() relies on the queue being sorted by SEQNUM. Search the queue backwards for the
+         * place of the event. */
+        for (loop = event_list.prev; loop != &event_list; loop = loop->prev) {
+                struct event *e = node_to_event(loop);
+
+                if (e->seqnum < seqnum) {
+                        prev = e;
+                        break;
+                }
+                if (e->seqnum == seqnum)
+                        return log_device_warning_errno(dev, EALREADY,
+                                                        "The event (SEQNUM=%llu) has been already queued.",
+                                                        seqnum);
+        }
 
         if (free_and_strdup(&devpath, udev_device_get_devpath(dev)) < 0 ||
             free_and_strdup(&devpath_old, udev_device_get_devpath_old(dev)) < 0 ||
@@ -958,18 +977,30 @@ static int event_queue_insert(struct udev_device *dev) {
 
         event->udev = udev_device_get_udev(dev);
         event->dev = dev;
-        event->seqnum = udev_device_get_seqnum(dev);
+        event->seqnum = seqnum;
         event->devpath = TAKE_PTR(devpath);
         event->devpath_old = TAKE_PTR(devpath_old);
         event->devnode = TAKE_PTR(devnode);
         event->devnum = udev_device_get_devnum(dev);
         event->is_block = streq("block", udev_device_get_subsystem(dev));
         event->ifindex = udev_device_get_ifindex(dev);
+        event->state = EVENT_QUEUED;
+
+        /* udev_list_node_append() inserts the node before the given one: right after prev, or at the head of
+         * the queue when every queued event has a larger SEQNUM. */
+        udev_list_node_append(&event->node, prev ? prev->node.next : event_list.next);
+        if (event->node.next != &event_list) {
+                log_device_debug(dev, "Unordered event is received (last queued event seqnum=%llu, newly received event seqnum=%llu), reordering.",
+                                 node_to_event(event_list.prev)->seqnum, seqnum);
+
+                /* The inserted event may block the events after it, which may have found an earlier event that
+                 * blocks them, see is_devpath_busy(): it does not look again at the events before that one.
+                 * Let them look at all events again. */
+                for (loop = event->node.next; loop != &event_list; loop = loop->next)
+                        node_to_event(loop)->delaying_seqnum = 0;
+        }
 
         log_event_queued(dev);
-
-        event->state = EVENT_QUEUED;
-        udev_list_node_append(&event->node, &event_list);
         return 0;
 }
 
