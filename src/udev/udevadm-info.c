@@ -1308,6 +1308,7 @@ static int uinfo(struct udev *udev, int argc, char *argv[]) {
                 ACTION_DEVICE_ID_FILE,
                 ACTION_TREE,
                 ACTION_EXPORT,
+                ACTION_CLEANUP_DB,
         } action = ACTION_QUERY;
 
         enum query_type query = QUERY_ALL;
@@ -1391,8 +1392,8 @@ static int uinfo(struct udev *udev, int argc, char *argv[]) {
                         action = ACTION_EXPORT;
                         break;
                 case 'c':
-                        cleanup_db(udev);
-                        return 0;
+                        action = ACTION_CLEANUP_DB;
+                        break;
                 case 'x':
                         export = true;
                         break;
@@ -1463,22 +1464,28 @@ static int uinfo(struct udev *udev, int argc, char *argv[]) {
                 return 1;
         }
 
-        if (action == ACTION_DEVICE_ID_FILE) {
-                if (argv[optind]) {
-                        log_error("Positional arguments are not allowed with -d/--device-id-of-file.");
-                        return 1;
-                }
-                if (stat_device(name, export, export_prefix) != 0)
-                        return 1;
-                return 0;
-        }
-
         for (; optind < argc; optind++) {
                 r = strv_extend(&devices, argv[optind]);
                 if (r < 0) {
                         log_error_errno(r, "Failed to build argument list: %m");
                         return 1;
                 }
+        }
+
+        if (IN_SET(action, ACTION_DEVICE_ID_FILE, ACTION_CLEANUP_DB) && !strv_isempty(devices)) {
+                log_error("Devices are not allowed with -d/--device-id-of-file and -c/--cleanup-db.");
+                return 1;
+        }
+
+        if (action == ACTION_CLEANUP_DB) {
+                cleanup_db(udev);
+                return 0;
+        }
+
+        if (action == ACTION_DEVICE_ID_FILE) {
+                if (stat_device(name, export, export_prefix) != 0)
+                        return 1;
+                return 0;
         }
 
         if (strv_isempty(devices)) {
