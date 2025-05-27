@@ -36,10 +36,10 @@ udevadm \- udev management tool
 \fBudevadm monitor \fR\fB[options]\fR
 .HP \w'\fBudevadm\ hwdb\ \fR\fB[options]\fR\ 'u
 \fBudevadm hwdb \fR\fB[options]\fR
-.HP \w'\fBudevadm\ test\ \fR\fB[options]\fR\fB\ \fR\fB\fIdevpath\fR\fR\fB|\fR\fB\fIfile\fR\fR\ 'u
-\fBudevadm test \fR\fB[options]\fR\fB \fR\fB\fIdevpath\fR\fR\fB|\fR\fB\fIfile\fR\fR
-.HP \w'\fBudevadm\ test\-builtin\ \fR\fB[options]\fR\fB\ \fR\fB\fIcommand\fR\fR\fB\ \fR\fB\fIdevpath\fR\fR\fB|\fR\fB\fIfile\fR\fR\ 'u
-\fBudevadm test\-builtin \fR\fB[options]\fR\fB \fR\fB\fIcommand\fR\fR\fB \fR\fB\fIdevpath\fR\fR\fB|\fR\fB\fIfile\fR\fR
+.HP \w'\fBudevadm\ test\ \fR\fB[options]\fR\fB\ \fR\fB\fIdevpath\fR\fR\fB|\fR\fB\fIfile\fR\fR\fB|\fR\fB\fIid\fR\fR\ 'u
+\fBudevadm test \fR\fB[options]\fR\fB \fR\fB\fIdevpath\fR\fR\fB|\fR\fB\fIfile\fR\fR\fB|\fR\fB\fIid\fR\fR
+.HP \w'\fBudevadm\ test\-builtin\ \fR\fB[options]\fR\fB\ \fR\fB\fIcommand\fR\fR\fB\ \fR\fB\fIdevpath\fR\fR\fB|\fR\fB\fIfile\fR\fR\fB|\fR\fB\fIid\fR\fR\ 'u
+\fBudevadm test\-builtin \fR\fB[options]\fR\fB \fR\fB\fIcommand\fR\fR\fB \fR\fB\fIdevpath\fR\fR\fB|\fR\fB\fIfile\fR\fR\fB|\fR\fB\fIid\fR\fR
 .HP \w'\fBudevadm\ verify\ \fR\fB[options]\fR\fB\ \fR\fB[\fIfile\fR\&.\&.\&.]\fR\ 'u
 \fBudevadm verify \fR\fB[options]\fR\fB \fR\fB[\fIfile\fR\&.\&.\&.]\fR
 .HP \w'\fBudevadm\ cat\ \fR\fB[options]\fR\fB\ \fR\fB[\fIfile\fR\&.\&.\&.]\fR\ 'u
@@ -69,7 +69,7 @@ Print version number\&.
 .RS 4
 Print help text\&.
 .RE
-.SS "udevadm info [\fIoptions\fR] [\fIdevpath\fR|\fIfile\fR...]"
+.SS "udevadm info [\fIoptions\fR] [\fIdevpath\fR|\fIfile\fR|\fIid\fR...]"
 .PP
 Queries the udev database for device information stored in the udev database\&. It can also query the properties of a device from its sysfs representation to help creating udev rules that match this device\&.
 .PP
@@ -273,11 +273,17 @@ Print help text\&.
 Do not pipe output into a pager\&.
 .RE
 .PP
-In addition optional positional arguments can be used to specify one or more devices\&. Each one may be a device name or a sys path\&. It must start with
+In addition optional positional arguments can be used to specify one or more devices\&. Each one may be a device name or a sys path, which must start with
 /dev
 or
 /sys
-respectively\&. The devices given with
+respectively, or a device ID, as shown in the
+J:
+field of the output (such as
+n1,
+c5:1,
+b259:1, or
++net:lo)\&. The devices given with
 \fB\-\-name=\fR
 and
 \fB\-\-path=\fR
@@ -394,7 +400,7 @@ Device property
 T}
 .TE
 .sp 1
-.SS "udevadm trigger [\fIoptions\fR] [\fIdevpath\fR|\fIfile\fR...]"
+.SS "udevadm trigger [\fIoptions\fR] [\fIdevpath\fR|\fIfile\fR|\fIid\fR...]"
 .PP
 Request device events from the kernel\&. Primarily used to replay events at system coldplug time\&.
 .PP
@@ -556,11 +562,14 @@ Print version\&.
 Print help text\&.
 .RE
 .PP
-In addition optional positional arguments can be used to specify device names or sys paths\&. They must start with
+In addition optional positional arguments can be used to specify device names or sys paths, which must start with
 /dev
 or
 /sys
-respectively\&.
+respectively, or device IDs, as shown in the
+J:
+field of
+\fBudevadm info\fR\&.
 .SS "udevadm settle [\fIoptions\fR]"
 .PP
 Watches the udev event queue, and exits if all current events are handled\&.
@@ -758,7 +767,7 @@ Specify the exact location where to write the compiled database\&.
 .RS 4
 Print help text\&.
 .RE
-.SS "udevadm test [\fIoptions\fR] [\fIdevpath\fR|\fIfile\fR]"
+.SS "udevadm test [\fIoptions\fR] [\fIdevpath\fR|\fIfile\fR|\fIid\fR]"
 .PP
 Simulate a udev event run for the given device, and print debug output\&.
 .PP
@@ -771,7 +780,11 @@ or
 /class/net/eth0, also a directory of a driver like
 /sys/bus/pci/drivers/e1000e, or as a device node or a symlink to it in
 /dev, e\&.g\&.
-/dev/sda\&. The same applies to
+/dev/sda, or as its device ID, as shown in the
+J:
+field of
+\fBudevadm info\fR, e\&.g\&.
+b8:0\&. The same applies to
 \fBudevadm test\-builtin\fR\&.
 .PP
 This command does not change the system: network interfaces are not renamed and do not get alternative names, device nodes, their permissions and their symlinks are not changed, sysfs attributes and sysctls are not written, and the udev database is not updated\&. Programs specified by
@@ -844,7 +857,7 @@ Print version\&.
 .RS 4
 Print help text\&.
 .RE
-.SS "udevadm test\-builtin [\fIoptions\fR] [\fIcommand\fR] [\fIdevpath\fR|\fIfile\fR]"
+.SS "udevadm test\-builtin [\fIoptions\fR] [\fIcommand\fR] [\fIdevpath\fR|\fIfile\fR|\fIid\fR]"
 .PP
 Run a built\-in command
 \fICOMMAND\fR

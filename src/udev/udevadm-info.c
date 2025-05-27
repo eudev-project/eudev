@@ -1531,7 +1531,7 @@ static int uinfo(struct udev *udev, int argc, char *argv[]) {
                 device = find_device(udev, *p, NULL);
                 if (!device) {
                         if (errno == EINVAL)
-                                log_error("Bad argument \"%s\", expected an absolute path in /dev/ or /sys/.", *p);
+                                log_error("Bad argument \"%s\", expected an absolute path in /dev/ or /sys/, or device ID.", *p);
                         else
                                 log_error("Unknown device \"%s\".", *p);
 

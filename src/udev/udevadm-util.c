@@ -67,6 +67,10 @@ struct udev_device *find_device(struct udev *udev,
         assert(udev);
         assert(id);
 
+        dev = udev_device_new_from_device_id(udev, id);
+        if (dev)
+                return dev;
+
         dev = device_new_from_path(udev, id);
         if (dev)
                 return dev;

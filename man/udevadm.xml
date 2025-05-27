@@ -52,10 +52,10 @@
       <command>udevadm hwdb <optional>options</optional></command>
     </cmdsynopsis>
     <cmdsynopsis>
-      <command>udevadm test <optional>options</optional> <replaceable>devpath</replaceable>|<replaceable>file</replaceable></command>
+      <command>udevadm test <optional>options</optional> <replaceable>devpath</replaceable>|<replaceable>file</replaceable>|<replaceable>id</replaceable></command>
     </cmdsynopsis>
     <cmdsynopsis>
-      <command>udevadm test-builtin <optional>options</optional> <replaceable>command</replaceable> <replaceable>devpath</replaceable>|<replaceable>file</replaceable></command>
+      <command>udevadm test-builtin <optional>options</optional> <replaceable>command</replaceable> <replaceable>devpath</replaceable>|<replaceable>file</replaceable>|<replaceable>id</replaceable></command>
     </cmdsynopsis>
     <cmdsynopsis>
       <command>udevadm verify <optional>options</optional> <optional><replaceable>file</replaceable>...</optional></command>
@@ -103,7 +103,7 @@
 
     <refsect2><title>udevadm info
       <arg choice="opt"><replaceable>options</replaceable></arg>
-      <arg choice="opt" rep="repeat"><replaceable>devpath</replaceable>|<replaceable>file</replaceable></arg>
+      <arg choice="opt" rep="repeat"><replaceable>devpath</replaceable>|<replaceable>file</replaceable>|<replaceable>id</replaceable></arg>
     </title>
 
       <para>Queries the udev database for device information
@@ -338,8 +338,11 @@
 
       <para>In addition optional positional arguments can be used
       to specify one or more devices. Each one may be a device name or
-      a sys path. It must start with <filename>/dev</filename> or
-      <filename>/sys</filename> respectively. The devices given with
+      a sys path, which must start with <filename>/dev</filename> or
+      <filename>/sys</filename> respectively, or a device ID, as shown in the
+      <literal>J:</literal> field of the output (such as <literal>n1</literal>,
+      <literal>c5:1</literal>, <literal>b259:1</literal>, or
+      <literal>+net:lo</literal>). The devices given with
       <option>--name=</option> and <option>--path=</option> are shown
       first. Only one device may be specified with
       <option>--attribute-walk</option> and <option>--tree</option>.</para>
@@ -426,7 +429,7 @@
 
     <refsect2><title>udevadm trigger
       <arg choice="opt"><replaceable>options</replaceable></arg>
-      <arg choice="opt" rep="repeat"><replaceable>devpath</replaceable>|<replaceable>file</replaceable></arg></title>
+      <arg choice="opt" rep="repeat"><replaceable>devpath</replaceable>|<replaceable>file</replaceable>|<replaceable>id</replaceable></arg></title>
       <para>Request device events from the kernel. Primarily used to replay events at system coldplug time.</para>
       <variablelist>
         <varlistentry>
@@ -646,9 +649,10 @@
       </variablelist>
 
       <para>In addition optional positional arguments can be used
-      to specify device names or sys paths. They must start with
+      to specify device names or sys paths, which must start with
       <filename>/dev</filename> or <filename>/sys</filename>
-      respectively.</para>
+      respectively, or device IDs, as shown in the <literal>J:</literal>
+      field of <command>udevadm info</command>.</para>
     </refsect2>
 
     <refsect2><title>udevadm settle
@@ -930,15 +934,16 @@
 
     <refsect2><title>udevadm test
       <arg choice="opt"><replaceable>options</replaceable></arg>
-      <arg><replaceable>devpath</replaceable>|<replaceable>file</replaceable></arg>
+      <arg><replaceable>devpath</replaceable>|<replaceable>file</replaceable>|<replaceable>id</replaceable></arg>
     </title>
       <para>Simulate a udev event run for the given device, and print debug output.</para>
       <para>The device may be given as its path in <filename>/sys</filename>, with or without the
       <filename>/sys</filename> prefix, e.g. <filename>/sys/class/net/eth0</filename> or
       <filename>/class/net/eth0</filename>, also a directory of a driver like
       <filename>/sys/bus/pci/drivers/e1000e</filename>, or as a device node or a symlink to it in
-      <filename>/dev</filename>, e.g. <filename>/dev/sda</filename>. The same applies to
-      <command>udevadm test-builtin</command>.</para>
+      <filename>/dev</filename>, e.g. <filename>/dev/sda</filename>, or as its device ID, as shown in
+      the <literal>J:</literal> field of <command>udevadm info</command>, e.g.
+      <literal>b8:0</literal>. The same applies to <command>udevadm test-builtin</command>.</para>
       <para>This command does not change the system: network interfaces are not
       renamed and do not get alternative names, device nodes, their permissions and their symlinks are not changed,
       sysfs attributes and sysctls are not written, and the udev database is not
@@ -1014,7 +1019,7 @@
     <refsect2><title>udevadm test-builtin
       <arg choice="opt"><replaceable>options</replaceable></arg>
       <arg><replaceable>command</replaceable></arg>
-      <arg><replaceable>devpath</replaceable>|<replaceable>file</replaceable></arg>
+      <arg><replaceable>devpath</replaceable>|<replaceable>file</replaceable>|<replaceable>id</replaceable></arg>
     </title>
       <para>Run a built-in command <replaceable>COMMAND</replaceable>
       for device <replaceable>DEVPATH</replaceable>, and print debug

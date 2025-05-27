@@ -21,8 +21,9 @@
 #include "terminal-util.h"
 #include "udev.h"
 
-/* Like systemd's find_device(): the device of a path in /dev or /sys, see device_new_from_path(),
- * or of that path below prefix. Sets errno on failure, EINVAL if id is not a path. */
+/* Like systemd's find_device(): the device of a device ID like "b8:0", "c1:3", "n1" or "+net:lo",
+ * of a path in /dev or /sys, see device_new_from_path(), or of that path below prefix. Sets errno
+ * on failure, EINVAL if id is not a path. */
 struct udev_device *find_device(struct udev *udev,
                                 const char *id,
                                 const char *prefix);
