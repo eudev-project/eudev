@@ -468,8 +468,11 @@ int main(int argc, char *argv[])
 
         fd = open(node, O_RDONLY|O_NONBLOCK|O_CLOEXEC|O_NOCTTY);
         if (fd < 0) {
-                log_error("unable to open '%s'", node);
-                return 1;
+                bool ignore = IN_SET(errno, ENODEV, ENXIO, ENOENT);
+                log_full_errno(ignore ? LOG_DEBUG : LOG_WARNING, errno,
+                               "Failed to open device node '%s'%s: %m",
+                               node, ignore ? ", ignoring" : "");
+                return ignore ? 0 : 1;
         }
 
         if (disk_identify(udev, fd, identify.byte, &is_packet_device) == 0) {

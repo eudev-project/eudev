@@ -42,8 +42,11 @@ int main(int argc, char** argv) {
 
         mtd_fd = open(argv[1], O_RDONLY|O_CLOEXEC|O_NOCTTY);
         if (mtd_fd < 0) {
-                log_error_errno(errno, "Failed to open: %m");
-                return EXIT_FAILURE;
+                bool ignore = IN_SET(errno, ENODEV, ENXIO, ENOENT);
+                log_full_errno(ignore ? LOG_DEBUG : LOG_WARNING, errno,
+                               "Failed to open device node '%s'%s: %m",
+                               argv[1], ignore ? ", ignoring" : "");
+                return ignore ? EXIT_SUCCESS : EXIT_FAILURE;
         }
 
         if (ioctl(mtd_fd, MEMGETINFO, &mtd_info) < 0) {

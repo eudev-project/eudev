@@ -64,8 +64,13 @@ int main(int argc, char *argv[]) {
                 return 2;
 
         fd = open(device, O_RDONLY|O_CLOEXEC|O_NOCTTY);
-        if (fd < 0)
-                return 3;
+        if (fd < 0) {
+                bool ignore = IN_SET(errno, ENODEV, ENXIO, ENOENT);
+                log_full_errno(ignore ? LOG_DEBUG : LOG_WARNING, errno,
+                               "Failed to open device node '%s'%s: %m",
+                               device, ignore ? ", ignoring" : "");
+                return ignore ? 0 : 3;
+        }
 
         if (ioctl(fd, VIDIOC_QUERYCAP, &v2cap) == 0) {
                 int capabilities;

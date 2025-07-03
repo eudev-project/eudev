@@ -929,9 +929,11 @@ int main(int argc, char *argv[])
                 nanosleep(&duration, NULL);
         }
         if (fd < 0) {
-                log_debug("unable to open '%s'", node);
-                fprintf(stderr, "unable to open '%s'\n", node);
-                rc = 1;
+                bool ignore = IN_SET(errno, ENODEV, ENXIO, ENOENT);
+                log_full_errno(ignore ? LOG_DEBUG : LOG_WARNING, errno,
+                               "Failed to open device node '%s'%s: %m",
+                               node, ignore ? ", ignoring" : "");
+                rc = ignore ? 0 : 1;
                 goto exit;
         }
         log_debug("probing: '%s'", node);
