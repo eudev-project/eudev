@@ -550,7 +550,7 @@ static int builtin_blkid(struct udev_device *dev, int argc, char *argv[], enum u
 
         fd = open(devnode, O_RDONLY|O_CLOEXEC|O_NONBLOCK|O_NOCTTY);
         if (fd < 0) {
-                bool ignore = errno == ENOENT;
+                bool ignore = IN_SET(errno, ENODEV, ENXIO, ENOENT, ENOMEDIUM);
 
                 log_debug_errno(errno, "Failed to open block device %s%s: %m",
                                 devnode, ignore ? ", ignoring" : "");
