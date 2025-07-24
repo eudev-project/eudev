@@ -42,6 +42,9 @@
 /* Three different errors for "this device does not quite exist" */
 #define ERRNO_IS_DEVICE_ABSENT(r) IN_SET(abs(r), ENODEV, ENXIO, ENOENT)
 
+/* Device is absent or "empty". We get -ENOMEDIUM from CD/DVD devices, also in VMs. */
+#define ERRNO_IS_DEVICE_ABSENT_OR_EMPTY(r) (ERRNO_IS_DEVICE_ABSENT(r) || abs(r) == ENOMEDIUM)
+
 #define UDEV_NODE_HASH_KEY ((const uint8_t[16]) { 0xb9, 0x6a, 0xf1, 0xce, 0x40, 0x31, 0x44, 0x1a, \
                                                    0x9e, 0x19, 0xec, 0x8b, 0xae, 0xf3, 0xe3, 0x2f })
 
@@ -507,7 +510,7 @@ static int link_update(struct udev_device *dev, const char *slink, bool add) {
                 return r;
 
         r = node_get_current(udev_device_get_udev(dev), slink, dirfd, &current_id, add ? &current_prio : NULL);
-        if (r < 0 && !ERRNO_IS_DEVICE_ABSENT(r))
+        if (r < 0 && !ERRNO_IS_DEVICE_ABSENT_OR_EMPTY(r))
                 return log_debug_errno(r, "Failed to get the current device node priority for '%s': %m", slink);
 
         r = stack_directory_update(dev, dirfd, add);
@@ -797,7 +800,7 @@ int udev_node_apply_permissions(struct udev_device *dev, bool apply_mac,
 
         node_fd = device_open_node_opath(dev);
         if (node_fd < 0) {
-                if (ERRNO_IS_DEVICE_ABSENT(node_fd)) {
+                if (ERRNO_IS_DEVICE_ABSENT_OR_EMPTY(node_fd)) {
                         log_debug_errno(node_fd, "Device node %s is missing, skipping handling.", devnode);
                         return 0; /* This is necessarily racey, so ignore missing the device */
                 }
@@ -831,7 +834,7 @@ int static_node_apply_permissions(
 
         node_fd = open(devnode, O_PATH|O_CLOEXEC);
         if (node_fd < 0) {
-                bool ignore = ERRNO_IS_DEVICE_ABSENT(errno);
+                bool ignore = ERRNO_IS_DEVICE_ABSENT_OR_EMPTY(errno);
                 r = -errno;
 
                 log_full_errno(ignore ? LOG_DEBUG : LOG_WARNING, r,
