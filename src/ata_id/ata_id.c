@@ -468,7 +468,7 @@ int main(int argc, char *argv[])
 
         fd = open(node, O_RDONLY|O_NONBLOCK|O_CLOEXEC|O_NOCTTY);
         if (fd < 0) {
-                bool ignore = IN_SET(errno, ENODEV, ENXIO, ENOENT);
+                bool ignore = IN_SET(errno, ENODEV, ENXIO, ENOENT, ENOMEDIUM);
                 log_full_errno(ignore ? LOG_DEBUG : LOG_WARNING, errno,
                                "Failed to open device node '%s'%s: %m",
                                node, ignore ? ", ignoring" : "");
