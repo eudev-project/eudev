@@ -229,6 +229,24 @@ static int stack_directory_find_prioritized_devnode(struct udev_device *dev, int
         return !!*ret;
 }
 
+static int link_search_and_update(struct udev_device *dev, const char *slink, int dirfd, bool add) {
+        int r;
+
+        assert(dev);
+        assert(slink);
+        assert(dirfd >= 0);
+
+        _cleanup_free_ char *devnode = NULL;
+        r = stack_directory_find_prioritized_devnode(dev, dirfd, add, &devnode);
+        if (r < 0)
+                return log_debug_errno(r, "Failed to determine device node with the highest priority for '%s': %m", slink);
+        if (r > 0)
+                return node_create_symlink(dev, devnode, slink);
+
+        log_debug("No reference left for '%s', removing", slink);
+        return node_remove_symlink(dev, slink);
+}
+
 static int stack_directory_update(struct udev_device *dev, int fd, bool add) {
         const char *id;
 
@@ -499,7 +517,7 @@ static int link_update(struct udev_device *dev, const char *slink, bool add) {
         _cleanup_(release_lock_file) LockFile lockfile = LOCK_FILE_INIT; /* #3 */
         _cleanup_(rmdir_and_freep) char *dirpath = NULL; /* #2 */
         _cleanup_close_ int dirfd = -1; /* #1 */
-        _cleanup_free_ char *current_id = NULL, *devnode = NULL;
+        _cleanup_free_ char *current_id = NULL;
         int r, current_prio;
 
         assert(dev);
@@ -517,62 +535,50 @@ static int link_update(struct udev_device *dev, const char *slink, bool add) {
         if (r < 0)
                 return log_debug_errno(r, "Failed to update stack directory for '%s': %m", slink);
 
-        if (current_id) {
-                const char *id;
-
-                id = udev_device_get_id_filename(dev);
-                if (!id)
-                        return log_debug_errno(ENODEV, "Failed to get device id: %m");
-
-                if (add) {
-                        int prio;
-
-                        prio = udev_device_get_devlink_priority(dev);
-
-                        if (streq(current_id, id)) {
-                                if (current_prio <= prio)
-                                        /* The devlink is ours and already exists, and the new priority is
-                                         * equal or higher than the previous. Hence, it is not necessary to
-                                         * recreate it. */
-                                        return 0;
-
-                                /* The devlink priority is downgraded. Another device may have a higher
-                                 * priority now. Let's find the device node with the highest priority. */
-                        } else {
-                                if (current_prio > prio)
-                                        /* The devlink with a higher priority already exists and is owned by
-                                         * another device. Hence, it is not necessary to recreate it. */
-                                        return 0;
-
-                                /* This device has the equal or a higher priority than the current. Let's
-                                 * create the devlink to our device node. */
-                                return node_create_symlink(dev, /* devnode = */ NULL, slink);
-                        }
-
-                } else {
-                        if (!streq(current_id, id))
-                                /* The devlink already exists and is owned by another device. Hence, it is
-                                 * not necessary to recreate it. */
-                                return 0;
-
-                        /* The current devlink is ours, and the target device will be removed. Hence, we need
-                         * to search the device that has the highest priority. and update the devlink. */
-                }
-        } else {
+        if (!current_id)
                 /* The requested devlink does not exist, or the target device does not exist and the devlink
                  * points to a non-existing device. Let's search the device that has the highest priority,
                  * and update the devlink. */
-                ;
+                return link_search_and_update(dev, slink, dirfd, add);
+
+        const char *id;
+        id = udev_device_get_id_filename(dev);
+        if (!id)
+                return log_debug_errno(ENODEV, "Failed to get device id: %m");
+
+        if (!add) {
+                if (!streq(current_id, id))
+                        /* The devlink already exists and is owned by another device. Hence, it is
+                         * not necessary to recreate it. */
+                        return 0;
+
+                /* The current devlink is ours, and the target device will be removed. Hence, we need
+                 * to search the device that has the highest priority. and update the devlink. */
+                return link_search_and_update(dev, slink, dirfd, add);
         }
 
-        r = stack_directory_find_prioritized_devnode(dev, dirfd, add, &devnode);
-        if (r < 0)
-                return log_debug_errno(r, "Failed to determine device node with the highest priority for '%s': %m", slink);
-        if (r > 0)
-                return node_create_symlink(dev, devnode, slink);
+        int prio;
+        prio = udev_device_get_devlink_priority(dev);
 
-        log_debug("No reference left for '%s', removing", slink);
-        return node_remove_symlink(dev, slink);
+        if (streq(current_id, id)) {
+                if (current_prio <= prio)
+                        /* The devlink is ours and already exists, and the new priority is equal or higher
+                         * than the previous. Hence, it is not necessary to recreate it. */
+                        return 0;
+
+                /* The devlink priority is downgraded. Another device may have a higher priority now. Let's
+                 * find the device node with the highest priority. */
+                return link_search_and_update(dev, slink, dirfd, add);
+        }
+
+        if (current_prio > prio)
+                /* The devlink with a higher priority already exists and is owned by another device. Hence,
+                 * it is not necessary to recreate it. */
+                return 0;
+
+        /* This device has the equal or a higher priority than the current. Let's create the devlink to our
+         * device node. */
+        return node_create_symlink(dev, /* devnode = */ NULL, slink);
 }
 
 static bool device_has_devlink(struct udev_device *dev, const char *devlink) {
