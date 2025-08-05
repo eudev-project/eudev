@@ -1513,6 +1513,19 @@ KERNEL=="sda", SYMLINK+="bad", RUN{builtin}+="dissect_image"
 KERNEL=="sda", SYMLINK+="found"
 EOF
         },
+        {
+                desc            => "OPTIONS log_level, dump and dump-json",
+                devpath         => "/devices/pci0000:00/0000:00:1f.2/host0/target0:0:0/0:0:0:0/block/sda",
+                exp_name        => "found",
+                not_exp_name    => "bad",
+                rules           => <<EOF
+KERNEL=="sda", OPTIONS="log_level=debug", ENV{L1}="1"
+KERNEL=="sda", OPTIONS="log_level=reset,dump", ENV{L2}="1"
+KERNEL=="sda", OPTIONS+="dump-json", ENV{L3}="1"
+KERNEL=="sda", OPTIONS="log_level=foo", SYMLINK+="bad"
+KERNEL=="sda", ENV{L1}=="1", ENV{L2}=="1", ENV{L3}=="1", SYMLINK+="found"
+EOF
+        },
 );
 
 sub udev {

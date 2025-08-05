@@ -158,7 +158,7 @@ enum token_type {
         TK_M_RESULT,                    /* val */
         TK_M_MAX,
 
-        TK_A_DUMP,
+        TK_A_DUMP,                      /* JsonFormatFlags */
         TK_A_STRING_ESCAPE_NONE,
         TK_A_STRING_ESCAPE_REPLACE,
         TK_A_DB_PERSIST,
@@ -217,6 +217,7 @@ struct token {
                                 int devlink_prio;
                                 int watch;
                                 int log_level;
+                                JsonFormatFlags dump_flags;
                                 enum udev_builtin_cmd builtin_cmd;
                         };
                 } key;
@@ -526,6 +527,8 @@ static void dump_token(struct udev_rules *rules, struct token *token) {
                 log_debug("%s %s '%s'", token_str(type), operation_str(op), value);
                 break;
         case TK_A_DUMP:
+                log_debug("%s %s", token_str(type), json_format_enabled(token->key.dump_flags) ? "json" : "text");
+                break;
         case TK_A_STRING_ESCAPE_NONE:
         case TK_A_STRING_ESCAPE_REPLACE:
         case TK_A_DB_PERSIST:
@@ -1274,6 +1277,8 @@ static int rule_add_key(struct rule_tmp *rule_tmp, enum token_type type,
                         token->key.mode = *(mode_t *)data;
                 break;
         case TK_A_DUMP:
+                token->key.dump_flags = *(JsonFormatFlags *)data;
+                break;
         case TK_A_STRING_ESCAPE_NONE:
         case TK_A_STRING_ESCAPE_REPLACE:
         case TK_A_DB_PERSIST:
@@ -1918,8 +1923,16 @@ static int add_rule(struct udev_rules *rules, char *line,
                         if (check_systemd_only_options(value, filename, lineno))
                                 goto ignore;
 
-                        if (options_has_word(value, "dump"))
-                                rule_add_key(&rule_tmp, TK_A_DUMP, op, NULL, NULL);
+                        if (options_has_word(value, "dump")) {
+                                const JsonFormatFlags flags = JSON_FORMAT_OFF;
+
+                                rule_add_key(&rule_tmp, TK_A_DUMP, op, NULL, &flags);
+                        }
+                        if (options_has_word(value, "dump-json")) {
+                                const JsonFormatFlags flags = JSON_FORMAT_NEWLINE;
+
+                                rule_add_key(&rule_tmp, TK_A_DUMP, op, NULL, &flags);
+                        }
 
                         pos = strstr(value, "link_priority=");
                         if (pos != NULL) {
@@ -2799,7 +2812,7 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                                 break;
                         }
 
-                        (void) dump_event(event, JSON_FORMAT_OFF, f);
+                        (void) dump_event(event, cur->key.dump_flags, f);
 
                         if (fclose(f) != 0)
                                 log_warning_errno(errno, "Failed to finalize memory stream, ignoring: %m");
