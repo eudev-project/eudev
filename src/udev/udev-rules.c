@@ -312,6 +312,28 @@ static bool check_systemd_only_options(const char *value, const char *filename, 
         }
 }
 
+/* Logs the lines of OPTIONS="dump", each with the device name prefixed, so that they can be found in
+ * the logs. The lines may be longer than the log buffer. */
+static void log_dump(struct udev_device *dev, const char *buf) {
+        const char *sysname = udev_device_get_sysname(dev) ?: "n/a";
+        const char *p = buf;
+
+        while (*p != '\0') {
+                _cleanup_free_ char *line = NULL;
+                size_t n = strcspn(p, "\n");
+
+                if (asprintf(&line, "%s: %.*s", sysname, (int) n, p) < 0) {
+                        log_oom();
+                        return;
+                }
+                log_full_long(LOG_INFO, line);
+
+                p += n;
+                if (*p == '\n')
+                        p++;
+        }
+}
+
 /* Checks whether the comma separated OPTIONS values contain exactly the given one. */
 static bool options_has_word(const char *value, const char *word) {
         const char *p = value;
@@ -2782,7 +2804,7 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                         if (fclose(f) != 0)
                                 log_warning_errno(errno, "Failed to finalize memory stream, ignoring: %m");
                         else
-                                log_full_long(LOG_INFO, buf);
+                                log_dump(event->dev, buf);
 
                         log_info("%s: %s:%u DONE", udev_device_get_sysname(event->dev),
                                  rules_str(rules, rule->rule.filename_off), rule->rule.filename_line);
