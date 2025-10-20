@@ -4,6 +4,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
+#include <linux/blkpg.h>
 #include <stdio.h>
 #include <string.h>
 #include <sys/ioctl.h>
@@ -21,7 +22,12 @@
 #include "fileio.h"
 #include "libudev-private.h"
 #include "log.h"
+#include "udev-util.h"
 #include "util.h"
+
+#ifndef BLKPG_RESIZE_PARTITION
+#define BLKPG_RESIZE_PARTITION 3 /* Linux 3.6 */
+#endif
 
 #define SYS_BLOCK_PATH_MAX(suffix) (sizeof("/sys/dev/block/") + DECIMAL_STR_MAX(unsigned) * 2 + sizeof(":") + strlen(suffix))
 #define xsprintf_sys_block_path(buf, suffix, devno) \
@@ -161,6 +167,116 @@ int blockdev_partscan_enabled(struct udev_device *dev) {
 
         /* Otherwise, assume part scanning is on, we have no further checks available. Assume the best. */
         return true;
+}
+
+static int block_device_blkpg(int fd, int op, int nr, uint64_t start, uint64_t size) {
+        struct blkpg_partition bp = {
+                .pno = nr,
+                .start = start,
+                .length = size,
+        };
+        struct blkpg_ioctl_arg ba = {
+                .op = op,
+                .data = &bp,
+                .datalen = sizeof(bp),
+        };
+
+        assert(fd >= 0);
+        assert(nr > 0);
+
+        if (ioctl(fd, BLKPG, &ba) < 0)
+                return -errno;
+
+        return 0;
+}
+
+int block_device_add_partition(int fd, int nr, uint64_t start, uint64_t size) {
+        return block_device_blkpg(fd, BLKPG_ADD_PARTITION, nr, start, size);
+}
+
+int block_device_remove_partition(int fd, int nr) {
+        return block_device_blkpg(fd, BLKPG_DEL_PARTITION, nr, 0, 0);
+}
+
+int block_device_resize_partition(int fd, int nr, uint64_t start, uint64_t size) {
+        return block_device_blkpg(fd, BLKPG_RESIZE_PARTITION, nr, start, size);
+}
+
+int partition_enumerator_new(struct udev_device *dev, struct udev_enumerate **ret) {
+        _cleanup_udev_enumerate_unref_ struct udev_enumerate *e = NULL;
+        const char *s;
+        int r;
+
+        assert(dev);
+        assert(ret);
+
+        /* Refuse invocation on partition block device, insist on "whole" device */
+        r = block_device_is_whole_disk(dev);
+        if (r < 0)
+                return r;
+        if (r == 0)
+                return -ENXIO; /* return a recognizable error */
+
+        e = udev_enumerate_new(udev_device_get_udev(dev));
+        if (!e)
+                return -ENOMEM;
+
+        r = udev_enumerate_add_match_parent(e, dev);
+        if (r < 0)
+                return r;
+
+        s = udev_device_get_sysname(dev);
+        if (!s)
+                return -ENODEV;
+
+        /* Also add sysname check for safety. Hopefully, this also improves performance. */
+        s = strjoina(s, "*");
+        r = udev_enumerate_add_match_sysname(e, s);
+        if (r < 0)
+                return r;
+
+        r = udev_enumerate_add_match_subsystem(e, "block");
+        if (r < 0)
+                return r;
+
+        r = udev_enumerate_add_match_property(e, "DEVTYPE", "partition");
+        if (r < 0)
+                return r;
+
+        r = udev_enumerate_scan_devices(e);
+        if (r < 0)
+                return r;
+
+        *ret = e;
+        e = NULL;
+        return 0;
+}
+
+int partition_node_of(const char *node, unsigned nr, char **ret) {
+        const char *fn;
+        size_t l;
+        char *subnode;
+
+        assert(node);
+        assert(nr > 0);
+        assert(ret);
+
+        /* Given a device node path to a block device returns the device node path to the partition block
+         * device of the specified partition */
+
+        fn = strrchr(node, '/');
+        fn = fn ? fn + 1 : node;
+
+        l = strlen(fn);
+        if (l == 0)
+                return -EISDIR;
+
+        /* "p" if the last character is a digit */
+        if (asprintf(&subnode, "%s%s%u", node, fn[l-1] >= '0' && fn[l-1] <= '9' ? "p" : "", nr) < 0)
+                return -ENOMEM;
+
+        *ret = subnode;
+        return 0;
 }
 
 static int parse_devnum(const char *s, dev_t *ret) {

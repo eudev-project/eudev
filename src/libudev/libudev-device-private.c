@@ -422,6 +422,55 @@ int device_get_sysattr_bool(struct udev_device *device, const char *sysattr)
         return parse_boolean(value);
 }
 
+int device_get_sysattr_u64(struct udev_device *device, const char *sysattr, uint64_t *ret)
+{
+        const char *value;
+        uint64_t v;
+        int r;
+
+        r = device_get_sysattr_value(device, sysattr, &value);
+        if (r < 0)
+                return r;
+
+        r = safe_atou64(value, &v);
+        if (r < 0)
+                return log_debug_errno(r, "%s: Failed to parse '%s' attribute: %m",
+                                       udev_device_get_sysname(device), sysattr);
+
+        if (ret)
+                *ret = v;
+        return v > 0;
+}
+
+/* Like sd_device_trigger_with_uuid() of systemd: triggers a synthetic uevent of the device with the action,
+ * e.g. "change", by writing it to the uevent attribute, with the UUID, unless it is NULL. The kernel passes
+ * the UUID on as SYNTH_UUID= since Linux 4.13; older kernels log an error and send no uevent at all. */
+int device_trigger(struct udev_device *device, const char *action, const char *uuid)
+{
+        _cleanup_close_ int fd = -1;
+        char filename[UTIL_PATH_SIZE];
+        const char *syspath, *s;
+
+        assert(device);
+        assert(action);
+
+        syspath = udev_device_get_syspath(device);
+        if (!syspath)
+                return -ENODEV;
+
+        strscpyl(filename, sizeof(filename), syspath, "/uevent", NULL);
+        s = uuid ? strjoina(action, " ", uuid) : action;
+
+        fd = open(filename, O_WRONLY|O_CLOEXEC|O_NOCTTY);
+        if (fd < 0)
+                return -errno;
+
+        if (write(fd, s, strlen(s)) < 0)
+                return -errno;
+
+        return 0;
+}
+
 int device_get_sysnum_unsigned(struct udev_device *device, unsigned *ret)
 {
         const char *s;

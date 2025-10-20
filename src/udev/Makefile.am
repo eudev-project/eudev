@@ -65,6 +65,8 @@ noinst_LTLIBRARIES = \
 libudev_core_la_SOURCES = \
 	blockdev-util.c \
 	blockdev-util.h \
+	reread-partition-table.c \
+	reread-partition-table.h \
 	udev-dump.c \
 	udev-event.c \
 	udev-watch.c \
