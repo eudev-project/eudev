@@ -1433,10 +1433,12 @@ static int synthesize_change(struct udev_device *dev) {
                         (void) prctl(PR_SET_PDEATHSIG, SIGTERM);
                         (void) sigprocmask(SIG_SETMASK, &sigmask_orig, NULL);
 
-                        /* Like FORK_CLOSE_ALL_FDS of systemd: close all file descriptors above stderr. The log
-                         * is closed first, as its descriptor is closed too. */
+                        /* Like FORK_CLOSE_ALL_FDS and FORK_REOPEN_LOG of systemd: close all file descriptors
+                         * above stderr, and open the log again, which is closed first, as its descriptor is
+                         * closed too. */
                         log_close();
                         (void) close_all_fds();
+                        log_open();
 
                         (void) reread_partition_table(dev, REREADPT_FORCE_UEVENT|REREADPT_BSD_LOCK);
                         _exit(EXIT_SUCCESS);
