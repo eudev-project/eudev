@@ -55,6 +55,7 @@
 #include "dev-setup.h"
 #include "fileio.h"
 #include "hashmap.h"
+#include "id128-util.h"
 #include "reread-partition-table.h"
 #include "set.h"
 
@@ -127,6 +128,10 @@ static UDEV_LIST(event_list);
 Hashmap *workers;
 /* the processes that re-read the partition table of a disk, see synthesize_change() */
 static Set *synthesize_change_children;
+/* the UUIDs of the synthetic change events that udevd triggered and did not receive yet, and when to stop
+ * waiting for them, see synthesize_change_one() */
+static Set *synthesized_events;
+static usec_t synthesized_events_clear_usec;
 static struct udev_list properties_list;
 static bool udev_exit;
 static char udevd_ready_string[] = "udevd ready\n";
@@ -523,6 +528,8 @@ static void worker_spawn(struct event *event) {
                 workers_free();
                 set_free(synthesize_change_children);
                 synthesize_change_children = NULL;
+                set_free_free(synthesized_events);
+                synthesized_events = NULL;
                 event_queue_cleanup(udev, EVENT_UNDEF);
                 udev_monitor_unref(monitor);
                 udev_ctrl_unref(udev_ctrl);
@@ -1151,8 +1158,9 @@ static void event_queue_update(void) {
         int r;
 
         /* keep /run/udev/queue also while child processes are re-reading partition tables, which trigger
-         * events */
-        if (!udev_list_node_is_empty(&event_list) || !set_isempty(synthesize_change_children)) {
+         * events, and until udevd received the change events it triggered itself */
+        if (!udev_list_node_is_empty(&event_list) || !set_isempty(synthesize_change_children) ||
+            !set_isempty(synthesized_events)) {
                 r = touch("/run/udev/queue");
                 if (r < 0)
                         log_warning_errno(r, "could not touch /run/udev/queue: %m");
@@ -1402,8 +1410,124 @@ static void handle_ctrl_msg(struct udev_ctrl *uctrl) {
         return;
 }
 
+/* Synthetic uevents with a UUID, which the kernel passes on as SYNTH_UUID=, need Linux 4.13 or newer. Older
+ * kernels log an error about the unknown action and send no uevent, so the action is written without a
+ * UUID there. */
+static bool synthetic_uuid_supported(void) {
+        static int cached = -1;
+        struct utsname u;
+        unsigned major, minor;
+
+        if (cached >= 0)
+                return cached;
+
+        cached = uname(&u) >= 0 && sscanf(u.release, "%u.%u", &major, &minor) == 2 &&
+                 (major > 4 || (major == 4 && minor >= 13));
+        if (!cached)
+                log_debug("The kernel does not support UUIDs of synthetic uevents, not waiting for the change events udevd triggers.");
+
+        return cached;
+}
+
+static void synthesized_events_clear(void) {
+        for (;;) {
+                _cleanup_free_ char *uuid = set_steal_first(synthesized_events);
+                if (!uuid)
+                        return;
+
+                log_warning("Could not receive synthesized event with UUID %s, ignoring.", uuid);
+        }
+}
+
+/* Returns the time in milliseconds until udevd stops waiting for the synthetic change events it triggered, 0
+ * if that is due now, or -1 if it does not wait for any. */
+static int synthesized_events_timeout(void) {
+        usec_t now_usec, t;
+
+        if (set_isempty(synthesized_events))
+                return -1;
+
+        now_usec = now(CLOCK_MONOTONIC);
+        if (synthesized_events_clear_usec <= now_usec)
+                return 0;
+
+        /* round up, the events are due when the timeout expires */
+        t = (synthesized_events_clear_usec - now_usec + USEC_PER_MSEC - 1) / USEC_PER_MSEC;
+        return t > INT_MAX ? INT_MAX : (int) t;
+}
+
+/* If the event is one udevd triggered, forget its UUID. */
+static void synthesized_event_received(struct udev_device *dev) {
+        char uuid[ID128_UUID_STRING_MAX];
+        const char *s;
+        id128_t id;
+
+        if (set_isempty(synthesized_events))
+                return;
+
+        /* SYNTH_UUID=0 is set whenever a device is triggered by userspace without specifying a UUID */
+        s = udev_device_get_property_value(dev, "SYNTH_UUID");
+        if (!s || id128_from_string(s, &id) < 0)
+                return;
+
+        free(set_remove(synthesized_events, id128_to_uuid_string(id, uuid)));
+}
+
+/* Like synthesize_change_one() of systemd: triggers a change event of the device, and remembers its UUID, so
+ * that /run/udev/queue is kept until udevd received the event. */
+static int synthesize_change_one(struct udev_device *dev) {
+        char uuid[ID128_UUID_STRING_MAX];
+        id128_t id;
+        char *copy;
+        int r;
+
+        log_debug("device %s closed, synthesising 'change' on %s",
+                  udev_device_get_devnode(dev), udev_device_get_syspath(dev));
+
+        if (!synthetic_uuid_supported()) {
+                r = device_trigger(dev, "change", NULL);
+                if (r < 0)
+                        return log_debug_errno(r, "%s: Failed to trigger 'change' uevent: %m", udev_device_get_devpath(dev));
+
+                return 0;
+        }
+
+        id128_randomize(&id);
+        id128_to_uuid_string(id, uuid);
+
+        r = device_trigger(dev, "change", uuid);
+        if (r < 0)
+                return log_debug_errno(r, "%s: Failed to trigger 'change' uevent: %m", udev_device_get_devpath(dev));
+
+        /* Avoid /run/udev/queue file being removed by event_queue_update(). */
+        copy = strdup(uuid);
+        if (!copy)
+                return log_oom_debug();
+
+        /* Let's not wait for too many events, to make not udevd consume huge amount of memory.
+         * Typically (but unfortunately, not always), the kernel provides events in the order we triggered.
+         * Hence, remembering the newest UUID should be mostly enough. */
+        while (set_size(synthesized_events) >= 1024) {
+                _cleanup_free_ char *old = set_steal_first(synthesized_events);
+
+                log_debug("Too many synthesized events are waiting, forgetting synthesized event with UUID %s.", old);
+        }
+
+        r = set_ensure_allocated(&synthesized_events, &string_hash_ops);
+        if (r < 0) {
+                free(copy);
+                return log_oom_debug();
+        }
+
+        r = set_consume(synthesized_events, copy);
+        if (r < 0)
+                return log_oom_debug();
+
+        synthesized_events_clear_usec = usec_add(now(CLOCK_MONOTONIC), USEC_PER_MINUTE);
+        return 0;
+}
+
 static int synthesize_change(struct udev_device *dev) {
-        char filename[UTIL_PATH_SIZE];
         pid_t pid;
         int r;
 
@@ -1452,11 +1576,7 @@ static int synthesize_change(struct udev_device *dev) {
                 return 0;
         }
 
-        log_debug("device %s closed, synthesising 'change'", udev_device_get_devnode(dev));
-        strscpyl(filename, sizeof(filename), udev_device_get_syspath(dev), "/uevent", NULL);
-        write_string_file(filename, "change");
-
-        return 0;
+        return synthesize_change_one(dev);
 }
 
 static int handle_inotify(struct udev *udev) {
@@ -2093,6 +2213,17 @@ int main(int argc, char *argv[]) {
                                 timeout = requeue_timeout;
                 }
 
+                if (!udev_exit) {
+                        int synthesized_timeout;
+
+                        /* stop waiting for the change events udevd triggered, after a minute without them */
+                        synthesized_timeout = synthesized_events_timeout();
+                        if (synthesized_timeout == 0)
+                                synthesized_events_clear();
+                        else if (synthesized_timeout > 0 && (timeout < 0 || synthesized_timeout < timeout))
+                                timeout = synthesized_timeout;
+                }
+
                 /* tell settle that we are busy or idle */
                 event_queue_update();
 
@@ -2185,6 +2316,7 @@ int main(int argc, char *argv[]) {
 
                         dev = udev_monitor_receive_device(monitor);
                         if (dev) {
+                                synthesized_event_received(dev);
                                 udev_device_ensure_usec_initialized(dev, NULL);
                                 if (event_queue_insert(dev) < 0)
                                         udev_device_unref(dev);
@@ -2253,6 +2385,7 @@ exit:
                 close(fd_ep);
         workers_free();
         set_free(synthesize_change_children);
+        set_free_free(synthesized_events);
         event_queue_cleanup(udev, EVENT_UNDEF);
         udev_rules_unref(rules);
         udev_builtin_exit(udev);

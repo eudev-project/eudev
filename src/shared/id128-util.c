@@ -6,6 +6,7 @@
 
 #include "fileio.h"
 #include "id128-util.h"
+#include "random-util.h"
 #include "util.h"
 
 int id128_from_string(const char *s, id128_t *ret) {
@@ -53,6 +54,21 @@ int id128_from_string(const char *s, id128_t *ret) {
         if (ret)
                 *ret = t;
         return 0;
+}
+
+/* Like sd_id128_randomize() of systemd: a random ID, made a valid v4 UUID. */
+void id128_randomize(id128_t *ret) {
+        id128_t t;
+
+        assert(ret);
+
+        random_bytes(&t, sizeof(t));
+
+        /* Turn this into a valid v4 UUID, to be nice. */
+        t.bytes[6] = (t.bytes[6] & 0x0F) | 0x40;
+        t.bytes[8] = (t.bytes[8] & 0x3F) | 0x80;
+
+        *ret = t;
 }
 
 char *id128_to_uuid_string(id128_t id, char s[static ID128_UUID_STRING_MAX]) {

@@ -23,6 +23,7 @@ typedef union id128 {
 /* Accepts both the plain form (32 hexadecimal digits) and the UUID form. */
 int id128_from_string(const char *s, id128_t *ret);
 char *id128_to_uuid_string(id128_t id, char s[static ID128_UUID_STRING_MAX]);
+void id128_randomize(id128_t *ret);
 
 static inline bool id128_equal(id128_t a, id128_t b) {
         return a.qwords[0] == b.qwords[0] && a.qwords[1] == b.qwords[1];
