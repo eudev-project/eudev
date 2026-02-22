@@ -1014,7 +1014,7 @@ void udev_event_execute_rules(struct udev_event *event,
                 udev_device_read_db(dev);
 
                 if (EVENT_MODE_DESTRUCTIVE(event)) {
-                        udev_device_tag_index(dev, NULL, false);
+                        udev_device_tag_index(dev, false);
                         udev_device_delete_db(dev);
 
                         if (major(udev_device_get_devnum(dev)) != 0)
@@ -1192,7 +1192,7 @@ void udev_event_execute_rules(struct udev_event *event,
 
                 if (EVENT_MODE_DESTRUCTIVE(event)) {
                         /* (re)write database file */
-                        udev_device_tag_index(dev, event->dev_db, true);
+                        udev_device_tag_index(dev, true);
                         udev_device_update_db(dev);
                 }
                 udev_device_set_is_initialized(dev);

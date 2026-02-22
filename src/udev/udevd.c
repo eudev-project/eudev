@@ -979,7 +979,7 @@ static void handle_signal(struct udev *udev __attribute__((unused)), int signo) 
                                         log_error("worker ["PID_FMT"] failed while handling '%s'", pid, worker->event->devpath);
                                         /* delete state from disk */
                                         udev_device_delete_db(worker->event->dev);
-                                        udev_device_tag_index(worker->event->dev, NULL, false);
+                                        udev_device_tag_index(worker->event->dev, false);
                                         /* forward kernel event without amending it, the manager does not
                                          * change the device of the event */
                                         udev_monitor_send_device(monitor, NULL, worker->event->dev);

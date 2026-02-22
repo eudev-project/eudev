@@ -86,7 +86,7 @@ void udev_device_set_db_persist(struct udev_device *udev_device);
 /* libudev-device-private.c */
 int udev_device_update_db(struct udev_device *udev_device);
 int udev_device_delete_db(struct udev_device *udev_device);
-int udev_device_tag_index(struct udev_device *dev, struct udev_device *dev_old, bool add);
+int udev_device_tag_index(struct udev_device *dev, bool add);
 
 /* libudev-monitor.c - netlink/unix socket communication  */
 int udev_monitor_disconnect(struct udev_monitor *udev_monitor);

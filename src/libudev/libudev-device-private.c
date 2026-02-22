@@ -52,30 +52,9 @@ static void udev_device_tag(struct udev_device *dev, const char *tag, bool add)
         }
 }
 
-int udev_device_tag_index(struct udev_device *dev, struct udev_device *dev_old, bool add)
+int udev_device_tag_index(struct udev_device *dev, bool add)
 {
         struct udev_list_entry *list_entry;
-        bool found;
-
-        if (add && dev_old != NULL) {
-                /* delete possible left-over tags */
-                udev_list_entry_foreach(list_entry, udev_device_get_tags_list_entry(dev_old)) {
-                        const char *tag_old = udev_list_entry_get_name(list_entry);
-                        struct udev_list_entry *list_entry_current;
-
-                        found = false;
-                        udev_list_entry_foreach(list_entry_current, udev_device_get_tags_list_entry(dev)) {
-                                const char *tag = udev_list_entry_get_name(list_entry_current);
-
-                                if (streq(tag, tag_old)) {
-                                        found = true;
-                                        break;
-                                }
-                        }
-                        if (!found)
-                                udev_device_tag(dev_old, tag_old, false);
-                }
-        }
 
         udev_list_entry_foreach(list_entry, udev_device_get_tags_list_entry(dev))
                 udev_device_tag(dev, udev_list_entry_get_name(list_entry), add);
