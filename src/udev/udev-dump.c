@@ -218,6 +218,14 @@ static int dump_event_json(struct udev_event *event, JsonFormatFlags flags, FILE
                 json_writer_array_end(&w);
         }
 
+        if (udev_device_get_current_tags_list_entry(dev)) {
+                json_writer_key(&w, "currentTags");
+                json_writer_array_begin(&w);
+                udev_list_entry_foreach(entry, udev_device_get_current_tags_list_entry(dev))
+                        json_writer_string(&w, udev_list_entry_get_name(entry));
+                json_writer_array_end(&w);
+        }
+
         if (udev_device_get_properties_list_entry(dev)) {
                 json_writer_key(&w, "properties");
                 json_writer_array_begin(&w);
@@ -358,6 +366,12 @@ int dump_event(struct udev_event *event, JsonFormatFlags flags, FILE *f) {
         if (udev_device_get_tags_list_entry(dev)) {
                 fprintf(f, "%sTags:%s\n", ansi_highlight(), ansi_normal());
                 udev_list_entry_foreach(entry, udev_device_get_tags_list_entry(dev))
+                        fprintf(f, "  %s\n", udev_list_entry_get_name(entry));
+        }
+
+        if (udev_device_get_current_tags_list_entry(dev)) {
+                fprintf(f, "%sCurrent Tags:%s\n", ansi_highlight(), ansi_normal());
+                udev_list_entry_foreach(entry, udev_device_get_current_tags_list_entry(dev))
                         fprintf(f, "  %s\n", udev_list_entry_get_name(entry));
         }
 
