@@ -2166,11 +2166,31 @@ void udev_device_remove_tag(struct udev_device *udev_device, const char *tag)
         }
 }
 
-void udev_device_cleanup_tags_list(struct udev_device *udev_device)
+/* Clears the current tags, and resets all tags to those of the original device, i.e. of the database
+ * entry of the device, dropping the tags added by this event, but keeping the sticky ones. */
+int udev_device_cleanup_tags(struct udev_device *udev_device, struct udev_device *original)
 {
+        struct udev_list_entry *e, *tmp, *original_tags = NULL;
+
         udev_device->tags_uptodate = false;
-        udev_list_cleanup(&udev_device->tags_list);
         udev_list_cleanup(&udev_device->current_tags_list);
+
+        if (original)
+                original_tags = udev_device_get_tags_list_entry(original);
+
+        udev_list_entry_foreach_safe(e, tmp, udev_list_get_entry(&udev_device->tags_list))
+                if (!udev_list_entry_get_by_name(original_tags, udev_list_entry_get_name(e)))
+                        udev_list_entry_delete(e);
+
+        udev_list_entry_foreach(e, original_tags) {
+                int r;
+
+                r = udev_device_add_tag(udev_device, udev_list_entry_get_name(e), false);
+                if (r < 0)
+                        return r;
+        }
+
+        return 0;
 }
 
 /**

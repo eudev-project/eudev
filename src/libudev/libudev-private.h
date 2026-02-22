@@ -70,7 +70,7 @@ void udev_device_set_is_initialized(struct udev_device *udev_device);
 int udev_device_add_tag(struct udev_device *udev_device, const char *tag, bool both);
 struct udev_list_entry *udev_device_get_current_tags_list_entry_raw(struct udev_device *udev_device);
 void udev_device_remove_tag(struct udev_device *udev_device, const char *tag);
-void udev_device_cleanup_tags_list(struct udev_device *udev_device);
+int udev_device_cleanup_tags(struct udev_device *udev_device, struct udev_device *original);
 usec_t udev_device_get_usec_initialized(struct udev_device *udev_device);
 void udev_device_ensure_usec_initialized(struct udev_device *udev_device, struct udev_device *old_device);
 int udev_device_get_devlink_priority(struct udev_device *udev_device);

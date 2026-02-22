@@ -3054,8 +3054,10 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                         char tag[UTIL_PATH_SIZE];
 
                         udev_event_apply_format(event, rules_str(rules, cur->key.value_off), tag, sizeof(tag), false, properties_list);
-                        if (cur->key.op == OP_ASSIGN || cur->key.op == OP_ASSIGN_FINAL)
-                                udev_device_cleanup_tags_list(event->dev);
+                        if ((cur->key.op == OP_ASSIGN || cur->key.op == OP_ASSIGN_FINAL) &&
+                            udev_device_cleanup_tags(event->dev, event->dev_db) < 0)
+                                log_warning("Failed to clear previously assigned tags, ignoring %s:%u",
+                                            rules_str(rules, rule->rule.filename_off), rule->rule.filename_line);
                         if (cur->key.op == OP_REMOVE)
                                 udev_device_remove_tag(event->dev, tag);
                         else if (udev_device_add_tag(event->dev, tag, true) == -EINVAL && tag[0] != '\0')
