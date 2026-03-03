@@ -191,6 +191,7 @@ enum udev_builtin_cmd {
         UDEV_BUILTIN_NET_DRIVER,
         UDEV_BUILTIN_NET_ID,
         UDEV_BUILTIN_PATH_ID,
+        UDEV_BUILTIN_TPM2_ID,
         UDEV_BUILTIN_USB_ID,
         UDEV_BUILTIN_MAX
 };
@@ -217,6 +218,7 @@ extern const struct udev_builtin udev_builtin_kmod;
 extern const struct udev_builtin udev_builtin_net_driver;
 extern const struct udev_builtin udev_builtin_net_id;
 extern const struct udev_builtin udev_builtin_path_id;
+extern const struct udev_builtin udev_builtin_tpm2_id;
 extern const struct udev_builtin udev_builtin_usb_id;
 void udev_builtin_init(struct udev *udev);
 void udev_builtin_exit(struct udev *udev);

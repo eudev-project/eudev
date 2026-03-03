@@ -63,6 +63,7 @@ libudev_core_la_SOURCES = \
 	netif-naming-scheme.c \
 	netif-naming-scheme.h \
 	udev-builtin-path_id.c \
+	udev-builtin-tpm2_id.c \
 	udev-builtin-usb_id.c
 
 noinst_HEADERS = \

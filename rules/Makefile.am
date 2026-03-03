@@ -27,6 +27,7 @@ dist_udevrules_DATA = \
 	60-persistent-v4l.rules \
 	60-sensor.rules \
 	60-serial.rules \
+	60-tpm2-id.rules \
 	64-btrfs.rules \
 	65-integration.rules \
 	70-camera.rules \
