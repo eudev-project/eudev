@@ -89,7 +89,7 @@ void udev_builtin_list(struct udev *udev __attribute__((unused))) {
         unsigned int i;
 
         for (i = 0; i < ELEMENTSOF(builtins); i++)
-                fprintf(stderr, "  %-14s  %s\n", builtins[i]->name, builtins[i]->help);
+                printf("  %-14s  %s\n", builtins[i]->name, builtins[i]->help);
 }
 
 const char *udev_builtin_name(enum udev_builtin_cmd cmd) {
