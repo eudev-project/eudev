@@ -100,6 +100,7 @@
 
 #include "udev.h"
 #include "fileio.h"
+#include "utf8.h"
 
 enum netname_type{
         NET_UNDEF,
@@ -160,7 +161,9 @@ static int dev_pci_onboard(struct udev_device *dev, struct netnames *names) {
         if (l == 0)
                 names->pci_onboard[0] = '\0';
 
-        names->pci_onboard_label = udev_device_get_sysattr_value(names->pcidev, "label");
+        attr = udev_device_get_sysattr_value(names->pcidev, "label");
+        if (attr && utf8_is_printable_newline(attr, strlen(attr), false))
+                names->pci_onboard_label = attr;
 
         return 0;
 }
