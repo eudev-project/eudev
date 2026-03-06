@@ -55,6 +55,7 @@
 #include "fileio.h"
 #include "udev-util.h"
 #include "unaligned.h"
+#include "utf8.h"
 
 #define SUPPORTED_SMBIOS_VER 0x030300
 
@@ -189,7 +190,7 @@ static void dmi_memory_device_string(
 
         str = strdupa_safe(dmi_string(h, s));
         str = strstrip(str);
-        if (!isempty(str))
+        if (!isempty(str) && utf8_is_printable_newline(str, strlen(str), false))
                 printf("MEMORY_DEVICE_%u_%s=%s\n", slot_num, attr_suffix, str);
 }
 

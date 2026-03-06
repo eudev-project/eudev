@@ -32,6 +32,7 @@
 #include <linux/videodev2.h>
 
 #include "util.h"
+#include "utf8.h"
 
 int main(int argc, char *argv[]) {
         static const struct option options[] = {
@@ -75,7 +76,8 @@ int main(int argc, char *argv[]) {
         if (ioctl(fd, VIDIOC_QUERYCAP, &v2cap) == 0) {
                 int capabilities;
                 printf("ID_V4L_VERSION=2\n");
-                printf("ID_V4L_PRODUCT=%s\n", v2cap.card);
+                if (utf8_is_printable_newline((char *)v2cap.card, strlen((char *)v2cap.card), false))
+                        printf("ID_V4L_PRODUCT=%s\n", v2cap.card);
                 printf("ID_V4L_CAPABILITIES=:");
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3,4,0)
                 if (v2cap.capabilities & V4L2_CAP_DEVICE_CAPS)

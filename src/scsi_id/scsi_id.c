@@ -37,6 +37,7 @@
 #include "libudev-private.h"
 #include "scsi_id.h"
 #include "udev-util.h"
+#include "utf8.h"
 
 static const struct option options[] = {
         { "device",             required_argument, NULL, 'd' },
@@ -552,7 +553,8 @@ static int scsi_id(struct udev *udev, char *maj_min_dev)
                 if (dev_scsi.tgpt_group[0] != '\0') {
                         printf("ID_TARGET_PORT=%s\n", dev_scsi.tgpt_group);
                 }
-                if (dev_scsi.unit_serial_number[0] != '\0') {
+                if (dev_scsi.unit_serial_number[0] != '\0' &&
+                    utf8_is_printable_newline(dev_scsi.unit_serial_number, strlen(dev_scsi.unit_serial_number), false)) {
                         printf("ID_SCSI_SERIAL=%s\n", dev_scsi.unit_serial_number);
                 }
                 goto out;
