@@ -124,9 +124,25 @@ int udev_builtin_run(struct udev_device *dev, enum udev_builtin_cmd cmd, const c
 }
 
 int udev_builtin_add_property(struct udev_device *dev, enum udev_event_mode mode, const char *key, const char *val) {
-        udev_device_add_property(dev, key, val);
+        int r;
 
-        if (mode == EVENT_UDEVADM_TEST_BUILTIN)
-                printf("%s=%s\n", key, val);
+        assert(key);
+
+        if (isempty(val))
+                val = NULL;
+
+        r = udev_device_add_property(dev, key, val);
+        if (r < 0)
+                return log_debug_errno(r, "%s: Failed to %s property '%s%s%s': %m",
+                                       udev_device_get_sysname(dev), val ? "add" : "remove",
+                                       key, val ? "=" : "", val ?: "");
+
+        if (mode == EVENT_UDEVADM_TEST_BUILTIN) {
+                if (val)
+                        printf("%s=%s\n", key, val);
+                else
+                        printf("%s (removed)\n", key);
+        }
+
         return 0;
 }
