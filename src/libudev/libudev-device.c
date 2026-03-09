@@ -36,6 +36,8 @@
 
 #include "libudev.h"
 #include "libudev-private.h"
+#include "def.h"
+#include "utf8.h"
 
 static int udev_device_read_uevent_file(struct udev_device *udev_device);
 static int udev_device_set_devnode(struct udev_device *udev_device, const char *devnode);
@@ -364,27 +366,73 @@ static int udev_device_set_devnode_gid(struct udev_device *udev_device, gid_t gi
         return 0;
 }
 
-static struct udev_list_entry *udev_device_add_property_internal(struct udev_device *udev_device, const char *key, const char *value)
+static bool property_is_valid(const char *key, const char *value)
 {
-        udev_device->envp_uptodate = false;
-        if (value == NULL) {
-                struct udev_list_entry *list_entry;
+        /* Device properties may be saved to database file, then may be parsed from the file. When if a
+         * property contains spurious characters, then the parser may be confused. Let's refuse spurious
+         * properties, even if it is internal, which will not be saved to database file, for consistency. */
 
+        if (isempty(key) || !in_charset(key, ALPHANUMERICAL "_."))
+                return false;
+
+        /* an empty value means unset the property, hence that's fine. */
+        if (isempty(value))
+                return true;
+
+        /* refuse invalid UTF8 and control characters */
+        if (!utf8_is_valid(value) || string_has_cc(value, NULL))
+                return false;
+
+        return true;
+}
+
+/* Sets, or with an empty or NULL value removes, a property. Returns -EINVAL for an invalid property
+ * and -ENOMEM on allocation failure. The new list entry is returned in ret_entry, NULL on removal. */
+static int udev_device_add_property_internal_full(struct udev_device *udev_device, const char *key, const char *value,
+                                                  struct udev_list_entry **ret_entry)
+{
+        struct udev_list_entry *list_entry;
+
+        if (ret_entry)
+                *ret_entry = NULL;
+
+        if (!property_is_valid(key, value))
+                return -EINVAL;
+
+        udev_device->envp_uptodate = false;
+        if (isempty(value)) {
                 list_entry = udev_device_get_properties_list_entry(udev_device);
                 list_entry = udev_list_entry_get_by_name(list_entry, key);
                 if (list_entry != NULL)
                         udev_list_entry_delete(list_entry);
-                return NULL;
+                return 0;
         }
-        return udev_list_entry_add(&udev_device->properties_list, key, value);
+
+        list_entry = udev_list_entry_add(&udev_device->properties_list, key, value);
+        if (list_entry == NULL)
+                return -ENOMEM;
+
+        if (ret_entry)
+                *ret_entry = list_entry;
+        return 0;
 }
 
+static struct udev_list_entry *udev_device_add_property_internal(struct udev_device *udev_device, const char *key, const char *value)
+{
+        struct udev_list_entry *list_entry;
+
+        (void) udev_device_add_property_internal_full(udev_device, key, value, &list_entry);
+        return list_entry;
+}
 
 int udev_device_add_property(struct udev_device *udev_device, const char *key, const char *value)
 {
         struct udev_list_entry *property;
+        int r;
 
-        property = udev_device_add_property_internal(udev_device, key, value);
+        r = udev_device_add_property_internal_full(udev_device, key, value, &property);
+        if (r < 0)
+                return r;
 
         /* store in db, skip private keys */
         if (key[0] != '.')

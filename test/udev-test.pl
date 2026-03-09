@@ -1402,9 +1402,26 @@ EOF
                 exp_name        => "found",
                 not_exp_name    => "bad",
                 rules           => <<EOF
-KERNEL=="sda", ENV{A}=e"x\\x2dy\\ttab\\"q\\\\z"
-KERNEL=="sda", ENV{A}=="x-y\ttab\\"q\\z", SYMLINK+="found"
+KERNEL=="sda", ENV{A}=e"x\\x2dy\\"q\\\\z"
+KERNEL=="sda", ENV{A}=="x-y\\"q\\z", SYMLINK+="found"
 KERNEL=="sda", ENV{A}=="x\\x2dy*", SYMLINK+="bad"
+EOF
+        },
+        {
+                desc            => "invalid properties are refused",
+                devpath         => "/devices/pci0000:00/0000:00:1f.2/host0/target0:0:0/0:0:0:0/block/sda",
+                exp_name        => "found",
+                not_exp_name    => "bad",
+                rules           => <<EOF
+KERNEL=="sda", ENV{TAB}=e"a\\tb", ENV{NL}=e"a\\nb", ENV{UTF8}=e"a\\xffb", ENV{BAD-KEY}="1", ENV{OK}="a\\\\b*?[]'\\"c"
+KERNEL=="sda", IMPORT{program}="/bin/sh -c 'printf \\"I_TAB=a\\tb\\nI-DASH=1\\nI_OK=1\\n\\"'"
+KERNEL=="sda", ENV{TAB}=="?*", SYMLINK+="bad"
+KERNEL=="sda", ENV{NL}=="?*", SYMLINK+="bad"
+KERNEL=="sda", ENV{UTF8}=="?*", SYMLINK+="bad"
+KERNEL=="sda", ENV{BAD-KEY}=="?*", SYMLINK+="bad"
+KERNEL=="sda", ENV{I_TAB}=="?*", SYMLINK+="bad"
+KERNEL=="sda", ENV{I-DASH}=="?*", SYMLINK+="bad"
+KERNEL=="sda", ENV{OK}=="?*", ENV{I_OK}=="1", SYMLINK+="found"
 EOF
         },
         {
