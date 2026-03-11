@@ -396,8 +396,16 @@ static int udev_device_add_property_internal_full(struct udev_device *udev_devic
         if (ret_entry)
                 *ret_entry = NULL;
 
-        if (!property_is_valid(key, value))
+        if (!property_is_valid(key, value)) {
+                if (log_get_max_level() >= LOG_DEBUG) {
+                        _cleanup_free_ char *escaped_key = cescape(key ?: ""),
+                                *escaped_value = cescape(value ?: "");
+                        log_debug("%s%sRefusing invalid property: %s=%s",
+                                  udev_device->sysname ?: "", udev_device->sysname ? ": " : "",
+                                  escaped_key ?: "(null)", escaped_value ?: "(null)");
+                }
                 return -EINVAL;
+        }
 
         udev_device->envp_uptodate = false;
         if (isempty(value)) {
