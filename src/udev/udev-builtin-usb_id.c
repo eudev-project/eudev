@@ -81,64 +81,59 @@ static void set_usb_iftype(char *to, int if_class_num, size_t len) {
         to[len-1] = '\0';
 }
 
-static int set_usb_mass_storage_ifsubtype(char *to, const char *from, size_t len) {
-        int type_num = 0;
-        char *eptr;
-        const char *type = "generic";
+static void set_usb_mass_storage_ifsubtype(char *to, unsigned type_num, size_t len) {
+        const char *type;
 
-        type_num = strtoul(from, &eptr, 0);
-        if (eptr != from) {
-                switch (type_num) {
-                case 1: /* RBC devices */
-                        type = "rbc";
-                        break;
-                case 2:
-                        type = "atapi";
-                        break;
-                case 3:
-                        type = "tape";
-                        break;
-                case 4: /* UFI */
-                        type = "floppy";
-                        break;
-                case 6: /* Transparent SPC-2 devices */
-                        type = "scsi";
-                        break;
-                default:
-                        break;
-                }
+        assert(to);
+
+        switch (type_num) {
+        case 1: /* RBC devices */
+                type = "rbc";
+                break;
+        case 2:
+                type = "atapi";
+                break;
+        case 3:
+                type = "tape";
+                break;
+        case 4: /* UFI */
+                type = "floppy";
+                break;
+        case 6: /* Transparent SPC-2 devices */
+                type = "scsi";
+                break;
+        default:
+                type = "generic";
         }
+
         strscpy(to, len, type);
-        return type_num;
 }
 
-static void set_scsi_type(char *to, const char *from, size_t len) {
-        int type_num;
-        char *eptr;
-        const char *type = "generic";
+static void set_scsi_type(char *to, unsigned type_num, size_t len) {
+        const char *type;
 
-        type_num = strtoul(from, &eptr, 0);
-        if (eptr != from) {
-                switch (type_num) {
-                case 0:
-                case 0xe:
-                        type = "disk";
-                        break;
-                case 1:
-                        type = "tape";
-                        break;
-                case 4:
-                case 7:
-                case 0xf:
-                        type = "optical";
-                        break;
-                case 5:
-                        type = "cd";
-                        break;
-                default:
-                        break;
-                }
+        assert(to);
+
+        switch (type_num) {
+        case 0:
+        case 0xe:
+                type = "disk";
+                break;
+        case 1:
+                type = "tape";
+                break;
+        case 4:
+        case 7:
+        case 0xf:
+                type = "optical";
+                break;
+        case 5:
+                type = "cd";
+                break;
+        default:
+                type = "generic";
         }
+
         strscpy(to, len, type);
 }
 
@@ -250,11 +245,10 @@ static int builtin_usb_id(struct udev_device *dev, int argc __attribute__((unuse
 
         struct udev_device *dev_interface = NULL;
         struct udev_device *dev_usb = NULL;
-        const char *if_class, *if_subclass;
-        int if_class_num;
-        int protocol = 0;
+        unsigned if_class_num, protocol = 0;
         size_t l;
         char *s;
+        int r;
 
         /* shortcut, if we are called directly for a "usb_device" type */
         if (udev_device_get_devtype(dev) != NULL && streq(udev_device_get_devtype(dev), "usb_device")) {
@@ -274,24 +268,22 @@ static int builtin_usb_id(struct udev_device *dev, int argc __attribute__((unuse
         (void) device_get_sysattr_safe_string(dev_interface, "bInterfaceNumber", &ifnum);
         (void) device_get_sysattr_safe_string(dev_interface, "driver", &driver);
 
-        if_class = udev_device_get_sysattr_value(dev_interface, "bInterfaceClass");
-        if (!if_class) {
-                log_debug("%s: cannot get bInterfaceClass attribute",
-                     udev_device_get_sysname(dev));
+        r = device_get_sysattr_unsigned_full(dev_interface, "bInterfaceClass", 16, &if_class_num);
+        if (r < 0) {
+                log_debug_errno(r, "%s: Failed to read bInterfaceClass attribute: %m",
+                                udev_device_get_sysname(dev));
                 return EXIT_FAILURE;
         }
 
-        if_class_num = strtoul(if_class, NULL, 16);
         if (if_class_num == 8) {
                 /* mass storage */
-                if_subclass = udev_device_get_sysattr_value(dev_interface, "bInterfaceSubClass");
-                if (if_subclass != NULL)
-                        protocol = set_usb_mass_storage_ifsubtype(type_str, if_subclass, sizeof(type_str)-1);
+                if (device_get_sysattr_unsigned_full(dev_interface, "bInterfaceSubClass", 16, &protocol) >= 0)
+                        set_usb_mass_storage_ifsubtype(type_str, protocol, sizeof(type_str)-1);
         } else {
                 set_usb_iftype(type_str, if_class_num, sizeof(type_str)-1);
         }
 
-        log_debug("%s: if_class %d protocol %d",
+        log_debug("%s: if_class %u protocol %u",
              udev_device_get_syspath(dev_interface), if_class_num, protocol);
 
         /* usb device directory */
@@ -308,7 +300,8 @@ static int builtin_usb_id(struct udev_device *dev, int argc __attribute__((unuse
         /* mass storage : SCSI or ATAPI */
         if (protocol == 6 || protocol == 2) {
                 struct udev_device *dev_scsi;
-                const char *scsi_model, *scsi_vendor, *scsi_type, *scsi_rev;
+                const char *scsi_model, *scsi_vendor, *scsi_rev;
+                unsigned scsi_type;
                 int host, bus, target, lun;
 
                 /* get scsi device */
@@ -344,10 +337,10 @@ static int builtin_usb_id(struct udev_device *dev, int argc __attribute__((unuse
                 util_replace_whitespace(scsi_model, model_str, sizeof(model_str)-1);
                 util_replace_chars(model_str, NULL);
 
-                scsi_type = udev_device_get_sysattr_value(dev_scsi, "type");
-                if (!scsi_type) {
-                        log_debug("%s: cannot get SCSI type attribute",
-                             udev_device_get_sysname(dev_scsi));
+                r = device_get_sysattr_unsigned(dev_scsi, "type", &scsi_type);
+                if (r < 0) {
+                        log_debug_errno(r, "%s: Failed to get SCSI type attribute: %m",
+                                        udev_device_get_sysname(dev_scsi));
                         goto fallback;
                 }
                 set_scsi_type(type_str, scsi_type, sizeof(type_str)-1);
