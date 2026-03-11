@@ -44,9 +44,9 @@ static int install_force_release(struct udev_device *dev, const unsigned *releas
         if (!atkbd)
                 return -ENODEV;
 
-        cur = udev_device_get_sysattr_value(atkbd, "force_release");
-        if (!cur)
-                return -ENODEV;
+        ret = device_get_sysattr_safe_string(atkbd, "force_release", &cur);
+        if (ret < 0)
+                return ret;
 
         s = codes;
         l = sizeof(codes);

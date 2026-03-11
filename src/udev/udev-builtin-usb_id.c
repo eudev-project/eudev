@@ -271,8 +271,8 @@ static int builtin_usb_id(struct udev_device *dev, int argc __attribute__((unuse
                 return EXIT_FAILURE;
         }
 
-        ifnum = udev_device_get_sysattr_value(dev_interface, "bInterfaceNumber");
-        driver = udev_device_get_sysattr_value(dev_interface, "driver");
+        (void) device_get_sysattr_safe_string(dev_interface, "bInterfaceNumber", &ifnum);
+        (void) device_get_sysattr_safe_string(dev_interface, "driver", &driver);
 
         if_class = udev_device_get_sysattr_value(dev_interface, "bInterfaceClass");
         if (!if_class) {

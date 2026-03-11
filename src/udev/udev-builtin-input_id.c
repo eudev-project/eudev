@@ -97,8 +97,7 @@ static void get_cap_mask(struct udev_device *dev __attribute__((unused)),
         char* word;
         unsigned long val;
 
-        v = udev_device_get_sysattr_value(pdev, attr);
-        if (!v)
+        if (device_get_sysattr_safe_string(pdev, attr, &v) < 0)
                 v = "";
 
         snprintf(text, sizeof(text), "%s", v);
