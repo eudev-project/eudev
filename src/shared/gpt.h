@@ -1,9 +1,13 @@
 /* SPDX-License-Identifier: LGPL-2.1-or-later */
 #pragma once
 
+#include <stdbool.h>
 #include <stdint.h>
+#include <sys/types.h>
 
 #include "id128-util.h"
+#include "macro.h"
+#include "sparse-endian.h"
 
 /* GPT partition type UUIDs of the Discoverable Partitions Specification
  * (https://uapi-group.org/specifications/specs/discoverable_partitions_specification/), after
@@ -81,3 +85,38 @@
 
 /* Flags we recognize on the root partition when doing auto-discovery */
 #define GPT_FLAG_NO_AUTO     (UINT64_C(1) << 63)
+
+typedef struct {
+        uint8_t partition_type_guid[16];
+        uint8_t unique_partition_guid[16];
+        le64_t starting_lba;
+        le64_t ending_lba;
+        le64_t attributes;
+        uint16_t partition_name[36];    /* UTF-16LE */
+} _packed_ GptPartitionEntry;
+
+typedef struct {
+        char signature[8];
+        le32_t revision;
+        le32_t header_size;
+        le32_t crc32;
+        le32_t reserved;
+        le64_t my_lba;
+        le64_t alternate_lba;
+        le64_t first_usable_lba;
+        le64_t last_usable_lba;
+        uint8_t disk_guid[16];
+        le64_t partition_entry_lba;
+        le32_t number_of_partition_entries;
+        le32_t size_of_partition_entry;
+        le32_t partition_entry_array_crc32;
+} _packed_ GptHeader;
+
+bool gpt_header_has_signature(const GptHeader *p) _pure_;
+
+ssize_t gpt_probe(
+                int fd,
+                GptHeader *ret_header,
+                void **ret_entries,
+                uint32_t *ret_n_entries,
+                uint32_t *ret_entry_size);

@@ -11,6 +11,7 @@ libudev_shared_la_SOURCES=\
 	dev-setup.c \
 	efivars.c \
 	factory-reset.c \
+	gpt.c \
 	fileio.c \
 	hashmap.c \
 	id128-util.c \
