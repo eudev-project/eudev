@@ -14,6 +14,7 @@ int block_device_is_whole_disk(struct udev_device *dev);
  * disk. The returned device is not referenced. */
 int block_device_get_whole_disk(struct udev_device *dev, struct udev_device **ret);
 int blockdev_partscan_enabled(struct udev_device *dev);
+int blockdev_get_sector_size(int fd, uint32_t *ret);
 
 /* BLKPG: add, remove or resize the partition nr of the whole disk opened as fd; start and size in bytes */
 int block_device_add_partition(int fd, int nr, uint64_t start, uint64_t size);

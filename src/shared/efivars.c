@@ -200,3 +200,29 @@ int efi_loader_get_device_part_uuid(id128_t *ret) {
 
         return efi_get_variable_id128(EFI_LOADER_VARIABLE_STR("LoaderDevicePartUUID"), ret);
 }
+
+id128_t efi_guid_to_id128(const void *guid) {
+        const uint8_t *b = guid;
+        id128_t id128;
+
+        assert(guid);
+
+        /* An EFI_GUID is Data1 (32 bits), Data2 and Data3 (16 bits each), all little endian, and Data4 (8
+         * bytes), so the first three fields have their bytes swapped compared with the UUID. Unlike
+         * efi_guid_to_id128() of systemd, which reads the fields as native integers, this also works on big
+         * endian architectures, where there is no EFI, but a disk with a GPT can still be read. */
+        id128.bytes[0] = b[3];
+        id128.bytes[1] = b[2];
+        id128.bytes[2] = b[1];
+        id128.bytes[3] = b[0];
+
+        id128.bytes[4] = b[5];
+        id128.bytes[5] = b[4];
+
+        id128.bytes[6] = b[7];
+        id128.bytes[7] = b[6];
+
+        memcpy(&id128.bytes[8], b + 8, 8);
+
+        return id128;
+}

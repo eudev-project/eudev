@@ -461,6 +461,66 @@ notloop:
         return 0;
 }
 
+static int probe_gpt_sector_size_mismatch(struct udev_device *dev, int fd, enum udev_event_mode mode) {
+        _cleanup_free_ void *entries = NULL;
+        uint32_t n_entries, entry_size, device_ssz, i;
+        id128_t loader_part_uuid;
+        ssize_t gpt_ssz;
+        int r;
+
+        /* Probe the GPT sector size. For CD-ROMs booted via El Torito, the GPT may use a different
+         * sector size than the device (e.g. 512-byte GPT on a 2048-byte CD-ROM). If there's a mismatch,
+         * check if this is the boot disk by comparing GPT partition UUIDs with the ESP/XBOOTLDR UUID
+         * exported by the boot loader. If it matches, set a property so that udev rules can set up a
+         * loop device with the correct sector size — the kernel can't parse the partition table itself
+         * in this case. */
+
+        gpt_ssz = gpt_probe(fd, /* ret_header= */ NULL, &entries, &n_entries, &entry_size);
+        if (gpt_ssz < 0)
+                return log_device_debug_errno(dev, gpt_ssz, "Failed to probe GPT: %m");
+        if (gpt_ssz == 0)
+                return 0;
+
+        r = blockdev_get_sector_size(fd, &device_ssz);
+        if (r < 0)
+                return log_device_debug_errno(dev, r, "Failed to get device sector size: %m");
+
+        if ((uint32_t) gpt_ssz == device_ssz)
+                return 0;
+
+        log_device_debug(dev, "GPT sector size %zi does not match device sector size %" PRIu32 ".",
+                         gpt_ssz, device_ssz);
+
+        r = efi_loader_get_device_part_uuid(&loader_part_uuid);
+        if (r < 0) {
+                if (r != -ENOENT && !IN_SET(r, -EOPNOTSUPP, -ENOTTY, -ENOSYS))
+                        return log_device_debug_errno(dev, r, "Failed to get loader partition UUID: %m");
+
+                return 0;
+        }
+
+        for (i = 0; i < n_entries; i++) {
+                const GptPartitionEntry *entry = (const GptPartitionEntry *) ((const uint8_t *) entries + (size_t) entry_size * i);
+                char s[DECIMAL_STR_MAX(ssize_t)];
+                id128_t type;
+
+                type = efi_guid_to_id128(entry->partition_type_guid);
+                if (!id128_in_set(type, GPT_ESP, GPT_XBOOTLDR))
+                        continue;
+
+                if (!id128_equal(efi_guid_to_id128(entry->unique_partition_guid), loader_part_uuid))
+                        continue;
+
+                log_device_debug(dev, "Found boot partition (ESP/XBOOTLDR) on disk with sector size mismatch.");
+                udev_builtin_add_property(dev, mode, "ID_PART_GPT_AUTO_ROOT_DISK_SECTOR_SIZE_MISMATCH", "1");
+                xsprintf(s, "%zi", gpt_ssz);
+                udev_builtin_add_property(dev, mode, "ID_PART_GPT_SECTOR_SIZE", s);
+                return 1; /* mismatch detected and handled */
+        }
+
+        return 0;
+}
+
 static int builtin_blkid(struct udev_device *dev, int argc, char *argv[], enum udev_event_mode mode) {
         int64_t offset = 0;
         bool noraid = false;
@@ -528,17 +588,6 @@ static int builtin_blkid(struct udev_device *dev, int argc, char *argv[], enum u
                 }
         }
 
-        blkid_probe_set_superblocks_flags(pr,
-                BLKID_SUBLKS_LABEL | BLKID_SUBLKS_UUID |
-                BLKID_SUBLKS_TYPE | BLKID_SUBLKS_SECTYPE |
-#ifdef BLKID_SUBLKS_FSINFO
-                BLKID_SUBLKS_FSINFO |
-#endif
-                BLKID_SUBLKS_USAGE | BLKID_SUBLKS_VERSION);
-
-        if (noraid)
-                blkid_probe_filter_superblocks_usage(pr, BLKID_FLTR_NOTIN, BLKID_USAGE_RAID);
-
         devnode = udev_device_get_devnode(dev);
         if (!devnode)
                 return log_device_debug_errno(dev, ENOENT, "Failed to get device name: %m");
@@ -551,6 +600,23 @@ static int builtin_blkid(struct udev_device *dev, int argc, char *argv[], enum u
                                            devnode, ignore ? ", ignoring" : "");
                 return ignore ? EXIT_SUCCESS : r;
         }
+
+        if (offset == 0) {
+                r = probe_gpt_sector_size_mismatch(dev, fd, mode);
+                if (r > 0)
+                        return EXIT_SUCCESS;
+        }
+
+        blkid_probe_set_superblocks_flags(pr,
+                BLKID_SUBLKS_LABEL | BLKID_SUBLKS_UUID |
+                BLKID_SUBLKS_TYPE | BLKID_SUBLKS_SECTYPE |
+#ifdef BLKID_SUBLKS_FSINFO
+                BLKID_SUBLKS_FSINFO |
+#endif
+                BLKID_SUBLKS_USAGE | BLKID_SUBLKS_VERSION);
+
+        if (noraid)
+                blkid_probe_filter_superblocks_usage(pr, BLKID_FLTR_NOTIN, BLKID_USAGE_RAID);
 
         errno = 0;
         err = blkid_probe_set_device(pr, fd, offset, 0);

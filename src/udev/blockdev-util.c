@@ -190,6 +190,21 @@ static int block_device_blkpg(int fd, int op, int nr, uint64_t start, uint64_t s
         return 0;
 }
 
+int blockdev_get_sector_size(int fd, uint32_t *ret) {
+        int ssz = 0;
+
+        assert(fd >= 0);
+        assert(ret);
+
+        if (ioctl(fd, BLKSSZGET, &ssz) < 0)
+                return -errno;
+        if (ssz <= 0) /* make sure the field is initialized */
+                return log_debug_errno(EIO, "Block device reported invalid sector size %i.", ssz);
+
+        *ret = ssz;
+        return 0;
+}
+
 int block_device_add_partition(int fd, int nr, uint64_t start, uint64_t size) {
         return block_device_blkpg(fd, BLKPG_ADD_PARTITION, nr, start, size);
 }

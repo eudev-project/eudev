@@ -25,3 +25,6 @@ int efi_get_variable_id128(const char *variable, id128_t *ret);
 
 /* The partition UUID of the ESP or XBOOTLDR partition the boot loader was started from */
 int efi_loader_get_device_part_uuid(id128_t *ret);
+
+/* Converts an EFI_GUID as it is stored in EFI and on disk (e.g. in a GPT partition entry) into an id128 */
+id128_t efi_guid_to_id128(const void *guid);
