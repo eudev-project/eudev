@@ -461,9 +461,10 @@ notloop:
         return 0;
 }
 
-static int probe_gpt_sector_size_mismatch(struct udev_device *dev, int fd, enum udev_event_mode mode) {
+static int probe_gpt_boot_disk_needs_loop(struct udev_device *dev, int fd, enum udev_event_mode mode) {
         _cleanup_free_ void *entries = NULL;
         uint32_t n_entries, entry_size, device_ssz, i;
+        bool sector_size_mismatch;
         id128_t loader_part_uuid;
         ssize_t gpt_ssz;
         int r;
@@ -473,7 +474,11 @@ static int probe_gpt_sector_size_mismatch(struct udev_device *dev, int fd, enum 
          * check if this is the boot disk by comparing GPT partition UUIDs with the ESP/XBOOTLDR UUID
          * exported by the boot loader. If it matches, set a property so that udev rules can set up a
          * loop device with the correct sector size — the kernel can't parse the partition table itself
-         * in this case. */
+         * in this case.
+         *
+         * Even if the sector sizes match, if the device does not support partition scanning (e.g. some
+         * CD-ROM drives), the kernel still can't parse the partition table. In that case, if the disk
+         * contains the ESP we booted from, we still need a loop device to expose the partitions. */
 
         gpt_ssz = gpt_probe(fd, /* ret_header= */ NULL, &entries, &n_entries, &entry_size);
         if (gpt_ssz < 0)
@@ -485,11 +490,21 @@ static int probe_gpt_sector_size_mismatch(struct udev_device *dev, int fd, enum 
         if (r < 0)
                 return log_device_debug_errno(dev, r, "Failed to get device sector size: %m");
 
-        if ((uint32_t) gpt_ssz == device_ssz)
-                return 0;
+        sector_size_mismatch = (uint32_t) gpt_ssz != device_ssz;
 
-        log_device_debug(dev, "GPT sector size %zi does not match device sector size %" PRIu32 ".",
-                         gpt_ssz, device_ssz);
+        if (!sector_size_mismatch) {
+                r = blockdev_partscan_enabled(dev);
+                if (r < 0)
+                        return log_device_debug_errno(dev, r, "Failed to check if partition scanning is enabled: %m");
+                if (r > 0)
+                        return 0;
+        }
+
+        if (sector_size_mismatch)
+                log_device_debug(dev, "GPT sector size %zi does not match device sector size %" PRIu32 ".",
+                                 gpt_ssz, device_ssz);
+        else
+                log_device_debug(dev, "Device does not support partition scanning.");
 
         r = efi_loader_get_device_part_uuid(&loader_part_uuid);
         if (r < 0) {
@@ -511,11 +526,11 @@ static int probe_gpt_sector_size_mismatch(struct udev_device *dev, int fd, enum 
                 if (!id128_equal(efi_guid_to_id128(entry->unique_partition_guid), loader_part_uuid))
                         continue;
 
-                log_device_debug(dev, "Found boot partition (ESP/XBOOTLDR) on disk with sector size mismatch.");
-                udev_builtin_add_property(dev, mode, "ID_PART_GPT_AUTO_ROOT_DISK_SECTOR_SIZE_MISMATCH", "1");
+                log_device_debug(dev, "Found boot partition (ESP/XBOOTLDR) on disk where kernel cannot scan partitions.");
+                udev_builtin_add_property(dev, mode, "ID_PART_GPT_AUTO_ROOT_DISK_NEEDS_LOOP", "1");
                 xsprintf(s, "%zi", gpt_ssz);
                 udev_builtin_add_property(dev, mode, "ID_PART_GPT_SECTOR_SIZE", s);
-                return 1; /* mismatch detected and handled */
+                return 1; /* boot disk needs loop device */
         }
 
         return 0;
@@ -602,7 +617,7 @@ static int builtin_blkid(struct udev_device *dev, int argc, char *argv[], enum u
         }
 
         if (offset == 0) {
-                r = probe_gpt_sector_size_mismatch(dev, fd, mode);
+                r = probe_gpt_boot_disk_needs_loop(dev, fd, mode);
                 if (r > 0)
                         return EXIT_SUCCESS;
         }
