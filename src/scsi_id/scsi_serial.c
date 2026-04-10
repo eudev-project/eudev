@@ -582,7 +582,9 @@ static int check_fill_0x83_prespc3(struct udev *udev __attribute__((unused)),
         /* serial has been memset to zero before */
         j = strlen(serial);        /* j = 1; */
 
-        for (i = 0; (i < page_83[3]) && (j < max_len-3); ++i) {
+        /* Cap reported page length to buffer size in case of malformed responses */
+        int page_len = MIN((int)page_83[3], SCSI_INQ_BUFF_LEN - 4);
+        for (i = 0; (i < page_len) && (j < max_len-3); ++i) {
                 serial[j++] = hex_str[(page_83[4+i] & 0xf0) >> 4];
                 serial[j++] = hex_str[ page_83[4+i] & 0x0f];
         }
@@ -653,6 +655,14 @@ static int do_scsi_page83_inquiry(struct udev *udev,
          * Search for a match in the prioritized id_search_list - since WWN ids
          * come first we can pick up the WWN in check_fill_0x83_id().
          */
+
+        /* Cap reported page length to buffer size in case of malformed responses.
+         * Below, j can equal page_end, and at that point page_83[j + 3] (the first descriptor data byte)
+         * must still be readable before the inner bounds check, so page_end + 4 < SCSI_INQ_BUFF_LEN
+         * requires page_end <= SCSI_INQ_BUFF_LEN - 5. */
+        unsigned page_end = MIN(((unsigned)page_83[2] << 8) + (unsigned)page_83[3] + 3U,
+                                (unsigned)SCSI_INQ_BUFF_LEN - 5U);
+
         for (id_ind = 0;
              id_ind < sizeof(id_search_list)/sizeof(id_search_list[0]);
              id_ind++) {
@@ -660,7 +670,12 @@ static int do_scsi_page83_inquiry(struct udev *udev,
                  * Examine each descriptor returned. There is normally only
                  * one or a small number of descriptors.
                  */
-                for (j = 4; j <= ((unsigned)page_83[2] << 8) + (unsigned)page_83[3] + 3; j += page_83[j + 3] + 4) {
+                for (j = 4; j <= page_end; j += page_83[j + 3] + 4) {
+                        /* Ensure the full descriptor fits within the buffer, including
+                         * fixed-offset accesses up to page_83[7] in the TGTGROUP path
+                         * of check_fill_0x83_id(), so require at least 8 bytes from j */
+                        if (j + MAX(4U + (unsigned)page_83[j + 3], 8U) > (unsigned)SCSI_INQ_BUFF_LEN)
+                                break;
                         retval = check_fill_0x83_id(udev,
                                                     dev_scsi, page_83 + j,
                                                     id_search_list + id_ind,
@@ -685,7 +700,7 @@ static int do_scsi_page83_inquiry(struct udev *udev,
  */
 static int do_scsi_page83_prespc3_inquiry(struct udev *udev,
                                           struct scsi_id_device *dev_scsi, int fd,
-                                          char *serial, char *serial_short __attribute__((unused)), int len __attribute__((unused))) {
+                                          char *serial, char *serial_short __attribute__((unused)), int len) {
         int retval;
         int i, j;
         unsigned char page_83[SCSI_INQ_BUFF_LEN];
@@ -735,7 +750,9 @@ static int do_scsi_page83_prespc3_inquiry(struct udev *udev,
          * using two bytes of ASCII for each byte
          * in the page_83.
          */
-        while (i < (page_83[3]+4)) {
+        /* Cap reported page length to buffer size in case of malformed responses */
+        int page_len = MIN((int)page_83[3] + 4, SCSI_INQ_BUFF_LEN);
+        while (i < page_len && j + 2 < len) {
                 serial[j++] = hex_str[(page_83[i] & 0xf0) >> 4];
                 serial[j++] = hex_str[page_83[i] & 0x0f];
                 i++;
@@ -773,7 +790,8 @@ static int do_scsi_page80_inquiry(struct udev *udev,
          * Prepend 'S' to avoid unlikely collision with page 0x83 vendor
          * specific type where we prepend '0' + vendor + model.
          */
-        len = buf[3];
+        /* Cap reported page length to buffer size in case of malformed responses */
+        len = MIN((int)buf[3], SCSI_INQ_BUFF_LEN - 4);
         if (serial) {
                 serial[0] = 'S';
                 ser_ind = append_vendor_model(dev_scsi, serial + 1);
@@ -915,7 +933,10 @@ int scsi_get_serial(struct udev *udev,
                 goto completed;
         }
 
-        for (ind = 4; ind <= page0[3] + 3; ind++)
+        /* Cap reported page length to buffer size in case of malformed responses */
+        int page0_end = MIN((int)page0[3] + 3, SCSI_INQ_BUFF_LEN - 1);
+
+        for (ind = 4; ind <= page0_end; ind++)
                 if (page0[ind] == PAGE_83)
                         if (!do_scsi_page83_inquiry(udev, dev_scsi, fd,
                                                     dev_scsi->serial, dev_scsi->serial_short, len, dev_scsi->unit_serial_number, dev_scsi->wwn, dev_scsi->wwn_vendor_extension, dev_scsi->tgpt_group)) {
@@ -926,7 +947,7 @@ int scsi_get_serial(struct udev *udev,
                                 goto completed;
                         }
 
-        for (ind = 4; ind <= page0[3] + 3; ind++)
+        for (ind = 4; ind <= page0_end; ind++)
                 if (page0[ind] == PAGE_80)
                         if (!do_scsi_page80_inquiry(udev, dev_scsi, fd,
                                                     dev_scsi->serial, dev_scsi->serial_short, len)) {
