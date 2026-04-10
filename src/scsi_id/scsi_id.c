@@ -497,6 +497,10 @@ static int set_inq_values(struct udev *udev, struct scsi_id_device *dev_scsi, co
         return 0;
 }
 
+static bool scsi_string_is_valid(const char *s) {
+        return !isempty(s) && utf8_is_printable_newline(s, strlen(s), false);
+}
+
 /*
  * scsi_id: try to get an id, if one is found, printf it to stdout.
  * returns a value passed to exit() - 0 if printed an id, else 1.
@@ -541,20 +545,19 @@ static int scsi_id(struct udev *udev, char *maj_min_dev)
                         util_replace_chars(serial_str, NULL);
                         printf("ID_SERIAL_SHORT=%s\n", serial_str);
                 }
-                if (dev_scsi.wwn[0] != '\0') {
+                if (scsi_string_is_valid(dev_scsi.wwn)) {
                         printf("ID_WWN=0x%s\n", dev_scsi.wwn);
-                        if (dev_scsi.wwn_vendor_extension[0] != '\0') {
+                        if (scsi_string_is_valid(dev_scsi.wwn_vendor_extension)) {
                                 printf("ID_WWN_VENDOR_EXTENSION=0x%s\n", dev_scsi.wwn_vendor_extension);
                                 printf("ID_WWN_WITH_EXTENSION=0x%s%s\n", dev_scsi.wwn, dev_scsi.wwn_vendor_extension);
                         } else {
                                 printf("ID_WWN_WITH_EXTENSION=0x%s\n", dev_scsi.wwn);
                         }
                 }
-                if (dev_scsi.tgpt_group[0] != '\0') {
+                if (scsi_string_is_valid(dev_scsi.tgpt_group)) {
                         printf("ID_TARGET_PORT=%s\n", dev_scsi.tgpt_group);
                 }
-                if (dev_scsi.unit_serial_number[0] != '\0' &&
-                    utf8_is_printable_newline(dev_scsi.unit_serial_number, strlen(dev_scsi.unit_serial_number), false)) {
+                if (scsi_string_is_valid(dev_scsi.unit_serial_number)) {
                         printf("ID_SCSI_SERIAL=%s\n", dev_scsi.unit_serial_number);
                 }
                 goto out;
