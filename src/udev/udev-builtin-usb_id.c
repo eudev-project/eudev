@@ -120,6 +120,10 @@ static int dev_if_packed_info(struct udev_device *dev, char *ifs_str, size_t len
                 uint8_t iInterface;
         } _packed_;
 
+        assert(dev);
+        assert(ifs_str);
+        assert(len >= 2);
+
         if (asprintf(&filename, "%s/descriptors", udev_device_get_syspath(dev)) < 0)
                 return log_oom();
 
