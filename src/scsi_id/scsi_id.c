@@ -516,7 +516,7 @@ static int scsi_id(struct udev *udev, char *maj_min_dev)
         int page_code;
         int retval = 0;
 
-        if (set_inq_values(udev, &dev_scsi, maj_min_dev) < 0) {
+        if (set_inq_values(udev, &dev_scsi, maj_min_dev) != 0) {
                 retval = 1;
                 goto out;
         }
