@@ -106,6 +106,21 @@ AC_SEARCH_LIBS([clock_gettime], [rt], [], [AC_MSG_ERROR([*** POSIX librt not fou
 LT_LIB_M
 
 # ------------------------------------------------------------------------------
+# With _GNU_SOURCE, glibc 2.38 and later redirect strtol(), sscanf() and friends to their C23 versions,
+# which need GLIBC_2.38 and also parse a "0b" prefix. Like systemd, keep the older versions with the
+# wrappers of stdlib.h and stdio.h in src/include/glibc, which are included before the headers of glibc.
+AC_MSG_CHECKING([whether the C library is glibc])
+AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[#include <features.h>
+#ifndef __GLIBC__
+#error not glibc
+#endif]])], [libc_is_glibc=yes], [libc_is_glibc=no])
+AC_MSG_RESULT([$libc_is_glibc])
+AS_IF([test "x$libc_is_glibc" = xyes],
+	[LIBC_CPPFLAGS='-isystem $(top_srcdir)/src/include/glibc'],
+	[LIBC_CPPFLAGS=])
+AC_SUBST([LIBC_CPPFLAGS])
+
+# ------------------------------------------------------------------------------
 
 # TODO: the old python checks are irrelevant, but we do need python and perl for tests
 

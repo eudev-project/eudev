@@ -25,3 +25,8 @@ endif
 if ENABLE_PROGRAMS
 SUBDIRS += $(PROGRAMS_SUBDIRS)
 endif
+
+# the wrappers of glibc's headers, see LIBC_CPPFLAGS in configure.ac
+EXTRA_DIST = \
+	include/glibc/stdio.h \
+	include/glibc/stdlib.h

@@ -5,6 +5,7 @@ LIBUDEV_REVISION=4
 LIBUDEV_AGE=6
 
 AM_CPPFLAGS = \
+	$(LIBC_CPPFLAGS) \
 	-include $(top_builddir)/config.h \
 	-DUDEV_ROOT_RUN=\"$(rootrundir)\" \
 	-DUDEV_CONF_FILE=\"$(udevconffile)\" \
