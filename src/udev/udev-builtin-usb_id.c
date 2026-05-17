@@ -32,110 +32,70 @@
 #include "device-nodes.h"
 #include "udev.h"
 
-static void set_usb_iftype(char *to, int if_class_num, size_t len) {
-        const char *type = "generic";
-
+static const char* set_usb_iftype(unsigned if_class_num) {
         switch (if_class_num) {
-        case 1:
-                type = "audio";
-                break;
-        case 2: /* CDC-Control */
-                break;
-        case 3:
-                type = "hid";
-                break;
-        case 5: /* Physical */
-                break;
-        case 6:
-                type = "media";
-                break;
-        case 7:
-                type = "printer";
-                break;
-        case 8:
-                type = "storage";
-                break;
-        case 9:
-                type = "hub";
-                break;
-        case 0x0a: /* CDC-Data */
-                break;
-        case 0x0b: /* Chip/Smart Card */
-                break;
-        case 0x0d: /* Content Security */
-                break;
+        case 0x01:
+                return "audio";
+        case 0x03:
+                return "hid";
+        case 0x06:
+                return "media";
+        case 0x07:
+                return "printer";
+        case 0x08:
+                return "storage";
+        case 0x09:
+                return "hub";
         case 0x0e:
-                type = "video";
-                break;
-        case 0xdc: /* Diagnostic Device */
-                break;
-        case 0xe0: /* Wireless Controller */
-                break;
-        case 0xfe: /* Application-specific */
-                break;
-        case 0xff: /* Vendor-specific */
-                break;
+                return "video";
         default:
-                break;
+                /* Other known types:
+                 * 0x02: CDC-Control
+                 * 0x05: Physical
+                 * 0x0a: CDC-Data
+                 * 0x0b: Chip/Smart Card
+                 * 0x0d: Content Security
+                 * 0xdc: Diagnostic Device
+                 * 0xe0: Wireless Controller
+                 * 0xfe: Application-specific
+                 * 0xff: Vendor-specific */
+                return "generic";
         }
-        strncpy(to, type, len);
-        to[len-1] = '\0';
 }
 
-static void set_usb_mass_storage_ifsubtype(char *to, unsigned type_num, size_t len) {
-        const char *type;
-
-        assert(to);
-
+static const char* set_usb_mass_storage_ifsubtype(uint8_t type_num) {
         switch (type_num) {
-        case 1: /* RBC devices */
-                type = "rbc";
-                break;
-        case 2:
-                type = "atapi";
-                break;
-        case 3:
-                type = "tape";
-                break;
-        case 4: /* UFI */
-                type = "floppy";
-                break;
-        case 6: /* Transparent SPC-2 devices */
-                type = "scsi";
-                break;
+        case 0x01: /* RBC devices */
+                return "rbc";
+        case 0x02:
+                return "atapi";
+        case 0x03:
+                return "tape";
+        case 0x04: /* UFI */
+                return "floppy";
+        case 0x06: /* Transparent SPC-2 devices */
+                return "scsi";
         default:
-                type = "generic";
+                return "generic";
         }
-
-        strscpy(to, len, type);
 }
 
-static void set_scsi_type(char *to, unsigned type_num, size_t len) {
-        const char *type;
-
-        assert(to);
-
+static const char* set_scsi_type(unsigned type_num) {
         switch (type_num) {
-        case 0:
-        case 0xe:
-                type = "disk";
-                break;
-        case 1:
-                type = "tape";
-                break;
-        case 4:
-        case 7:
-        case 0xf:
-                type = "optical";
-                break;
-        case 5:
-                type = "cd";
-                break;
+        case 0x00:
+        case 0x0e:
+                return "disk";
+        case 0x01:
+                return "tape";
+        case 0x04:
+        case 0x07:
+        case 0x0f:
+                return "optical";
+        case 0x05:
+                return "cd";
         default:
-                type = "generic";
+                return "generic";
         }
-
-        strscpy(to, len, type);
 }
 
 #define USB_DT_DEVICE                        0x01
@@ -238,10 +198,10 @@ static int builtin_usb_id(struct udev_device *dev, int argc __attribute__((unuse
         char serial_str[UTIL_NAME_SIZE] = "";
         char packed_if_str[UTIL_NAME_SIZE] = "";
         char revision_str[64] = "";
-        char type_str[64] = "";
         char instance_str[64] = "";
         const char *ifnum = NULL;
         const char *driver = NULL;
+        const char *type_str = NULL;
         char serial[256];
 
         struct udev_device *dev_interface = NULL;
@@ -279,9 +239,9 @@ static int builtin_usb_id(struct udev_device *dev, int argc __attribute__((unuse
         if (if_class_num == 8) {
                 /* mass storage */
                 if (device_get_sysattr_unsigned_full(dev_interface, "bInterfaceSubClass", 16, &protocol) >= 0)
-                        set_usb_mass_storage_ifsubtype(type_str, protocol, sizeof(type_str)-1);
+                        type_str = set_usb_mass_storage_ifsubtype(protocol);
         } else {
-                set_usb_iftype(type_str, if_class_num, sizeof(type_str)-1);
+                type_str = set_usb_iftype(if_class_num);
         }
 
         log_debug("%s: if_class %u protocol %u",
@@ -344,7 +304,7 @@ static int builtin_usb_id(struct udev_device *dev, int argc __attribute__((unuse
                                         udev_device_get_sysname(dev_scsi));
                         goto fallback;
                 }
-                set_scsi_type(type_str, scsi_type, sizeof(type_str)-1);
+                type_str = set_scsi_type(scsi_type);
 
                 scsi_rev = udev_device_get_sysattr_value(dev_scsi, "rev");
                 if (!scsi_rev) {
