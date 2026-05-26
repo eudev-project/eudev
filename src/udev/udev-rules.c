@@ -569,7 +569,25 @@ static gid_t add_gid(struct udev_rules *rules, const char *group) {
         return gid;
 }
 
-static int import_property_from_string(struct udev_device *dev, char *line) {
+/* Adds a property imported by a rule. Failures are logged, and are not fatal. */
+static int import_property(struct udev_device *dev, const char *key, const char *val,
+                           const char *filename, unsigned int lineno) {
+        int r;
+
+        r = udev_device_add_property(dev, key, val);
+        if (r == -ENOMEM)
+                return log_oom();
+        if (r < 0) {
+                _cleanup_free_ char *k = cescape(key), *v = cescape(val ?: "");
+
+                log_warning_errno(r, "Failed to import property \"%s=%s\", ignoring %s:%u: %m",
+                                  k ?: key, v ?: "", filename, lineno);
+        }
+        return r;
+}
+
+static int import_property_from_string(struct udev_device *dev, char *line,
+                                       const char *filename, unsigned int lineno) {
         char *key;
         char *val;
         size_t len;
@@ -623,20 +641,21 @@ static int import_property_from_string(struct udev_device *dev, char *line) {
                 val++;
         }
 
-        udev_device_add_property(dev, key, val);
+        import_property(dev, key, val, filename, lineno);
 
         return 0;
 }
 
-static int import_file_into_properties(struct udev_device *dev, const char *filename) {
+static int import_file_into_properties(struct udev_device *dev, const char *import,
+                                       const char *filename, unsigned int lineno) {
         FILE *f;
         char line[UTIL_LINE_SIZE];
 
-        f = fopen(filename, "re");
+        f = fopen(import, "re");
         if (f == NULL)
                 return -1;
         while (fgets(line, sizeof(line), f) != NULL)
-                import_property_from_string(dev, line);
+                import_property_from_string(dev, line, filename, lineno);
         fclose(f);
         return 0;
 }
@@ -644,7 +663,8 @@ static int import_file_into_properties(struct udev_device *dev, const char *file
 static int import_program_into_properties(struct udev_event *event,
                                           usec_t timeout_usec,
                                           usec_t timeout_warn_usec,
-                                          const char *program, const sigset_t *sigmask) {
+                                          const char *program, const sigset_t *sigmask,
+                                          const char *filename, unsigned int lineno) {
         struct udev_device *dev = event->dev;
         char **envp;
         _cleanup_free_ char *result = NULL;
@@ -681,7 +701,7 @@ static int import_program_into_properties(struct udev_event *event,
                         pos[0] = '\0';
                         pos = &pos[1];
                 }
-                import_property_from_string(dev, line);
+                import_property_from_string(dev, line, filename, lineno);
                 line = pos;
         }
         return 0;
@@ -759,7 +779,8 @@ static int proc_cmdline_get_key(const char *key, char **value) {
         return found;
 }
 
-static int import_parent_into_properties(struct udev_device *dev, const char *filter) {
+static int import_parent_into_properties(struct udev_device *dev, const char *filter,
+                                         const char *filename, unsigned int lineno) {
         struct udev_device *dev_parent;
         struct udev_list_entry *list_entry;
 
@@ -771,9 +792,8 @@ static int import_parent_into_properties(struct udev_device *dev, const char *fi
                 const char *key = udev_list_entry_get_name(list_entry);
                 const char *val = udev_list_entry_get_value(list_entry);
 
-                if (fnmatch(filter, key, 0) == 0) {
-                        udev_device_add_property(dev, key, val);
-                }
+                if (fnmatch(filter, key, 0) == 0)
+                        import_property(dev, key, val, filename, lineno);
         }
         return 0;
 }
@@ -2452,7 +2472,9 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                         char import[UTIL_PATH_SIZE];
 
                         udev_event_apply_format(event, rules_str(rules, cur->key.value_off), import, sizeof(import), false);
-                        if (import_file_into_properties(event->dev, import) != 0)
+                        if (import_file_into_properties(event->dev, import,
+                                                        rules_str(rules, rule->rule.filename_off),
+                                                        rule->rule.filename_line) != 0)
                                 if (cur->key.op != OP_NOMATCH)
                                         goto nomatch;
                         break;
@@ -2466,7 +2488,9 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                                   rules_str(rules, rule->rule.filename_off),
                                   rule->rule.filename_line);
 
-                        if (import_program_into_properties(event, timeout_usec, timeout_warn_usec, import, sigmask) != 0)
+                        if (import_program_into_properties(event, timeout_usec, timeout_warn_usec, import, sigmask,
+                                                           rules_str(rules, rule->rule.filename_off),
+                                                           rule->rule.filename_line) != 0)
                                 if (cur->key.op != OP_NOMATCH)
                                         goto nomatch;
                         break;
@@ -2513,7 +2537,8 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
 
                         value = udev_device_get_property_value(event->dev_db, key);
                         if (value != NULL)
-                                udev_device_add_property(event->dev, key, value);
+                                import_property(event->dev, key, value,
+                                                rules_str(rules, rule->rule.filename_off), rule->rule.filename_line);
                         else {
                                 if (cur->key.op != OP_NOMATCH)
                                         goto nomatch;
@@ -2534,11 +2559,9 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                         else if (r > 0) {
                                 imported = true;
 
-                                if (value)
-                                        udev_device_add_property(event->dev, key, value);
-                                else
-                                        /* we import simple flags as 'FLAG=1' */
-                                        udev_device_add_property(event->dev, key, "1");
+                                /* we import simple flags as 'FLAG=1' */
+                                import_property(event->dev, key, value ?: "1",
+                                                rules_str(rules, rule->rule.filename_off), rule->rule.filename_line);
                         }
 
                         if (!imported && cur->key.op != OP_NOMATCH)
@@ -2549,7 +2572,9 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                         char import[UTIL_PATH_SIZE];
 
                         udev_event_apply_format(event, rules_str(rules, cur->key.value_off), import, sizeof(import), false);
-                        if (import_parent_into_properties(event->dev, import) != 0)
+                        if (import_parent_into_properties(event->dev, import,
+                                                          rules_str(rules, rule->rule.filename_off),
+                                                          rule->rule.filename_line) != 0)
                                 if (cur->key.op != OP_NOMATCH)
                                         goto nomatch;
                         break;
@@ -2713,11 +2738,15 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                         char *value = rules_str(rules, cur->key.value_off);
                         char value_new[UTIL_NAME_SIZE];
                         const char *value_old = NULL;
+                        int r;
 
                         if (value[0] == '\0') {
                                 if (cur->key.op == OP_ADD)
                                         break;
-                                udev_device_add_property(event->dev, name, NULL);
+                                r = udev_device_add_property(event->dev, name, NULL);
+                                if (r < 0)
+                                        log_error_errno(r, "Failed to remove property \"%s\" %s:%u: %m", name,
+                                                        rules_str(rules, rule->rule.filename_off), rule->rule.filename_line);
                                 break;
                         }
 
@@ -2743,7 +2772,15 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                                 }
                         }
 
-                        udev_device_add_property(event->dev, name, value_new);
+                        r = udev_device_add_property(event->dev, name, value_new);
+                        if (r == -ENOMEM)
+                                log_oom();
+                        else if (r < 0) {
+                                _cleanup_free_ char *v = cescape(value_new);
+
+                                log_warning_errno(r, "Failed to set property \"%s=%s\", ignoring %s:%u: %m", name, v ?: "",
+                                                  rules_str(rules, rule->rule.filename_off), rule->rule.filename_line);
+                        }
                         break;
                 }
                 case TK_A_TAG: {

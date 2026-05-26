@@ -52,14 +52,18 @@ int udev_builtin_hwdb_lookup(struct udev_device *dev,
                 list = udev_hwdb_get_properties_list_entry(hwdb, modalias, 0);
 
         udev_list_entry_foreach(entry, list) {
+                int r;
+
                 if (filter && fnmatch(filter, udev_list_entry_get_name(entry), FNM_NOESCAPE) != 0)
                         continue;
 
-                if (udev_builtin_add_property(dev, mode,
+                r = udev_builtin_add_property(dev, mode,
                                               udev_list_entry_get_name(entry),
-                                              udev_list_entry_get_value(entry)) < 0)
-                        return -ENOMEM;
-                n++;
+                                              udev_list_entry_get_value(entry));
+                if (r == -ENOMEM)
+                        return r;
+                if (r >= 0)
+                        n++;
         }
         return n;
 }
