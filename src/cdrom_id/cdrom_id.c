@@ -263,7 +263,7 @@ static int cd_media_compat(struct udev *udev __attribute__((unused)), int fd)
 static int cd_inquiry(struct udev *udev, int fd)
 {
         struct scsi_cmd sc;
-        unsigned char inq[128];
+        unsigned char inq[128] = {};
         int err;
 
         scsi_cmd_init(udev, &sc);
@@ -489,7 +489,7 @@ static int cd_profiles_old_mmc(struct udev *udev, int fd)
         struct scsi_cmd sc;
         int err;
 
-        unsigned char header[32];
+        unsigned char header[32] = {};
 
         scsi_cmd_init(udev, &sc);
         scsi_cmd_set(udev, &sc, 0, 0x51);
@@ -529,7 +529,7 @@ static int cd_profiles_old_mmc(struct udev *udev, int fd)
 static int cd_profiles(struct udev *udev, int fd)
 {
         struct scsi_cmd sc;
-        unsigned char features[65530];
+        unsigned char features[65530] = {};
         unsigned int cur_profile = 0;
         unsigned int len;
         unsigned int i;
@@ -618,7 +618,7 @@ out:
 static int cd_media_info(struct udev *udev, int fd)
 {
         struct scsi_cmd sc;
-        unsigned char header[32];
+        unsigned char header[32] = {};
         static const char *media_status[] = {
                 "blank",
                 "appendable",
@@ -655,15 +655,15 @@ static int cd_media_info(struct udev *udev, int fd)
          * always "complete", DVD-RAM are "other" or "complete" if the disc is
          * write protected; we need to check the contents if it is blank */
         if ((cd_media_dvd_rw_ro || cd_media_dvd_plus_rw || cd_media_dvd_plus_rw_dl || cd_media_dvd_ram) && (header[2] & 3) > 1) {
-                unsigned char buffer[32 * 2048];
+                unsigned char buffer[32 * 2048] = {};
                 unsigned char len;
                 int offset;
 
                 if (cd_media_dvd_ram) {
                         /* a write protected dvd-ram may report "complete" status */
 
-                        unsigned char dvdstruct[8];
-                        unsigned char format[12];
+                        unsigned char dvdstruct[8] = {};
+                        unsigned char format[12] = {};
 
                         scsi_cmd_init(udev, &sc);
                         scsi_cmd_set(udev, &sc, 0, 0xAD);
@@ -771,8 +771,8 @@ determined:
 static int cd_media_toc(struct udev *udev, int fd)
 {
         struct scsi_cmd sc;
-        unsigned char header[12];
-        unsigned char toc[65536];
+        unsigned char header[12] = {};
+        unsigned char toc[65536] = {};
         unsigned int len, i, num_tracks;
         unsigned char *p;
         int err;
