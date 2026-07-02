@@ -250,28 +250,58 @@ _public_ struct udev_monitor *udev_monitor_new_from_netlink(struct udev *udev, c
         return udev_monitor_new_from_netlink_fd(udev, name, -1);
 }
 
-static inline void bpf_stmt(struct sock_filter *inss, unsigned int *i,
-                            unsigned short code, unsigned int data)
+static int bpf_stmt_impl(struct sock_filter *inss, unsigned int *i, size_t n_ins,
+                         unsigned short code, unsigned int data)
 {
-        struct sock_filter *ins = &inss[*i];
+        struct sock_filter *ins;
 
+        if (*i >= n_ins)
+                return -E2BIG;
+
+        ins = &inss[*i];
         ins->code = code;
         ins->k = data;
         (*i)++;
+        return 0;
 }
 
-static inline void bpf_jmp(struct sock_filter *inss, unsigned int *i,
-                           unsigned short code, unsigned int data,
-                           unsigned short jt, unsigned short jf)
-{
-        struct sock_filter *ins = &inss[*i];
+#define bpf_stmt(ins, i, code, data) \
+        bpf_stmt_impl((ins), (i), ELEMENTSOF(ins), (code), (data))
 
+static int bpf_jmp_impl(struct sock_filter *inss, unsigned int *i, size_t n_ins,
+                        unsigned short code, unsigned int data,
+                        unsigned int jt, unsigned int jf)
+{
+        struct sock_filter *ins;
+
+        if (*i >= n_ins)
+                return -E2BIG;
+
+        /* The jump offsets are stored in single bytes (struct sock_filter.jt/.jf are __u8). A larger
+         * offset would be silently truncated and make the filter branch to the wrong instruction, i.e.
+         * drop events that should match. */
+        if (jt > UINT8_MAX || jf > UINT8_MAX)
+                return -E2BIG;
+
+        ins = &inss[*i];
         ins->code = code;
         ins->jt = jt;
         ins->jf = jf;
         ins->k = data;
         (*i)++;
+        return 0;
 }
+
+#define bpf_jmp(ins, i, code, data, jt, jf) \
+        bpf_jmp_impl((ins), (i), ELEMENTSOF(ins), (code), (data), (jt), (jf))
+
+/* collect the first error */
+#define BPF_GATHER(r, expr)                     \
+        do {                                    \
+                int _k = (expr);                \
+                if ((r) >= 0 && _k < 0)         \
+                        (r) = _k;               \
+        } while (false)
 
 /**
  * udev_monitor_filter_update:
@@ -288,7 +318,7 @@ _public_ int udev_monitor_filter_update(struct udev_monitor *udev_monitor)
         struct sock_fprog filter;
         unsigned int i;
         struct udev_list_entry *list_entry;
-        int err;
+        int err, r = 0;
 
         if (udev_list_get_entry(&udev_monitor->filter_subsystem_list) == NULL &&
             udev_list_get_entry(&udev_monitor->filter_tag_list) == NULL)
@@ -298,11 +328,11 @@ _public_ int udev_monitor_filter_update(struct udev_monitor *udev_monitor)
         i = 0;
 
         /* load magic in A */
-        bpf_stmt(ins, &i, BPF_LD|BPF_W|BPF_ABS, offsetof(struct udev_monitor_netlink_header, magic));
+        BPF_GATHER(r, bpf_stmt(ins, &i, BPF_LD|BPF_W|BPF_ABS, offsetof(struct udev_monitor_netlink_header, magic)));
         /* jump if magic matches */
-        bpf_jmp(ins, &i, BPF_JMP|BPF_JEQ|BPF_K, UDEV_MONITOR_MAGIC, 1, 0);
+        BPF_GATHER(r, bpf_jmp(ins, &i, BPF_JMP|BPF_JEQ|BPF_K, UDEV_MONITOR_MAGIC, 1, 0));
         /* wrong magic, pass packet */
-        bpf_stmt(ins, &i, BPF_RET|BPF_K, 0xffffffff);
+        BPF_GATHER(r, bpf_stmt(ins, &i, BPF_RET|BPF_K, 0xffffffff));
 
         if (udev_list_get_entry(&udev_monitor->filter_tag_list) != NULL) {
                 int tag_matches;
@@ -319,23 +349,23 @@ _public_ int udev_monitor_filter_update(struct udev_monitor *udev_monitor)
                         uint32_t tag_bloom_lo = tag_bloom_bits & 0xffffffff;
 
                         /* load device bloom bits in A */
-                        bpf_stmt(ins, &i, BPF_LD|BPF_W|BPF_ABS, offsetof(struct udev_monitor_netlink_header, filter_tag_bloom_hi));
+                        BPF_GATHER(r, bpf_stmt(ins, &i, BPF_LD|BPF_W|BPF_ABS, offsetof(struct udev_monitor_netlink_header, filter_tag_bloom_hi)));
                         /* clear bits (tag bits & bloom bits) */
-                        bpf_stmt(ins, &i, BPF_ALU|BPF_AND|BPF_K, tag_bloom_hi);
+                        BPF_GATHER(r, bpf_stmt(ins, &i, BPF_ALU|BPF_AND|BPF_K, tag_bloom_hi));
                         /* jump to next tag if it does not match */
-                        bpf_jmp(ins, &i, BPF_JMP|BPF_JEQ|BPF_K, tag_bloom_hi, 0, 3);
+                        BPF_GATHER(r, bpf_jmp(ins, &i, BPF_JMP|BPF_JEQ|BPF_K, tag_bloom_hi, 0, 3));
 
                         /* load device bloom bits in A */
-                        bpf_stmt(ins, &i, BPF_LD|BPF_W|BPF_ABS, offsetof(struct udev_monitor_netlink_header, filter_tag_bloom_lo));
+                        BPF_GATHER(r, bpf_stmt(ins, &i, BPF_LD|BPF_W|BPF_ABS, offsetof(struct udev_monitor_netlink_header, filter_tag_bloom_lo)));
                         /* clear bits (tag bits & bloom bits) */
-                        bpf_stmt(ins, &i, BPF_ALU|BPF_AND|BPF_K, tag_bloom_lo);
+                        BPF_GATHER(r, bpf_stmt(ins, &i, BPF_ALU|BPF_AND|BPF_K, tag_bloom_lo));
                         /* jump behind end of tag match block if tag matches */
                         tag_matches--;
-                        bpf_jmp(ins, &i, BPF_JMP|BPF_JEQ|BPF_K, tag_bloom_lo, 1 + (tag_matches * 6), 0);
+                        BPF_GATHER(r, bpf_jmp(ins, &i, BPF_JMP|BPF_JEQ|BPF_K, tag_bloom_lo, 1 + (tag_matches * 6), 0));
                 }
 
                 /* nothing matched, drop packet */
-                bpf_stmt(ins, &i, BPF_RET|BPF_K, 0);
+                BPF_GATHER(r, bpf_stmt(ins, &i, BPF_RET|BPF_K, 0));
         }
 
         /* add all subsystem matches */
@@ -344,34 +374,34 @@ _public_ int udev_monitor_filter_update(struct udev_monitor *udev_monitor)
                         unsigned int hash = util_string_hash32(udev_list_entry_get_name(list_entry));
 
                         /* load device subsystem value in A */
-                        bpf_stmt(ins, &i, BPF_LD|BPF_W|BPF_ABS, offsetof(struct udev_monitor_netlink_header, filter_subsystem_hash));
+                        BPF_GATHER(r, bpf_stmt(ins, &i, BPF_LD|BPF_W|BPF_ABS, offsetof(struct udev_monitor_netlink_header, filter_subsystem_hash)));
                         if (udev_list_entry_get_value(list_entry) == NULL) {
                                 /* jump if subsystem does not match */
-                                bpf_jmp(ins, &i, BPF_JMP|BPF_JEQ|BPF_K, hash, 0, 1);
+                                BPF_GATHER(r, bpf_jmp(ins, &i, BPF_JMP|BPF_JEQ|BPF_K, hash, 0, 1));
                         } else {
                                 /* jump if subsystem does not match */
-                                bpf_jmp(ins, &i, BPF_JMP|BPF_JEQ|BPF_K, hash, 0, 3);
+                                BPF_GATHER(r, bpf_jmp(ins, &i, BPF_JMP|BPF_JEQ|BPF_K, hash, 0, 3));
 
                                 /* load device devtype value in A */
-                                bpf_stmt(ins, &i, BPF_LD|BPF_W|BPF_ABS, offsetof(struct udev_monitor_netlink_header, filter_devtype_hash));
+                                BPF_GATHER(r, bpf_stmt(ins, &i, BPF_LD|BPF_W|BPF_ABS, offsetof(struct udev_monitor_netlink_header, filter_devtype_hash)));
                                 /* jump if value does not match */
                                 hash = util_string_hash32(udev_list_entry_get_value(list_entry));
-                                bpf_jmp(ins, &i, BPF_JMP|BPF_JEQ|BPF_K, hash, 0, 1);
+                                BPF_GATHER(r, bpf_jmp(ins, &i, BPF_JMP|BPF_JEQ|BPF_K, hash, 0, 1));
                         }
 
                         /* matched, pass packet */
-                        bpf_stmt(ins, &i, BPF_RET|BPF_K, 0xffffffff);
-
-                        if (i+1 >= ELEMENTSOF(ins))
-                                return -E2BIG;
+                        BPF_GATHER(r, bpf_stmt(ins, &i, BPF_RET|BPF_K, 0xffffffff));
                 }
 
                 /* nothing matched, drop packet */
-                bpf_stmt(ins, &i, BPF_RET|BPF_K, 0);
+                BPF_GATHER(r, bpf_stmt(ins, &i, BPF_RET|BPF_K, 0));
         }
 
         /* matched, pass packet */
-        bpf_stmt(ins, &i, BPF_RET|BPF_K, 0xffffffff);
+        BPF_GATHER(r, bpf_stmt(ins, &i, BPF_RET|BPF_K, 0xffffffff));
+
+        if (r < 0)
+                return r;
 
         /* install filter */
         memzero(&filter, sizeof(filter));
