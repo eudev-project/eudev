@@ -684,7 +684,8 @@ retry:
                                  buf.nlh.magic, htonl(UDEV_MONITOR_MAGIC));
                         return NULL;
                 }
-                if (buf.nlh.properties_off+32 > (size_t)buflen) {
+                /* avoid 32-bit overflow of properties_off + 32 */
+                if ((uint64_t) buf.nlh.properties_off + 32 > (uint64_t) buflen) {
                         log_debug("message smaller than expected (%u > %zd)",
                                   buf.nlh.properties_off+32, buflen);
                         return NULL;
@@ -696,7 +697,7 @@ retry:
                 is_initialized = true;
         } else {
                 /* kernel message with header */
-                bufpos = strlen(buf.raw) + 1;
+                bufpos = strnlen(buf.raw, buflen) + 1;
                 if ((size_t)bufpos < sizeof("a@/d") || bufpos >= buflen) {
                         log_debug("invalid message length");
                         return NULL;

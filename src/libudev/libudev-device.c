@@ -2074,9 +2074,19 @@ struct udev_device *udev_device_new_from_nulstr(struct udev *udev, char *nulstr,
                 size_t keylen;
 
                 key = nulstr + bufpos;
-                keylen = strlen(key);
+                keylen = strnlen(key, buflen - bufpos);
                 if (keylen == 0)
                         break;
+                if ((ssize_t) keylen == buflen - bufpos) {
+                        /* the last string is not NUL terminated */
+                        log_debug("failed to parse nulstr, invalid device");
+
+                        udev_device_unref(device);
+
+                        errno = EINVAL;
+
+                        return NULL;
+                }
 
                 bufpos += keylen + 1;
                 udev_device_add_property_from_string_parse(device, key);
