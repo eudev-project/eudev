@@ -127,7 +127,7 @@ static int adm_hwdb(struct udev *udev, int argc, char *argv[]) {
         }
 
         if (test)
-                (void) hwdb_query(udev, test, NULL);
+                (void) hwdb_query(udev, test, root);
 out:
         return rc;
 }
