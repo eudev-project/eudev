@@ -581,25 +581,25 @@ static int setup_matches(struct udev *udev, struct udev_enumerate *e, const Expo
         STRV_FOREACH(a, m->attr_match) {
                 _cleanup_free_ char *k = NULL, *v = NULL;
 
-                r = parse_key_value_argument(*a, /* require_value= */ true, &k, &v);
+                r = parse_key_value_argument(*a, /* require_value= */ false, &k, &v);
                 if (r < 0)
                         return r;
 
                 r = udev_enumerate_add_match_sysattr(e, k, v);
                 if (r < 0)
-                        return log_error_errno(r, "Failed to add sysattr match '%s=%s': %m", k, v);
+                        return log_error_errno(r, "Failed to add sysattr match '%s=%s': %m", k, strna(v));
         }
 
         STRV_FOREACH(a, m->attr_nomatch) {
                 _cleanup_free_ char *k = NULL, *v = NULL;
 
-                r = parse_key_value_argument(*a, /* require_value= */ true, &k, &v);
+                r = parse_key_value_argument(*a, /* require_value= */ false, &k, &v);
                 if (r < 0)
                         return r;
 
                 r = udev_enumerate_add_nomatch_sysattr(e, k, v);
                 if (r < 0)
-                        return log_error_errno(r, "Failed to add negative sysattr match '%s=%s': %m", k, v);
+                        return log_error_errno(r, "Failed to add negative sysattr match '%s=%s': %m", k, strna(v));
         }
 
         STRV_FOREACH(a, m->property_match) {
