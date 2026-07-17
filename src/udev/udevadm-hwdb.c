@@ -441,6 +441,7 @@ static int trie_store(struct trie *trie, const char *filename) {
         }
 
         log_debug("=== trie on-disk ===");
+        log_debug("filename:         %s", filename);
         log_debug("size:             %8"PRIi64" bytes", size);
         log_debug("header:           %8zu bytes", sizeof(struct trie_header_f));
         log_debug("nodes:            %8"PRIu64" bytes (%8"PRIu64")",
@@ -488,7 +489,7 @@ static int insert_data(struct trie *trie, struct udev_list *match_list,
         return 0;
 }
 
-static int import_file(struct udev *udev, struct trie *trie, const char *filename, uint16_t file_priority) {
+static int import_file(struct udev *udev, struct trie *trie, const char *filename, const char *path_in_root, uint16_t file_priority) {
         enum {
                 HW_MATCH,
                 HW_DATA,
@@ -560,7 +561,7 @@ static int import_file(struct udev *udev, struct trie *trie, const char *filenam
 
                         /* first data */
                         state = HW_DATA;
-                        err = insert_data(trie, &match_list, line, filename, file_priority, line_number);
+                        err = insert_data(trie, &match_list, line, path_in_root, file_priority, line_number);
                         if (err < 0)
                                 r = err;
                         break;
@@ -581,7 +582,7 @@ static int import_file(struct udev *udev, struct trie *trie, const char *filenam
                                 break;
                         }
 
-                        err = insert_data(trie, &match_list, line, filename, file_priority, line_number);
+                        err = insert_data(trie, &match_list, line, path_in_root, file_priority, line_number);
                         if (err < 0)
                                 r = err;
                         break;
@@ -750,8 +751,19 @@ static int adm_hwdb(struct udev *udev, int argc, char *argv[]) {
                         goto out;
                 }
                 STRV_FOREACH(f, files) {
-                        log_debug("reading file '%s'", *f);
-                        import_file(udev, trie, *f, file_priority++);
+                        const char *path_in_root = *f;
+
+                        /* Strip the root from the filename stored in the database, to not
+                         * leak build paths and keep the database reproducible. The files
+                         * are listed as the root directly followed by the path. */
+                        if (!isempty(root) && startswith(*f, root)) {
+                                path_in_root = *f + strlen(root);
+                                while (path_in_root[0] == '/' && path_in_root[1] == '/')
+                                        path_in_root++;
+                        }
+
+                        log_debug("reading file '%s' -> '%s'", *f, path_in_root);
+                        import_file(udev, trie, *f, path_in_root, file_priority++);
                 }
                 strv_free(files);
 
