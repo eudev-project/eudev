@@ -1155,6 +1155,9 @@ _public_ struct udev_device *udev_device_get_parent(struct udev_device *udev_dev
                 udev_device->parent_set = true;
                 udev_device->parent_device = device_new_from_parent(udev_device);
         }
+        /* the lookup of the parent is cached, also set errno on subsequent calls */
+        if (udev_device->parent_device == NULL)
+                errno = ENOENT;
         return udev_device->parent_device;
 }
 
