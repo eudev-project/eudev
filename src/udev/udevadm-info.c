@@ -981,6 +981,7 @@ static int uinfo(struct udev *udev, int argc, char *argv[]) {
         const char *export_prefix = NULL;
         char name[UTIL_PATH_SIZE];
         usec_t wait_for_initialization_timeout = 0;
+        PagerFlags pager_flags;
         char **p;
         int c, r, ret;
 
@@ -1174,7 +1175,11 @@ static int uinfo(struct udev *udev, int argc, char *argv[]) {
                 return 1;
         }
 
-        pager_open(arg_pager_flags);
+        pager_flags = arg_pager_flags;
+        if (action == ACTION_QUERY && query == QUERY_SYMLINK && !value)
+                pager_flags |= PAGER_DISABLE;
+
+        pager_open(pager_flags);
 
         if (action == ACTION_EXPORT) {
                 export_devices(udev);
