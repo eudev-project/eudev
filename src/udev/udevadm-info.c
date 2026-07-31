@@ -403,7 +403,7 @@ static void help(void) {
                "       property                 The device properties\n"
                "       all                      All values\n"
                "     --property=NAME          Show only properties by this name\n"
-               "     --value                  When showing properties, print only their values\n"
+               "     --value                  Print only values\n"
                "  -p --path=SYSPATH           sysfs device path used for query or attribute walk\n"
                "  -n --name=NAME              Node or symlink name used for query or attribute walk\n"
                "  -r --root                   Prepend dev directory to path names\n"
@@ -616,13 +616,17 @@ static int uinfo(struct udev *udev, int argc, char *argv[]) {
                 case QUERY_SYMLINK:
                         list_entry = udev_device_get_devlinks_list_entry(device);
                         while (list_entry != NULL) {
-                                if (root)
-                                        printf("%s", udev_list_entry_get_name(list_entry));
-                                else
-                                        printf("%s", udev_list_entry_get_name(list_entry) + strlen("/dev/"));
+                                const char *devlink = udev_list_entry_get_name(list_entry);
+
+                                if (!root)
+                                        devlink += strlen("/dev/");
+
                                 list_entry = udev_list_entry_get_next(list_entry);
-                                if (list_entry != NULL)
-                                        printf(" ");
+
+                                if (value)
+                                        printf("%s\n", devlink);
+                                else
+                                        printf("%s%s", devlink, list_entry != NULL ? " " : "");
                         }
                         printf("\n");
                         break;
