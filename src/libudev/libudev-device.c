@@ -465,6 +465,33 @@ static struct udev_list_entry *udev_device_add_property_from_string(struct udev_
         return udev_device_add_property_internal(udev_device, name, val);
 }
 
+/* Checks a "KEY=VALUE" string received from the kernel or udevd, and logs why it is ignored. */
+static bool property_string_is_valid(struct udev_device *udev_device, const char *property)
+{
+        _cleanup_free_ char *key = NULL;
+        const char *eq;
+
+        eq = strchr(property, '=');
+        if (eq) {
+                key = strndup(property, eq - property);
+                if (!key) {
+                        log_oom();
+                        return false;
+                }
+                if (property_is_valid(key, eq + 1))
+                        return true;
+        }
+
+        if (log_get_max_level() >= LOG_DEBUG) {
+                _cleanup_free_ char *escaped = cescape(property);
+
+                log_debug("%s%sInvalid property '%s', ignoring",
+                          udev_device->sysname ?: "", udev_device->sysname ? ": " : "",
+                          escaped ?: "(null)");
+        }
+        return false;
+}
+
 static int udev_device_set_syspath(struct udev_device *udev_device, const char *syspath)
 {
         const char *pos;
@@ -547,6 +574,11 @@ static int udev_device_set_action(struct udev_device *udev_device, const char *a
  */
 static void udev_device_add_property_from_string_parse(struct udev_device *udev_device, const char *property)
 {
+        /* Skip an invalid property, but continue with the others. When DEVPATH or SUBSYSTEM is
+         * invalid, udev_device_add_property_from_string_parse_finish() refuses the device. */
+        if (!property_string_is_valid(udev_device, property))
+                return;
+
         if (startswith(property, "DEVPATH=")) {
                 char path[UTIL_PATH_SIZE];
 
@@ -749,6 +781,11 @@ static int udev_device_read_uevent_file(struct udev_device *udev_device)
                 if (pos == NULL)
                         continue;
                 pos[0] = '\0';
+
+                /* The kernel may pass invalid characters, e.g. in UNIQ= of USB serial devices. Ignore
+                 * only such key-value pairs. */
+                if (!property_string_is_valid(udev_device, line))
+                        continue;
 
                 if (startswith(line, "DEVTYPE=")) {
                         udev_device_set_devtype(udev_device, &line[8]);
