@@ -39,6 +39,7 @@
 #include "sysctl-util.h"
 
 #define PREALLOC_TOKEN          2048
+#define IMPORT_PROGRAM_SIZE     (128 * 1024)
 
 struct uid_gid {
         unsigned int name_off;
@@ -643,12 +644,16 @@ static int import_program_into_properties(struct udev_event *event,
                                           const char *program, const sigset_t *sigmask) {
         struct udev_device *dev = event->dev;
         char **envp;
-        char result[UTIL_LINE_SIZE];
+        _cleanup_free_ char *result = NULL;
         char *line;
         int err;
 
+        result = malloc(IMPORT_PROGRAM_SIZE);
+        if (result == NULL)
+                return -ENOMEM;
+
         envp = udev_device_get_properties_envp(dev);
-        err = udev_event_spawn(event, timeout_usec, timeout_warn_usec, program, envp, sigmask, result, sizeof(result));
+        err = udev_event_spawn(event, timeout_usec, timeout_warn_usec, program, envp, sigmask, result, IMPORT_PROGRAM_SIZE);
         if (err < 0)
                 return err;
 

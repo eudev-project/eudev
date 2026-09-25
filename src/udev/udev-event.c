@@ -462,6 +462,7 @@ static void spawn_read(struct udev_event *event,
                 .data.ptr = &fd_stderr,
         };
         size_t respos = 0;
+        bool truncated = false;
         int r;
 
         /* read from child if requested */
@@ -538,12 +539,16 @@ static void spawn_read(struct udev_event *event,
 
                                 /* store stdout result */
                                 if (result != NULL && *fd == fd_stdout) {
-                                        if (respos + count < ressize) {
-                                                memcpy(&result[respos], buf, count);
-                                                respos += count;
-                                        } else {
-                                                log_error("'%s' ressize %zu too short", cmd, ressize);
+                                        size_t len = count;
+
+                                        if (len > ressize - 1 - respos) {
+                                                len = ressize - 1 - respos;
+                                                if (!truncated)
+                                                        log_error("'%s' ressize %zu too short", cmd, ressize);
+                                                truncated = true;
                                         }
+                                        memcpy(&result[respos], buf, len);
+                                        respos += len;
                                 }
 
                                 /* log debug output only if we watch stderr */
