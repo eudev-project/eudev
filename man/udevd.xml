@@ -34,6 +34,7 @@
       <command>/sbin/udevd</command>
       <arg><option>--daemon</option></arg>
       <arg><option>--debug</option></arg>
+      <arg><option>--ready-notify=</option></arg>
       <arg><option>--children-max=</option></arg>
       <arg><option>--exec-delay=</option></arg>
       <arg><option>--event-timeout=</option></arg>
@@ -72,6 +73,16 @@
         <term><option>-D</option>, <option>--debug</option></term>
         <listitem>
           <para>Print debug messages to standard error.</para>
+        </listitem>
+      </varlistentry>
+
+      <varlistentry>
+        <term><option>-r</option>, <option>--ready-notify=</option></term>
+        <listitem>
+          <para>Issue (S6/dinit compatible) readiness notification via a
+          file descriptor. A short message followed by a newline character
+          will be sent via the specified file descriptor (inherited from
+          the parent process) when initialization is complete.</para>
         </listitem>
       </varlistentry>
 

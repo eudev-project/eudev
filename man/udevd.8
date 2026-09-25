@@ -25,7 +25,7 @@ udevd \- Device event managing daemon
 .PP
 udevd
 .HP \w'\fB/sbin/udevd\fR\ 'u
-\fB/sbin/udevd\fR [\fB\-\-daemon\fR] [\fB\-\-debug\fR] [\fB\-\-children\-max=\fR] [\fB\-\-exec\-delay=\fR] [\fB\-\-event\-timeout=\fR] [\fB\-\-resolve\-names=early|late|never\fR] [\fB\-\-version\fR] [\fB\-\-help\fR]
+\fB/sbin/udevd\fR [\fB\-\-daemon\fR] [\fB\-\-debug\fR] [\fB\-\-ready\-notify=\fR] [\fB\-\-children\-max=\fR] [\fB\-\-exec\-delay=\fR] [\fB\-\-event\-timeout=\fR] [\fB\-\-resolve\-names=early|late|never\fR] [\fB\-\-version\fR] [\fB\-\-help\fR]
 .SH "DESCRIPTION"
 .PP
 \fBudevd\fR
@@ -45,6 +45,11 @@ Detach and run in the background\&.
 \fB\-D\fR, \fB\-\-debug\fR
 .RS 4
 Print debug messages to standard error\&.
+.RE
+.PP
+\fB\-r\fR, \fB\-\-ready\-notify=\fR
+.RS 4
+Issue (S6/dinit compatible) readiness notification via a file descriptor\&. A short message followed by a newline character will be sent via the specified file descriptor (inherited from the parent process) when initialization is complete\&.
 .RE
 .PP
 \fB\-c\fR, \fB\-\-children\-max=\fR
