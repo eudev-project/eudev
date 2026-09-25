@@ -390,6 +390,54 @@ out:
         return hostdev;
 }
 
+static struct udev_device *handle_scsi_ata(struct udev_device *parent, char **path, char **compat_path) {
+        struct udev_device *targetdev, *target_parent;
+        struct udev_device *atadev = NULL;
+        struct udev *udev = udev_device_get_udev(parent);
+        const char *port_no, *sysname, *name;
+        unsigned host, bus, target, lun;
+
+        assert(parent);
+        assert(path);
+
+        name = udev_device_get_sysname(parent);
+        if (sscanf(name, "%u:%u:%u:%u", &host, &bus, &target, &lun) != 4)
+                return NULL;
+
+        targetdev = udev_device_get_parent_with_subsystem_devtype(parent, "scsi", "scsi_host");
+        if (targetdev == NULL)
+                return NULL;
+
+        target_parent = udev_device_get_parent(targetdev);
+        if (target_parent == NULL)
+                return NULL;
+
+        sysname = udev_device_get_sysname(target_parent);
+        if (sysname == NULL)
+                return NULL;
+
+        atadev = udev_device_new_from_subsystem_sysname(udev, "ata_port", udev_device_get_sysname(target_parent));
+        if (atadev == NULL)
+                return NULL;
+
+        port_no = udev_device_get_sysattr_value(atadev, "port_no");
+        if (port_no == NULL)
+                return NULL;
+
+        if (bus != 0)
+                /* Devices behind port multiplier have a bus != 0 */
+                path_prepend(path, "ata-%s.%u.0", port_no, bus);
+        else
+                /* Master/slave are distinguished by target id */
+                path_prepend(path, "ata-%s.%u", port_no, target);
+
+        /* old compatible persistent link for ATA devices */
+        if (compat_path)
+                path_prepend(compat_path, "ata-%s", port_no);
+
+        return parent;
+}
+
 static struct udev_device *handle_scsi_hyperv(struct udev_device *parent, char **path) {
         struct udev_device *hostdev;
         struct udev_device *vmbusdev;
@@ -426,7 +474,7 @@ static struct udev_device *handle_scsi_hyperv(struct udev_device *parent, char *
         return parent;
 }
 
-static struct udev_device *handle_scsi(struct udev_device *parent, char **path, bool *supported_parent) {
+static struct udev_device *handle_scsi(struct udev_device *parent, char **path, char **compat_path, bool *supported_parent) {
         const char *devtype;
         const char *name;
         const char *id;
@@ -465,19 +513,8 @@ static struct udev_device *handle_scsi(struct udev_device *parent, char **path, 
                 goto out;
         }
 
-        /*
-         * We do not support the ATA transport class, it uses global counters
-         * to name the ata devices which numbers spread across multiple
-         * controllers.
-         *
-         * The real link numbers are not exported. Also, possible chains of ports
-         * behind port multipliers cannot be composed that way.
-         *
-         * Until all that is solved at the kernel level, there are no by-path/
-         * links for ATA devices.
-         */
         if (strstr(name, "/ata") != NULL) {
-                parent = NULL;
+                parent = handle_scsi_ata(parent, path, compat_path);
                 goto out;
         }
 
@@ -578,7 +615,8 @@ out:
 
 static int builtin_path_id(struct udev_device *dev, int argc __attribute__((unused)), char *argv[] __attribute__((unused)), bool test) {
         struct udev_device *parent;
-        char *path = NULL;
+        _cleanup_free_ char *path = NULL;
+        _cleanup_free_ char *compat_path = NULL;
         bool supported_transport = false;
         bool supported_parent = false;
 
@@ -600,7 +638,7 @@ static int builtin_path_id(struct udev_device *dev, int argc __attribute__((unus
                 } else if (streq(subsys, "scsi_tape")) {
                         handle_scsi_tape(parent, &path);
                 } else if (streq(subsys, "scsi")) {
-                        parent = handle_scsi(parent, &path, &supported_parent);
+                        parent = handle_scsi(parent, &path, &compat_path, &supported_parent);
                         supported_transport = true;
                 } else if (streq(subsys, "cciss")) {
                         parent = handle_cciss(parent, &path);
@@ -616,23 +654,33 @@ static int builtin_path_id(struct udev_device *dev, int argc __attribute__((unus
                         parent = skip_subsystem(parent, "serio");
                 } else if (streq(subsys, "pci")) {
                         path_prepend(&path, "pci-%s", udev_device_get_sysname(parent));
+                        if (compat_path)
+                                path_prepend(&compat_path, "pci-%s", udev_device_get_sysname(parent));
                         parent = skip_subsystem(parent, "pci");
                         supported_parent = true;
                 } else if (streq(subsys, "platform")) {
                         path_prepend(&path, "platform-%s", udev_device_get_sysname(parent));
+                        if (compat_path)
+                                path_prepend(&compat_path, "platform-%s", udev_device_get_sysname(parent));
                         parent = skip_subsystem(parent, "platform");
                         supported_transport = true;
                         supported_parent = true;
                 } else if (streq(subsys, "acpi")) {
                         path_prepend(&path, "acpi-%s", udev_device_get_sysname(parent));
+                        if (compat_path)
+                                path_prepend(&compat_path, "acpi-%s", udev_device_get_sysname(parent));
                         parent = skip_subsystem(parent, "acpi");
                         supported_parent = true;
                 } else if (streq(subsys, "xen")) {
                         path_prepend(&path, "xen-%s", udev_device_get_sysname(parent));
+                        if (compat_path)
+                                path_prepend(&compat_path, "xen-%s", udev_device_get_sysname(parent));
                         parent = skip_subsystem(parent, "xen");
                         supported_parent = true;
                 } else if (streq(subsys, "scm")) {
                         path_prepend(&path, "scm-%s", udev_device_get_sysname(parent));
+                        if (compat_path)
+                                path_prepend(&compat_path, "scm-%s", udev_device_get_sysname(parent));
                         parent = skip_subsystem(parent, "scm");
                         supported_transport = true;
                         supported_parent = true;
@@ -655,20 +703,16 @@ static int builtin_path_id(struct udev_device *dev, int argc __attribute__((unus
          * might produce conflicting IDs if the parent does not provide a
          * unique and predictable name.
          */
-        if (!supported_parent) {
-                free(path);
+        if (!supported_parent)
                 path = NULL;
-        }
 
         /*
          * Do not return block devices without a well-known transport. Some
          * devices do not expose their buses and do not provide a unique
          * and predictable name that way.
          */
-        if (streq(udev_device_get_subsystem(dev), "block") && !supported_transport) {
-                free(path);
+        if (streq(udev_device_get_subsystem(dev), "block") && !supported_transport)
                 path = NULL;
-        }
 
 out:
         if (path != NULL) {
@@ -703,7 +747,15 @@ out:
 
                 udev_builtin_add_property(dev, test, "ID_PATH", path);
                 udev_builtin_add_property(dev, test, "ID_PATH_TAG", tag);
-                free(path);
+
+                /*
+                 * Compatible link generation for ATA devices
+                 * we assign compat_link to the env variable
+                 * ID_PATH_ATA_COMPAT
+                 */
+                if (compat_path)
+                        udev_builtin_add_property(dev, test, "ID_PATH_ATA_COMPAT", compat_path);
+
                 return EXIT_SUCCESS;
         }
         return EXIT_FAILURE;
