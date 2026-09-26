@@ -200,6 +200,12 @@ if test "x$enable_blkid" != "xno"; then
 	if test "x$have_blkid" = xno && test "x$enable_blkid" = xyes; then
 		AC_MSG_ERROR([*** blkid support requested but not found])
 	fi
+	if test "x$have_blkid" = xyes; then
+		save_LIBS="$LIBS"
+		LIBS="$LIBS $BLKID_LIBS"
+		AC_CHECK_FUNCS([blkid_probe_set_hint])
+		LIBS="$save_LIBS"
+	fi
 fi
 AM_CONDITIONAL(HAVE_BLKID, [test "x$have_blkid" = "xyes"])
 

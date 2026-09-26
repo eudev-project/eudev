@@ -145,18 +145,40 @@ static int builtin_blkid(struct udev_device *dev, int argc, char *argv[], bool t
 
         static const struct option options[] = {
                 { "offset", optional_argument, NULL, 'o' },
+                { "hint",   required_argument, NULL, 'H' },
                 { "noraid", no_argument, NULL, 'R' },
                 {}
         };
 
+        pr = blkid_new_probe();
+        if (!pr)
+                return EXIT_FAILURE;
+
         for (;;) {
                 int option;
 
-                option = getopt_long(argc, argv, "oR", options, NULL);
+                option = getopt_long(argc, argv, "oH:R", options, NULL);
                 if (option == -1)
                         break;
 
                 switch (option) {
+                case 'H':
+#ifdef HAVE_BLKID_PROBE_SET_HINT
+                        if (blkid_probe_set_hint(pr, optarg, 0) < 0) {
+                                log_error("Failed to use '%s' probing hint", optarg);
+                                blkid_free_probe(pr);
+                                return EXIT_FAILURE;
+                        }
+                        break;
+#else
+                        /* Use the hint <name>=<offset> as probing offset for old versions */
+                        optarg = strchr(optarg, '=');
+                        if (!optarg)
+                                /* no value means 0, do nothing for old versions */
+                                break;
+                        ++optarg;
+                        /* fall through */
+#endif
                 case 'o':
                         offset = strtoull(optarg, NULL, 0);
                         break;
@@ -165,10 +187,6 @@ static int builtin_blkid(struct udev_device *dev, int argc, char *argv[], bool t
                         break;
                 }
         }
-
-        pr = blkid_new_probe();
-        if (!pr)
-                return EXIT_FAILURE;
 
         blkid_probe_set_superblocks_flags(pr,
                 BLKID_SUBLKS_LABEL | BLKID_SUBLKS_UUID |
