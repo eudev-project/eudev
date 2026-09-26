@@ -97,6 +97,7 @@ void udev_event_execute_rules(struct udev_event *event,
                               struct udev_rules *rules,
                               const sigset_t *sigset);
 void udev_event_execute_run(struct udev_event *event, usec_t timeout_usec, usec_t timeout_warn_usec, const sigset_t *sigset);
+#define UDEV_ARGV_MAX 128
 int udev_build_argv(struct udev *udev, char *cmd, int *argc, char *argv[]);
 
 /* udev-watch.c */

@@ -687,6 +687,11 @@ int udev_build_argv(struct udev *udev __attribute__((unused)), char *cmd, int *a
 
         pos = cmd;
         while (pos != NULL && pos[0] != '\0') {
+               /* callers provide an array of UDEV_ARGV_MAX entries, leave room for the terminating NULL */
+               if (i >= UDEV_ARGV_MAX - 1) {
+                        log_error("too many arguments in command, ignoring the rest: '%s'", pos);
+                        break;
+               }
                if (IN_SET(pos[0], '\'', '"')) {
                         /* do not separate quotes or double quotes */
                         char delim[2] = { pos[0], '\0' };
@@ -720,7 +725,7 @@ int udev_event_spawn(struct udev_event *event,
         int errpipe[2] = {-1, -1};
         pid_t pid;
         char arg[UTIL_PATH_SIZE];
-        char *argv[128];
+        char *argv[UDEV_ARGV_MAX];
         char program[UTIL_PATH_SIZE];
         int err = 0;
 
