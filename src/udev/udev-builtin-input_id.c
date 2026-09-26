@@ -138,8 +138,37 @@ static void get_cap_mask(struct udev_device *dev __attribute__((unused)),
         }
 }
 
+static void get_input_id_attr(struct udev_device *dev, const char *attr, __u16 *ret) {
+        const char *v;
+        unsigned long val;
+        char *end;
+
+        v = udev_device_get_sysattr_value(dev, attr);
+        if (!v)
+                return;
+
+        errno = 0;
+        val = strtoul(v, &end, 16);
+        if (errno != 0 || end == v || *end != '\0' || val > 0xffff)
+                return;
+
+        *ret = (__u16) val;
+}
+
+static struct input_id get_input_id(struct udev_device *dev) {
+        struct input_id id = {};
+
+        get_input_id_attr(dev, "id/bustype", &id.bustype);
+        get_input_id_attr(dev, "id/vendor", &id.vendor);
+        get_input_id_attr(dev, "id/product", &id.product);
+        get_input_id_attr(dev, "id/version", &id.version);
+
+        return id;
+}
+
 /* pointer devices */
 static bool test_pointers(struct udev_device *dev,
+                          const struct input_id *id,
                           const unsigned long* bitmask_ev,
                           const unsigned long* bitmask_abs,
                           const unsigned long* bitmask_key,
@@ -164,7 +193,7 @@ static bool test_pointers(struct udev_device *dev,
         bool is_tablet = false;
         bool is_joystick = false;
         bool is_accelerometer = false;
-        bool is_pointing_stick= false;
+        bool is_pointing_stick = false;
 
         has_keys = test_bit(EV_KEY, bitmask_ev);
         has_abs_coordinates = test_bit(ABS_X, bitmask_abs) && test_bit(ABS_Y, bitmask_abs);
@@ -243,6 +272,10 @@ static bool test_pointers(struct udev_device *dev,
             (has_rel_coordinates ||
             !has_abs_coordinates)) /* mouse buttons and no axis */
                 is_mouse = true;
+
+        /* There is no such thing as an i2c mouse */
+        if (is_mouse && id->bustype == BUS_I2C)
+                is_pointing_stick = true;
 
         if (is_pointing_stick)
                 udev_builtin_add_property(dev, test, "ID_INPUT_POINTINGSTICK", "1");
@@ -330,6 +363,8 @@ static int builtin_input_id(struct udev_device *dev, int argc __attribute__((unu
                 pdev = udev_device_get_parent_with_subsystem_devtype(pdev, "input", NULL);
 
         if (pdev) {
+                struct input_id id = get_input_id(pdev);
+
                 /* Use this as a flag that input devices were detected, so that this
                  * program doesn't need to be called more than once per device */
                 udev_builtin_add_property(dev, test, "ID_INPUT", "1");
@@ -338,7 +373,7 @@ static int builtin_input_id(struct udev_device *dev, int argc __attribute__((unu
                 get_cap_mask(dev, pdev, "capabilities/rel", bitmask_rel, sizeof(bitmask_rel), test);
                 get_cap_mask(dev, pdev, "capabilities/key", bitmask_key, sizeof(bitmask_key), test);
                 get_cap_mask(dev, pdev, "properties", bitmask_props, sizeof(bitmask_props), test);
-                is_pointer = test_pointers(dev, bitmask_ev, bitmask_abs,
+                is_pointer = test_pointers(dev, &id, bitmask_ev, bitmask_abs,
                                            bitmask_key, bitmask_rel,
                                            bitmask_props, test);
                 is_key = test_key(dev, bitmask_ev, bitmask_key, test);
