@@ -170,6 +170,7 @@ static struct udev_device *handle_scsi_sas(struct udev_device *parent, char **pa
         const char *sas_address = NULL;
         const char *phy_id;
         const char *phy_count;
+        unsigned num_phys;
         char *lun = NULL;
 
         targetdev = udev_device_get_parent_with_subsystem_devtype(parent, "scsi", "scsi_target");
@@ -198,13 +199,13 @@ static struct udev_device *handle_scsi_sas(struct udev_device *parent, char **pa
                           "sas_port", udev_device_get_sysname(port));
 
         phy_count = udev_device_get_sysattr_value(port_sasdev, "num_phys");
-        if (phy_count == NULL) {
+        if (phy_count == NULL || safe_atou(phy_count, &num_phys) < 0) {
                parent = NULL;
                goto out;
         }
 
-        /* Check if we are simple disk */
-        if (strncmp(phy_count, "1", 2) != 0) {
+        /* Check if this is a wide port (i.e. num_phys is 2 or higher) */
+        if (num_phys > 1) {
                  parent = handle_scsi_sas_wide_port(parent, path);
                  goto out;
         }
