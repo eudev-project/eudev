@@ -664,6 +664,11 @@ static int builtin_path_id(struct udev_device *dev, int argc __attribute__((unus
                         parent = skip_subsystem(parent, "platform");
                         supported_transport = true;
                         supported_parent = true;
+                } else if (streq(subsys, "amba")) {
+                        path_prepend(&path, "amba-%s", udev_device_get_sysname(parent));
+                        parent = skip_subsystem(parent, "amba");
+                        supported_transport = true;
+                        supported_parent = true;
                 } else if (streq(subsys, "acpi")) {
                         path_prepend(&path, "acpi-%s", udev_device_get_sysname(parent));
                         parent = skip_subsystem(parent, "acpi");
