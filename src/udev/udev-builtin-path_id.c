@@ -830,7 +830,7 @@ out:
                 add_id_with_usb_revision(dev, test, path);
 
                 /* compose valid udev tag name */
-                for (p = path, i = 0; *p; p++) {
+                for (p = path, i = 0; *p && i < sizeof(tag) - 1; p++) {
                         if ((*p >= '0' && *p <= '9') ||
                             (*p >= 'A' && *p <= 'Z') ||
                             (*p >= 'a' && *p <= 'z') ||
