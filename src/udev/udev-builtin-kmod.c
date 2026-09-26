@@ -67,9 +67,14 @@ _printf_(6,0) static void udev_kmod_log(void *data __attribute__((unused)), int 
         log_internalv(priority, 0, file, line, fn, format, args);
 }
 
-static int builtin_kmod(struct udev_device *dev, int argc, char *argv[], bool test __attribute__((unused))) {
+static int builtin_kmod(struct udev_device *dev, int argc, char *argv[], bool test) {
         struct udev *udev = udev_device_get_udev(dev);
         int i;
+
+        if (test) {
+                log_debug("Running in test mode, skipping execution of 'kmod' builtin command.");
+                return EXIT_SUCCESS;
+        }
 
         if (!ctx)
                 return 0;

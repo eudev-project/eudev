@@ -198,13 +198,18 @@ static int open_device(const char *devnode) {
         return fd;
 }
 
-static int builtin_keyboard(struct udev_device *dev, int argc __attribute__((unused)), char *argv[] __attribute__((unused)), bool test __attribute__((unused))) {
+static int builtin_keyboard(struct udev_device *dev, int argc __attribute__((unused)), char *argv[] __attribute__((unused)), bool test) {
         struct udev_list_entry *entry;
         unsigned release[1024];
         unsigned release_count = 0;
         _cleanup_close_ int fd = -1;
         const char *node;
         int has_abs = -1;
+
+        if (test) {
+                log_debug("Running in test mode, skipping execution of 'keyboard' builtin command.");
+                return EXIT_SUCCESS;
+        }
 
         node = udev_device_get_devnode(dev);
         if (!node) {
