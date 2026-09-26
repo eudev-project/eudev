@@ -872,6 +872,9 @@ static int builtin_path_id(struct udev_device *dev, int argc __attribute__((unus
                                 path_prepend(&compat_path, "xen-%s", udev_device_get_sysname(parent));
                         parent = skip_subsystem(parent, "xen");
                         supported_parent = true;
+                } else if (streq(subsys, "virtio")) {
+                        parent = skip_subsystem(parent, "virtio");
+                        supported_transport = true;
                 } else if (streq(subsys, "scm")) {
                         path_prepend(&path, "scm-%s", udev_device_get_sysname(parent));
                         if (compat_path)
