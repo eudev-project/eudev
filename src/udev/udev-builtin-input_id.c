@@ -128,7 +128,7 @@ static void get_cap_mask(struct udev_device *dev __attribute__((unused)),
                 log_debug("%s decoded bit map:", attr);
                 val = bitmask_size / sizeof (unsigned long);
                 /* skip over leading zeros */
-                while (bitmask[val-1] == 0 && val > 0)
+                while (val > 0 && bitmask[val-1] == 0)
                         --val;
                 for (i = 0; i < val; ++i) {
                         DISABLE_WARNING_FORMAT_NONLITERAL;
