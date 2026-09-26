@@ -34,6 +34,9 @@
 #include "udev.h"
 #include "utf8.h"
 
+DEFINE_TRIVIAL_CLEANUP_FUNC(blkid_probe, blkid_free_probe);
+#define _cleanup_blkid_free_probe_ _cleanup_(blkid_free_probep)
+
 static void print_property(struct udev_device *dev, bool test, const char *name, const char *value) {
         char s[256];
 
@@ -210,7 +213,7 @@ static int builtin_blkid(struct udev_device *dev, int argc, char *argv[], bool t
         int64_t offset = 0;
         bool noraid = false;
         _cleanup_close_ int fd = -1;
-        blkid_probe pr;
+        _cleanup_blkid_free_probe_ blkid_probe pr = NULL;
         const char *data;
         const char *name;
         const char *prtype = NULL;
@@ -245,7 +248,6 @@ static int builtin_blkid(struct udev_device *dev, int argc, char *argv[], bool t
 #ifdef HAVE_BLKID_PROBE_SET_HINT
                         if (blkid_probe_set_hint(pr, optarg, 0) < 0) {
                                 log_error("Failed to use '%s' probing hint", optarg);
-                                blkid_free_probe(pr);
                                 return EXIT_FAILURE;
                         }
                         break;
@@ -347,7 +349,6 @@ static int builtin_blkid(struct udev_device *dev, int argc, char *argv[], bool t
                 }
         }
 
-        blkid_free_probe(pr);
 out:
         if (err < 0)
                 return EXIT_FAILURE;
