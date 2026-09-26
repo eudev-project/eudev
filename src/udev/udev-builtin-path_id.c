@@ -29,6 +29,7 @@
 #include <errno.h>
 #include <dirent.h>
 #include <getopt.h>
+#include <linux/usb/ch11.h>
 
 #include "udev.h"
 #include "udev-util.h"
@@ -520,10 +521,54 @@ static void handle_scsi_tape(struct udev_device *dev, char **path) {
                 path_prepend(path, "st%c", name[2]);
 }
 
+static int get_usb_revision(struct udev_device *dev) {
+        unsigned long protocol;
+        const char *s;
+        char *end;
+
+        assert(dev);
+
+        /* Returns usb revision 1, 2, or 3. */
+
+        s = udev_device_get_sysattr_value(dev, "bDeviceProtocol");
+        if (!s)
+                return -ENOENT;
+
+        errno = 0;
+        protocol = strtoul(s, &end, 16);
+        if (errno != 0 || end == s || *end != '\0' || protocol > UINT8_MAX)
+                return -EINVAL;
+
+        switch (protocol) {
+        case USB_HUB_PR_HS_NO_TT: /* Full speed hub (USB1) or Hi-speed hub without TT (USB2) */
+
+                /* See speed_show() in drivers/usb/core/sysfs.c of the kernel. */
+                s = udev_device_get_sysattr_value(dev, "speed");
+                if (!s)
+                        return -ENOENT;
+
+                if (streq(s, "480"))
+                        return 2;
+
+                return 1;
+
+        case USB_HUB_PR_HS_SINGLE_TT: /* Hi-speed hub with single TT */
+        case USB_HUB_PR_HS_MULTI_TT: /* Hi-speed hub with multiple TT */
+                return 2;
+
+        case USB_HUB_PR_SS: /* Super speed hub */
+                return 3;
+
+        default:
+                return -EPROTONOSUPPORT;
+        }
+}
+
 static struct udev_device *handle_usb(struct udev_device *parent, char **path) {
         const char *devtype;
         const char *str;
         const char *port;
+        int r;
 
         devtype = udev_device_get_devtype(parent);
         if (devtype == NULL)
@@ -538,7 +583,24 @@ static struct udev_device *handle_usb(struct udev_device *parent, char **path) {
         port++;
 
         parent = skip_subsystem(parent, "usb");
-        path_prepend(path, "usb-0:%s", port);
+
+        /* USB host number may change across reboots (and probably even without reboot). The part after USB
+         * host number is determined by device topology and so does not change. Hence, drop the host number
+         * and always use '0' instead.
+         *
+         * xHCI host controllers may register two (or more?) USB root hubs for USB 2.0 and USB 3.0, and the
+         * sysname, whose host number replaced with 0, of a device under the hubs may conflict with others.
+         * To avoid the conflict, let's include the USB revision of the root hub to the PATH_ID.
+         * See issue https://github.com/systemd/systemd/issues/19406 for more details. */
+        r = get_usb_revision(parent);
+        if (r < 0) {
+                log_debug_errno(r, "Failed to get the USB revision number, ignoring: %m");
+                path_prepend(path, "usb-0:%s", port);
+        } else {
+                assert(r > 0);
+                path_prepend(path, "usbv%i-0:%s", r, port);
+        }
+
         return parent;
 }
 
@@ -614,6 +676,30 @@ static int find_real_nvme_parent(struct udev_device *dev, struct udev_device **r
         *ret = nvme;
         nvme = NULL;
         return 0;
+}
+
+static void add_id_with_usb_revision(struct udev_device *dev, bool test, char *path) {
+        char *p;
+
+        assert(dev);
+        assert(path);
+
+        /* When the path contains the USB revision, let's adds ID_PATH_WITH_USB_REVISION property and
+         * drop the version specifier for later use. */
+
+        p = strstr(path, "-usbv");
+        if (!p)
+                return;
+        p += strlen("-usbv");
+        if (p[0] < '0' || p[0] > '9')
+                return;
+        if (p[1] != '-')
+                return;
+
+        udev_builtin_add_property(dev, test, "ID_PATH_WITH_USB_REVISION", path);
+
+        /* Drop the USB revision specifier for backward compatibility. */
+        memmove(p - 1, p + 1, strlen(p + 1) + 1);
 }
 
 static int builtin_path_id(struct udev_device *dev, int argc __attribute__((unused)), char *argv[] __attribute__((unused)), bool test) {
@@ -731,6 +817,8 @@ out:
                 char tag[UTIL_NAME_SIZE];
                 size_t i;
                 const char *p;
+
+                add_id_with_usb_revision(dev, test, path);
 
                 /* compose valid udev tag name */
                 for (p = path, i = 0; *p; p++) {
