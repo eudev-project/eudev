@@ -185,6 +185,10 @@ static int dev_if_packed_info(struct udev_device *dev, char *ifs_str, size_t len
                 desc = (struct usb_interface_descriptor *) &buf[pos];
                 if (desc->bLength < 3)
                         break;
+                if (desc->bLength > (size_t) size - pos) {
+                        log_debug("Corrupt data read from \"%s\"", filename);
+                        return -EIO;
+                }
                 pos += desc->bLength;
 
                 if (desc->bDescriptorType != USB_DT_INTERFACE)
