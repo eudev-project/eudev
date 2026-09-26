@@ -178,12 +178,22 @@ static void set_trackpoint_sensitivity(struct udev_device *dev, const char *valu
                 log_error_errno(r, "Failed to write 'sensitivity' attribute for '%s': %m", udev_device_get_devnode(pdev));
 }
 
+/* the device node vanished or has no medium */
+static bool errno_is_device_absent_or_empty(int r) {
+        return IN_SET(abs(r), ENODEV, ENXIO, ENOENT, ENOMEDIUM);
+}
+
 static int open_device(const char *devnode) {
         int fd;
 
         fd = open(devnode, O_RDWR|O_CLOEXEC|O_NONBLOCK|O_NOCTTY);
-        if (fd < 0)
-                return log_error_errno(errno, "Error opening device \"%s\": %m", devnode);
+        if (fd < 0) {
+                bool ignore = errno_is_device_absent_or_empty(errno);
+
+                return log_full_errno(ignore ? LOG_DEBUG : LOG_WARNING, errno,
+                                      "Error opening device \"%s\"%s: %m",
+                                      devnode, ignore ? ", ignoring" : "");
+        }
 
         return fd;
 }
@@ -235,7 +245,7 @@ static int builtin_keyboard(struct udev_device *dev, int argc __attribute__((unu
                         if (fd == -1) {
                                 fd = open_device(node);
                                 if (fd < 0)
-                                        return EXIT_FAILURE;
+                                        return errno_is_device_absent_or_empty(fd) ? EXIT_SUCCESS : EXIT_FAILURE;
                         }
 
                         map_keycode(fd, node, scancode, keycode);
@@ -252,7 +262,7 @@ static int builtin_keyboard(struct udev_device *dev, int argc __attribute__((unu
                         if (fd == -1) {
                                 fd = open_device(node);
                                 if (fd < 0)
-                                        return EXIT_FAILURE;
+                                        return errno_is_device_absent_or_empty(fd) ? EXIT_SUCCESS : EXIT_FAILURE;
                         }
 
                         if (has_abs == -1) {
