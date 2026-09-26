@@ -40,14 +40,19 @@ static int builtin_btrfs(struct udev_device *dev, int argc, char *argv[], bool t
         if (argc != 3 || !streq(argv[1], "ready"))
                 return EXIT_FAILURE;
 
-        fd = open("/dev/btrfs-control", O_RDWR|O_CLOEXEC|O_NOCTTY);
-        if (fd < 0)
-                return EXIT_FAILURE;
-
         if (strlen(argv[2]) >= sizeof(args.name)) {
                 log_debug("Device name too long for BTRFS_IOC_DEVICES_READY call: %s", argv[2]);
                 return EXIT_FAILURE;
         }
+
+        if (test) {
+                log_debug("Running in test mode, skipping execution of 'btrfs' builtin command.");
+                return EXIT_SUCCESS;
+        }
+
+        fd = open("/dev/btrfs-control", O_RDWR|O_CLOEXEC|O_NOCTTY);
+        if (fd < 0)
+                return EXIT_FAILURE;
 
         strscpy(args.name, sizeof(args.name), argv[2]);
         err = ioctl(fd, BTRFS_IOC_DEVICES_READY, &args);
