@@ -687,6 +687,38 @@ static int find_real_nvme_parent(struct udev_device *dev, struct udev_device **r
         return 0;
 }
 
+static int handle_pnp(struct udev_device *parent, char **path) {
+        _cleanup_udev_device_unref_ struct udev_device *firmware_node = NULL;
+        _cleanup_free_ char *firmware_node_path = NULL;
+        const char *syspath, *sysname;
+
+        assert(parent);
+        assert(path);
+
+        syspath = udev_device_get_syspath(parent);
+        if (!syspath)
+                return -ENODEV;
+
+        firmware_node_path = realpath(strjoina(syspath, "/firmware_node"), NULL);
+        if (!firmware_node_path)
+                return -errno;
+
+        firmware_node = udev_device_new_from_syspath(udev_device_get_udev(parent), firmware_node_path);
+        if (!firmware_node)
+                return -ENODEV;
+
+        if (!streq_ptr(udev_device_get_subsystem(firmware_node), "acpi"))
+                return -ENODEV;
+
+        sysname = udev_device_get_sysname(firmware_node);
+        if (!sysname)
+                return -ENODEV;
+
+        path_prepend(path, "acpi-%s", sysname);
+
+        return 0;
+}
+
 static void add_id_with_usb_revision(struct udev_device *dev, bool test, char *path) {
         char *p;
 
@@ -779,6 +811,10 @@ static int builtin_path_id(struct udev_device *dev, int argc __attribute__((unus
                         path_prepend(&path, "acpi-%s", udev_device_get_sysname(parent));
                         parent = skip_subsystem(parent, "acpi");
                         supported_parent = true;
+                } else if (streq(subsys, "pnp")) {
+                        if (handle_pnp(parent, &path) >= 0)
+                                supported_parent = true;
+                        parent = skip_subsystem(parent, "pnp");
                 } else if (streq(subsys, "xen")) {
                         path_prepend(&path, "xen-%s", udev_device_get_sysname(parent));
                         parent = skip_subsystem(parent, "xen");
