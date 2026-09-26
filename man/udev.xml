@@ -610,11 +610,9 @@
       <varname>PROGRAM</varname>, <varname>OWNER</varname>,
       <varname>GROUP</varname>, <varname>MODE</varname>, <varname>SECLABEL</varname>,
       and <varname>RUN</varname> fields support simple string substitutions.
-      The <varname>RUN</varname> substitutions are performed after all rules
-      have been processed, right before the program is executed, allowing for
-      the use of device properties set by earlier matching rules. For all other
-      fields, substitutions are performed while the individual rule is being
-      processed. The available substitutions are:</para>
+      The substitutions are performed while the individual rule is being
+      processed, so they use the device properties set by the preceding
+      rules. The available substitutions are:</para>
       <variablelist class='udev-directives'>
         <varlistentry>
           <term><option>$kernel</option>, <option>%k</option></term>

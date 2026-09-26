@@ -451,9 +451,7 @@ The
 \fIMODE\fR,
 \fISECLABEL\fR, and
 \fIRUN\fR
-fields support simple string substitutions\&. The
-\fIRUN\fR
-substitutions are performed after all rules have been processed, right before the program is executed, allowing for the use of device properties set by earlier matching rules\&. For all other fields, substitutions are performed while the individual rule is being processed\&. The available substitutions are:
+fields support simple string substitutions\&. The substitutions are performed while the individual rule is being processed, so they use the device properties set by the preceding rules\&. The available substitutions are:
 .PP
 \fB$kernel\fR, \fB%k\fR
 .RS 4
