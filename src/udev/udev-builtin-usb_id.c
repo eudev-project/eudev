@@ -167,7 +167,7 @@ static int dev_if_packed_info(struct udev_device *dev, char *ifs_str, size_t len
         if (asprintf(&filename, "%s/descriptors", udev_device_get_syspath(dev)) < 0)
                 return log_oom();
 
-        fd = open(filename, O_RDONLY|O_CLOEXEC);
+        fd = open(filename, O_RDONLY|O_CLOEXEC|O_NOCTTY);
         if (fd < 0)
                 return log_debug_errno(errno, "Error opening USB device 'descriptors' file: %m");
 

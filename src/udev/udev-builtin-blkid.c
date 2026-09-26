@@ -279,7 +279,7 @@ static int builtin_blkid(struct udev_device *dev, int argc, char *argv[], bool t
         if (noraid)
                 blkid_probe_filter_superblocks_usage(pr, BLKID_FLTR_NOTIN, BLKID_USAGE_RAID);
 
-        fd = open(udev_device_get_devnode(dev), O_RDONLY|O_CLOEXEC);
+        fd = open(udev_device_get_devnode(dev), O_RDONLY|O_CLOEXEC|O_NOCTTY);
         if (fd < 0) {
                 err = log_debug_errno(errno, "Failure opening block device %s: %m", udev_device_get_devnode(dev));
                 goto out;

@@ -63,7 +63,7 @@ static void extract_info(struct udev_device *dev, const char *devpath, bool test
         struct input_absinfo xabsinfo = {}, yabsinfo = {};
         _cleanup_close_ int fd = -1;
 
-        fd = open(devpath, O_RDONLY|O_CLOEXEC);
+        fd = open(devpath, O_RDONLY|O_CLOEXEC|O_NOCTTY);
         if (fd < 0)
                 return;
 
