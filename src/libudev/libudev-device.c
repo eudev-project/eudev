@@ -1522,6 +1522,7 @@ _public_ const char *udev_device_get_sysattr_value(struct udev_device *udev_devi
         struct stat statbuf;
         int fd;
         ssize_t size;
+        size_t len;
         const char *val = NULL;
 
         if (udev_device == NULL)
@@ -1581,7 +1582,10 @@ _public_ const char *udev_device_get_sysattr_value(struct udev_device *udev_devi
 
         /* got a valid value, store it in cache and return it */
         value[size] = '\0';
-        util_remove_trailing_chars(value, '\n');
+        /* drop trailing newlines, including carriage returns */
+        len = strlen(value);
+        while (len > 0 && strchr(NEWLINE, value[len - 1]))
+                value[--len] = '\0';
         list_entry = udev_list_entry_add(&udev_device->sysattr_value_list, sysattr, value);
         val = udev_list_entry_get_value(list_entry);
 out:
@@ -1625,8 +1629,8 @@ _public_ int udev_device_set_sysattr_value(struct udev_device *udev_device, cons
 
         len = strlen(value);
 
-        /* drop trailing newlines */
-        while (len > 0 && value[len - 1] == '\n')
+        /* drop trailing newlines, including carriage returns */
+        while (len > 0 && strchr(NEWLINE, value[len - 1]))
                 len--;
 
         /* value length is limited to 4k */
