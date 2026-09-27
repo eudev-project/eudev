@@ -930,6 +930,7 @@ static int get_usb_specifier(struct udev_device *dev, char **ret) {
 static int names_usb(struct udev_device *dev, const char *prefix, bool test) {
         struct udev_device *usbdev, *pcidev;
         _cleanup_free_ char *suffix = NULL;
+        char str[IFNAMSIZ];
         int r;
 
         assert(dev);
@@ -950,7 +951,14 @@ static int names_usb(struct udev_device *dev, const char *prefix, bool test) {
         if (pcidev)
                 return names_pci_slot(dev, pcidev, prefix, suffix, test);
 
-        return log_device_debug_errno(usbdev, ENOENT, "Failed to get parent PCI bus.");
+        if (!naming_scheme_has(NAMING_USB_HOST))
+                return log_device_debug_errno(usbdev, ENOENT, "Failed to get parent PCI bus.");
+
+        /* Otherwise, e.g. on-chip asics that have USB ports, use the USB specifier as is. */
+        if (snprintf_ok(str, sizeof str, "%s%s", prefix, suffix))
+                udev_builtin_add_property(dev, test, "ID_NET_NAME_PATH", str);
+
+        return 0;
 }
 
 static int get_bcma_specifier(struct udev_device *dev, char **ret) {
