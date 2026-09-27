@@ -256,8 +256,12 @@ static int trie_insert(struct trie *trie, struct trie_node *node, const char *se
                         node->values = NULL;
                         node->values_count = 0;
                         err = node_add_child(trie, node, new_child, c);
-                        if (err)
+                        if (err) {
+                                /* undo the split, to not lose the moved children and values */
+                                *node = *new_child;
+                                node->prefix_off -= p + 1;
                                 return err;
+                        }
 
                         new_child = NULL; /* avoid cleanup */
                         break;
