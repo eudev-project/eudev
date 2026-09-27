@@ -212,8 +212,13 @@ static DIR *xopendirat(int fd, const char *name, int flags) {
 
 static void cleanup_dir(DIR *dir, mode_t mask, int depth) {
         struct dirent *dent;
+        int dfd;
 
         if (depth <= 0)
+                return;
+
+        dfd = dirfd(dir);
+        if (dfd < 0)
                 return;
 
         for (dent = readdir(dir); dent != NULL; dent = readdir(dir)) {
@@ -221,22 +226,22 @@ static void cleanup_dir(DIR *dir, mode_t mask, int depth) {
 
                 if (dent->d_name[0] == '.')
                         continue;
-                if (fstatat(dirfd(dir), dent->d_name, &stats, AT_SYMLINK_NOFOLLOW) != 0)
+                if (fstatat(dfd, dent->d_name, &stats, AT_SYMLINK_NOFOLLOW) != 0)
                         continue;
                 if ((stats.st_mode & mask) != 0)
                         continue;
                 if (S_ISDIR(stats.st_mode)) {
                         _cleanup_closedir_ DIR *subdir = NULL;
 
-                        subdir = xopendirat(dirfd(dir), dent->d_name, O_NOFOLLOW);
+                        subdir = xopendirat(dfd, dent->d_name, O_NOFOLLOW);
                         if (!subdir)
                                 log_debug_errno(errno, "Failed to open subdirectory '%s', ignoring: %m", dent->d_name);
                         else
                                 cleanup_dir(subdir, mask, depth-1);
 
-                        (void) unlinkat(dirfd(dir), dent->d_name, AT_REMOVEDIR);
+                        (void) unlinkat(dfd, dent->d_name, AT_REMOVEDIR);
                 } else
-                        (void) unlinkat(dirfd(dir), dent->d_name, 0);
+                        (void) unlinkat(dfd, dent->d_name, 0);
         }
 }
 
@@ -250,22 +255,28 @@ static void cleanup_dir(DIR *dir, mode_t mask, int depth) {
 static bool cleanup_dir_after_db_cleanup(DIR *dir, DIR *datadir) {
         unsigned int kept = 0;
         struct dirent *dent;
+        int dfd, data_dfd;
 
         assert(dir && datadir);
+
+        dfd = dirfd(dir);
+        data_dfd = dirfd(datadir);
+        if (dfd < 0 || data_dfd < 0)
+                return false;
 
         for (dent = readdir(dir); dent != NULL; dent = readdir(dir)) {
                 struct stat data_stats, link_stats;
 
                 if (streq(dent->d_name, ".") || streq(dent->d_name, ".."))
                         continue;
-                if (fstatat(dirfd(dir), dent->d_name, &link_stats, AT_SYMLINK_NOFOLLOW) < 0) {
+                if (fstatat(dfd, dent->d_name, &link_stats, AT_SYMLINK_NOFOLLOW) < 0) {
                         if (errno != ENOENT)
                                 kept++;
                         continue;
                 }
 
-                if (fstatat(dirfd(datadir), dent->d_name, &data_stats, 0) < 0)
-                        (void) unlinkat(dirfd(dir), dent->d_name,
+                if (fstatat(data_dfd, dent->d_name, &data_stats, 0) < 0)
+                        (void) unlinkat(dfd, dent->d_name,
                                         S_ISDIR(link_stats.st_mode) ? AT_REMOVEDIR : 0);
                 else
                         /* The entry still exists under /run/udev/data */
@@ -277,26 +288,31 @@ static bool cleanup_dir_after_db_cleanup(DIR *dir, DIR *datadir) {
 
 static void cleanup_dirs_after_db_cleanup(DIR *dir, DIR *datadir) {
         struct dirent *dent;
+        int dfd;
 
         assert(dir && datadir);
+
+        dfd = dirfd(dir);
+        if (dfd < 0)
+                return;
 
         for (dent = readdir(dir); dent != NULL; dent = readdir(dir)) {
                 struct stat stats;
 
                 if (streq(dent->d_name, ".") || streq(dent->d_name, ".."))
                         continue;
-                if (fstatat(dirfd(dir), dent->d_name, &stats, AT_SYMLINK_NOFOLLOW) < 0)
+                if (fstatat(dfd, dent->d_name, &stats, AT_SYMLINK_NOFOLLOW) < 0)
                         continue;
                 if (S_ISDIR(stats.st_mode)) {
                         _cleanup_closedir_ DIR *subdir = NULL;
 
-                        subdir = xopendirat(dirfd(dir), dent->d_name, O_NOFOLLOW);
+                        subdir = xopendirat(dfd, dent->d_name, O_NOFOLLOW);
                         if (!subdir)
                                 log_debug_errno(errno, "Failed to open subdirectory '%s', ignoring: %m", dent->d_name);
                         else if (cleanup_dir_after_db_cleanup(subdir, datadir))
-                                (void) unlinkat(dirfd(dir), dent->d_name, AT_REMOVEDIR);
+                                (void) unlinkat(dfd, dent->d_name, AT_REMOVEDIR);
                 } else
-                        (void) unlinkat(dirfd(dir), dent->d_name, 0);
+                        (void) unlinkat(dfd, dent->d_name, 0);
         }
 }
 
