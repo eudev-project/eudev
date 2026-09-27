@@ -76,6 +76,13 @@ static inline bool isempty(const char *p) {
         return !p || !p[0];
 }
 
+/* Checks that all characters of s are in charset, like systemd's in_charset(). */
+static inline bool in_charset(const char *s, const char *charset) {
+        assert(s);
+        assert(charset);
+        return s[strspn(s, charset)] == '\0';
+}
+
 static inline char *startswith(const char *s, const char *prefix) {
         size_t l;
 

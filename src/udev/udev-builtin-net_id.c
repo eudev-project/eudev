@@ -72,10 +72,6 @@ static inline const char *strna(const char *s) {
         return s ?: "n/a";
 }
 
-static bool in_charset(const char *s, const char *charset) {
-        return s[strspn(s, charset)] == '\0';
-}
-
 static bool device_in_subsystem(struct udev_device *dev, const char *subsystem) {
         return streq_ptr(udev_device_get_subsystem(dev), subsystem);
 }
