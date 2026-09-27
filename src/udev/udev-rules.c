@@ -1789,7 +1789,7 @@ static int parse_file(struct udev_rules *rules, const char *filename) {
         first_token = rules->token_cur;
         filename_off = rules_add_string(rules, filename);
 
-        while (fgets(line, sizeof(line), f) != NULL) {
+        for (bool eof = false; !eof && fgets(line, sizeof(line), f) != NULL; ) {
                 char *key;
                 size_t len;
 
@@ -1809,8 +1809,10 @@ static int parse_file(struct udev_rules *rules, const char *filename) {
 
                 /* continue reading if backslash+newline is found */
                 while (line[len-2] == '\\') {
-                        if (fgets(&line[len-2], (sizeof(line)-len)+2, f) == NULL)
+                        if (fgets(&line[len-2], (sizeof(line)-len)+2, f) == NULL) {
+                                eof = true;
                                 break;
+                        }
                         if (strlen(&line[len-2]) < 2)
                                 break;
                         line_nr++;
