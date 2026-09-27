@@ -719,9 +719,13 @@ static void handle_ctrl_msg(struct udev_ctrl *uctrl) {
 
         i = udev_ctrl_get_set_log_level(ctrl_msg);
         if (i >= 0) {
-                log_debug("udevd message (SET_LOG_LEVEL) received, log_priority=%i", i);
-                log_set_max_level(i);
-                worker_kill(false);
+                if ((i & LOG_PRIMASK) != i)
+                        log_warning("udevd message (SET_LOG_LEVEL) received with invalid log_priority=%i, ignoring", i);
+                else {
+                        log_debug("udevd message (SET_LOG_LEVEL) received, log_priority=%i", i);
+                        log_set_max_level(i);
+                        worker_kill(false);
+                }
         }
 
         if (udev_ctrl_get_stop_exec_queue(ctrl_msg) > 0) {

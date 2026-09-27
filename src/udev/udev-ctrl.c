@@ -406,6 +406,9 @@ struct udev_ctrl_msg *udev_ctrl_receive_msg(struct udev_ctrl_connection *conn) {
                 goto err;
         }
 
+        /* make sure that the string in the message is NUL terminated */
+        uctrl_msg->ctrl_msg_wire.buf[sizeof(uctrl_msg->ctrl_msg_wire.buf) - 1] = '\0';
+
         cmsg = CMSG_FIRSTHDR(&smsg);
         cred = (struct ucred *) CMSG_DATA(cmsg);
 
