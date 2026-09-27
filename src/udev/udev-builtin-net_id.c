@@ -50,6 +50,8 @@
 #define HEXDIGITS DIGITS "abcdefABCDEF"
 #endif
 
+#define ONBOARD_14BIT_INDEX_MAX ((1U << 14) - 1)
+
 #define log_device_debug(dev, fmt, ...) \
         log_debug("%s: " fmt, udev_device_get_sysname(dev), ##__VA_ARGS__)
 #define log_device_debug_errno(dev, error, fmt, ...) \
@@ -125,6 +127,15 @@ static int get_port_specifier(struct udev_device *dev, char **ret) {
         return 0;
 }
 
+static bool is_valid_onboard_index(unsigned idx) {
+        /* Some BIOSes report rubbish indexes that are excessively high (2^24-1 is an index VMware likes to
+         * report for example). Let's define a cut-off where we don't consider the index reliable anymore. We
+         * pick some arbitrary cut-off, which is somewhere beyond the realistic number of physical network
+         * interface a system might have. Ideally the kernel would already filter this crap for us, but it
+         * doesn't currently. */
+        return idx <= ONBOARD_14BIT_INDEX_MAX;
+}
+
 static int pci_get_onboard_index(struct udev_device *dev, unsigned *ret) {
         unsigned idx;
         int r;
@@ -142,6 +153,8 @@ static int pci_get_onboard_index(struct udev_device *dev, unsigned *ret) {
 
         if (idx == 0)
                 return log_device_debug_errno(dev, EINVAL, "Onboard index 0 is not used.");
+        if (!is_valid_onboard_index(idx))
+                return log_device_debug_errno(dev, EINVAL, "Not a valid onboard index: %u", idx);
 
         *ret = idx;
         return 0;
