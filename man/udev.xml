@@ -760,6 +760,384 @@
       </variablelist>
   </refsect1>
 
+  <refsect1><title>Network Interface Naming</title>
+      <para>For network interfaces, the <command>net_id</command> builtin, which
+      is imported by <filename>75-net-description.rules</filename>, generates
+      predictable names from firmware information, from the location of the
+      device on its bus, and from its MAC address, and exports them as device
+      properties. Depending on the <varname>net.ifnames=</varname> kernel command
+      line option (see <citerefentry><refentrytitle>udevd</refentrytitle>
+      <manvolnum>8</manvolnum></citerefentry>),
+      <filename>80-net-name-slot.rules</filename> renames the interface to the
+      first one of <varname>ID_NET_NAME_ONBOARD</varname>,
+      <varname>ID_NET_NAME_SLOT</varname>, <varname>ID_NET_NAME_PATH</varname> and
+      <varname>ID_NET_NAME_MAC</varname> that is set.</para>
+
+      <para>All names start with a two character prefix for the type of the
+      interface: <literal>en</literal> for Ethernet, <literal>ib</literal> for
+      InfiniBand, <literal>sl</literal> for serial line IP (slip),
+      <literal>wl</literal> for wireless LAN, <literal>ww</literal> for wireless
+      WAN and <literal>mc</literal> for MCTP. Names that do not fit into the 15
+      characters of an interface name are not exported. The following properties
+      are set:</para>
+
+      <variablelist>
+        <varlistentry>
+          <term><varname>ID_NET_NAMING_SCHEME=</varname></term>
+          <listitem>
+            <para>The naming scheme the names were generated with, see
+            below.</para>
+          </listitem>
+        </varlistentry>
+
+        <varlistentry>
+          <term><varname>ID_NET_NAME_ONBOARD=</varname><replaceable>prefix</replaceable><literal>o</literal><replaceable>index</replaceable>[<replaceable>port</replaceable>][<replaceable>suffix</replaceable>]</term>
+          <term><varname>ID_NET_NAME_ONBOARD=</varname><replaceable>prefix</replaceable><literal>d</literal><replaceable>index</replaceable></term>
+          <listitem>
+            <para>The index number the firmware provides for an on-board
+            PCI device (ACPI <literal>_DSM</literal> or SMBIOS type 41), or
+            the index of the DeviceTree alias (<literal>ethernet</literal><replaceable>N</replaceable>,
+            <literal>wifi</literal><replaceable>N</replaceable>) of the
+            device.</para>
+          </listitem>
+        </varlistentry>
+
+        <varlistentry>
+          <term><varname>ID_NET_LABEL_ONBOARD=</varname><replaceable>label</replaceable></term>
+          <listitem>
+            <para>The label the firmware provides for an on-board PCI device.
+            It is not used as an interface name.</para>
+          </listitem>
+        </varlistentry>
+
+        <varlistentry>
+          <term><varname>ID_NET_NAME_SLOT=</varname><replaceable>prefix</replaceable>[<literal>P</literal><replaceable>domain</replaceable>]<literal>s</literal><replaceable>slot</replaceable>[<literal>f</literal><replaceable>function</replaceable>][<replaceable>port</replaceable>][<replaceable>suffix</replaceable>]</term>
+          <term><varname>ID_NET_NAME_SLOT=</varname><replaceable>prefix</replaceable><literal>v</literal><replaceable>slot</replaceable></term>
+          <term><varname>ID_NET_NAME_SLOT=</varname><replaceable>prefix</replaceable><literal>X</literal><replaceable>number</replaceable></term>
+          <listitem>
+            <para>The PCI slot number of the device, as provided by the
+            firmware; the IBM PowerVM VIO slot number; the Xen netfront VIF
+            number.</para>
+          </listitem>
+        </varlistentry>
+
+        <varlistentry>
+          <term><varname>ID_NET_NAME_PATH=</varname><replaceable>prefix</replaceable>[<literal>P</literal><replaceable>domain</replaceable>]<literal>p</literal><replaceable>bus</replaceable><literal>s</literal><replaceable>slot</replaceable>[<literal>f</literal><replaceable>function</replaceable>][<replaceable>port</replaceable>][<replaceable>suffix</replaceable>]</term>
+          <term><varname>ID_NET_NAME_PATH=</varname><replaceable>prefix</replaceable><literal>c</literal><replaceable>bus_id</replaceable></term>
+          <term><varname>ID_NET_NAME_PATH=</varname><replaceable>prefix</replaceable><literal>a</literal><replaceable>vendor</replaceable><replaceable>model</replaceable><literal>i</literal><replaceable>instance</replaceable></term>
+          <term><varname>ID_NET_NAME_PATH=</varname><replaceable>prefix</replaceable><literal>i</literal><replaceable>address</replaceable><literal>n</literal><replaceable>port_name</replaceable></term>
+          <term><varname>ID_NET_NAME_PATH=</varname><replaceable>prefix</replaceable><literal>u</literal><replaceable>port</replaceable>...</term>
+          <listitem>
+            <para>The location of the device: the PCI bus, slot and function
+            numbers; the bus ID of an s390 CCW device, without leading zeros;
+            the ACPI name of an ARM64 platform device; the address and port
+            name of a netdevsim device; the port chain of a USB device on a
+            USB host controller that is not a PCI device.</para>
+          </listitem>
+        </varlistentry>
+
+        <varlistentry>
+          <term><varname>ID_NET_NAME_MAC=</varname><replaceable>prefix</replaceable><literal>x</literal><replaceable>AABBCCDDEEFF</replaceable></term>
+          <listitem>
+            <para>The permanent MAC address of the device. It is not set for
+            an address of all zeros, unlike in systemd since version 250,
+            because the rules may use it as the name of the interface.</para>
+          </listitem>
+        </varlistentry>
+      </variablelist>
+
+      <para>The parts of the PCI based names are:</para>
+
+      <variablelist>
+        <varlistentry>
+          <term><literal>P</literal><replaceable>domain</replaceable></term>
+          <listitem>
+            <para>The PCI domain, only when it is not 0, or as the
+            <varname>ID_NET_NAME_INCLUDE_DOMAIN=</varname> property of the
+            PCI device says. It is left out of slot names when the slot of an
+            s390 PCI device is found by its <filename>function_id</filename>.</para>
+          </listitem>
+        </varlistentry>
+        <varlistentry>
+          <term><literal>f</literal><replaceable>function</replaceable></term>
+          <listitem>
+            <para>The PCI function; for multi-function devices also for
+            function 0. With ARI, the full 8-bit function number.</para>
+          </listitem>
+        </varlistentry>
+        <varlistentry>
+          <term><literal>n</literal><replaceable>phys_port_name</replaceable>, <literal>d</literal><replaceable>dev_port</replaceable></term>
+          <listitem>
+            <para>The port name or, when there is none, the port number of
+            one of several ports of a single PCI function.</para>
+          </listitem>
+        </varlistentry>
+        <varlistentry>
+          <term><literal>r</literal><replaceable>number</replaceable></term>
+          <listitem>
+            <para>An SR-IOV virtual function representor, named after the
+            physical function, with the number of the virtual function
+            instead of the port.</para>
+          </listitem>
+        </varlistentry>
+        <varlistentry>
+          <term><literal>v</literal><replaceable>number</replaceable></term>
+          <listitem>
+            <para>An SR-IOV virtual function, named after its physical
+            function.</para>
+          </listitem>
+        </varlistentry>
+        <varlistentry>
+          <term><literal>S</literal><replaceable>sfnum</replaceable></term>
+          <listitem>
+            <para>An auxiliary sub-function (e.g. of mlx5_core), named after
+            its PCI function.</para>
+          </listitem>
+        </varlistentry>
+        <varlistentry>
+          <term><literal>u</literal><replaceable>port</replaceable>...[<literal>c</literal><replaceable>config</replaceable>][<literal>i</literal><replaceable>interface</replaceable>]</term>
+          <listitem>
+            <para>A USB device: the chain of hub port numbers, the
+            configuration unless it is 1 and the interface unless it is
+            0.</para>
+          </listitem>
+        </varlistentry>
+        <varlistentry>
+          <term><literal>b</literal><replaceable>number</replaceable></term>
+          <listitem>
+            <para>A Broadcom bus (BCMA) core, unless it is 0.</para>
+          </listitem>
+        </varlistentry>
+      </variablelist>
+
+      <refsect2><title>Naming schemes</title>
+        <para>New versions add new kinds of names and improve existing ones, which
+        changes the names of some devices. The rules of a given version are
+        called a naming scheme, and it can be selected with
+        <varname>net.naming_scheme=</varname> on the kernel command line (see
+        <citerefentry><refentrytitle>udevd</refentrytitle><manvolnum>8</manvolnum></citerefentry>)
+        to keep the names stable. The environment variable
+        <varname>$NET_NAMING_SCHEME</varname> may also be used, e.g. to preview
+        the names with <command>udevadm test-builtin net_id</command>; it
+        takes precedence over the kernel command line, unless it is prefixed
+        with <literal>:</literal>. The schemes <literal>v238</literal> and
+        later are the ones of systemd and generate the same names as systemd
+        does, except that names longer than 15 characters are not exported. The default is
+        <literal>latest</literal>. Unknown names are ignored with a warning.
+        The following schemes are defined:</para>
+
+        <variablelist>
+          <varlistentry>
+            <term><literal>eudev</literal></term>
+            <listitem>
+              <para>The names generated by eudev 3.2.15 and older, which are
+              based on those of systemd 220.</para>
+            </listitem>
+          </varlistentry>
+
+          <varlistentry>
+            <term><literal>v238</literal></term>
+            <listitem>
+              <para>The naming of systemd 238. Compared to
+              <literal>eudev</literal>: virtio network devices are named
+              after their PCI or CCW device; onboard indexes above 16383 are
+              ignored; the port name (<literal>n</literal><replaceable>phys_port_name</replaceable>)
+              is preferred over the port number; the names of s390 CCW devices
+              are <literal>enc</literal><replaceable>bus_id</replaceable>
+              without leading zeros, instead of <literal>enccw</literal><replaceable>bus_id</replaceable>;
+              IBM PowerVM VIO and ARM64 ACPI platform devices are named; the
+              hotplug slot of a parent PCI device is used when the device has
+              none, and slot names with leading zeros, like those of s390, are
+              parsed as octal numbers; <varname>ID_NET_LABEL_ONBOARD</varname>
+              is also set for devices without an onboard index; and the
+              <varname>ID_NET_NAME_ALLOW</varname> and
+              <varname>ID_NET_NAME_INCLUDE_DOMAIN</varname> properties are
+              used.</para>
+            </listitem>
+          </varlistentry>
+
+          <varlistentry>
+            <term><literal>v239</literal></term>
+            <listitem>
+              <para>SR-IOV virtual functions are named after their physical
+              function with a <literal>v</literal><replaceable>number</replaceable>
+              suffix. Devices using ARI (e.g. NPAR partitions) use the full
+              function number.</para>
+            </listitem>
+          </varlistentry>
+
+          <varlistentry>
+            <term><literal>v240</literal></term>
+            <listitem>
+              <para>InfiniBand devices get names with the <literal>ib</literal>
+              prefix. An onboard index of 0 is used.</para>
+            </listitem>
+          </varlistentry>
+
+          <varlistentry>
+            <term><literal>v241</literal></term>
+            <listitem>
+              <para>Same names as <literal>v240</literal>.</para>
+            </listitem>
+          </varlistentry>
+
+          <varlistentry>
+            <term><literal>v243</literal></term>
+            <listitem>
+              <para>netdevsim devices are named.
+              <varname>ID_NET_LABEL_ONBOARD</varname> is not prefixed with the
+              interface type anymore.</para>
+            </listitem>
+          </varlistentry>
+
+          <varlistentry>
+            <term><literal>v245</literal></term>
+            <listitem>
+              <para>Same names as <literal>v243</literal>.</para>
+            </listitem>
+          </varlistentry>
+
+          <varlistentry>
+            <term><literal>v247</literal></term>
+            <listitem>
+              <para><varname>ID_NET_NAME_SLOT</varname> is not set when the slot
+              belongs to a PCI bridge, as all devices behind it would get the
+              same name.</para>
+            </listitem>
+          </varlistentry>
+
+          <varlistentry>
+            <term><literal>v249</literal></term>
+            <listitem>
+              <para>The slots of s390 PCI devices are found by their
+              <filename>function_id</filename>. Onboard indexes up to 65535
+              are used.</para>
+            </listitem>
+          </varlistentry>
+
+          <varlistentry>
+            <term><literal>v250</literal></term>
+            <listitem>
+              <para>Xen netfront devices are named.</para>
+            </listitem>
+          </varlistentry>
+
+          <varlistentry>
+            <term><literal>v251</literal></term>
+            <listitem>
+              <para>The slot of a PCI bridge is used again for
+              multi-function devices behind it. This is reverted in
+              <literal>v255</literal>.</para>
+            </listitem>
+          </varlistentry>
+
+          <varlistentry>
+            <term><literal>v252</literal></term>
+            <listitem>
+              <para>Devices with a DeviceTree <literal>ethernet</literal><replaceable>N</replaceable>
+              alias are named.</para>
+            </listitem>
+          </varlistentry>
+
+          <varlistentry>
+            <term><literal>v253</literal></term>
+            <listitem>
+              <para>USB devices on a USB host controller that is not a PCI
+              device are named.</para>
+            </listitem>
+          </varlistentry>
+
+          <varlistentry>
+            <term><literal>v254</literal></term>
+            <listitem>
+              <para>SR-IOV virtual function representors are named with an
+              <literal>r</literal><replaceable>number</replaceable> suffix
+              instead of their port name.</para>
+            </listitem>
+          </varlistentry>
+
+          <varlistentry>
+            <term><literal>v255</literal></term>
+            <listitem>
+              <para>The change of <literal>v251</literal> is reverted.</para>
+            </listitem>
+          </varlistentry>
+
+          <varlistentry>
+            <term><literal>v257</literal></term>
+            <listitem>
+              <para>The PCI slot is read from
+              <filename>firmware_node/sun</filename>. The DeviceTree alias
+              of the network interface itself is preferred over the one of its
+              parent device.</para>
+            </listitem>
+          </varlistentry>
+
+          <varlistentry>
+            <term><literal>v258</literal></term>
+            <listitem>
+              <para>Same names as <literal>v257</literal>.</para>
+            </listitem>
+          </varlistentry>
+
+          <varlistentry>
+            <term><literal>v259</literal></term>
+            <listitem>
+              <para>WLAN devices with a DeviceTree <literal>wifi</literal><replaceable>N</replaceable>
+              or <literal>ethernet</literal><replaceable>N</replaceable> alias
+              are named.</para>
+            </listitem>
+          </varlistentry>
+
+          <varlistentry>
+            <term><literal>v260</literal></term>
+            <listitem>
+              <para>MCTP devices are named, with the <literal>mc</literal>
+              prefix.</para>
+            </listitem>
+          </varlistentry>
+
+          <varlistentry>
+            <term><literal>v261</literal></term>
+            <listitem>
+              <para>Auxiliary sub-functions are named after their PCI function
+              with an <literal>S</literal><replaceable>sfnum</replaceable>
+              suffix.</para>
+            </listitem>
+          </varlistentry>
+
+          <varlistentry>
+            <term><literal>latest</literal></term>
+            <listitem>
+              <para>The latest scheme, currently <literal>v261</literal>.</para>
+            </listitem>
+          </varlistentry>
+        </variablelist>
+
+        <para>Note that a naming scheme only fixes the rules; the names may still
+        change when a new kernel version exposes more information, e.g. a
+        <filename>phys_port_name</filename> attribute.</para>
+      </refsect2>
+
+      <refsect2><title>Limiting the use of sysfs attributes</title>
+        <para>With the systemd naming schemes, the sysfs attributes used for a
+        name can be restricted with properties of the device the attribute
+        belongs to. <varname>ID_NET_NAME_ALLOW=0</varname> disallows all
+        attributes that are not explicitly allowed, and
+        <varname>ID_NET_NAME_ALLOW_</varname><replaceable>ATTRIBUTE</replaceable><varname>=</varname>
+        allows (1) or disallows (0) a specific attribute, e.g.
+        <varname>ID_NET_NAME_ALLOW_PHYS_PORT_NAME=0</varname>. For network
+        interfaces, such properties are usually set in the hwdb, where
+        <filename>75-net-description.rules</filename> looks them up with the
+        key <literal>net:naming:dr</literal><replaceable>driver</replaceable><literal>:</literal>,
+        for example:</para>
+
+        <programlisting># /etc/udev/hwdb.d/50-net-naming-denylist.hwdb
+net:naming:drvirtio_net:*
+ ID_NET_NAME_ALLOW_PHYS_PORT_NAME=0</programlisting>
+      </refsect2>
+  </refsect1>
+
   <refsect1><title>Hardware Database Files</title>
       <para>The hwdb files are read from the files located in the
       system hwdb directory <filename>/usr/lib/udev/hwdb.d</filename>,
