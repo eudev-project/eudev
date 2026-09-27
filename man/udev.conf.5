@@ -70,6 +70,48 @@ below the specified root directory instead, and defaults to
 if it is not set there\&.
 .RE
 .PP
+\fIsas_legacy_path\fR
+.RS 4
+Takes a boolean argument (\fByes\fR,
+\fBtrue\fR,
+\fB1\fR
+or
+\fBno\fR,
+\fBfalse\fR,
+\fB0\fR)\&. Defaults to
+\fBno\fR\&. Selects how the
+\fBpath_id\fR
+builtin composes the SAS part of
+\fIID_PATH\fR, and thus the
+/dev/disk/by\-path/
+links, of devices behind a SAS port whose
+num_phys
+attribute is not
+1\&.
+.sp
+By default only ports with two or more phys are treated as wide ports and named after the SAS address of the end device:
+sas\-\fI0xADDRESS\fR\-lun\-\fIN\fR\&. Ports reporting zero phys, as done e\&.g\&. by the smartpqi driver, are named like single phy ports after the phy they are connected to:
+sas\-phy\fIPHY\fR\-lun\-\fIN\fR, or
+sas\-exp\fI0xADDRESS\fR\-phy\fIPHY\fR\-lun\-\fIN\fR
+when connected through an expander\&. If
+num_phys
+cannot be parsed, no
+\fIID_PATH\fR
+is set\&.
+.sp
+If set to
+\fByes\fR, the naming of older eudev versions is used: every port with a
+num_phys
+other than
+1, including
+0
+and unparsable values, is treated as a wide port and named
+sas\-\fI0xADDRESS\fR\-lun\-\fIN\fR\&. This keeps existing by\-path links of such controllers stable\&. The file is only read when
+\fBudevd\fR
+starts, and the links of already present devices are updated only when their events are processed again, e\&.g\&. by
+\fBudevadm trigger\fR\&.
+.RE
+.PP
 In addition,
 udevd
 can be configured by command\-line options and the kernel command line (see

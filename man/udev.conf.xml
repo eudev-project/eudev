@@ -106,6 +106,42 @@
           there.</para>
         </listitem>
       </varlistentry>
+
+      <varlistentry>
+        <term><varname>sas_legacy_path</varname></term>
+
+        <listitem>
+          <para>Takes a boolean argument (<option>yes</option>,
+          <option>true</option>, <option>1</option> or <option>no</option>,
+          <option>false</option>, <option>0</option>). Defaults to
+          <option>no</option>. Selects how the <command>path_id</command>
+          builtin composes the SAS part of <varname>ID_PATH</varname>, and
+          thus the <filename>/dev/disk/by-path/</filename> links, of devices
+          behind a SAS port whose <filename>num_phys</filename> attribute is
+          not <literal>1</literal>.</para>
+
+          <para>By default only ports with two or more phys are treated as
+          wide ports and named after the SAS address of the end device:
+          <literal>sas-<replaceable>0xADDRESS</replaceable>-lun-<replaceable>N</replaceable></literal>.
+          Ports reporting zero phys, as done e.g. by the smartpqi driver,
+          are named like single phy ports after the phy they are connected
+          to: <literal>sas-phy<replaceable>PHY</replaceable>-lun-<replaceable>N</replaceable></literal>,
+          or <literal>sas-exp<replaceable>0xADDRESS</replaceable>-phy<replaceable>PHY</replaceable>-lun-<replaceable>N</replaceable></literal>
+          when connected through an expander. If <filename>num_phys</filename>
+          cannot be parsed, no <varname>ID_PATH</varname> is set.</para>
+
+          <para>If set to <option>yes</option>, the naming of older eudev
+          versions is used: every port with a <filename>num_phys</filename>
+          other than <literal>1</literal>, including <literal>0</literal> and
+          unparsable values, is treated as a wide port and named
+          <literal>sas-<replaceable>0xADDRESS</replaceable>-lun-<replaceable>N</replaceable></literal>.
+          This keeps existing by-path links of such controllers stable. The
+          file is only read when <command>udevd</command> starts, and the
+          links of already present devices are updated only when their
+          events are processed again, e.g. by
+          <command>udevadm trigger</command>.</para>
+        </listitem>
+      </varlistentry>
     </variablelist>
 
     <para>

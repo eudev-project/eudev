@@ -52,7 +52,18 @@ struct udev {
                        int priority, const char *file, int line, const char *fn,
                        const char *format, va_list args);
         void *userdata;
+        bool sas_legacy_path;
 };
+
+static int parse_boolean(const char *v) {
+        if (streq(v, "1") || strcaseeq(v, "yes") || strcaseeq(v, "y") ||
+            strcaseeq(v, "true") || strcaseeq(v, "t") || strcaseeq(v, "on"))
+                return 1;
+        if (streq(v, "0") || strcaseeq(v, "no") || strcaseeq(v, "n") ||
+            strcaseeq(v, "false") || strcaseeq(v, "f") || strcaseeq(v, "off"))
+                return 0;
+        return -EINVAL;
+}
 
 /**
  * udev_get_userdata:
@@ -173,6 +184,17 @@ static void udev_read_conf(struct udev *udev, const char *filename) {
                                         log_set_max_level(prio);
                                 continue;
                         }
+
+                        if (streq(key, "sas_legacy_path")) {
+                                int b;
+
+                                b = parse_boolean(val);
+                                if (b < 0)
+                                        log_debug("%s:%u: invalid boolean '%s' for sas_legacy_path, ignoring.", filename, line_nr, val);
+                                else
+                                        udev->sas_legacy_path = b;
+                                continue;
+                        }
                 }
         }
 }
@@ -230,6 +252,13 @@ int udev_read_hwdb_format(const char *root) {
         log_set_max_level(level);
 
         return tmp.hwdb_format;
+}
+
+/* Not part of the public API, used by the path_id builtin. */
+bool udev_get_sas_legacy_path(struct udev *udev) {
+        if (udev == NULL)
+                return false;
+        return udev->sas_legacy_path;
 }
 
 /**
