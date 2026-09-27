@@ -363,7 +363,7 @@
             <para>The name of a symlink targeting the node. Every matching rule adds
             this value to the list of symlinks to be created. With the <literal>-=</literal>
             operator, the specified symlinks are removed from that list again, which allows
-            to suppress symlinks added by earlier rules.</para>
+            suppressing symlinks added by earlier rules.</para>
             <para>The set of characters to name a symlink is limited. Allowed
             characters are <literal>0-9A-Za-z#+-.:=@_/</literal>, valid UTF-8 character
             sequences, and <literal>\x00</literal> hex encoding. All other
