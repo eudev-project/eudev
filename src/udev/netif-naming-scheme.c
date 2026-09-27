@@ -6,6 +6,7 @@
 
 #include "log.h"
 #include "netif-naming-scheme.h"
+#include "utf8.h"
 #include "util.h"
 
 /* eudev: the default can be changed at build time, e.g. with CPPFLAGS=-DDEFAULT_NET_NAMING_SCHEME='"eudev"'. */
@@ -131,4 +132,94 @@ finish:
         free(cmdline_naming_scheme);
         cmdline_naming_scheme = NULL;
         return cache;
+}
+
+static int device_get_sysattr_value(struct udev_device *dev, const char *sysattr, const char **ret) {
+        const char *value;
+
+        value = udev_device_get_sysattr_value(dev, sysattr);
+        if (!value)
+                return -ENOENT;
+
+        *ret = value;
+        return 0;
+}
+
+static bool sysattr_string_is_safe(const char *p) {
+        /* Like systemd's string_is_safe() with STRING_ALLOW_EMPTY, STRING_ALLOW_NEWLINES,
+         * STRING_ALLOW_BACKSLASHES, STRING_ALLOW_QUOTES and STRING_ALLOW_GLOBS: the string must be
+         * valid UTF-8 and must not contain control characters other than newline. */
+
+        while (*p) {
+                int len;
+
+                if ((*p > 0 && *p < ' ' && *p != '\n') || *p == 0x7f)
+                        return false;
+
+                len = utf8_encoded_valid_unichar(p);
+                if (len < 0)
+                        return false;
+
+                p += len;
+        }
+
+        return true;
+}
+
+int device_get_sysattr_int(struct udev_device *device, const char *sysattr, int *ret_value) {
+        const char *value;
+        int r, v;
+
+        r = device_get_sysattr_value(device, sysattr, &value);
+        if (r < 0)
+                return r;
+
+        r = safe_atoi(value, &v);
+        if (r < 0)
+                return log_debug_errno(r, "%s: Failed to parse '%s' attribute: %m",
+                                       udev_device_get_sysname(device), sysattr);
+
+        if (ret_value)
+                *ret_value = v;
+        /* We return "true" if the value is positive. */
+        return v > 0;
+}
+
+int device_get_sysattr_unsigned(struct udev_device *device, const char *sysattr, unsigned *ret_value) {
+        const char *value;
+        unsigned v;
+        int r;
+
+        r = device_get_sysattr_value(device, sysattr, &value);
+        if (r < 0)
+                return r;
+
+        r = safe_atou_full(value, 0, &v);
+        if (r < 0)
+                return log_debug_errno(r, "%s: Failed to parse '%s' attribute: %m",
+                                       udev_device_get_sysname(device), sysattr);
+
+        if (ret_value)
+                *ret_value = v;
+        /* We return "true" if the value is positive. */
+        return v > 0;
+}
+
+int device_get_sysattr_safe_string(struct udev_device *device, const char *sysattr, const char **ret_value) {
+        const char *value;
+        int r;
+
+        r = device_get_sysattr_value(device, sysattr, &value);
+        if (r < 0)
+                return r;
+
+        if (!sysattr_string_is_safe(value)) {
+                log_debug("%s: '%s' sysattr contains invalid characters, refusing.",
+                          udev_device_get_sysname(device), sysattr);
+                return -ENXIO;
+        }
+
+        if (ret_value)
+                *ret_value = value;
+        return 0;
 }
