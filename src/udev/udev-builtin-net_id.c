@@ -581,8 +581,15 @@ static int names_ccw(struct udev_device *dev, const char *prefix, bool test) {
         if (!IN_SET(bus_id_len, 8, 9))
                 return log_device_debug_errno(cdev, EINVAL, "Invalid bus_id: '%s'", bus_id);
 
+        /* Strip leading zeros from the bus id for aesthetic purposes. This
+         * keeps the ccw names stable, yet much shorter in general case of
+         * bus_id 0.0.0600 -> 600. This is similar to e.g. how PCI domain is
+         * not prepended when it is zero.
+         */
+        bus_id += strspn(bus_id, ".0");
+
         /* Use the CCW bus-ID as network device name */
-        if (snprintf_ok(str, sizeof str, "%sccw%s", prefix, bus_id))
+        if (snprintf_ok(str, sizeof str, "%sc%s", prefix, bus_id))
                 udev_builtin_add_property(dev, test, "ID_NET_NAME_PATH", str);
         log_device_debug(dev, "CCW identifier: ccw_busid=%s", bus_id);
         return 0;
