@@ -46,25 +46,27 @@ jobs:
             automake \
             tree
 
+      # libselinux 3.11 renamed libselinux1-dev to libselinux-dev, so let
+      # apt pick whichever one the release has
       - name: install prerequisites (devuan)
         if: ${{ startsWith(matrix.distro, 'devuan/') }}
         run: >-
-          apt-get update && apt-get install -y \
-            build-essential \
-            libblkid-dev \
-            libkmod-dev \
-            libselinux1-dev \
-            autoconf \
-            automake \
-            xsltproc \
-            docbook-xml \
-            docbook-xsl \
-            gperf \
-            libglib-object-introspection-perl \
-            libglib2.0-dev \
-            linux-headers-amd64 \
-            libtool \
-            tree
+          apt-get update && apt-get satisfy -y \
+            "build-essential, \
+            libblkid-dev, \
+            libkmod-dev, \
+            libselinux-dev | libselinux1-dev, \
+            autoconf, \
+            automake, \
+            xsltproc, \
+            docbook-xml, \
+            docbook-xsl, \
+            gperf, \
+            libglib-object-introspection-perl, \
+            libglib2.0-dev, \
+            linux-headers-amd64, \
+            libtool, \
+            tree"
 
       - name: checkout
         uses: actions/checkout@v7
