@@ -54,6 +54,18 @@ static void dump_event(struct udev_event *event) {
         struct udev_device *dev = event->dev;
         struct udev_list_entry *entry;
 
+        if (udev_list_get_entry(&event->written_sysattr_list)) {
+                printf("%sWritten sysfs attributes:%s\n", ansi_highlight(), ansi_normal());
+                udev_list_entry_foreach(entry, udev_list_get_entry(&event->written_sysattr_list))
+                        printf("  %s : %s\n", udev_list_entry_get_name(entry), udev_list_entry_get_value(entry));
+        }
+
+        if (udev_list_get_entry(&event->written_sysctl_list)) {
+                printf("%sWritten sysctl entries:%s\n", ansi_highlight(), ansi_normal());
+                udev_list_entry_foreach(entry, udev_list_get_entry(&event->written_sysctl_list))
+                        printf("  %s : %s\n", udev_list_entry_get_name(entry), udev_list_entry_get_value(entry));
+        }
+
         printf("%sProperties:%s\n", ansi_highlight(), ansi_normal());
         udev_list_entry_foreach(entry, udev_device_get_properties_list_entry(dev))
                 printf("  %s=%s\n", udev_list_entry_get_name(entry), udev_list_entry_get_value(entry));

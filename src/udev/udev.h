@@ -51,6 +51,8 @@ struct udev_event {
         gid_t gid;
         struct udev_list seclabel_list;
         struct udev_list run_list;
+        struct udev_list written_sysattr_list;
+        struct udev_list written_sysctl_list;
         int exec_delay;
         usec_t birth_usec;
         int fd_signal;
@@ -96,6 +98,8 @@ int udev_rules_apply_static_dev_perms(struct udev_rules *rules);
 /* udev-event.c */
 struct udev_event *udev_event_new(struct udev_device *dev, enum udev_event_mode mode);
 void udev_event_unref(struct udev_event *event);
+void event_cache_written_sysattr(struct udev_event *event, const char *attr, const char *value);
+void event_cache_written_sysctl(struct udev_event *event, const char *attr, const char *value);
 size_t udev_event_apply_format(struct udev_event *event,
                                const char *src, char *dest, size_t size,
                                bool replace_whitespace);

@@ -850,6 +850,21 @@ static int attr_subst_subdir(char *attr, size_t len) {
         return found;
 }
 
+/* like systemd's verify_regular_at(AT_FDCWD, path, follow) */
+static int verify_regular(const char *path, bool follow) {
+        struct stat st;
+
+        if ((follow ? stat(path, &st) : lstat(path, &st)) < 0)
+                return -errno;
+        if (S_ISDIR(st.st_mode))
+                return -EISDIR;
+        if (S_ISLNK(st.st_mode))
+                return -ELOOP;
+        if (!S_ISREG(st.st_mode))
+                return -EBADFD;
+        return 0;
+}
+
 static int get_key(struct udev *udev __attribute__((unused)), char **line, char **key, enum operation_type *op, char **value,
                    bool *is_case_insensitive) {
         char *linepos;
@@ -2819,9 +2834,17 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
 
                         udev_event_apply_format(event, rules_str(rules, cur->key.value_off), value, sizeof(value), false);
                         if (!EVENT_MODE_DESTRUCTIVE(event)) {
+                                int r;
+
                                 log_debug("Running in test mode, skipping writing ATTR{%s}=\"%s\" %s:%u", attr, value,
                                           rules_str(rules, rule->rule.filename_off),
                                           rule->rule.filename_line);
+
+                                r = verify_regular(attr, false);
+                                if (r < 0 && !IN_SET(r, -EACCES, -EPERM))
+                                        log_error_errno(r, "Failed to verify sysfs attribute \"%s\" is a regular file: %m", attr);
+                                else
+                                        event_cache_written_sysattr(event, attr, value);
                                 break;
                         }
                         log_debug("ATTR '%s' writing '%s' %s:%u", attr, value,
@@ -2831,6 +2854,8 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                         if (f != NULL) {
                                 if (fprintf(f, "%s", value) <= 0)
                                         log_error_errno(errno, "error writing ATTR{%s}: %m", attr);
+                                else
+                                        event_cache_written_sysattr(event, attr, value);
                                 fclose(f);
                         } else {
                                 log_error_errno(errno, "error opening ATTR{%s} for writing: %m", attr);
@@ -2846,8 +2871,17 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                         sysctl_normalize(filename);
                         udev_event_apply_format(event, rules_str(rules, cur->key.value_off), value, sizeof(value), false);
                         if (!EVENT_MODE_DESTRUCTIVE(event)) {
+                                char path[UTIL_PATH_SIZE];
+
                                 log_debug("Running in test mode, skipping writing SYSCTL{%s}=\"%s\" %s:%u", filename, value,
                                           rules_str(rules, rule->rule.filename_off), rule->rule.filename_line);
+
+                                strscpyl(path, sizeof(path), "/proc/sys/", filename, NULL);
+                                r = verify_regular(path, true);
+                                if (r < 0 && !IN_SET(r, -EACCES, -EPERM))
+                                        log_error_errno(r, "Failed to verify sysctl entry \"%s\" is a regular file: %m", filename);
+                                else
+                                        event_cache_written_sysctl(event, filename, value);
                                 break;
                         }
                         log_debug("SYSCTL '%s' writing '%s' %s:%u", filename, value,
@@ -2855,6 +2889,8 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                         r = sysctl_write(filename, value);
                         if (r < 0)
                                 log_error("error writing SYSCTL{%s}='%s': %s", filename, value, strerror(-r));
+                        else
+                                event_cache_written_sysctl(event, filename, value);
                         break;
                 }
                 case TK_A_RUN_BUILTIN:

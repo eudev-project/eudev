@@ -48,6 +48,8 @@ struct udev_event *udev_event_new(struct udev_device *dev, enum udev_event_mode 
         event->udev = udev;
         udev_list_init(udev, &event->run_list, false);
         udev_list_init(udev, &event->seclabel_list, false);
+        udev_list_init(udev, &event->written_sysattr_list, true);
+        udev_list_init(udev, &event->written_sysctl_list, true);
         event->fd_signal = -1;
         event->birth_usec = now(CLOCK_MONOTONIC);
         event->event_mode = mode;
@@ -59,9 +61,25 @@ void udev_event_unref(struct udev_event *event) {
                 return;
         udev_list_cleanup(&event->run_list);
         udev_list_cleanup(&event->seclabel_list);
+        udev_list_cleanup(&event->written_sysattr_list);
+        udev_list_cleanup(&event->written_sysctl_list);
         free(event->program_result);
         free(event->name);
         free(event);
+}
+
+static void event_cache_written_value(struct udev_list *values, const char *attr, const char *value) {
+        /* The list is unique, this replaces an earlier value. */
+        if (udev_list_entry_add(values, attr, value) == NULL)
+                log_debug("Failed to remember the value written to '%s', ignoring.", attr);
+}
+
+void event_cache_written_sysattr(struct udev_event *event, const char *attr, const char *value) {
+        event_cache_written_value(&event->written_sysattr_list, attr, value);
+}
+
+void event_cache_written_sysctl(struct udev_event *event, const char *attr, const char *value) {
+        event_cache_written_value(&event->written_sysctl_list, attr, value);
 }
 
 size_t udev_event_apply_format(struct udev_event *event,
