@@ -203,6 +203,43 @@ static int get_virtfn_info(struct udev_device *pcidev, struct udev_device **ret_
         return -ENOENT;
 }
 
+static int get_subfunc_info(struct udev_device *aux_dev, struct udev_device **ret_parent_pcidev, char **ret_suffix) {
+        struct udev_device *parent;
+        unsigned sfnum;
+        char *suffix;
+        int r;
+
+        assert(aux_dev);
+        assert(ret_parent_pcidev);
+        assert(ret_suffix);
+
+        /* The auxiliary device must expose an 'sfnum' attribute. This is currently used by the
+         * mlx5_core driver for sub-function (SF) auxiliary devices. The sfnum is the user-defined
+         * stable identifier passed to "devlink port add ... sfnum N". */
+        r = device_get_sysattr_unsigned_filtered(aux_dev, "sfnum", &sfnum);
+        if (r < 0)
+                return r;
+
+        /* Walk one hop up: the auxiliary device's parent must be a PCI function. It can be either
+         * the PF directly, or an SR-IOV VF — mlx5 also supports SFs hosted on VFs (VF-SF), see
+         * Documentation/networking/representors.rst in the kernel tree. The VF case is handled by
+         * the existing virtfn logic in names_pci(), so here we just return the immediate PCI
+         * parent and a single "S<sfnum>" suffix piece. */
+        parent = udev_device_get_parent(aux_dev);
+        if (!parent)
+                return -ENOENT;
+
+        if (!device_in_subsystem(parent, "pci"))
+                return -ENODEV;
+
+        if (asprintf(&suffix, "S%u", sfnum) < 0)
+                return -ENOMEM;
+
+        *ret_parent_pcidev = udev_device_ref(parent);
+        *ret_suffix = suffix;
+        return 0;
+}
+
 static int get_port_specifier(struct udev_device *dev, char **ret) {
         const char *phys_port_name;
         unsigned dev_port;
@@ -967,26 +1004,59 @@ static int names_devicetree(struct udev_device *dev, const char *prefix, bool te
 }
 
 static int names_pci(struct udev_device *dev, const char *prefix, bool test) {
-        _cleanup_udev_device_unref_ struct udev_device *physfn_pcidev = NULL;
-        _cleanup_free_ char *virtfn_suffix = NULL;
+        _cleanup_udev_device_unref_ struct udev_device *physfn_pcidev = NULL, *parent_pcidev = NULL;
+        _cleanup_free_ char *virtfn_suffix = NULL, *subfunc_suffix = NULL, *combined_suffix = NULL;
         struct udev_device *parent;
+        const char *suffix = NULL;
+        bool is_child_function;
 
         assert(dev);
         assert(prefix);
 
-        /* check if our direct parent is a PCI device with no other bus in-between */
-        if (get_matching_parent(dev, (const char *[]) { "pci", NULL }, /* skip_virtio= */ true, &parent) < 0)
+        /* If the network device's direct parent is an auxiliary device that exposes a stable
+         * 'sfnum' attribute (currently mlx5_core sub-functions), peel off the SF identity into
+         * a 'S<sfnum>' suffix piece and pick up the aux device's underlying PCI function as
+         * 'parent'. The aux device is just a bump on the path; everything below — PF/VF
+         * resolution, slot/onboard lookup — proceeds the same way as for any PCI-rooted
+         * network device. */
+        if (naming_scheme_has(NAMING_SUBFUNC)) {
+                struct udev_device *aux;
+
+                if (get_matching_parent(dev, (const char *[]) { "auxiliary", NULL },
+                                        /* skip_virtio= */ false, &aux) >= 0)
+                        (void) get_subfunc_info(aux, &parent_pcidev, &subfunc_suffix);
+        }
+
+        /* SF: parent is the aux device's PCI function. Otherwise the network device's direct
+         * parent must itself be a PCI device. */
+        if (subfunc_suffix)
+                parent = parent_pcidev;
+        else if (get_matching_parent(dev, (const char *[]) { "pci", NULL }, /* skip_virtio= */ true, &parent) < 0)
                 return 0;
 
-        /* If this is an SR-IOV virtual device, get base name using physical device and add virtfn suffix. */
+        /* If parent is an SR-IOV VF, walk to the parent PF and add a 'v<N>' suffix piece. The
+         * onboard BIOS label is intentionally not exposed for any "child function" (VF, SF, or
+         * VF-SF), since the label refers to the parent's physical port, not to a logical child. */
+        is_child_function = !!subfunc_suffix;
         if (naming_scheme_has(NAMING_SR_IOV_V) &&
-            get_virtfn_info(parent, &physfn_pcidev, &virtfn_suffix) >= 0)
+            get_virtfn_info(parent, &physfn_pcidev, &virtfn_suffix) >= 0) {
                 parent = physfn_pcidev;
-        else
+                is_child_function = true;
+        }
+        if (!is_child_function)
                 (void) names_pci_onboard_label(dev, parent, prefix, test);
 
-        (void) names_pci_onboard(dev, parent, prefix, virtfn_suffix, test);
-        (void) names_pci_slot(dev, parent, prefix, virtfn_suffix, test);
+        /* Compose the final suffix in PF -> [VF ->] SF order, e.g. "v0", "S88", or "v0S88". */
+        if (virtfn_suffix && subfunc_suffix) {
+                combined_suffix = strjoin(virtfn_suffix, subfunc_suffix, NULL);
+                if (!combined_suffix)
+                        return -ENOMEM;
+                suffix = combined_suffix;
+        } else
+                suffix = virtfn_suffix ?: subfunc_suffix;
+
+        (void) names_pci_onboard(dev, parent, prefix, suffix, test);
+        (void) names_pci_slot(dev, parent, prefix, suffix, test);
         return 0;
 }
 
