@@ -843,6 +843,8 @@ static int rename_netif_dev_fromname_toname(struct udev_device *dev __attribute_
         strscpy(ifr.ifr_name, IFNAMSIZ, oldname);
         strscpy(ifr.ifr_newname, IFNAMSIZ, name);
         r = ioctl(sk, SIOCSIFNAME, &ifr);
+        if (r < 0)
+                r = -errno;
 
 #ifdef ENABLE_RULE_GENERATOR
         int loop;
@@ -853,6 +855,8 @@ static int rename_netif_dev_fromname_toname(struct udev_device *dev __attribute_
                 goto out;
         }
         /* keep trying if the destination interface name already exists */
+        if (r != -EEXIST)
+                goto out;
         log_debug("collision on rename of network interface %s to %s , retrying until timeout\n",
                 ifr.ifr_name, ifr.ifr_newname);
 
@@ -860,15 +864,16 @@ static int rename_netif_dev_fromname_toname(struct udev_device *dev __attribute_
         memzero(&ifr_tmp, sizeof(struct ifreq));
         strscpy(ifr_tmp.ifr_name, IFNAMSIZ, oldname);
         snprintf(ifr_tmp.ifr_newname, IFNAMSIZ, "rename_%s", oldname);
-        r = ioctl(sk, SIOCSIFNAME, &ifr_tmp);
-                log_info("Temporarily renamed network interface %s to %s\n", ifr_tmp.ifr_name, ifr_tmp.ifr_newname);
+        if (ioctl(sk, SIOCSIFNAME, &ifr_tmp) < 0) {
+                r = -errno;
+                log_debug_errno(r, "could not temporarily rename network interface %s to %s: %m",
+                                ifr_tmp.ifr_name, ifr_tmp.ifr_newname);
+                goto out;
+        }
+        log_info("Temporarily renamed network interface %s to %s\n", ifr_tmp.ifr_name, ifr_tmp.ifr_newname);
 
         /* we have changed our name so in subsequent tries i should rename my temporal name to the wanted one */
         strscpy(ifr.ifr_name, IFNAMSIZ, ifr_tmp.ifr_newname);
-
-        r = -errno;
-        if (r != -EEXIST)
-                goto out;
 
         /* wait a maximum of 90 seconds for our target to become available */
         loop = 90 * 20;
@@ -890,7 +895,7 @@ static int rename_netif_dev_fromname_toname(struct udev_device *dev __attribute_
 out:
 #endif
         if (r < 0)
-                log_error_errno(-errno, "Error changing net interface name %s to %s: %m\n", ifr.ifr_name, ifr.ifr_newname);
+                log_error_errno(r, "Error changing net interface name %s to %s: %m\n", ifr.ifr_name, ifr.ifr_newname);
         else
                 log_debug("renamed network interface '%s' to '%s'", oldname, name);
 
@@ -963,11 +968,10 @@ void udev_event_execute_rules(struct udev_event *event,
                  */
 
 #ifdef ENABLE_RULE_GENERATOR
-                int r;
+                int r = 0;
                 if (udev_device_get_ifindex(dev) > 0 && streq(udev_device_get_action(dev), "add") &&
-                    (event->name == NULL && (r=udev_rules_assigning_name_to(rules,udev_device_get_sysname(dev))) > 0 ||
-                    event->name != NULL && !streq(event->name, udev_device_get_sysname(dev)))) {
-                        char syspath[UTIL_PATH_SIZE];
+                    ((event->name == NULL && (r=udev_rules_assigning_name_to(rules,udev_device_get_sysname(dev))) > 0) ||
+                     (event->name != NULL && !streq(event->name, udev_device_get_sysname(dev))))) {
                         char *pos;
                         char *finalifname = event->name;
                         char newifname[IFNAMSIZ];
@@ -976,12 +980,11 @@ void udev_event_execute_rules(struct udev_event *event,
                         if (r > 0 || (r=udev_rules_assigning_name_to(rules,udev_device_get_sysname(dev))) > 0) {
                                 /* have a conflict, rename to a temp name */
                                 char *newpos;
-                                int ifidnum;
 
                                 /* build the temporary iface name */
                                 strscpy(newifname, IFNAMSIZ, udev_device_get_sysname(dev));
                                 newpos=pos=&newifname[strcspn(newifname,"0123456789")];
-                                ifidnum=(int)strtol(pos,&newpos,10);
+                                (void) strtol(pos,&newpos,10);
                                 *pos='\0';
                                 if (newpos > pos && *newpos == '\0') /* append new iface num to name */
                                         /* use udev_device_get_ifindex(dev) as it is unique to every iface */

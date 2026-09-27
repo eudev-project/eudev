@@ -3047,8 +3047,6 @@ int udev_rules_assigning_name_to(struct udev_rules *rules, const char *match_nam
 {
         struct token *cur;
         struct token *rule;
-        enum escape_type esc = ESCAPE_UNSET;
-        bool name_final = false;
 
         if (rules->tokens == NULL)
                 return 0;
