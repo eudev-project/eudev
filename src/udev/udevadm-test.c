@@ -95,6 +95,12 @@ static void dump_event(struct udev_event *event) {
 
                 if (perms)
                         printf("%sDevice node permission:%s\n  %04o\n", ansi_highlight(), ansi_normal(), event->mode);
+
+                if (udev_list_get_entry(&event->seclabel_list)) {
+                        printf("%sDevice node security label:%s\n", ansi_highlight(), ansi_normal());
+                        udev_list_entry_foreach(entry, udev_list_get_entry(&event->seclabel_list))
+                                printf("  %s : %s\n", udev_list_entry_get_name(entry), udev_list_entry_get_value(entry));
+                }
         }
 
         if (udev_device_get_ifindex(dev) > 0 && !isempty(event->name))
