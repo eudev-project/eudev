@@ -37,75 +37,75 @@
 DEFINE_TRIVIAL_CLEANUP_FUNC(blkid_probe, blkid_free_probe);
 #define _cleanup_blkid_free_probe_ _cleanup_(blkid_free_probep)
 
-static void print_property(struct udev_device *dev, bool test, const char *name, const char *value) {
+static void print_property(struct udev_device *dev, enum udev_event_mode mode, const char *name, const char *value) {
         char s[256];
 
         s[0] = '\0';
 
         if (streq(name, "TYPE")) {
-                udev_builtin_add_property(dev, test, "ID_FS_TYPE", value);
+                udev_builtin_add_property(dev, mode, "ID_FS_TYPE", value);
 
         } else if (streq(name, "USAGE")) {
-                udev_builtin_add_property(dev, test, "ID_FS_USAGE", value);
+                udev_builtin_add_property(dev, mode, "ID_FS_USAGE", value);
 
         } else if (streq(name, "VERSION")) {
-                udev_builtin_add_property(dev, test, "ID_FS_VERSION", value);
+                udev_builtin_add_property(dev, mode, "ID_FS_VERSION", value);
 
         } else if (streq(name, "UUID")) {
                 blkid_safe_string(value, s, sizeof(s));
-                udev_builtin_add_property(dev, test, "ID_FS_UUID", s);
+                udev_builtin_add_property(dev, mode, "ID_FS_UUID", s);
                 blkid_encode_string(value, s, sizeof(s));
-                udev_builtin_add_property(dev, test, "ID_FS_UUID_ENC", s);
+                udev_builtin_add_property(dev, mode, "ID_FS_UUID_ENC", s);
 
         } else if (streq(name, "UUID_SUB")) {
                 blkid_safe_string(value, s, sizeof(s));
-                udev_builtin_add_property(dev, test, "ID_FS_UUID_SUB", s);
+                udev_builtin_add_property(dev, mode, "ID_FS_UUID_SUB", s);
                 blkid_encode_string(value, s, sizeof(s));
-                udev_builtin_add_property(dev, test, "ID_FS_UUID_SUB_ENC", s);
+                udev_builtin_add_property(dev, mode, "ID_FS_UUID_SUB_ENC", s);
 
         } else if (streq(name, "LABEL")) {
                 blkid_safe_string(value, s, sizeof(s));
-                udev_builtin_add_property(dev, test, "ID_FS_LABEL", s);
+                udev_builtin_add_property(dev, mode, "ID_FS_LABEL", s);
                 blkid_encode_string(value, s, sizeof(s));
-                udev_builtin_add_property(dev, test, "ID_FS_LABEL_ENC", s);
+                udev_builtin_add_property(dev, mode, "ID_FS_LABEL_ENC", s);
 
         } else if (streq(name, "FSSIZE") || streq(name, "FSLASTBLOCK") || streq(name, "FSBLOCKSIZE")) {
                 strscpyl(s, sizeof(s), "ID_FS_", name + 2, NULL);
-                udev_builtin_add_property(dev, test, s, value);
+                udev_builtin_add_property(dev, mode, s, value);
 
         } else if (streq(name, "PTTYPE")) {
-                udev_builtin_add_property(dev, test, "ID_PART_TABLE_TYPE", value);
+                udev_builtin_add_property(dev, mode, "ID_PART_TABLE_TYPE", value);
 
         } else if (streq(name, "PTUUID")) {
-                udev_builtin_add_property(dev, test, "ID_PART_TABLE_UUID", value);
+                udev_builtin_add_property(dev, mode, "ID_PART_TABLE_UUID", value);
 
         } else if (streq(name, "PART_ENTRY_NAME")) {
                 blkid_encode_string(value, s, sizeof(s));
-                udev_builtin_add_property(dev, test, "ID_PART_ENTRY_NAME", s);
+                udev_builtin_add_property(dev, mode, "ID_PART_ENTRY_NAME", s);
 
         } else if (streq(name, "PART_ENTRY_TYPE")) {
                 blkid_encode_string(value, s, sizeof(s));
-                udev_builtin_add_property(dev, test, "ID_PART_ENTRY_TYPE", s);
+                udev_builtin_add_property(dev, mode, "ID_PART_ENTRY_TYPE", s);
 
         } else if (startswith(name, "PART_ENTRY_")) {
                 strscpyl(s, sizeof(s), "ID_", name, NULL);
-                udev_builtin_add_property(dev, test, s, value);
+                udev_builtin_add_property(dev, mode, s, value);
 
         } else if (streq(name, "SYSTEM_ID")) {
                 blkid_encode_string(value, s, sizeof(s));
-                udev_builtin_add_property(dev, test, "ID_FS_SYSTEM_ID", s);
+                udev_builtin_add_property(dev, mode, "ID_FS_SYSTEM_ID", s);
 
         } else if (streq(name, "PUBLISHER_ID")) {
                 blkid_encode_string(value, s, sizeof(s));
-                udev_builtin_add_property(dev, test, "ID_FS_PUBLISHER_ID", s);
+                udev_builtin_add_property(dev, mode, "ID_FS_PUBLISHER_ID", s);
 
         } else if (streq(name, "APPLICATION_ID")) {
                 blkid_encode_string(value, s, sizeof(s));
-                udev_builtin_add_property(dev, test, "ID_FS_APPLICATION_ID", s);
+                udev_builtin_add_property(dev, mode, "ID_FS_APPLICATION_ID", s);
 
         } else if (streq(name, "BOOT_SYSTEM_ID")) {
                 blkid_encode_string(value, s, sizeof(s));
-                udev_builtin_add_property(dev, test, "ID_FS_BOOT_SYSTEM_ID", s);
+                udev_builtin_add_property(dev, mode, "ID_FS_BOOT_SYSTEM_ID", s);
         }
 }
 
@@ -209,7 +209,7 @@ notloop:
         return 0;
 }
 
-static int builtin_blkid(struct udev_device *dev, int argc, char *argv[], bool test) {
+static int builtin_blkid(struct udev_device *dev, int argc, char *argv[], enum udev_event_mode mode) {
         int64_t offset = 0;
         bool noraid = false;
         _cleanup_close_ int fd = -1;
@@ -313,7 +313,7 @@ static int builtin_blkid(struct udev_device *dev, int argc, char *argv[], bool t
                 if (blkid_probe_get_value(pr, i, &name, &data, NULL))
                         continue;
 
-                print_property(dev, test, name, data);
+                print_property(dev, mode, name, data);
         }
 
         r = read_loopback_backing_inode(
@@ -328,9 +328,9 @@ static int builtin_blkid(struct udev_device *dev, int argc, char *argv[], bool t
                 char buf[DECIMAL_STR_MAX(uint64_t)*2 + 2];
 
                 xsprintf(buf, "%u:%u", major(backing_devno), minor(backing_devno));
-                udev_builtin_add_property(dev, test, "ID_LOOP_BACKING_DEVICE", buf);
+                udev_builtin_add_property(dev, mode, "ID_LOOP_BACKING_DEVICE", buf);
                 xsprintf(buf, "%" PRIu64, (uint64_t) backing_inode);
-                udev_builtin_add_property(dev, test, "ID_LOOP_BACKING_INODE", buf);
+                udev_builtin_add_property(dev, mode, "ID_LOOP_BACKING_INODE", buf);
 
                 if (backing_fname) {
                         /* In the worst case blkid_encode_string() will blow up to 4x the string
@@ -344,8 +344,8 @@ static int builtin_blkid(struct udev_device *dev, int argc, char *argv[], bool t
                         /* lo_file_name is an arbitrary string picked by userspace, do not store it
                          * unencoded if it contains control characters or invalid UTF-8 */
                         if (utf8_is_printable_newline(backing_fname, strlen(backing_fname), false))
-                                udev_builtin_add_property(dev, test, "ID_LOOP_BACKING_FILENAME", backing_fname);
-                        udev_builtin_add_property(dev, test, "ID_LOOP_BACKING_FILENAME_ENC", encoded);
+                                udev_builtin_add_property(dev, mode, "ID_LOOP_BACKING_FILENAME", backing_fname);
+                        udev_builtin_add_property(dev, mode, "ID_LOOP_BACKING_FILENAME_ENC", encoded);
                 }
         }
 

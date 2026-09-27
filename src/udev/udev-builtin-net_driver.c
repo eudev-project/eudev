@@ -49,7 +49,7 @@ static int ethtool_get_driver(const char *ifname, char **ret) {
         return 0;
 }
 
-static int builtin_net_driver_set_driver(struct udev_device *dev, int argc __attribute__((unused)), char *argv[] __attribute__((unused)), bool test) {
+static int builtin_net_driver_set_driver(struct udev_device *dev, int argc __attribute__((unused)), char *argv[] __attribute__((unused)), enum udev_event_mode mode) {
         _cleanup_free_ char *driver = NULL;
         const char *ifname;
         int r;
@@ -78,7 +78,7 @@ static int builtin_net_driver_set_driver(struct udev_device *dev, int argc __att
                 return EXIT_FAILURE;
         }
 
-        udev_builtin_add_property(dev, test, "ID_NET_DRIVER", driver);
+        udev_builtin_add_property(dev, mode, "ID_NET_DRIVER", driver);
         return EXIT_SUCCESS;
 }
 

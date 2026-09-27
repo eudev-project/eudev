@@ -30,6 +30,15 @@
 #include "label.h"
 #include "strv.h"
 
+/* The context an event is processed in: a udevd worker, 'udevadm test', 'udevadm test-builtin'
+ * or the rule runner of the test suite (test/test-udev). */
+enum udev_event_mode {
+        EVENT_UDEV_WORKER,
+        EVENT_UDEVADM_TEST,
+        EVENT_UDEVADM_TEST_BUILTIN,
+        EVENT_TEST_RULE_RUNNER,
+};
+
 struct udev_event {
         struct udev *udev;
         struct udev_device *dev;
@@ -59,7 +68,13 @@ struct udev_event {
         bool name_final;
         bool devlink_final;
         bool run_final;
+        enum udev_event_mode event_mode;
 };
+
+static inline bool EVENT_MODE_DESTRUCTIVE(struct udev_event *event) {
+        assert(event);
+        return IN_SET(event->event_mode, EVENT_UDEV_WORKER, EVENT_TEST_RULE_RUNNER);
+}
 
 struct udev_watch {
         struct udev_list_node node;
@@ -79,7 +94,7 @@ int udev_rules_apply_to_event(struct udev_rules *rules, struct udev_event *event
 int udev_rules_apply_static_dev_perms(struct udev_rules *rules);
 
 /* udev-event.c */
-struct udev_event *udev_event_new(struct udev_device *dev);
+struct udev_event *udev_event_new(struct udev_device *dev, enum udev_event_mode mode);
 void udev_event_unref(struct udev_event *event);
 size_t udev_event_apply_format(struct udev_event *event,
                                const char *src, char *dest, size_t size,
@@ -167,7 +182,7 @@ enum udev_builtin_cmd {
 };
 struct udev_builtin {
         const char *name;
-        int (*cmd)(struct udev_device *dev, int argc, char *argv[], bool test);
+        int (*cmd)(struct udev_device *dev, int argc, char *argv[], enum udev_event_mode mode);
         const char *help;
         int (*init)(struct udev *udev);
         void (*exit)(struct udev *udev);
@@ -193,13 +208,13 @@ void udev_builtin_exit(struct udev *udev);
 enum udev_builtin_cmd udev_builtin_lookup(const char *command);
 const char *udev_builtin_name(enum udev_builtin_cmd cmd);
 bool udev_builtin_run_once(enum udev_builtin_cmd cmd);
-int udev_builtin_run(struct udev_device *dev, enum udev_builtin_cmd cmd, const char *command, bool test);
+int udev_builtin_run(struct udev_device *dev, enum udev_builtin_cmd cmd, const char *command, enum udev_event_mode mode);
 void udev_builtin_list(struct udev *udev);
 bool udev_builtin_validate(struct udev *udev);
-int udev_builtin_add_property(struct udev_device *dev, bool test, const char *key, const char *val);
+int udev_builtin_add_property(struct udev_device *dev, enum udev_event_mode mode, const char *key, const char *val);
 int udev_builtin_hwdb_lookup(struct udev_device *dev, const char *prefix, const char *modalias,
-                             const char *filter, bool test);
-int udev_builtin_net_id_eudev(struct udev_device *dev, bool test);
+                             const char *filter, enum udev_event_mode mode);
+int udev_builtin_net_id_eudev(struct udev_device *dev, enum udev_event_mode mode);
 
 /* udevadm commands */
 struct udevadm_cmd {

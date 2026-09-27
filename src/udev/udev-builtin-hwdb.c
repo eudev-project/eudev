@@ -33,7 +33,7 @@ static struct udev_hwdb *hwdb;
 
 int udev_builtin_hwdb_lookup(struct udev_device *dev,
                              const char *prefix, const char *modalias,
-                             const char *filter, bool test) {
+                             const char *filter, enum udev_event_mode mode) {
         struct udev_list_entry *list;
         struct udev_list_entry *entry;
         int n = 0;
@@ -55,7 +55,7 @@ int udev_builtin_hwdb_lookup(struct udev_device *dev,
                 if (filter && fnmatch(filter, udev_list_entry_get_name(entry), FNM_NOESCAPE) != 0)
                         continue;
 
-                if (udev_builtin_add_property(dev, test,
+                if (udev_builtin_add_property(dev, mode,
                                               udev_list_entry_get_name(entry),
                                               udev_list_entry_get_value(entry)) < 0)
                         return -ENOMEM;
@@ -92,7 +92,7 @@ static const char *modalias_usb(struct udev_device *dev, char *s, size_t size) {
 
 static int udev_builtin_hwdb_search(struct udev_device *dev, struct udev_device *srcdev,
                                     const char *subsystem, const char *prefix,
-                                    const char *filter, bool test) {
+                                    const char *filter, enum udev_event_mode mode) {
         struct udev_device *d;
         char s[LINE_MAX];
         bool last = false;
@@ -129,7 +129,7 @@ static int udev_builtin_hwdb_search(struct udev_device *dev, struct udev_device 
 
                 log_debug("hwdb modalias key: \"%s\"", modalias);
 
-                r = udev_builtin_hwdb_lookup(dev, prefix, modalias, filter, test);
+                r = udev_builtin_hwdb_lookup(dev, prefix, modalias, filter, mode);
                 if (r > 0)
                         break;
         }
@@ -137,7 +137,7 @@ static int udev_builtin_hwdb_search(struct udev_device *dev, struct udev_device 
         return r;
 }
 
-static int builtin_hwdb(struct udev_device *dev, int argc, char *argv[], bool test) {
+static int builtin_hwdb(struct udev_device *dev, int argc, char *argv[], enum udev_event_mode mode) {
         static const struct option options[] = {
                 { "filter", required_argument, NULL, 'f' },
                 { "device", required_argument, NULL, 'd' },
@@ -182,7 +182,7 @@ static int builtin_hwdb(struct udev_device *dev, int argc, char *argv[], bool te
 
         /* query a specific key given as argument */
         if (argv[optind]) {
-                if (udev_builtin_hwdb_lookup(dev, prefix, argv[optind], filter, test) > 0)
+                if (udev_builtin_hwdb_lookup(dev, prefix, argv[optind], filter, mode) > 0)
                         return EXIT_SUCCESS;
                 return EXIT_FAILURE;
         }
@@ -194,7 +194,7 @@ static int builtin_hwdb(struct udev_device *dev, int argc, char *argv[], bool te
                         return EXIT_FAILURE;
         }
 
-        if (udev_builtin_hwdb_search(dev, srcdev, subsystem, prefix, filter, test) > 0)
+        if (udev_builtin_hwdb_search(dev, srcdev, subsystem, prefix, filter, mode) > 0)
                 return EXIT_SUCCESS;
         return EXIT_FAILURE;
 }

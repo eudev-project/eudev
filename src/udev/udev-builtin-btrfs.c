@@ -32,7 +32,7 @@
 #include "missing.h"
 #include "udev.h"
 
-static int builtin_btrfs(struct udev_device *dev, int argc, char *argv[], bool test) {
+static int builtin_btrfs(struct udev_device *dev, int argc, char *argv[], enum udev_event_mode mode) {
         struct btrfs_ioctl_vol_args args = {};
         _cleanup_close_ int fd = -1;
         const char *node;
@@ -59,7 +59,7 @@ static int builtin_btrfs(struct udev_device *dev, int argc, char *argv[], bool t
                 return EXIT_FAILURE;
         }
 
-        if (test) {
+        if (mode != EVENT_UDEV_WORKER) {
                 log_debug("Running in test mode, skipping execution of 'btrfs' builtin command.");
                 return EXIT_SUCCESS;
         }
@@ -73,7 +73,7 @@ static int builtin_btrfs(struct udev_device *dev, int argc, char *argv[], bool t
         if (err < 0)
                 return EXIT_FAILURE;
 
-        udev_builtin_add_property(dev, test, "ID_BTRFS_READY", one_zero(err == 0));
+        udev_builtin_add_property(dev, mode, "ID_BTRFS_READY", one_zero(err == 0));
         return EXIT_SUCCESS;
 }
 

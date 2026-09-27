@@ -58,7 +58,7 @@ static inline int abs_size_mm(const struct input_absinfo *absinfo) {
         return (absinfo->maximum - absinfo->minimum) / absinfo->resolution;
 }
 
-static void extract_info(struct udev_device *dev, const char *devpath, bool test) {
+static void extract_info(struct udev_device *dev, const char *devpath, enum udev_event_mode mode) {
         char width[DECIMAL_STR_MAX(int)], height[DECIMAL_STR_MAX(int)];
         struct input_absinfo xabsinfo = {}, yabsinfo = {};
         _cleanup_close_ int fd = -1;
@@ -77,8 +77,8 @@ static void extract_info(struct udev_device *dev, const char *devpath, bool test
         snprintf(width, sizeof(width), "%d", abs_size_mm(&xabsinfo));
         snprintf(height, sizeof(height), "%d", abs_size_mm(&yabsinfo));
 
-        udev_builtin_add_property(dev, test, "ID_INPUT_WIDTH_MM", width);
-        udev_builtin_add_property(dev, test, "ID_INPUT_HEIGHT_MM", height);
+        udev_builtin_add_property(dev, mode, "ID_INPUT_WIDTH_MM", width);
+        udev_builtin_add_property(dev, mode, "ID_INPUT_HEIGHT_MM", height);
 }
 
 /*
@@ -90,7 +90,7 @@ static void extract_info(struct udev_device *dev, const char *devpath, bool test
 static void get_cap_mask(struct udev_device *dev __attribute__((unused)),
                          struct udev_device *pdev, const char* attr,
                          unsigned long *bitmask, size_t bitmask_size,
-                         bool test) {
+                         enum udev_event_mode mode) {
         const char *v;
         char text[4096];
         unsigned i;
@@ -121,7 +121,7 @@ static void get_cap_mask(struct udev_device *dev __attribute__((unused)),
         else
                 log_debug("ignoring %s block %lX which is larger than maximum size", attr, val);
 
-        if (test) {
+        if (mode == EVENT_UDEVADM_TEST_BUILTIN) {
                 /* printf pattern with the right unsigned long number of hex chars */
                 snprintf(text, sizeof(text), "  bit %%4u: %%0%zulX\n",
                          2 * sizeof(unsigned long));
@@ -174,7 +174,7 @@ static bool test_pointers(struct udev_device *dev,
                           const unsigned long* bitmask_key,
                           const unsigned long* bitmask_rel,
                           const unsigned long* bitmask_props,
-                          bool test) {
+                          enum udev_event_mode mode) {
         int button, axis;
         bool has_abs_coordinates = false;
         bool has_rel_coordinates = false;
@@ -210,7 +210,7 @@ static bool test_pointers(struct udev_device *dev,
                 is_accelerometer = true;
 
         if (is_accelerometer) {
-                udev_builtin_add_property(dev, test, "ID_INPUT_ACCELEROMETER", "1");
+                udev_builtin_add_property(dev, mode, "ID_INPUT_ACCELEROMETER", "1");
                 return true;
         }
 
@@ -335,19 +335,19 @@ static bool test_pointers(struct udev_device *dev,
         }
 
         if (is_pointing_stick)
-                udev_builtin_add_property(dev, test, "ID_INPUT_POINTINGSTICK", "1");
+                udev_builtin_add_property(dev, mode, "ID_INPUT_POINTINGSTICK", "1");
         if (is_mouse || is_abs_mouse)
-                udev_builtin_add_property(dev, test, "ID_INPUT_MOUSE", "1");
+                udev_builtin_add_property(dev, mode, "ID_INPUT_MOUSE", "1");
         if (is_touchpad)
-                udev_builtin_add_property(dev, test, "ID_INPUT_TOUCHPAD", "1");
+                udev_builtin_add_property(dev, mode, "ID_INPUT_TOUCHPAD", "1");
         if (is_touchscreen)
-                udev_builtin_add_property(dev, test, "ID_INPUT_TOUCHSCREEN", "1");
+                udev_builtin_add_property(dev, mode, "ID_INPUT_TOUCHSCREEN", "1");
         if (is_joystick)
-                udev_builtin_add_property(dev, test, "ID_INPUT_JOYSTICK", "1");
+                udev_builtin_add_property(dev, mode, "ID_INPUT_JOYSTICK", "1");
         if (is_tablet)
-                udev_builtin_add_property(dev, test, "ID_INPUT_TABLET", "1");
+                udev_builtin_add_property(dev, mode, "ID_INPUT_TABLET", "1");
         if (is_tablet_pad)
-                udev_builtin_add_property(dev, test, "ID_INPUT_TABLET_PAD", "1");
+                udev_builtin_add_property(dev, mode, "ID_INPUT_TABLET_PAD", "1");
 
         return is_tablet || is_mouse || is_abs_mouse || is_touchpad || is_touchscreen || is_joystick || is_pointing_stick;
 }
@@ -356,7 +356,7 @@ static bool test_pointers(struct udev_device *dev,
 static bool test_key(struct udev_device *dev,
                      const unsigned long* bitmask_ev,
                      const unsigned long* bitmask_key,
-                     bool test) {
+                     enum udev_event_mode mode) {
         unsigned i;
         unsigned long found;
         unsigned long mask;
@@ -389,7 +389,7 @@ static bool test_key(struct udev_device *dev,
         }
 
         if (found > 0) {
-                udev_builtin_add_property(dev, test, "ID_INPUT_KEY", "1");
+                udev_builtin_add_property(dev, mode, "ID_INPUT_KEY", "1");
                 ret = true;
         }
 
@@ -397,14 +397,14 @@ static bool test_key(struct udev_device *dev,
          * those, consider it a full keyboard; do not test KEY_RESERVED, though */
         mask = 0xFFFFFFFE;
         if ((bitmask_key[0] & mask) == mask) {
-                udev_builtin_add_property(dev, test, "ID_INPUT_KEYBOARD", "1");
+                udev_builtin_add_property(dev, mode, "ID_INPUT_KEYBOARD", "1");
                 ret = true;
         }
 
         return ret;
 }
 
-static int builtin_input_id(struct udev_device *dev, int argc __attribute__((unused)), char *argv[] __attribute__((unused)), bool test) {
+static int builtin_input_id(struct udev_device *dev, int argc __attribute__((unused)), char *argv[] __attribute__((unused)), enum udev_event_mode mode) {
         struct udev_device *pdev;
         unsigned long bitmask_ev[NBITS(EV_MAX)];
         unsigned long bitmask_abs[NBITS(ABS_MAX)];
@@ -426,29 +426,29 @@ static int builtin_input_id(struct udev_device *dev, int argc __attribute__((unu
 
                 /* Use this as a flag that input devices were detected, so that this
                  * program doesn't need to be called more than once per device */
-                udev_builtin_add_property(dev, test, "ID_INPUT", "1");
-                get_cap_mask(dev, pdev, "capabilities/ev", bitmask_ev, sizeof(bitmask_ev), test);
-                get_cap_mask(dev, pdev, "capabilities/abs", bitmask_abs, sizeof(bitmask_abs), test);
-                get_cap_mask(dev, pdev, "capabilities/rel", bitmask_rel, sizeof(bitmask_rel), test);
-                get_cap_mask(dev, pdev, "capabilities/key", bitmask_key, sizeof(bitmask_key), test);
-                get_cap_mask(dev, pdev, "properties", bitmask_props, sizeof(bitmask_props), test);
+                udev_builtin_add_property(dev, mode, "ID_INPUT", "1");
+                get_cap_mask(dev, pdev, "capabilities/ev", bitmask_ev, sizeof(bitmask_ev), mode);
+                get_cap_mask(dev, pdev, "capabilities/abs", bitmask_abs, sizeof(bitmask_abs), mode);
+                get_cap_mask(dev, pdev, "capabilities/rel", bitmask_rel, sizeof(bitmask_rel), mode);
+                get_cap_mask(dev, pdev, "capabilities/key", bitmask_key, sizeof(bitmask_key), mode);
+                get_cap_mask(dev, pdev, "properties", bitmask_props, sizeof(bitmask_props), mode);
                 is_pointer = test_pointers(dev, &id, bitmask_ev, bitmask_abs,
                                            bitmask_key, bitmask_rel,
-                                           bitmask_props, test);
-                is_key = test_key(dev, bitmask_ev, bitmask_key, test);
+                                           bitmask_props, mode);
+                is_key = test_key(dev, bitmask_ev, bitmask_key, mode);
                 /* Some evdev nodes have only a scrollwheel */
                 if (!is_pointer && !is_key && test_bit(EV_REL, bitmask_ev) &&
                     (test_bit(REL_WHEEL, bitmask_rel) || test_bit(REL_HWHEEL, bitmask_rel)))
-                        udev_builtin_add_property(dev, test, "ID_INPUT_KEY", "1");
+                        udev_builtin_add_property(dev, mode, "ID_INPUT_KEY", "1");
                 if (test_bit(EV_SW, bitmask_ev))
-                        udev_builtin_add_property(dev, test, "ID_INPUT_SWITCH", "1");
+                        udev_builtin_add_property(dev, mode, "ID_INPUT_SWITCH", "1");
 
         }
 
         devnode = udev_device_get_devnode(dev);
         sysname = udev_device_get_sysname(dev);
         if (devnode && sysname && startswith(sysname, "event"))
-                extract_info(dev, devnode, test);
+                extract_info(dev, devnode, mode);
 
         return EXIT_SUCCESS;
 }

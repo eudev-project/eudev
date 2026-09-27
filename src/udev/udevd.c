@@ -299,7 +299,7 @@ static void worker_spawn(struct event *event) {
                         int fd_lock = -1;
 
                         log_debug("seq %llu running", udev_device_get_seqnum(dev));
-                        udev_event = udev_event_new(dev);
+                        udev_event = udev_event_new(dev, EVENT_UDEV_WORKER);
                         if (udev_event == NULL) {
                                 r = -ENOMEM;
                                 goto out;

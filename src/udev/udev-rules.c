@@ -2452,7 +2452,7 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                                   rules_str(rules, rule->rule.filename_off),
                                   rule->rule.filename_line);
 
-                        if (udev_builtin_run(event->dev, cur->key.builtin_cmd, command, false) != 0) {
+                        if (udev_builtin_run(event->dev, cur->key.builtin_cmd, command, event->event_mode) != 0) {
                                 /* remember failure */
                                 log_debug("IMPORT builtin '%s' returned non-zero",
                                           udev_builtin_name(cur->key.builtin_cmd));

@@ -786,7 +786,7 @@ static int handle_pnp(struct udev_device *parent, char **path) {
         return 0;
 }
 
-static void add_id_with_usb_revision(struct udev_device *dev, bool test, char *path) {
+static void add_id_with_usb_revision(struct udev_device *dev, enum udev_event_mode mode, char *path) {
         char *p;
 
         assert(dev);
@@ -804,13 +804,13 @@ static void add_id_with_usb_revision(struct udev_device *dev, bool test, char *p
         if (p[1] != '-')
                 return;
 
-        udev_builtin_add_property(dev, test, "ID_PATH_WITH_USB_REVISION", path);
+        udev_builtin_add_property(dev, mode, "ID_PATH_WITH_USB_REVISION", path);
 
         /* Drop the USB revision specifier for backward compatibility. */
         memmove(p - 1, p + 1, strlen(p + 1) + 1);
 }
 
-static int builtin_path_id(struct udev_device *dev, int argc __attribute__((unused)), char *argv[] __attribute__((unused)), bool test) {
+static int builtin_path_id(struct udev_device *dev, int argc __attribute__((unused)), char *argv[] __attribute__((unused)), enum udev_event_mode mode) {
         _cleanup_udev_device_unref_ struct udev_device *dev_other_branch = NULL;
         struct udev_device *parent;
         char *path = NULL;
@@ -962,7 +962,7 @@ out:
                 size_t i;
                 const char *p;
 
-                add_id_with_usb_revision(dev, test, path);
+                add_id_with_usb_revision(dev, mode, path);
 
                 /* compose valid udev tag name */
                 for (p = path, i = 0; *p && i < sizeof(tag) - 1; p++) {
@@ -989,8 +989,8 @@ out:
                         i--;
                 tag[i] = '\0';
 
-                udev_builtin_add_property(dev, test, "ID_PATH", path);
-                udev_builtin_add_property(dev, test, "ID_PATH_TAG", tag);
+                udev_builtin_add_property(dev, mode, "ID_PATH", path);
+                udev_builtin_add_property(dev, mode, "ID_PATH_TAG", tag);
 
                 /*
                  * Compatible link generation for ATA devices
@@ -998,7 +998,7 @@ out:
                  * ID_PATH_ATA_COMPAT
                  */
                 if (compat_path)
-                        udev_builtin_add_property(dev, test, "ID_PATH_ATA_COMPAT", compat_path);
+                        udev_builtin_add_property(dev, mode, "ID_PATH_ATA_COMPAT", compat_path);
 
                 free(path);
                 return EXIT_SUCCESS;

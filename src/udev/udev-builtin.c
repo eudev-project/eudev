@@ -111,7 +111,7 @@ enum udev_builtin_cmd udev_builtin_lookup(const char *command) {
         return UDEV_BUILTIN_MAX;
 }
 
-int udev_builtin_run(struct udev_device *dev, enum udev_builtin_cmd cmd, const char *command, bool test) {
+int udev_builtin_run(struct udev_device *dev, enum udev_builtin_cmd cmd, const char *command, enum udev_event_mode mode) {
         char arg[UTIL_PATH_SIZE];
         int argc;
         char *argv[UDEV_ARGV_MAX];
@@ -120,13 +120,13 @@ int udev_builtin_run(struct udev_device *dev, enum udev_builtin_cmd cmd, const c
         optind = 0;
         strscpy(arg, sizeof(arg), command);
         udev_build_argv(udev_device_get_udev(dev), arg, &argc, argv);
-        return builtins[cmd]->cmd(dev, argc, argv, test);
+        return builtins[cmd]->cmd(dev, argc, argv, mode);
 }
 
-int udev_builtin_add_property(struct udev_device *dev, bool test, const char *key, const char *val) {
+int udev_builtin_add_property(struct udev_device *dev, enum udev_event_mode mode, const char *key, const char *val) {
         udev_device_add_property(dev, key, val);
 
-        if (test)
+        if (mode == EVENT_UDEVADM_TEST_BUILTIN)
                 printf("%s=%s\n", key, val);
         return 0;
 }

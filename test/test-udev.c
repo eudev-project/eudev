@@ -131,7 +131,7 @@ int main(int argc __attribute__((unused)), char *argv[]) {
                 goto out;
         }
 
-        event = udev_event_new(dev);
+        event = udev_event_new(dev, EVENT_TEST_RULE_RUNNER);
 
         sigfillset(&mask);
         sigprocmask(SIG_SETMASK, &mask, &sigmask_orig);

@@ -37,7 +37,7 @@
 
 #include "udev.h"
 
-struct udev_event *udev_event_new(struct udev_device *dev) {
+struct udev_event *udev_event_new(struct udev_device *dev, enum udev_event_mode mode) {
         struct udev *udev = udev_device_get_udev(dev);
         struct udev_event *event;
 
@@ -50,6 +50,7 @@ struct udev_event *udev_event_new(struct udev_device *dev) {
         udev_list_init(udev, &event->seclabel_list, false);
         event->fd_signal = -1;
         event->birth_usec = now(CLOCK_MONOTONIC);
+        event->event_mode = mode;
         return event;
 }
 
@@ -719,6 +720,16 @@ out:
         return 0;
 }
 
+static bool program_runs_in_test_mode(const char *cmd) {
+        const char *p;
+
+        NULSTR_FOREACH(p, "ata_id\0" "cdrom_id\0" "dmi_memory_id\0" "fido_id\0" "mtd_probe\0" "scsi_id\0")
+                if (startswith(cmd, p))
+                        return true;
+
+        return false;
+}
+
 int udev_event_spawn(struct udev_event *event,
                      usec_t timeout_usec,
                      usec_t timeout_warn_usec,
@@ -731,6 +742,19 @@ int udev_event_spawn(struct udev_event *event,
         char *argv[UDEV_ARGV_MAX];
         char program[UTIL_PATH_SIZE];
         int err = 0;
+
+        assert(event);
+        assert(cmd);
+        assert(result || ressize == 0);
+
+        if (event->event_mode == EVENT_UDEVADM_TEST && !program_runs_in_test_mode(cmd)) {
+                log_debug("Running in test mode, skipping execution of '%s'.", cmd);
+                if (ressize > 0)
+                        result[0] = '\0';
+                if (ret_truncated)
+                        *ret_truncated = false;
+                return 0;
+        }
 
         strscpy(arg, sizeof(arg), cmd);
         udev_build_argv(event->udev, arg, NULL, argv);
@@ -907,6 +931,21 @@ static int rename_netif(struct udev_event *event) {
         return rename_netif_dev_fromname_toname(event->dev,udev_device_get_sysname(event->dev),event->name);
 }
 
+#ifdef ENABLE_RULE_GENERATOR
+/* build the temporary iface name, used when the current name is assigned to another device */
+static void netif_tmp_name(struct udev_device *dev, char newifname[IFNAMSIZ]) {
+        char *pos, *newpos;
+
+        strscpy(newifname, IFNAMSIZ, udev_device_get_sysname(dev));
+        newpos=pos=&newifname[strcspn(newifname,"0123456789")];
+        (void) strtol(pos,&newpos,10);
+        *pos='\0';
+        if (newpos > pos && *newpos == '\0') /* append new iface num to name */
+                /* use udev_device_get_ifindex(dev) as it is unique to every iface */
+                snprintf(pos,IFNAMSIZ+(newifname-pos), "%d", 128 - udev_device_get_ifindex(dev));
+}
+#endif
+
 void udev_event_execute_rules(struct udev_event *event,
                               usec_t timeout_usec, usec_t timeout_warn_usec,
                               struct udev_list *properties_list,
@@ -919,22 +958,27 @@ void udev_event_execute_rules(struct udev_event *event,
 
         if (streq(udev_device_get_action(dev), "remove")) {
                 udev_device_read_db(dev);
-                udev_device_tag_index(dev, NULL, false);
-                udev_device_delete_db(dev);
 
-                if (major(udev_device_get_devnum(dev)) != 0)
-                        udev_watch_end(event->udev, dev);
+                if (EVENT_MODE_DESTRUCTIVE(event)) {
+                        udev_device_tag_index(dev, NULL, false);
+                        udev_device_delete_db(dev);
+
+                        if (major(udev_device_get_devnum(dev)) != 0)
+                                udev_watch_end(event->udev, dev);
+                }
 
                 udev_rules_apply_to_event(rules, event,
                                           timeout_usec, timeout_warn_usec,
                                           properties_list,
                                           sigmask);
 
-                if (major(udev_device_get_devnum(dev)) != 0)
-                        udev_node_remove(dev);
+                if (EVENT_MODE_DESTRUCTIVE(event)) {
+                        if (major(udev_device_get_devnum(dev)) != 0)
+                                udev_node_remove(dev);
+                }
         } else {
                 /* disable watch during event processing */
-                if (major(udev_device_get_devnum(dev)) != 0)
+                if (EVENT_MODE_DESTRUCTIVE(event) && major(udev_device_get_devnum(dev)) != 0)
                         udev_watch_end(event->udev, dev);
 
                 event->dev_db = udev_device_clone_with_db(dev);
@@ -949,6 +993,24 @@ void udev_event_execute_rules(struct udev_event *event,
                                           sigmask);
 
                 /* rename a new network interface, if needed */
+                if (!EVENT_MODE_DESTRUCTIVE(event) &&
+                    udev_device_get_ifindex(dev) > 0 && streq(udev_device_get_action(dev), "add")) {
+                        const char *sysname = udev_device_get_sysname(dev);
+#ifdef ENABLE_RULE_GENERATOR
+                        char tmpname[IFNAMSIZ];
+
+                        if ((event->name == NULL || !streq(event->name, sysname)) &&
+                            udev_rules_assigning_name_to(rules, sysname) > 0) {
+                                netif_tmp_name(dev, tmpname);
+                                if (!streq(tmpname, sysname))
+                                        log_debug("Running in test mode, skipping temporary rename of network interface '%s' to '%s'.",
+                                                  sysname, tmpname);
+                        }
+#endif
+                        if (event->name != NULL && !streq(event->name, sysname))
+                                log_debug("Running in test mode, skipping renaming network interface '%s' to '%s'.",
+                                          sysname, event->name);
+                }
 
                 /* ENABLE_RULE_GENERATOR conditional:
                  * if this is a net iface, and it is an add event,
@@ -969,26 +1031,17 @@ void udev_event_execute_rules(struct udev_event *event,
 
 #ifdef ENABLE_RULE_GENERATOR
                 int r = 0;
-                if (udev_device_get_ifindex(dev) > 0 && streq(udev_device_get_action(dev), "add") &&
+                if (EVENT_MODE_DESTRUCTIVE(event) &&
+                    udev_device_get_ifindex(dev) > 0 && streq(udev_device_get_action(dev), "add") &&
                     ((event->name == NULL && (r=udev_rules_assigning_name_to(rules,udev_device_get_sysname(dev))) > 0) ||
                      (event->name != NULL && !streq(event->name, udev_device_get_sysname(dev))))) {
-                        char *pos;
                         char *finalifname = event->name;
                         char newifname[IFNAMSIZ];
 
                         /* r is the number of rules that assign a device with NAME= this sysname */
                         if (r > 0 || (r=udev_rules_assigning_name_to(rules,udev_device_get_sysname(dev))) > 0) {
                                 /* have a conflict, rename to a temp name */
-                                char *newpos;
-
-                                /* build the temporary iface name */
-                                strscpy(newifname, IFNAMSIZ, udev_device_get_sysname(dev));
-                                newpos=pos=&newifname[strcspn(newifname,"0123456789")];
-                                (void) strtol(pos,&newpos,10);
-                                *pos='\0';
-                                if (newpos > pos && *newpos == '\0') /* append new iface num to name */
-                                        /* use udev_device_get_ifindex(dev) as it is unique to every iface */
-                                        snprintf(pos,IFNAMSIZ+(newifname-pos), "%d", 128 - udev_device_get_ifindex(dev));
+                                netif_tmp_name(dev, newifname);
 
                                 /* note, r > 0, which will skip the post-rename stuff if no rename occurs */
 
@@ -1020,7 +1073,8 @@ void udev_event_execute_rules(struct udev_event *event,
                                 log_debug("renamed netif to '%s'\n", finalifname);
                                 r = udev_device_rename(dev, finalifname);
 #else
-                if (udev_device_get_ifindex(dev) > 0 && streq(udev_device_get_action(dev), "add") &&
+                if (EVENT_MODE_DESTRUCTIVE(event) &&
+                    udev_device_get_ifindex(dev) > 0 && streq(udev_device_get_action(dev), "add") &&
                     event->name != NULL && !streq(event->name, udev_device_get_sysname(dev))) {
                         int r;
 
@@ -1043,7 +1097,7 @@ void udev_event_execute_rules(struct udev_event *event,
                         bool apply;
 
                         /* remove/update possible left-over symlinks from old database entry */
-                        if (event->dev_db != NULL)
+                        if (EVENT_MODE_DESTRUCTIVE(event) && event->dev_db != NULL)
                                 udev_node_update_old_links(dev, event->dev_db);
 
                         if (!event->owner_set)
@@ -1066,15 +1120,23 @@ void udev_event_execute_rules(struct udev_event *event,
                         }
 
                         apply = streq(udev_device_get_action(dev), "add") || event->owner_set || event->group_set || event->mode_set;
-                        udev_node_add(dev, apply, event->mode, event->uid, event->gid, &event->seclabel_list);
+                        if (EVENT_MODE_DESTRUCTIVE(event))
+                                udev_node_add(dev, apply, event->mode, event->uid, event->gid, &event->seclabel_list);
+                        else
+                                log_debug("Running in test mode, skipping handling device node '%s', devnum=%s, "
+                                          "mode=%#o, uid="UID_FMT", gid="GID_FMT".",
+                                          udev_device_get_devnode(dev), udev_device_get_id_filename(dev),
+                                          event->mode, event->uid, event->gid);
                 }
 
                 /* preserve old, or get new initialization timestamp */
                 udev_device_ensure_usec_initialized(event->dev, event->dev_db);
 
-                /* (re)write database file */
-                udev_device_tag_index(dev, event->dev_db, true);
-                udev_device_update_db(dev);
+                if (EVENT_MODE_DESTRUCTIVE(event)) {
+                        /* (re)write database file */
+                        udev_device_tag_index(dev, event->dev_db, true);
+                        udev_device_update_db(dev);
+                }
                 udev_device_set_is_initialized(dev);
 
                 event->dev_db = udev_device_unref(event->dev_db);
@@ -1089,7 +1151,7 @@ void udev_event_execute_run(struct udev_event *event, usec_t timeout_usec, usec_
                 enum udev_builtin_cmd builtin_cmd = udev_list_entry_get_num(list_entry);
 
                 if (builtin_cmd < UDEV_BUILTIN_MAX) {
-                        udev_builtin_run(event->dev, builtin_cmd, command, false);
+                        udev_builtin_run(event->dev, builtin_cmd, command, event->event_mode);
                 } else {
                         char **envp;
 

@@ -102,7 +102,7 @@ static int adm_builtin(struct udev *udev, int argc, char *argv[]) {
                 goto out;
         }
 
-        rc = udev_builtin_run(dev, cmd, command, true);
+        rc = udev_builtin_run(dev, cmd, command, EVENT_UDEVADM_TEST_BUILTIN);
         if (rc < 0) {
                 fprintf(stderr, "error executing '%s', exit code %i\n\n", command, rc);
                 rc = 6;

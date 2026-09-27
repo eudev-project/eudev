@@ -449,7 +449,7 @@ static int names_mac(struct udev_device *dev, struct netnames *names) {
 }
 
 /* IEEE Organizationally Unique Identifier vendor string */
-static int ieee_oui(struct udev_device *dev, struct netnames *names, bool test) {
+static int ieee_oui(struct udev_device *dev, struct netnames *names, enum udev_event_mode mode) {
         char str[32];
 
         if (!names->mac_valid)
@@ -460,11 +460,11 @@ static int ieee_oui(struct udev_device *dev, struct netnames *names, bool test) 
         snprintf(str, sizeof(str), "OUI:%02X%02X%02X%02X%02X%02X",
                  names->mac[0], names->mac[1], names->mac[2],
                  names->mac[3], names->mac[4], names->mac[5]);
-        udev_builtin_hwdb_lookup(dev, NULL, str, NULL, test);
+        udev_builtin_hwdb_lookup(dev, NULL, str, NULL, mode);
         return 0;
 }
 
-int udev_builtin_net_id_eudev(struct udev_device *dev, bool test) {
+int udev_builtin_net_id_eudev(struct udev_device *dev, enum udev_event_mode mode) {
         const char *s;
         const char *p;
         unsigned int i;
@@ -507,7 +507,7 @@ int udev_builtin_net_id_eudev(struct udev_device *dev, bool test) {
                         prefix = "ww";
         }
 
-        udev_builtin_add_property(dev, test, "ID_NET_NAMING_SCHEME", naming_scheme()->name);
+        udev_builtin_add_property(dev, mode, "ID_NET_NAMING_SCHEME", naming_scheme()->name);
 
         err = names_mac(dev, &names);
         if (err >= 0 && names.mac_valid) {
@@ -516,9 +516,9 @@ int udev_builtin_net_id_eudev(struct udev_device *dev, bool test) {
                 snprintf(str, sizeof(str), "%sx%02x%02x%02x%02x%02x%02x", prefix,
                          names.mac[0], names.mac[1], names.mac[2],
                          names.mac[3], names.mac[4], names.mac[5]);
-                udev_builtin_add_property(dev, test, "ID_NET_NAME_MAC", str);
+                udev_builtin_add_property(dev, mode, "ID_NET_NAME_MAC", str);
 
-                ieee_oui(dev, &names, test);
+                ieee_oui(dev, &names, mode);
         }
 
         /* get path names for Linux on System z network devices */
@@ -527,7 +527,7 @@ int udev_builtin_net_id_eudev(struct udev_device *dev, bool test) {
                 char str[IFNAMSIZ];
 
                 if (snprintf(str, sizeof(str), "%s%s", prefix, names.ccw_group) < (int)sizeof(str))
-                        udev_builtin_add_property(dev, test, "ID_NET_NAME_PATH", str);
+                        udev_builtin_add_property(dev, mode, "ID_NET_NAME_PATH", str);
                 goto out;
         }
 
@@ -542,19 +542,19 @@ int udev_builtin_net_id_eudev(struct udev_device *dev, bool test) {
 
                 if (names.pci_onboard[0])
                         if (snprintf(str, sizeof(str), "%s%s", prefix, names.pci_onboard) < (int)sizeof(str))
-                                udev_builtin_add_property(dev, test, "ID_NET_NAME_ONBOARD", str);
+                                udev_builtin_add_property(dev, mode, "ID_NET_NAME_ONBOARD", str);
 
                 if (names.pci_onboard_label)
                         if (snprintf(str, sizeof(str), "%s%s", prefix, names.pci_onboard_label) < (int)sizeof(str))
-                                udev_builtin_add_property(dev, test, "ID_NET_LABEL_ONBOARD", str);
+                                udev_builtin_add_property(dev, mode, "ID_NET_LABEL_ONBOARD", str);
 
                 if (names.pci_path[0])
                         if (snprintf(str, sizeof(str), "%s%s", prefix, names.pci_path) < (int)sizeof(str))
-                                udev_builtin_add_property(dev, test, "ID_NET_NAME_PATH", str);
+                                udev_builtin_add_property(dev, mode, "ID_NET_NAME_PATH", str);
 
                 if (names.pci_slot[0])
                         if (snprintf(str, sizeof(str), "%s%s", prefix, names.pci_slot) < (int)sizeof(str))
-                                udev_builtin_add_property(dev, test, "ID_NET_NAME_SLOT", str);
+                                udev_builtin_add_property(dev, mode, "ID_NET_NAME_SLOT", str);
                 goto out;
         }
 
@@ -565,11 +565,11 @@ int udev_builtin_net_id_eudev(struct udev_device *dev, bool test) {
 
                 if (names.pci_path[0])
                         if (snprintf(str, sizeof(str), "%s%s%s", prefix, names.pci_path, names.usb_ports) < (int)sizeof(str))
-                                udev_builtin_add_property(dev, test, "ID_NET_NAME_PATH", str);
+                                udev_builtin_add_property(dev, mode, "ID_NET_NAME_PATH", str);
 
                 if (names.pci_slot[0])
                         if (snprintf(str, sizeof(str), "%s%s%s", prefix, names.pci_slot, names.usb_ports) < (int)sizeof(str))
-                                udev_builtin_add_property(dev, test, "ID_NET_NAME_SLOT", str);
+                                udev_builtin_add_property(dev, mode, "ID_NET_NAME_SLOT", str);
                 goto out;
         }
 
@@ -580,11 +580,11 @@ int udev_builtin_net_id_eudev(struct udev_device *dev, bool test) {
 
                 if (names.pci_path[0])
                         if (snprintf(str, sizeof(str), "%s%s%s", prefix, names.pci_path, names.bcma_core) < (int)sizeof(str))
-                                udev_builtin_add_property(dev, test, "ID_NET_NAME_PATH", str);
+                                udev_builtin_add_property(dev, mode, "ID_NET_NAME_PATH", str);
 
                 if (names.pci_slot[0])
                         if (snprintf(str, sizeof(str), "%s%s%s", prefix, names.pci_slot, names.bcma_core) < (int)sizeof(str))
-                                udev_builtin_add_property(dev, test, "ID_NET_NAME_SLOT", str);
+                                udev_builtin_add_property(dev, mode, "ID_NET_NAME_SLOT", str);
                 goto out;
         }
 out:

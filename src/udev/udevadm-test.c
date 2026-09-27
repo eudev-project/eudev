@@ -130,7 +130,7 @@ static int adm_test(struct udev *udev, int argc, char *argv[]) {
         /* don't read info from the db */
         udev_device_set_info_loaded(dev);
 
-        event = udev_event_new(dev);
+        event = udev_event_new(dev, EVENT_UDEVADM_TEST);
 
         sigfillset(&mask);
         sigprocmask(SIG_SETMASK, &mask, &sigmask_orig);
