@@ -566,7 +566,7 @@ static int names_bcma(struct udev_device *dev, const char *prefix, bool test) {
 static int names_ccw(struct udev_device *dev, const char *prefix, bool test) {
         struct udev_device *cdev;
         const char *bus_id;
-        size_t bus_id_len;
+        size_t bus_id_start, bus_id_len;
         char str[IFNAMSIZ];
 
         assert(dev);
@@ -574,13 +574,12 @@ static int names_ccw(struct udev_device *dev, const char *prefix, bool test) {
 
         /* get path names for Linux on System z network devices */
 
-        /* Network devices are always grouped CCW devices */
-        if (get_matching_parent(dev, (const char *[]) { "ccwgroup", NULL }, /* skip_virtio= */ false, &cdev) < 0)
+        if (get_matching_parent(dev, (const char *[]) { "ccwgroup", "ccw", NULL }, /* skip_virtio= */ true, &cdev) < 0)
                 return 0;
 
         log_device_debug(dev, "Device is CCW.");
 
-        /* Retrieve bus-ID of the grouped CCW device.  The bus-ID uniquely
+        /* Retrieve bus-ID of the CCW device.  The bus-ID uniquely
          * identifies the network device on the Linux on System z channel
          * subsystem.  Note that the bus-ID contains lowercase characters.
          */
@@ -596,9 +595,10 @@ static int names_ccw(struct udev_device *dev, const char *prefix, bool test) {
         /* Strip leading zeros from the bus id for aesthetic purposes. This
          * keeps the ccw names stable, yet much shorter in general case of
          * bus_id 0.0.0600 -> 600. This is similar to e.g. how PCI domain is
-         * not prepended when it is zero.
+         * not prepended when it is zero. Preserve the last 0 for 0.0.0000.
          */
-        bus_id += strspn(bus_id, ".0");
+        bus_id_start = strspn(bus_id, ".0");
+        bus_id += bus_id_start < bus_id_len ? bus_id_start : bus_id_len - 1;
 
         /* Use the CCW bus-ID as network device name */
         if (snprintf_ok(str, sizeof str, "%sc%s", prefix, bus_id))
