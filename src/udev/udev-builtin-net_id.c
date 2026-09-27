@@ -820,9 +820,9 @@ static int names_platform(struct udev_device *dev, const char *prefix, bool test
         return 0;
 }
 
-static int names_devicetree(struct udev_device *dev, const char *prefix, bool test) {
+static int names_devicetree_alias_prefix(struct udev_device *dev, const char *prefix, const char *alias_prefix, bool test) {
         _cleanup_udev_device_unref_ struct udev_device *aliases_dev = NULL, *ofnode_dev = NULL, *devicetree_dev = NULL;
-        _cleanup_free_ char *devicetree_path = NULL;
+        _cleanup_free_ char *alias_prefix_0 = NULL, *devicetree_path = NULL;
         _cleanup_closedir_ DIR *dir = NULL;
         const char *ofnode_path, *ofnode_syspath, *devicetree_syspath;
         struct dirent *de;
@@ -830,13 +830,13 @@ static int names_devicetree(struct udev_device *dev, const char *prefix, bool te
 
         assert(dev);
         assert(prefix);
+        assert(alias_prefix);
 
-        if (!naming_scheme_has(NAMING_DEVICETREE_ALIASES))
-                return 0;
+        /* Returns 1 if found, 0 if not found, negative if error */
 
-        /* only ethernet supported for now */
-        if (!streq(prefix, "en"))
-                return -EOPNOTSUPP;
+        alias_prefix_0 = strjoin(alias_prefix, "0", NULL);
+        if (!alias_prefix_0)
+                return -ENOMEM;
 
         /* check if the device itself has an of_node */
         if (naming_scheme_has(NAMING_DEVICETREE_PORT_ALIASES)) {
@@ -899,7 +899,7 @@ static int names_devicetree(struct udev_device *dev, const char *prefix, bool te
                 if (!IN_SET(de->d_type, DT_REG, DT_LNK))
                         continue;
 
-                alias_index = startswith(alias, "ethernet");
+                alias_index = startswith(alias, alias_prefix);
                 if (!alias_index)
                         continue;
 
@@ -912,26 +912,48 @@ static int names_devicetree(struct udev_device *dev, const char *prefix, bool te
                 /* If there's no index, we default to 0... */
                 if (isempty(alias_index)) {
                         i = 0;
-                        conflict = "ethernet0";
+                        conflict = alias_prefix_0;
                 } else {
                         r = safe_atou_full(alias_index, 0, &i);
                         if (r < 0)
                                 return log_device_debug_errno(dev, r, "Could not get index of alias '%s': %m", alias);
-                        conflict = "ethernet";
+                        conflict = alias_prefix;
                 }
 
                 /* ...but make sure we don't have an alias conflict */
                 if (i == 0 && device_get_sysattr_safe_string_filtered(aliases_dev, conflict, NULL) >= 0)
                         return log_device_debug_errno(dev, EEXIST,
-                                                      "Ethernet alias conflict: ethernet and ethernet0 both exist.");
+                                                      "DeviceTree alias conflict: '%s' and '%s' both exist.",
+                                                      alias_prefix, alias_prefix_0);
 
                 if (snprintf_ok(str, sizeof str, "%sd%u", prefix, i))
                         udev_builtin_add_property(dev, test, "ID_NET_NAME_ONBOARD", str);
                 log_device_debug(dev, "DeviceTree identifier: alias_index=%u", i);
-                return 0;
+                return 1;
         }
 
-        return -ENOENT;
+        return 0;
+}
+
+static int names_devicetree(struct udev_device *dev, const char *prefix, bool test) {
+        int r;
+
+        assert(dev);
+        assert(prefix);
+
+        if (!naming_scheme_has(NAMING_DEVICETREE_ALIASES))
+                return 0;
+
+        if (streq(prefix, "en"))
+                r = names_devicetree_alias_prefix(dev, prefix, "ethernet", test);
+        else
+                return -EOPNOTSUPP; /* Unsupported interface type */
+        if (r < 0)
+                return r;
+        if (r == 0) /* Not found */
+                return -ENOENT;
+
+        return 0; /* Found */
 }
 
 static int names_pci(struct udev_device *dev, const char *prefix, bool test) {
