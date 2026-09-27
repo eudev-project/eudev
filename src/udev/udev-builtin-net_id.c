@@ -972,6 +972,45 @@ static int names_mac(struct udev_device *dev, const char *prefix, bool test) {
         return 0;
 }
 
+static int names_netdevsim(struct udev_device *dev, const char *prefix, bool test) {
+        struct udev_device *netdevsimdev;
+        const char *phys_port_name, *sysnum;
+        unsigned addr;
+        char str[IFNAMSIZ];
+        int r;
+
+        assert(dev);
+        assert(prefix);
+
+        /* get netdevsim path names */
+
+        if (!naming_scheme_has(NAMING_NETDEVSIM))
+                return 0;
+
+        netdevsimdev = udev_device_get_parent_with_subsystem_devtype(dev, "netdevsim", NULL);
+        if (!netdevsimdev)
+                return -ENOENT;
+
+        sysnum = udev_device_get_sysnum(netdevsimdev);
+        if (!sysnum)
+                return log_device_debug_errno(netdevsimdev, ENOENT, "Failed to get device sysnum.");
+
+        r = safe_atou_full(sysnum, SAFE_ATO_REFUSE_PLUS_MINUS | SAFE_ATO_REFUSE_LEADING_WHITESPACE | 10, &addr);
+        if (r < 0)
+                return log_device_debug_errno(netdevsimdev, r, "Failed to parse device sysnum: %m");
+
+        r = device_get_sysattr_safe_string(dev, "phys_port_name", &phys_port_name);
+        if (r < 0)
+                return log_device_debug_errno(dev, r, "Failed to get 'phys_port_name' attribute: %m");
+        if (isempty(phys_port_name))
+                return log_device_debug_errno(dev, EOPNOTSUPP, "The 'phys_port_name' attribute is empty.");
+
+        if (snprintf_ok(str, sizeof str, "%si%un%s", prefix, addr, phys_port_name))
+                udev_builtin_add_property(dev, test, "ID_NET_NAME_PATH", str);
+        log_device_debug(dev, "Netdevsim identifier: address=%u, port_name=%s", addr, phys_port_name);
+        return 0;
+}
+
 static int get_ifname_prefix(struct udev_device *dev, const char **ret) {
         unsigned iftype;
         int r;
@@ -1056,6 +1095,7 @@ static int builtin_net_id(struct udev_device *dev, int argc __attribute__((unuse
         (void) names_ccw(dev, prefix, test);
         (void) names_vio(dev, prefix, test);
         (void) names_platform(dev, prefix, test);
+        (void) names_netdevsim(dev, prefix, test);
         (void) names_pci(dev, prefix, test);
         (void) names_usb(dev, prefix, test);
         (void) names_bcma(dev, prefix, test);
