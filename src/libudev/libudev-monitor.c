@@ -412,6 +412,18 @@ _public_ int udev_monitor_filter_update(struct udev_monitor *udev_monitor)
         /* matched, pass packet */
         BPF_GATHER(r, bpf_stmt(ins, &i, BPF_RET|BPF_K, 0xffffffff));
 
+        if (r == -E2BIG) {
+                static const struct sock_fprog empty = { 0, NULL };
+
+                /* The filter does not fit into the socket filter program. Do not filter
+                 * in the kernel then, and remove a previously installed filter. The
+                 * received devices are always checked by passes_filter(). */
+                log_debug("too many filter matches for a socket filter, filtering in userspace");
+                if (setsockopt(udev_monitor->sock, SOL_SOCKET, SO_DETACH_FILTER, &empty, sizeof(empty)) < 0 &&
+                    errno != ENOENT)
+                        return -errno;
+                return 0;
+        }
         if (r < 0)
                 return r;
 
@@ -589,7 +601,7 @@ static int passes_filter(struct udev_monitor *udev_monitor, struct udev_device *
                 const char *devtype;
                 const char *ddevtype;
 
-                if (!streq(dsubsys, subsys))
+                if (!streq_ptr(dsubsys, subsys))
                         continue;
 
                 devtype = udev_list_entry_get_value(list_entry);
