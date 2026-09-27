@@ -356,6 +356,31 @@ static bool is_pci_ari_enabled(struct udev_device *dev) {
         return device_get_sysattr_bool(dev, "ari_enabled") > 0;
 }
 
+static bool is_pci_bridge(struct udev_device *dev) {
+        const char *v, *p;
+        bool b;
+
+        assert(dev);
+
+        if (device_get_sysattr_safe_string(dev, "modalias", &v) < 0)
+                return false;
+
+        if (!startswith(v, "pci:"))
+                return false;
+
+        p = strrchr(v, 's');
+        if (!p)
+                return false;
+        if (p[1] != 'c')
+                return false;
+
+        /* PCI device subclass 04 corresponds to PCI bridge */
+        b = strneq(p + 2, "04", 2);
+        if (b)
+                log_device_debug(dev, "Device is a PCI bridge.");
+        return b;
+}
+
 static int pci_get_hotplug_slot_from_address(
                 struct udev_device *dev,
                 struct udev_device *pci,
@@ -436,6 +461,13 @@ static int pci_get_hotplug_slot(struct udev_device *dev, uint32_t *ret) {
                 if (r < 0)
                         return r;
                 if (r > 0) {
+                        /* We found the match between PCI device and slot. However, we won't use the slot
+                         * index if the device is a PCI bridge, because it can have other child devices that
+                         * will try to claim the same index and that would create name collision. */
+                        if (naming_scheme_has(NAMING_BRIDGE_NO_SLOT) && is_pci_bridge(slot_dev))
+                                return log_device_debug_errno(dev, ESTALE,
+                                                              "Not using slot information because the PCI device is a bridge.");
+
                         *ret = slot;
                         return 0;
                 }
