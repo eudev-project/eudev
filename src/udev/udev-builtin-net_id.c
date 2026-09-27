@@ -211,6 +211,23 @@ static int get_port_specifier(struct udev_device *dev, char **ret) {
         /* First, try to use the kernel provided front panel port name for multiple port PCI device. */
         r = device_get_sysattr_safe_string(dev, "phys_port_name", &phys_port_name);
         if (r >= 0 && !isempty(phys_port_name)) {
+                if (naming_scheme_has(NAMING_SR_IOV_R)) {
+                        int vf_id = -1;
+
+                        /* Check if phys_port_name indicates virtual device representor. */
+                        (void) sscanf(phys_port_name, "pf%*uvf%d", &vf_id);
+
+                        if (vf_id >= 0) {
+                                /* For VF representor append 'r<VF_NUM>'. */
+                                if (asprintf(&buf, "r%d", vf_id) < 0)
+                                        return -ENOMEM;
+
+                                *ret = buf;
+                                return 1;
+                        }
+                }
+
+                /* Otherwise, use phys_port_name as is. */
                 buf = strjoin("n", phys_port_name, NULL);
                 if (!buf)
                         return -ENOMEM;
