@@ -313,7 +313,9 @@ static int names_pci_onboard_label(struct udev_device *dev, struct udev_device *
         if (r < 0)
                 return log_device_debug_errno(pci_dev, r, "Failed to get PCI onboard label: %m");
 
-        if (snprintf_ok(str, sizeof str, "%s%s", prefix, label))
+        if (snprintf_ok(str, sizeof str, "%s%s",
+                        naming_scheme_has(NAMING_LABEL_NOPREFIX) ? "" : prefix,
+                        label))
                 udev_builtin_add_property(dev, test, "ID_NET_LABEL_ONBOARD", str);
 
         log_device_debug(dev, "Onboard label from PCI device: %s", label);
