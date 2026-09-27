@@ -36,6 +36,7 @@
 #include "udev.h"
 #include "def.h"
 #include "netif-naming-scheme.h"
+#include "path-util.h"
 #include "udev-util.h"
 
 #ifndef ALTIFNAMSIZ
@@ -63,6 +64,10 @@ static inline const char *strempty(const char *s) {
 
 static inline const char *strna(const char *s) {
         return s ?: "n/a";
+}
+
+static bool in_charset(const char *s, const char *charset) {
+        return s[strspn(s, charset)] == '\0';
 }
 
 static bool device_in_subsystem(struct udev_device *dev, const char *subsystem) {
@@ -99,6 +104,31 @@ static int get_matching_parent(
                 }
 
         return -ENODEV;
+}
+
+static int get_first_syspath_component(struct udev_device *dev, const char *prefix, char **ret) {
+        const char *p;
+        size_t n;
+        char *buf;
+
+        assert(dev);
+        assert(prefix);
+        assert(ret);
+
+        p = path_startswith(udev_device_get_syspath(dev), prefix);
+        if (!p)
+                return -EINVAL;
+
+        n = strcspn(p, "/");
+        if (n == 0 || n > NAME_MAX)
+                return -EINVAL;
+
+        buf = strndup(p, n);
+        if (!buf)
+                return -ENOMEM;
+
+        *ret = buf;
+        return (int) n; /* return the length of the string */
 }
 
 static int get_port_specifier(struct udev_device *dev, char **ret) {
@@ -414,6 +444,48 @@ static int names_pci_slot(struct udev_device *dev, struct udev_device *pci_dev, 
         log_device_debug(dev, "PCI slot identifier: domain=%s slot=%" PRIu32 " func=%s port=%s -> %s",
                          strna(domain), slot, strna(func), strna(port), isempty(str) ? "n/a" : str);
 
+        return 0;
+}
+
+static int names_vio(struct udev_device *dev, const char *prefix, bool test) {
+        _cleanup_free_ char *s = NULL;
+        unsigned slotid;
+        char str[IFNAMSIZ];
+        int r;
+
+        assert(dev);
+        assert(prefix);
+
+        /* get ibmveth/ibmvnic slot-based names. */
+
+        /* check if our direct parent is a VIO device with no other bus in-between */
+        if (get_matching_parent(dev, (const char *[]) { "vio", NULL }, /* skip_virtio= */ false, NULL) < 0)
+                return 0;
+
+        log_device_debug(dev, "Parent device is in the vio subsystem.");
+
+        /* The devices' $DEVPATH number is tied to (virtual) hardware (slot id
+         * selected in the HMC), thus this provides a reliable naming (e.g.
+         * "/devices/vio/30000002/net/eth1"); we ignore the bus number, as
+         * there should only ever be one bus, and then remove leading zeros. */
+        r = get_first_syspath_component(dev, "/sys/devices/vio/", &s);
+        if (r < 0)
+                return log_device_debug_errno(dev, r, "Failed to get VIO bus ID and slot ID: %m");
+
+        if (r != 8)
+                return log_device_debug_errno(dev, EINVAL, "VIO bus ID and slot ID have invalid length: '%s'", s);
+
+        if (!in_charset(s, HEXDIGITS))
+                return log_device_debug_errno(dev, EINVAL, "VIO bus ID and slot ID contain invalid characters: '%s'", s);
+
+        /* Parse only slot ID (the last 4 hexdigits). */
+        r = safe_atou_full(s + 4, 16, &slotid);
+        if (r < 0)
+                return log_device_debug_errno(dev, r, "Failed to parse VIO slot from '%s': %m", s);
+
+        if (snprintf_ok(str, sizeof str, "%sv%u", prefix, slotid))
+                udev_builtin_add_property(dev, test, "ID_NET_NAME_SLOT", str);
+        log_device_debug(dev, "Vio slot identifier: slotid=%u", slotid);
         return 0;
 }
 
@@ -808,6 +880,7 @@ static int builtin_net_id(struct udev_device *dev, int argc __attribute__((unuse
 
         (void) names_mac(dev, prefix, test);
         (void) names_ccw(dev, prefix, test);
+        (void) names_vio(dev, prefix, test);
         (void) names_pci(dev, prefix, test);
         (void) names_usb(dev, prefix, test);
         (void) names_bcma(dev, prefix, test);
