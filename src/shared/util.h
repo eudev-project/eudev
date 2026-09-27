@@ -165,6 +165,12 @@ int unoctchar(char c) _const_;
 char *cescape(const char *s);
 size_t cescape_char(char c, char *buf);
 
+static inline bool char_is_cc(char p) {
+        /* char is unsigned on some architectures, hence cast to unsigned before the comparison. */
+        return (uint8_t) p < (uint8_t) ' ' || p == 127;
+}
+bool string_has_cc(const char *p, const char *ok) _pure_;
+
 typedef enum UnescapeFlags {
         UNESCAPE_RELAX = 1,
 } UnescapeFlags;

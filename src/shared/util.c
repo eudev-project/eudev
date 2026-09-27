@@ -917,6 +917,28 @@ char *xescape(const char *s, const char *bad) {
         return r;
 }
 
+bool string_has_cc(const char *p, const char *ok) {
+        const char *t;
+
+        assert(p);
+
+        /*
+         * Check if a string contains control characters. If 'ok' is
+         * non-NULL it may be a string containing additional CCs to be
+         * considered OK.
+         */
+
+        for (t = p; *t; t++) {
+                if (ok && strchr(ok, *t))
+                        continue;
+
+                if (char_is_cc(*t))
+                        return true;
+        }
+
+        return false;
+}
+
 _pure_ static bool hidden_file_allow_backup(const char *filename) {
         assert(filename);
 
