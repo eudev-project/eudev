@@ -260,8 +260,8 @@ static int pci_get_onboard_index(struct udev_device *dev, unsigned *ret) {
         if (r < 0)
                 return log_device_debug_errno(dev, r, "Could not obtain onboard index: %m");
 
-        if (idx == 0)
-                return log_device_debug_errno(dev, EINVAL, "Onboard index 0 is not used.");
+        if (idx == 0 && !naming_scheme_has(NAMING_ZERO_ACPI_INDEX))
+                return log_device_debug_errno(dev, EINVAL, "Naming scheme does not allow onboard index==0.");
         if (!is_valid_onboard_index(idx))
                 return log_device_debug_errno(dev, EINVAL, "Not a valid onboard index: %u", idx);
 
