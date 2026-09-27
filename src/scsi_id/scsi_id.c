@@ -135,13 +135,14 @@ static char *get_value(char **buffer)
                 end = comma_string;
         }
         val = strsep(buffer, end);
-        if (val && end == quote_string)
+        if (val && end == quote_string && *buffer && **buffer != '\0')
                 /*
-                 * skip trailing quote
+                 * skip the separator after the trailing quote; there is
+                 * none if the quote was not terminated
                  */
                 (*buffer)++;
 
-        while (isspace(**buffer))
+        while (*buffer && isspace(**buffer))
                 (*buffer)++;
 
         return val;
