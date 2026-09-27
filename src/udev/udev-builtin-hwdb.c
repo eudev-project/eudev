@@ -27,6 +27,7 @@
 #include <getopt.h>
 
 #include "udev.h"
+#include "udev-util.h"
 
 static struct udev_hwdb *hwdb;
 
@@ -64,7 +65,7 @@ int udev_builtin_hwdb_lookup(struct udev_device *dev,
 }
 
 static const char *modalias_usb(struct udev_device *dev, char *s, size_t size) {
-        const char *v, *p;
+        const char *v, *p, *n;
         int vn, pn;
 
         v = udev_device_get_sysattr_value(dev, "idVendor");
@@ -83,7 +84,9 @@ static const char *modalias_usb(struct udev_device *dev, char *s, size_t size) {
                 return NULL;
         if (pn > 0xffff)
                 return NULL;
-        snprintf(s, size, "usb:v%04Xp%04X*", vn, pn);
+        n = udev_device_get_sysattr_value(dev, "product");
+
+        snprintf(s, size, "usb:v%04Xp%04X:%s", vn, pn, n ? n : "");
         return s;
 }
 
@@ -91,9 +94,12 @@ static int udev_builtin_hwdb_search(struct udev_device *dev, struct udev_device 
                                     const char *subsystem, const char *prefix,
                                     const char *filter, bool test) {
         struct udev_device *d;
-        char s[16];
+        char s[LINE_MAX];
         bool last = false;
         int r = 0;
+
+        if (!srcdev)
+                srcdev = dev;
 
         for (d = srcdev; d && !last; d = udev_device_get_parent(d)) {
                 const char *dsubsys;
@@ -121,6 +127,8 @@ static int udev_builtin_hwdb_search(struct udev_device *dev, struct udev_device 
                 if (!modalias)
                         continue;
 
+                log_debug("hwdb modalias key: \"%s\"", modalias);
+
                 r = udev_builtin_hwdb_lookup(dev, prefix, modalias, filter, test);
                 if (r > 0)
                         break;
@@ -141,7 +149,7 @@ static int builtin_hwdb(struct udev_device *dev, int argc, char *argv[], bool te
         const char *device = NULL;
         const char *subsystem = NULL;
         const char *prefix = NULL;
-        struct udev_device *srcdev;
+        _cleanup_udev_device_unref_ struct udev_device *srcdev = NULL;
 
         if (!hwdb)
                 return EXIT_FAILURE;
@@ -184,8 +192,7 @@ static int builtin_hwdb(struct udev_device *dev, int argc, char *argv[], bool te
                 srcdev = udev_device_new_from_device_id(udev_device_get_udev(dev), device);
                 if (!srcdev)
                         return EXIT_FAILURE;
-        } else
-                srcdev = dev;
+        }
 
         if (udev_builtin_hwdb_search(dev, srcdev, subsystem, prefix, filter, test) > 0)
                 return EXIT_SUCCESS;

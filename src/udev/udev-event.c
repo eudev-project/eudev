@@ -451,7 +451,7 @@ static void spawn_read(struct udev_event *event,
                        usec_t timeout_usec,
                        const char *cmd,
                        int fd_stdout, int fd_stderr,
-                       char *result, size_t ressize) {
+                       char *result, size_t ressize, bool *ret_truncated) {
         _cleanup_close_ int fd_ep = -1;
         struct epoll_event ep_outpipe = {
                 .events = EPOLLIN,
@@ -576,6 +576,9 @@ static void spawn_read(struct udev_event *event,
         /* return the child's stdout string */
         if (result != NULL)
                 result[respos] = '\0';
+
+        if (ret_truncated)
+                *ret_truncated = truncated;
 }
 
 static int spawn_wait(struct udev_event *event,
@@ -687,6 +690,11 @@ int udev_build_argv(struct udev *udev __attribute__((unused)), char *cmd, int *a
 
         pos = cmd;
         while (pos != NULL && pos[0] != '\0') {
+               /* callers provide an array of UDEV_ARGV_MAX entries, leave room for the terminating NULL */
+               if (i >= UDEV_ARGV_MAX - 1) {
+                        log_error("too many arguments in command, ignoring the rest: '%s'", pos);
+                        break;
+               }
                if (IN_SET(pos[0], '\'', '"')) {
                         /* do not separate quotes or double quotes */
                         char delim[2] = { pos[0], '\0' };
@@ -715,12 +723,12 @@ int udev_event_spawn(struct udev_event *event,
                      usec_t timeout_usec,
                      usec_t timeout_warn_usec,
                      const char *cmd, char **envp, const sigset_t *sigmask,
-                     char *result, size_t ressize) {
+                     char *result, size_t ressize, bool *ret_truncated) {
         int outpipe[2] = {-1, -1};
         int errpipe[2] = {-1, -1};
         pid_t pid;
-        char arg[UTIL_PATH_SIZE];
-        char *argv[128];
+        char arg[UTIL_LINE_SIZE];
+        char *argv[UDEV_ARGV_MAX];
         char program[UTIL_PATH_SIZE];
         int err = 0;
 
@@ -793,7 +801,7 @@ int udev_event_spawn(struct udev_event *event,
                            timeout_usec,
                            cmd,
                            outpipe[READ_END], errpipe[READ_END],
-                           result, ressize);
+                           result, ressize, ret_truncated);
 
                 err = spawn_wait(event, timeout_usec, timeout_warn_usec, cmd, pid);
         }
@@ -915,12 +923,11 @@ void udev_event_execute_rules(struct udev_event *event,
                 if (major(udev_device_get_devnum(dev)) != 0)
                         udev_node_remove(dev);
         } else {
+                /* disable watch during event processing */
+                if (major(udev_device_get_devnum(dev)) != 0)
+                        udev_watch_end(event->udev, dev);
+
                 event->dev_db = udev_device_clone_with_db(dev);
-                if (event->dev_db != NULL) {
-                        /* disable watch during event processing */
-                        if (major(udev_device_get_devnum(dev)) != 0)
-                                udev_watch_end(event->udev, event->dev_db);
-                }
 
                 if (major(udev_device_get_devnum(dev)) == 0 &&
                     streq(udev_device_get_action(dev), "move"))
@@ -1070,26 +1077,21 @@ void udev_event_execute_run(struct udev_event *event, usec_t timeout_usec, usec_
         struct udev_list_entry *list_entry;
 
         udev_list_entry_foreach(list_entry, udev_list_get_entry(&event->run_list)) {
-                const char *cmd = udev_list_entry_get_name(list_entry);
+                const char *command = udev_list_entry_get_name(list_entry);
                 enum udev_builtin_cmd builtin_cmd = udev_list_entry_get_num(list_entry);
 
                 if (builtin_cmd < UDEV_BUILTIN_MAX) {
-                        char command[UTIL_PATH_SIZE];
-
-                        udev_event_apply_format(event, cmd, command, sizeof(command), false);
                         udev_builtin_run(event->dev, builtin_cmd, command, false);
                 } else {
-                        char program[UTIL_PATH_SIZE];
                         char **envp;
 
                         if (event->exec_delay > 0) {
-                                log_debug("delay execution of '%s'", program);
+                                log_debug("delay execution of '%s'", command);
                                 sleep(event->exec_delay);
                         }
 
-                        udev_event_apply_format(event, cmd, program, sizeof(program), false);
                         envp = udev_device_get_properties_envp(event->dev);
-                        udev_event_spawn(event, timeout_usec, timeout_warn_usec, program, envp, sigmask, NULL, 0);
+                        udev_event_spawn(event, timeout_usec, timeout_warn_usec, command, envp, sigmask, NULL, 0, NULL);
                 }
         }
 }

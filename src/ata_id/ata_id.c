@@ -183,8 +183,8 @@ static int disk_identify_command(int          fd,
                         return ret;
         }
 
-        if (!(sense[0] == 0x72 && desc[0] == 0x9 && desc[1] == 0x0c) &&
-                !(sense[0] == 0x70 && sense[12] == 0x00 && sense[13] == 0x1d)) {
+        if (!((sense[0] & 0x7f) == 0x72 && desc[0] == 0x9 && desc[1] == 0x0c) &&
+                !((sense[0] & 0x7f) == 0x70 && sense[12] == 0x00 && sense[13] == 0x1d)) {
                 errno = EIO;
                 return -1;
         }
@@ -260,7 +260,7 @@ static int disk_identify_packet_device_command(int          fd,
                         return ret;
         }
 
-        if (!(sense[0] == 0x72 && desc[0] == 0x9 && desc[1] == 0x0c)) {
+        if (!((sense[0] & 0x7f) == 0x72 && desc[0] == 0x9 && desc[1] == 0x0c)) {
                 errno = EIO;
                 return -1;
         }
@@ -319,6 +319,7 @@ static void disk_identify_fixup_uint16 (uint8_t identify[512], unsigned int offs
  * @fd: File descriptor for the block device.
  * @out_identify: Return location for IDENTIFY data.
  * @out_is_packet_device: Return location for whether returned data is from a IDENTIFY PACKET DEVICE.
+ * @ret_peripheral_device_type: Return location for the SCSI peripheral device type.
  *
  * Sends the IDENTIFY DEVICE or IDENTIFY PACKET DEVICE command to the
  * device represented by @fd. If successful, then the result will be
@@ -333,7 +334,8 @@ static void disk_identify_fixup_uint16 (uint8_t identify[512], unsigned int offs
 static int disk_identify(struct udev *udev __attribute__((unused)),
                          int fd,
                          uint8_t out_identify[512],
-                         int *out_is_packet_device)
+                         int *out_is_packet_device,
+                         int *ret_peripheral_device_type)
 {
         int ret;
         uint8_t inquiry_buf[36];
@@ -378,7 +380,7 @@ static int disk_identify(struct udev *udev __attribute__((unused)),
             ret = disk_identify_packet_device_command(fd, out_identify, 512);
             goto check_nul_bytes;
           }
-        if (peripheral_device_type != 0x00) {
+        if (!IN_SET(peripheral_device_type, 0x00, 0x14)) {
                 ret = -1;
                 errno = EIO;
                 goto out;
@@ -405,6 +407,9 @@ static int disk_identify(struct udev *udev __attribute__((unused)),
                 goto out;
         }
 
+        if (ret == 0 && ret_peripheral_device_type != NULL)
+                *ret_peripheral_device_type = peripheral_device_type;
+
 out:
         if (out_is_packet_device != NULL)
                 *out_is_packet_device = is_packet_device;
@@ -429,6 +434,7 @@ int main(int argc, char *argv[])
         _cleanup_close_ int fd = -1;
         uint16_t word;
         int is_packet_device = 0;
+        int peripheral_device_type = -1;
         static const struct option options[] = {
                 { "export", no_argument, NULL, 'x' },
                 { "help", no_argument, NULL, 'h' },
@@ -466,13 +472,16 @@ int main(int argc, char *argv[])
                 return 1;
         }
 
-        fd = open(node, O_RDONLY|O_NONBLOCK|O_CLOEXEC);
+        fd = open(node, O_RDONLY|O_NONBLOCK|O_CLOEXEC|O_NOCTTY);
         if (fd < 0) {
-                log_error("unable to open '%s'", node);
-                return 1;
+                bool ignore = IN_SET(errno, ENODEV, ENXIO, ENOENT, ENOMEDIUM);
+                log_full_errno(ignore ? LOG_DEBUG : LOG_WARNING, errno,
+                               "Failed to open device node '%s'%s: %m",
+                               node, ignore ? ", ignoring" : "");
+                return ignore ? 0 : 1;
         }
 
-        if (disk_identify(udev, fd, identify.byte, &is_packet_device) == 0) {
+        if (disk_identify(udev, fd, identify.byte, &is_packet_device, &peripheral_device_type) == 0) {
                 /*
                  * fix up only the fields from the IDENTIFY data that we are going to
                  * use and copy it into the hd_driveid struct for convenience
@@ -558,6 +567,10 @@ int main(int argc, char *argv[])
                 if (id.command_set_1 & (1<<5)) {
                         printf("ID_ATA_WRITE_CACHE=1\n");
                         printf("ID_ATA_WRITE_CACHE_ENABLED=%d\n", (id.cfs_enable_1 & (1<<5)) ? 1 : 0);
+                }
+                if (id.command_set_1 & (1<<6)) {
+                        printf("ID_ATA_READ_LOOKAHEAD=1\n");
+                        printf("ID_ATA_READ_LOOKAHEAD_ENABLED=%d\n", (id.cfs_enable_1 & (1<<6)) ? 1 : 0);
                 }
                 if (id.command_set_1 & (1<<10)) {
                         printf("ID_ATA_FEATURE_SET_HPA=1\n");
@@ -670,6 +683,9 @@ int main(int argc, char *argv[])
                     identify.wyde[0] == 0x844a ||
                     (identify.wyde[83] & 0xc004) == 0x4004)
                         printf("ID_ATA_CFA=1\n");
+
+                if (peripheral_device_type >= 0)
+                        printf("ID_ATA_PERIPHERAL_DEVICE_TYPE=%d\n", peripheral_device_type);
         } else {
                 if (serial[0] != '\0')
                         printf("%s_%s\n", model, serial);

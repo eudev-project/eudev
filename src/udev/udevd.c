@@ -96,8 +96,8 @@ struct event {
         unsigned long long int delaying_seqnum;
         unsigned long long int seqnum;
         const char *devpath;
-        size_t devpath_len;
         const char *devpath_old;
+        const char *devnode;
         dev_t devnum;
         int ifindex;
         bool is_block;
@@ -116,6 +116,7 @@ enum worker_state {
         WORKER_RUNNING,
         WORKER_IDLE,
         WORKER_KILLED,
+        WORKER_KILLING,
 };
 
 struct worker {
@@ -347,10 +348,14 @@ static void worker_spawn(struct event *event) {
                                                arg_event_timeout_usec, arg_event_timeout_warn_usec,
                                                &sigmask_orig);
 
-                        /* apply/restore inotify watch */
-                        if (udev_event->inotify_watch) {
-                                udev_watch_begin(udev, dev);
-                                udev_device_update_db(dev);
+                        /* apply/restore inotify watch; some udev rule may erroneously set
+                         * inotify watch on remove event, silently ignore it for safety */
+                        if (!streq_ptr(udev_device_get_action(dev), "remove") &&
+                            udev_device_get_devnode(dev) != NULL) {
+                                if (udev_event->inotify_watch)
+                                        udev_watch_begin(udev, dev);
+                                else
+                                        udev_watch_end(udev, dev);
                         }
 
                         safe_close(fd_lock);
@@ -488,8 +493,8 @@ static int event_queue_insert(struct udev_device *dev) {
         udev_device_copy_properties(event->dev_kernel, dev);
         event->seqnum = udev_device_get_seqnum(dev);
         event->devpath = udev_device_get_devpath(dev);
-        event->devpath_len = strlen(event->devpath);
         event->devpath_old = udev_device_get_devpath_old(dev);
+        event->devnode = udev_device_get_devnode(dev);
         event->devnum = udev_device_get_devnum(dev);
         event->is_block = streq("block", udev_device_get_subsystem(dev));
         event->ifindex = udev_device_get_ifindex(dev);
@@ -502,7 +507,7 @@ static int event_queue_insert(struct udev_device *dev) {
         return 0;
 }
 
-static void worker_kill(void) {
+static void worker_kill(bool force) {
         struct worker *worker;
         Iterator i;
 
@@ -510,15 +515,33 @@ static void worker_kill(void) {
                 if (worker->state == WORKER_KILLED)
                         continue;
 
+                /* do not interrupt a running worker, kill it when it has finished its event */
+                if (worker->state == WORKER_RUNNING && !force) {
+                        worker->state = WORKER_KILLING;
+                        continue;
+                }
+
                 worker->state = WORKER_KILLED;
                 kill(worker->pid, SIGTERM);
         }
 }
 
+static bool devpath_conflict(const char *a, const char *b) {
+        /* This returns true when two paths are equivalent, or one is a child of another. */
+
+        if (!a || !b)
+                return false;
+
+        for (; *a != '\0' && *b != '\0'; a++, b++)
+                if (*a != *b)
+                        return false;
+
+        return *a == '/' || *b == '/' || *a == *b;
+}
+
 /* lookup event for identical, parent, child device */
 static bool is_devpath_busy(struct event *event) {
         struct udev_list_node *loop;
-        size_t common;
 
         /* check if queue contains events we depend on */
         udev_list_node_foreach(loop, &event_list) {
@@ -538,50 +561,28 @@ static bool is_devpath_busy(struct event *event) {
 
                 /* check major/minor */
                 if (major(event->devnum) != 0 && event->devnum == loop_event->devnum && event->is_block == loop_event->is_block)
-                        return true;
+                        goto set_delaying_seqnum;
 
                 /* check network device ifindex */
                 if (event->ifindex != 0 && event->ifindex == loop_event->ifindex)
-                        return true;
+                        goto set_delaying_seqnum;
 
-                /* check our old name */
-                if (event->devpath_old != NULL && streq(loop_event->devpath, event->devpath_old)) {
-                        event->delaying_seqnum = loop_event->seqnum;
-                        return true;
-                }
+                /* check for identical, parent, or child device, also with the old names */
+                if (devpath_conflict(event->devpath, loop_event->devpath) ||
+                    devpath_conflict(event->devpath, loop_event->devpath_old) ||
+                    devpath_conflict(event->devpath_old, loop_event->devpath))
+                        goto set_delaying_seqnum;
 
-                /* compare devpath */
-                common = MIN(loop_event->devpath_len, event->devpath_len);
-
-                /* one devpath is contained in the other? */
-                if (memcmp(loop_event->devpath, event->devpath, common) != 0)
-                        continue;
-
-                /* identical device event found */
-                if (loop_event->devpath_len == event->devpath_len) {
-                        /* devices names might have changed/swapped in the meantime */
-                        if (major(event->devnum) != 0 && (event->devnum != loop_event->devnum || event->is_block != loop_event->is_block))
-                                continue;
-                        if (event->ifindex != 0 && event->ifindex != loop_event->ifindex)
-                                continue;
-                        event->delaying_seqnum = loop_event->seqnum;
-                        return true;
-                }
-
-                /* parent device event found */
-                if (event->devpath[common] == '/') {
-                        event->delaying_seqnum = loop_event->seqnum;
-                        return true;
-                }
-
-                /* child device event found */
-                if (loop_event->devpath[common] == '/') {
-                        event->delaying_seqnum = loop_event->seqnum;
-                        return true;
-                }
+                /* check device node, the devnum and the devpath may be different for the same node */
+                if (event->devnode != NULL && streq_ptr(event->devnode, loop_event->devnode))
+                        goto set_delaying_seqnum;
 
                 /* no matching device */
                 continue;
+
+        set_delaying_seqnum:
+                event->delaying_seqnum = loop_event->seqnum;
+                return true;
         }
 
         return false;
@@ -675,7 +676,10 @@ static void worker_returned(int fd_worker) {
                         continue;
                 }
 
-                if (worker->state != WORKER_KILLED)
+                if (worker->state == WORKER_KILLING) {
+                        worker->state = WORKER_KILLED;
+                        kill(worker->pid, SIGTERM);
+                } else if (worker->state != WORKER_KILLED)
                         worker->state = WORKER_IDLE;
 
                 /* worker returned */
@@ -716,9 +720,13 @@ static void handle_ctrl_msg(struct udev_ctrl *uctrl) {
 
         i = udev_ctrl_get_set_log_level(ctrl_msg);
         if (i >= 0) {
-                log_debug("udevd message (SET_LOG_LEVEL) received, log_priority=%i", i);
-                log_set_max_level(i);
-                worker_kill();
+                if ((i & LOG_PRIMASK) != i)
+                        log_warning("udevd message (SET_LOG_LEVEL) received with invalid log_priority=%i, ignoring", i);
+                else {
+                        log_debug("udevd message (SET_LOG_LEVEL) received, log_priority=%i", i);
+                        log_set_max_level(i);
+                        worker_kill(false);
+                }
         }
 
         if (udev_ctrl_get_stop_exec_queue(ctrl_msg) > 0) {
@@ -760,7 +768,7 @@ static void handle_ctrl_msg(struct udev_ctrl *uctrl) {
                         }
                         free(key);
                 }
-                worker_kill();
+                worker_kill(false);
         }
 
         i = udev_ctrl_get_set_children_max(ctrl_msg);
@@ -914,8 +922,9 @@ static int handle_inotify(struct udev *udev) {
                 log_debug("inotify event: %x for %s", e->mask, udev_device_get_devnode(dev));
                 if (e->mask & IN_CLOSE_WRITE)
                         synthesize_change(dev);
-                else if (e->mask & IN_IGNORED)
-                        udev_watch_end(udev, dev);
+
+                /* Do not handle IN_IGNORED here. It should be handled by worker in 'remove' uevent;
+                 * udev_event_execute_rules() -> udev_watch_end(). */
 
                 udev_device_unref(dev);
         }
@@ -1010,7 +1019,10 @@ static int parse_proc_cmdline_item(const char *key, const char *value) {
                 int prio;
 
                 prio = util_log_priority(value);
-                log_set_max_level(prio);
+                if (prio < 0)
+                        log_warning("invalid udev.log-priority ignored: %s", value);
+                else
+                        log_set_max_level(prio);
         } else if (streq(key, "children-max")) {
                 r = safe_atou(value, &arg_children_max);
                 if (r < 0)
@@ -1430,7 +1442,7 @@ int main(int argc, char *argv[]) {
 
                         /* discard queued events and kill workers */
                         event_queue_cleanup(udev, EVENT_QUEUED);
-                        worker_kill();
+                        worker_kill(true);
 
                         /* exit after all has cleaned up */
                         if (udev_list_node_is_empty(&event_list) && hashmap_isempty(workers))
@@ -1466,7 +1478,7 @@ int main(int argc, char *argv[]) {
                         /* kill idle workers */
                         if (udev_list_node_is_empty(&event_list)) {
                                 log_debug("cleanup idle workers");
-                                worker_kill();
+                                worker_kill(false);
                         }
 
                         /* check for hanging events */
@@ -1474,7 +1486,7 @@ int main(int argc, char *argv[]) {
                                 struct event *event = worker->event;
                                 usec_t ts;
 
-                                if (worker->state != WORKER_RUNNING)
+                                if (worker->state != WORKER_RUNNING && worker->state != WORKER_KILLING)
                                         continue;
 
                                 assert(event);
@@ -1523,7 +1535,7 @@ int main(int argc, char *argv[]) {
 
                 /* reload requested, HUP signal received, rules changed, builtin changed */
                 if (reload) {
-                        worker_kill();
+                        worker_kill(false);
                         rules = udev_rules_unref(rules);
                         udev_builtin_exit(udev);
                         reload = false;

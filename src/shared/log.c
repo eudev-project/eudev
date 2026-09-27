@@ -404,10 +404,11 @@ static int log_dispatch(
                 const char *object,
                 char *buffer) {
 
-        int r = 0;
+        if (error < 0)
+                error = -error;
 
         if (log_target == LOG_TARGET_NULL)
-                return 0;
+                return -error;
 
         /* Patch in LOG_DAEMON facility if necessary */
         if ((level & LOG_FACMASK) == 0)
@@ -436,8 +437,7 @@ static int log_dispatch(
                                 if (k != -EAGAIN)
                                         log_close_syslog();
                                 log_open_kmsg();
-                        } else if (k > 0)
-                                r++;
+                        }
                 }
 
                 if (k <= 0 &&
@@ -450,8 +450,7 @@ static int log_dispatch(
                         if (k < 0) {
                                 log_close_kmsg();
                                 log_open_console();
-                        } else if (k > 0)
-                                r++;
+                        }
                 }
 
                 if (k <= 0) {
@@ -463,7 +462,7 @@ static int log_dispatch(
                 buffer = e;
         } while (buffer);
 
-        return r;
+        return -error;
 }
 
 int log_internalv(
@@ -478,8 +477,15 @@ int log_internalv(
         PROTECT_ERRNO;
         char buffer[LINE_MAX];
 
+        if (error < 0)
+                error = -error;
+
         if (_likely_(LOG_PRI(level) > log_max_level))
-                return 0;
+                return -error;
+
+        /* Make sure that %m maps to the specified error */
+        if (error != 0)
+                errno = error;
 
         vsnprintf(buffer, sizeof(buffer), format, ap);
         char_array_0(buffer);

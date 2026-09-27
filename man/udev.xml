@@ -130,6 +130,26 @@
         </varlistentry>
       </variablelist>
 
+      <para>Values are written as double quoted strings, such as ("string").
+      To include a quotation mark (") in the value, precede it by a backslash (\").
+      Any other occurrences of a backslash followed by a character are not unescaped.
+      That is, "\t\n" is treated as four characters:
+      backslash, lowercase t, backslash, lowercase n.</para>
+
+      <para>The string can be prefixed with a lowercase e (e"string\n") to mark the string as
+      C-style escaped, see
+      <ulink url="https://en.wikipedia.org/wiki/Escape_sequences_in_C#Table_of_escape_sequences">Escape sequences in C</ulink>.
+      For example, e"string\n" is parsed as 7 characters: 6 lowercase letters and a newline.
+      This can be useful for writing special characters when a kernel driver requires them.</para>
+
+      <para>The string can be prefixed with a lowercase i (i"string") to mark that the string or pattern
+      will match case-insensitively. For example, i"foo" will match
+      <literal>foo</literal>, <literal>FOO</literal>, <literal>FoO</literal> and so on. The prefix can be
+      used only for match (<literal>==</literal>) or unmatch (<literal>!=</literal>) rules, e.g.
+      <varname>ATTR{foo}==i"abcd"</varname>.</para>
+
+      <para>Please note that <constant>NUL</constant> is not allowed in either string variant.</para>
+
       <para>The following key names can be used to match against device properties.
       Some of the keys also match against properties of the parent devices in sysfs,
       not only the device that has generated the event. If multiple keys that match
@@ -168,10 +188,10 @@
         <varlistentry>
           <term><varname>SYMLINK</varname></term>
           <listitem>
-            <para>Match the name of a symlink targeting the node. It can
-            be used once a SYMLINK key has been set in one of the preceding
-            rules. There may be multiple symlinks; only one needs to match.
-            </para>
+            <para>Match the name of a symlink targeting the node. It can be used once a SYMLINK key has
+            been set in one of the preceding rules. There may be multiple symlinks; only one needs to
+            match. If the operator is <literal>!=</literal>, the token returns true only if there is no
+            symlink matched.</para>
           </listitem>
         </varlistentry>
 
@@ -237,7 +257,8 @@
         <varlistentry>
           <term><varname>TAGS</varname></term>
           <listitem>
-            <para>Search the devpath upwards for a device with matching tag.</para>
+            <para>Search the devpath upwards for a device with matching tag. If the operator is
+            <literal>!=</literal>, the token returns true only if there is no tag matched.</para>
           </listitem>
         </varlistentry>
 
@@ -251,7 +272,9 @@
         <varlistentry>
           <term><varname>TAG</varname></term>
           <listitem>
-            <para>Match against a device tag.</para>
+            <para>Match against one of device tags. It can be used once a TAG key has been set in one of
+            the preceding rules. There may be multiple tags; only one needs to match. If the operator is
+            <literal>!=</literal>, the token returns true only if there is no tag matched.</para>
           </listitem>
         </varlistentry>
 
@@ -338,7 +361,9 @@
           <term><varname>SYMLINK</varname></term>
           <listitem>
             <para>The name of a symlink targeting the node. Every matching rule adds
-            this value to the list of symlinks to be created.</para>
+            this value to the list of symlinks to be created. With the <literal>-=</literal>
+            operator, the specified symlinks are removed from that list again, which allows
+            to suppress symlinks added by earlier rules.</para>
             <para>The set of characters to name a symlink is limited. Allowed
             characters are <literal>0-9A-Za-z#+-.:=@_/</literal>, valid UTF-8 character
             sequences, and <literal>\x00</literal> hex encoding. All other
@@ -544,9 +569,12 @@
               <varlistentry>
                 <term><option>string_escape=<replaceable>none|replace</replaceable></option></term>
                 <listitem>
-                  <para>Usually control and other possibly unsafe characters are replaced
-                  in strings used for device naming. The mode of replacement can be specified
-                  with this option.</para>
+                  <para>When <literal>replace</literal>, possibly unsafe characters in strings
+                  assigned to <varname>NAME</varname>, <varname>SYMLINK</varname>, and
+                  <varname>ENV{<replaceable>key</replaceable>}</varname> are replaced. When
+                  <literal>none</literal>, no replacement is performed. When unset, the replacement
+                  is performed for <varname>NAME</varname>, <varname>SYMLINK</varname>, but not for
+                  <varname>ENV{<replaceable>key</replaceable>}</varname>. Defaults to unset.</para>
                 </listitem>
               </varlistentry>
               <varlistentry>
@@ -580,13 +608,11 @@
 
       <para>The <varname>NAME</varname>, <varname>SYMLINK</varname>,
       <varname>PROGRAM</varname>, <varname>OWNER</varname>,
-      <varname>GROUP</varname>, <varname>MODE</varname>, and
-      <varname>RUN</varname> fields support simple string substitutions.
-      The <varname>RUN</varname> substitutions are performed after all rules
-      have been processed, right before the program is executed, allowing for
-      the use of device properties set by earlier matching rules. For all other
-      fields, substitutions are performed while the individual rule is being
-      processed. The available substitutions are:</para>
+      <varname>GROUP</varname>, <varname>MODE</varname>, <varname>SECLABEL</varname>,
+      and <varname>RUN</varname> fields support simple string substitutions.
+      The substitutions are performed while the individual rule is being
+      processed, so they use the device properties set by the preceding
+      rules. The available substitutions are:</para>
       <variablelist class='udev-directives'>
         <varlistentry>
           <term><option>$kernel</option>, <option>%k</option></term>

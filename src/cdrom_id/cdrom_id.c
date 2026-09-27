@@ -263,7 +263,7 @@ static int cd_media_compat(struct udev *udev __attribute__((unused)), int fd)
 static int cd_inquiry(struct udev *udev, int fd)
 {
         struct scsi_cmd sc;
-        unsigned char inq[128];
+        unsigned char inq[128] = {};
         int err;
 
         scsi_cmd_init(udev, &sc);
@@ -489,7 +489,7 @@ static int cd_profiles_old_mmc(struct udev *udev, int fd)
         struct scsi_cmd sc;
         int err;
 
-        unsigned char header[32];
+        unsigned char header[32] = {};
 
         scsi_cmd_init(udev, &sc);
         scsi_cmd_set(udev, &sc, 0, 0x51);
@@ -529,7 +529,7 @@ static int cd_profiles_old_mmc(struct udev *udev, int fd)
 static int cd_profiles(struct udev *udev, int fd)
 {
         struct scsi_cmd sc;
-        unsigned char features[65530];
+        unsigned char features[65530] = {};
         unsigned int cur_profile = 0;
         unsigned int len;
         unsigned int i;
@@ -618,7 +618,7 @@ out:
 static int cd_media_info(struct udev *udev, int fd)
 {
         struct scsi_cmd sc;
-        unsigned char header[32];
+        unsigned char header[32] = {};
         static const char *media_status[] = {
                 "blank",
                 "appendable",
@@ -655,15 +655,15 @@ static int cd_media_info(struct udev *udev, int fd)
          * always "complete", DVD-RAM are "other" or "complete" if the disc is
          * write protected; we need to check the contents if it is blank */
         if ((cd_media_dvd_rw_ro || cd_media_dvd_plus_rw || cd_media_dvd_plus_rw_dl || cd_media_dvd_ram) && (header[2] & 3) > 1) {
-                unsigned char buffer[32 * 2048];
+                unsigned char buffer[32 * 2048] = {};
                 unsigned char len;
                 int offset;
 
                 if (cd_media_dvd_ram) {
                         /* a write protected dvd-ram may report "complete" status */
 
-                        unsigned char dvdstruct[8];
-                        unsigned char format[12];
+                        unsigned char dvdstruct[8] = {};
+                        unsigned char format[12] = {};
 
                         scsi_cmd_init(udev, &sc);
                         scsi_cmd_set(udev, &sc, 0, 0xAD);
@@ -771,8 +771,8 @@ determined:
 static int cd_media_toc(struct udev *udev, int fd)
 {
         struct scsi_cmd sc;
-        unsigned char header[12];
-        unsigned char toc[65536];
+        unsigned char header[12] = {};
+        unsigned char toc[65536] = {};
         unsigned int len, i, num_tracks;
         unsigned char *p;
         int err;
@@ -816,7 +816,7 @@ static int cd_media_toc(struct udev *udev, int fd)
         /* Take care to not iterate beyond the last valid track as specified in
          * the TOC, but also avoid going beyond the TOC length, just in case
          * the last track number is invalidly large */
-        for (p = toc+4, i = 4; i < len-8 && num_tracks > 0; i += 8, p += 8, --num_tracks) {
+        for (p = toc+4, i = 4; i + 8 <= len && num_tracks > 0; i += 8, p += 8, --num_tracks) {
                 unsigned int block;
                 unsigned int is_data_track;
 
@@ -921,7 +921,7 @@ int main(int argc, char *argv[])
         for (cnt = 20; cnt > 0; cnt--) {
                 struct timespec duration;
 
-                fd = open(node, O_RDONLY|O_NONBLOCK|O_CLOEXEC|(is_mounted(node) ? 0 : O_EXCL));
+                fd = open(node, O_RDONLY|O_NONBLOCK|O_CLOEXEC|O_NOCTTY|(is_mounted(node) ? 0 : O_EXCL));
                 if (fd >= 0 || errno != EBUSY)
                         break;
                 duration.tv_sec = 0;
@@ -929,9 +929,11 @@ int main(int argc, char *argv[])
                 nanosleep(&duration, NULL);
         }
         if (fd < 0) {
-                log_debug("unable to open '%s'", node);
-                fprintf(stderr, "unable to open '%s'\n", node);
-                rc = 1;
+                bool ignore = IN_SET(errno, ENODEV, ENXIO, ENOENT);
+                log_full_errno(ignore ? LOG_DEBUG : LOG_WARNING, errno,
+                               "Failed to open device node '%s'%s: %m",
+                               node, ignore ? ", ignoring" : "");
+                rc = ignore ? 0 : 1;
                 goto exit;
         }
         log_debug("probing: '%s'", node);

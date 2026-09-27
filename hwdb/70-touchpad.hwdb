@@ -5,11 +5,6 @@
 # The lookup keys are composed in:
 #   70-touchpad.rules
 #
-# Note: The format of the "touchpad:" prefix match key is a
-# contract between the rules file and the hardware data, it might
-# change in later revisions to support more or better matches, it
-# is not necessarily expected to be a stable ABI.
-#
 # Match string format:
 # touchpad:<subsystem>:v<vid>p<pid>:name:<name>:
 #
@@ -31,39 +26,58 @@
 #   udevadm info /dev/input/eventXX.
 #
 # Permitted keys:
-#   Specify if a touchpad is a built-in one or external:
+#   Specify whether a touchpad is a built-in one or external:
 #   ID_INPUT_TOUCHPAD_INTEGRATION=internal|external
+#
+#   By default i8042, i2c, and rmi devices are assumed to be internal,
+#   bluetooth devices are assumed to be external, usb devices are assumed
+#   to be internal when connected to a PCB port and external otherwise.
 
-touchpad:i8042:*
-touchpad:rmi:*
-touchpad:usb:*
+# Example entry; vid: ffff, pid: 0000; both must be lowercase.
+# this will make this bluetooth touchpad to behave as internal.
+#touchpad:bluetooth:vffffp0000:*
+# ID_INPUT_TOUCHPAD_INTEGRATION=internal
+
+###########################################################
+# Apple T2 MacBook internal trackpad
+###########################################################
+# The T2 virtual USB host controller reports the device as having unknown
+# removability, so 65-integration.rules classifies the touchpad as external
+# and libinput skips disable-while-typing.
+# The touchpad is physically integrated; mark it internal to enable DWT.
+touchpad:usb:v05acp0280:name:Apple Inc. Apple Internal Keyboard / Trackpad:*
+touchpad:usb:v05acp0340:name:Apple Inc. Apple Internal Keyboard / Trackpad:*
  ID_INPUT_TOUCHPAD_INTEGRATION=internal
 
-touchpad:bluetooth:*
- ID_INPUT_TOUCHPAD_INTEGRATION=external
+###########################################################
+# ASUS ROG Flow Z13 (GZ302EA)
+###########################################################
+# The USB port is reported as removable by firmware, so 65-integration.rules
+# classifies the touchpad as external and libinput skips disable-while-typing.
+# The touchpad is physically integrated; mark it internal to enable DWT.
+touchpad:usb:v0b05p1a30:name:ASUSTeK Computer Inc. GZ302EA-Keyboard Touchpad:*
+ ID_INPUT_TOUCHPAD_INTEGRATION=internal
 
 ###########################################################
-# Apple
+# Lenovo IdeaPad Duet3 10IGL5 (82AT)
 ###########################################################
-# Magic Trackpad (1 and 2)
-touchpad:usb:v05acp030e:*
-touchpad:usb:v05acp0265:*
- ID_INPUT_TOUCHPAD_INTEGRATION=external
+touchpad:bluetooth:v17efp60fa:*
+ ID_INPUT_TOUCHPAD_INTEGRATION=internal
 
 ###########################################################
-# HP Elite x2 1013 G3
+# Lenovo ThinkPad X1 Tablet Thin Keyboard Gen 3 (17EF:60B5)
 ###########################################################
-touchpad:usb:v044ep1221:*
- ID_INPUT_TOUCHPAD_INTEGRATION=external
+# The USB port is reported as removable by firmware, so 65-integration.rules
+# classifies the touchpad as external and libinput skips disable-while-typing.
+# The touchpad is physically integrated; mark it internal to enable DWT.
+touchpad:usb:v17efp60b5:name:Chicony ThinkPad X1 Tablet Thin Keyboard Gen 3:*
+ ID_INPUT_TOUCHPAD_INTEGRATION=internal
 
 ###########################################################
-# Logitech
+# Microsoft Surface Type Cover
 ###########################################################
-touchpad:usb:v046d*
- ID_INPUT_TOUCHPAD_INTEGRATION=external
-
-###########################################################
-# Wacom
-###########################################################
-touchpad:usb:v056a*
- ID_INPUT_TOUCHPAD_INTEGRATION=external
+# The USB port is reported as removable by firmware, so 65-integration.rules
+# classifies the touchpad as external and libinput skips disable-while-typing.
+# The touchpad is physically integrated; mark it internal to enable DWT.
+touchpad:usb:v045ep09c0:name:Microsoft Surface Type Cover Touchpad:*
+ ID_INPUT_TOUCHPAD_INTEGRATION=internal

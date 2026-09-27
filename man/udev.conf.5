@@ -39,6 +39,79 @@ and
 \fBdebug\fR\&.
 .RE
 .PP
+\fIhwdb_format\fR
+.RS 4
+The format of the compiled hardware database
+hwdb\&.bin
+created by
+\fBudevadm hwdb \-\-update\fR\&. Valid values are
+\fB1\fR
+and
+\fB2\fR, invalid values are ignored with a warning\&. Defaults to
+\fB1\fR\&.
+.sp
+Format
+\fB1\fR
+is the compatible format, which can be read by all versions of libudev\&. When a device matches multiple entries of the hardware database which set the same property, it is undefined which of the values is used\&.
+.sp
+Format
+\fB2\fR
+additionally stores the origin (the source file and the line number) of every property, so that for the same property the value from a later file or a later line takes precedence\&. This format can only be read by libudev from this release or newer: older versions of libudev, including an old
+\fBudevd\fR
+which was not restarted after an upgrade, misread such a database\&.
+.sp
+When
+\fBudevadm hwdb \-\-update\fR
+is used with
+\fB\-\-root=\fR, the value is taken from
+udev\&.conf
+below the specified root directory instead, and defaults to
+\fB1\fR
+if it is not set there\&.
+.RE
+.PP
+\fIsas_legacy_path\fR
+.RS 4
+Takes a boolean argument (\fByes\fR,
+\fBtrue\fR,
+\fB1\fR
+or
+\fBno\fR,
+\fBfalse\fR,
+\fB0\fR)\&. Defaults to
+\fBno\fR\&. Selects how the
+\fBpath_id\fR
+builtin composes the SAS part of
+\fIID_PATH\fR, and thus the
+/dev/disk/by\-path/
+links, of devices behind a SAS port whose
+num_phys
+attribute is not
+1\&.
+.sp
+By default only ports with two or more phys are treated as wide ports and named after the SAS address of the end device:
+sas\-\fI0xADDRESS\fR\-lun\-\fIN\fR\&. Ports reporting zero phys, as done e\&.g\&. by the smartpqi driver, are named like single phy ports after the phy they are connected to:
+sas\-phy\fIPHY\fR\-lun\-\fIN\fR, or
+sas\-exp\fI0xADDRESS\fR\-phy\fIPHY\fR\-lun\-\fIN\fR
+when connected through an expander\&. If
+num_phys
+cannot be parsed, no
+\fIID_PATH\fR
+is set\&.
+.sp
+If set to
+\fByes\fR, the naming of older eudev versions is used: every port with a
+num_phys
+other than
+1, including
+0
+and unparsable values, is treated as a wide port and named
+sas\-\fI0xADDRESS\fR\-lun\-\fIN\fR\&. This keeps existing by\-path links of such controllers stable\&. The file is only read when
+\fBudevd\fR
+starts, and the links of already present devices are updated only when their events are processed again, e\&.g\&. by
+\fBudevadm trigger\fR\&.
+.RE
+.PP
 In addition,
 udevd
 can be configured by command\-line options and the kernel command line (see

@@ -40,6 +40,7 @@ static const struct udev_builtin *builtins[] = {
 #ifdef HAVE_KMOD
         [UDEV_BUILTIN_KMOD] = &udev_builtin_kmod,
 #endif
+        [UDEV_BUILTIN_NET_DRIVER] = &udev_builtin_net_driver,
         [UDEV_BUILTIN_NET_ID] = &udev_builtin_net_id,
         [UDEV_BUILTIN_PATH_ID] = &udev_builtin_path_id,
         [UDEV_BUILTIN_USB_ID] = &udev_builtin_usb_id,
@@ -113,7 +114,7 @@ enum udev_builtin_cmd udev_builtin_lookup(const char *command) {
 int udev_builtin_run(struct udev_device *dev, enum udev_builtin_cmd cmd, const char *command, bool test) {
         char arg[UTIL_PATH_SIZE];
         int argc;
-        char *argv[128];
+        char *argv[UDEV_ARGV_MAX];
 
         /* we need '0' here to reset the internal state */
         optind = 0;

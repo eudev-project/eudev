@@ -201,7 +201,8 @@ struct token {
                 struct {
                         enum token_type type:8;
                         enum operation_type op:8;
-                        enum string_glob_type glob:8;
+                        enum string_glob_type glob:7;
+                        bool case_insensitive:1;  /* string or pattern is matched case-insensitively */
                         enum string_subst_type subst:4;
                         enum string_subst_type attrsubst:4;
                         unsigned int value_off;
@@ -225,6 +226,8 @@ struct rule_tmp {
         struct token rule;
         struct token token[MAX_TK];
         unsigned int token_cur;
+        /* the value of the currently parsed key has the "i" prefix */
+        bool case_insensitive;
 };
 
 #ifdef DEBUG
@@ -612,7 +615,7 @@ static int import_property_from_string(struct udev_device *dev, char *line) {
 
         /* unquote */
         if (val[0] == '"' || val[0] == '\'') {
-                if (val[len-1] != val[0]) {
+                if (len == 1 || val[len-1] != val[0]) {
                         log_debug("inconsistent quoting: '%s', skip", line);
                         return -1;
                 }
@@ -646,6 +649,7 @@ static int import_program_into_properties(struct udev_event *event,
         char **envp;
         _cleanup_free_ char *result = NULL;
         char *line;
+        bool truncated = false;
         int err;
 
         result = malloc(IMPORT_PROGRAM_SIZE);
@@ -653,9 +657,20 @@ static int import_program_into_properties(struct udev_event *event,
                 return -ENOMEM;
 
         envp = udev_device_get_properties_envp(dev);
-        err = udev_event_spawn(event, timeout_usec, timeout_warn_usec, program, envp, sigmask, result, IMPORT_PROGRAM_SIZE);
+        err = udev_event_spawn(event, timeout_usec, timeout_warn_usec, program, envp, sigmask, result, IMPORT_PROGRAM_SIZE, &truncated);
         if (err < 0)
                 return err;
+
+        if (truncated) {
+                log_debug("Result of '%s' is too long and truncated, ignoring the last line of the result.", program);
+
+                /* Drop the last line. */
+                line = strrchr(result, '\n');
+                if (line)
+                        line[0] = '\0';
+                else
+                        result[0] = '\0';
+        }
 
         line = result;
         while (line != NULL) {
@@ -670,6 +685,78 @@ static int import_program_into_properties(struct udev_event *event,
                 line = pos;
         }
         return 0;
+}
+
+static bool relaxed_equal_char(char a, char b) {
+        return a == b ||
+                (a == '_' && b == '-') ||
+                (a == '-' && b == '_');
+}
+
+static const char *proc_cmdline_key_startswith(const char *s, const char *prefix) {
+        /* Much like startswith(), but considers "-" and "_" the same */
+
+        for (; *prefix != 0; s++, prefix++)
+                if (!relaxed_equal_char(*s, *prefix))
+                        return NULL;
+
+        return s;
+}
+
+/* Looks for a specific key on the kernel command line. A parameter beginning with the "key" string
+ * followed by "=" is searched, and the value following this is returned in "value". If the key is
+ * found as a separate word (i.e. not followed by "="), this is also accepted, and "value" is
+ * returned as NULL. When comparing the key, "-" and "_" are considered equivalent. Returns > 0 if
+ * the key is found, 0 if not. */
+static int proc_cmdline_get_key(const char *key, char **value) {
+        _cleanup_free_ char *line = NULL, *ret = NULL;
+        bool found = false;
+        const char *p;
+        int r;
+
+        assert(value);
+
+        if (isempty(key))
+                return -EINVAL;
+
+        r = proc_cmdline(&line);
+        if (r < 0)
+                return r;
+
+        p = line;
+        for (;;) {
+                _cleanup_free_ char *word = NULL;
+                const char *e;
+
+                r = unquote_first_word(&p, &word, UNQUOTE_RELAX);
+                if (r < 0)
+                        return r;
+                if (r == 0)
+                        break;
+
+                /* Note: unlike upstream, arguments starting with "rd." are not filtered out when not
+                 * running in the initrd, as in_initrd() requires /etc/initrd-release, which the
+                 * initrds used with eudev usually do not provide. A key never matches a word with
+                 * the "rd." prefix, unless the key itself is specified with it. */
+                e = proc_cmdline_key_startswith(word, key);
+                if (!e)
+                        continue;
+
+                if (*e == '=') {
+                        free(ret);
+                        ret = strdup(e+1);
+                        if (!ret)
+                                return -ENOMEM;
+
+                        found = true;
+                } else if (*e == 0)
+                        found = true;
+        }
+
+        *value = ret;
+        ret = NULL;
+
+        return found;
 }
 
 static int import_parent_into_properties(struct udev_device *dev, const char *filter) {
@@ -763,10 +850,13 @@ static int attr_subst_subdir(char *attr, size_t len) {
         return found;
 }
 
-static int get_key(struct udev *udev __attribute__((unused)), char **line, char **key, enum operation_type *op, char **value) {
+static int get_key(struct udev *udev __attribute__((unused)), char **line, char **key, enum operation_type *op, char **value,
+                   bool *is_case_insensitive) {
         char *linepos;
         char *temp;
         unsigned i, j;
+        bool is_escaped = false;
+        const char *k;
 
         linepos = *line;
         if (linepos == NULL || linepos[0] == '\0')
@@ -834,30 +924,65 @@ static int get_key(struct udev *udev __attribute__((unused)), char **line, char 
         if (linepos[0] == '\0')
                 return -1;
 
-        /* get the value */
+        /* check if the value is prefixed with:
+         * - "e" for C-style escaped strings
+         * - "i" for case insensitive match
+         *
+         * Note both e and i can be set but do not allow duplicates ("eei", "eii"). */
+        *is_case_insensitive = false;
+        for (k = linepos; *k != '"' && k < linepos + 2; k++)
+                if (*k == 'e' && !is_escaped)
+                        is_escaped = true;
+                else if (*k == 'i' && !*is_case_insensitive)
+                        *is_case_insensitive = true;
+                else
+                        return -1;
+        linepos += is_escaped + *is_case_insensitive;
+
+        /* value must be double quotated */
         if (linepos[0] == '"')
                 linepos++;
         else
                 return -1;
         *value = linepos;
 
-        /* terminate */
-        for (i = 0, j = 0; ; i++, j++) {
+        if (!is_escaped) {
+                /* terminate */
+                for (i = 0, j = 0; ; i++, j++) {
 
-                if (linepos[i] == '"')
-                        break;
+                        if (linepos[i] == '"')
+                                break;
 
-                if (linepos[i] == '\0')
-                        return -1;
+                        if (linepos[i] == '\0')
+                                return -1;
 
-                /* double quotes can be escaped */
-                if (linepos[i] == '\\')
-                        if (linepos[i+1] == '"')
+                        /* double quotes can be escaped */
+                        if (linepos[i] == '\\')
+                                if (linepos[i+1] == '"')
+                                        i++;
+
+                        linepos[j] = linepos[i];
+                }
+                linepos[j] = '\0';
+        } else {
+                _cleanup_free_ char *unescaped = NULL;
+                int r;
+
+                /* find the end position of value */
+                for (i = 0; linepos[i] != '"'; i++) {
+                        if (linepos[i] == '\\')
                                 i++;
+                        if (linepos[i] == '\0')
+                                return -1;
+                }
+                linepos[i] = '\0';
 
-                linepos[j] = linepos[i];
+                r = cunescape_length(linepos, i, 0, &unescaped);
+                if (r < 0)
+                        return -1;
+                assert((unsigned) r <= i);
+                memcpy(linepos, unescaped, r + 1);
         }
-        linepos[j] = '\0';
 
         /* move line to next key */
         *line = linepos + i + 1;
@@ -890,6 +1015,9 @@ static int rule_add_key(struct rule_tmp *rule_tmp, enum token_type type,
         const char *attr = NULL;
 
         memzero(token, sizeof(struct token));
+
+        if (type < TK_M_MAX)
+                token->key.case_insensitive = rule_tmp->case_insensitive;
 
         switch (type) {
         case TK_M_ACTION:
@@ -1081,8 +1209,9 @@ static int add_rule(struct udev_rules *rules, char *line,
                 char *key;
                 char *value;
                 enum operation_type op;
+                bool is_case_insensitive;
 
-                if (get_key(rules->udev, &linepos, &key, &op, &value) != 0) {
+                if (get_key(rules->udev, &linepos, &key, &op, &value, &is_case_insensitive) != 0) {
                         /* Avoid erroring on trailing whitespace. This is probably rare
                          * so save the work for the error case instead of always trying
                          * to strip the trailing whitespace with strstrip(). */
@@ -1103,6 +1232,12 @@ static int add_rule(struct udev_rules *rules, char *line,
                         }
                         break;
                 }
+
+                if (is_case_insensitive && op > OP_MATCH_MAX) {
+                        log_error("invalid prefix 'i' for '%s', the 'i' prefix can be specified only for '==' or '!=' operator", key);
+                        goto invalid;
+                }
+                rule_tmp.case_insensitive = is_case_insensitive;
 
                 if (streq(key, "ACTION")) {
                         if (op > OP_MATCH_MAX) {
@@ -1278,23 +1413,30 @@ static int add_rule(struct udev_rules *rules, char *line,
                                         goto invalid;
                         } else {
                                 static const char *blacklist[] = {
-                                        "ACTION",
-                                        "SUBSYSTEM",
-                                        "DEVTYPE",
-                                        "MAJOR",
-                                        "MINOR",
-                                        "DRIVER",
-                                        "IFINDEX",
-                                        "DEVNAME",
-                                        "DEVLINKS",
-                                        "DEVPATH",
-                                        "TAGS",
+                                        /* basic properties set by kernel, only in netlink event */
+                                        "ACTION", "SEQNUM", "SYNTH_UUID",
+                                        /* basic properties set by kernel, both in netlink event and uevent file */
+                                        "DEVPATH", "DEVPATH_OLD", "SUBSYSTEM", "DEVTYPE", "DRIVER", "MODALIAS",
+                                        /* device node */
+                                        "DEVNAME", "DEVMODE", "DEVUID", "DEVGID", "MAJOR", "MINOR",
+                                        /* block device */
+                                        "DISKSEQ", "PARTN",
+                                        /* network interface (INTERFACE_OLD is set by udevd) */
+                                        "IFINDEX", "INTERFACE", "INTERFACE_OLD",
+                                        /* basic properties set by udevd */
+                                        "DEVLINKS", "TAGS", "CURRENT_TAGS", "USEC_INITIALIZED", "UDEV_DATABASE_VERSION",
                                 };
                                 unsigned int i;
 
                                 for (i = 0; i < ELEMENTSOF(blacklist); i++) {
                                         if (!streq(attr, blacklist[i]))
                                                 continue;
+                                        log_error("invalid ENV attribute, '%s' can not be set %s:%u", attr, filename, lineno);
+                                        goto invalid;
+                                }
+                                /* Similar to SYNTH_UUID, but set based on KEY=VALUE arguments passed by userspace.
+                                 * See kernel's f36776fafbaa0094390dd4e7e3e29805e0b82730 (v4.13) */
+                                if (startswith(attr, "SYNTH_ARG_")) {
                                         log_error("invalid ENV attribute, '%s' can not be set %s:%u", attr, filename, lineno);
                                         goto invalid;
                                 }
@@ -1313,6 +1455,10 @@ static int add_rule(struct udev_rules *rules, char *line,
                 }
 
                 if (streq(key, "PROGRAM")) {
+                        if (is_case_insensitive) {
+                                log_error("invalid prefix 'i' for PROGRAM");
+                                goto invalid;
+                        }
                         if (op == OP_REMOVE) {
                                 log_error("invalid PROGRAM operation");
                                 goto invalid;
@@ -1338,6 +1484,10 @@ static int add_rule(struct udev_rules *rules, char *line,
                         }
                         if (op == OP_REMOVE) {
                                 log_error("invalid IMPORT operation");
+                                goto invalid;
+                        }
+                        if (is_case_insensitive) {
+                                log_error("invalid prefix 'i' for IMPORT");
                                 goto invalid;
                         }
                         if (streq(attr, "program")) {
@@ -1379,6 +1529,10 @@ static int add_rule(struct udev_rules *rules, char *line,
 
                         if (op > OP_MATCH_MAX) {
                                 log_error("invalid TEST operation");
+                                goto invalid;
+                        }
+                        if (is_case_insensitive) {
+                                log_error("invalid prefix 'i' for TEST");
                                 goto invalid;
                         }
                         attr = get_key_attribute(rules->udev, key + strlen("TEST"));
@@ -1470,10 +1624,6 @@ static int add_rule(struct udev_rules *rules, char *line,
                 }
 
                 if (streq(key, "SYMLINK")) {
-                        if (op == OP_REMOVE) {
-                                log_error("invalid SYMLINK operation");
-                                goto invalid;
-                        }
                         if (op < OP_MATCH_MAX)
                                 rule_add_key(&rule_tmp, TK_M_DEVLINK, op, value, NULL);
                         else
@@ -1785,7 +1935,8 @@ bool udev_rules_check_timestamp(struct udev_rules *rules) {
         return paths_check_timestamp(rules_dirs, &rules->dirs_ts_usec, true);
 }
 
-static int match_key(struct udev_rules *rules, struct token *token, const char *val) {
+/* returns whether the value matches the token's pattern, regardless of the operator */
+static bool match_value(struct udev_rules *rules, struct token *token, const char *val) {
         char *key_value = rules_str(rules, token->key.value_off);
         char *pos;
         bool match = false;
@@ -1795,10 +1946,13 @@ static int match_key(struct udev_rules *rules, struct token *token, const char *
 
         switch (token->key.glob) {
         case GL_PLAIN:
-                match = (streq(key_value, val));
+                if (token->key.case_insensitive)
+                        match = (strcasecmp(key_value, val) == 0);
+                else
+                        match = (streq(key_value, val));
                 break;
         case GL_GLOB:
-                match = (fnmatch(key_value, val, 0) == 0);
+                match = (fnmatch(key_value, val, token->key.case_insensitive ? FNM_CASEFOLD : 0) == 0);
                 break;
         case GL_SPLIT:
                 {
@@ -1814,11 +1968,17 @@ static int match_key(struct udev_rules *rules, struct token *token, const char *
                                 if (next != NULL) {
                                         size_t matchlen = (size_t)(next - s);
 
-                                        match = (matchlen == len && strneq(s, val, matchlen));
+                                        if (token->key.case_insensitive)
+                                                match = (matchlen == len && strncasecmp(s, val, matchlen) == 0);
+                                        else
+                                                match = (matchlen == len && strneq(s, val, matchlen));
                                         if (match)
                                                 break;
                                 } else {
-                                        match = (streq(s, val));
+                                        if (token->key.case_insensitive)
+                                                match = (strcasecmp(s, val) == 0);
+                                        else
+                                                match = (streq(s, val));
                                         break;
                                 }
                                 s = &next[1];
@@ -1837,7 +1997,7 @@ static int match_key(struct udev_rules *rules, struct token *token, const char *
                                         pos[0] = '\0';
                                         pos = &pos[1];
                                 }
-                                match = (fnmatch(key_value, val, 0) == 0);
+                                match = (fnmatch(key_value, val, token->key.case_insensitive ? FNM_CASEFOLD : 0) == 0);
                                 if (match)
                                         break;
                                 key_value = pos;
@@ -1848,8 +2008,19 @@ static int match_key(struct udev_rules *rules, struct token *token, const char *
                 match = (val[0] != '\0');
                 break;
         case GL_UNSET:
-                return -1;
+                break;
         }
+
+        return match;
+}
+
+static int match_key(struct udev_rules *rules, struct token *token, const char *val) {
+        bool match;
+
+        if (token->key.glob == GL_UNSET)
+                return -1;
+
+        match = match_value(rules, token, val);
 
         if (match && (token->key.op == OP_MATCH))
                 return 0;
@@ -1912,6 +2083,57 @@ enum escape_type {
         ESCAPE_REPLACE,
 };
 
+/* Checks if a path is safe to be used as a device node symlink, i.e. it does not contain "." or
+ * ".." components or duplicated slashes. */
+static bool devlink_is_safe(const char *p) {
+        if (isempty(p))
+                return false;
+
+        if (streq(p, ".") || streq(p, ".."))
+                return false;
+
+        if (startswith(p, "../") || endswith(p, "/..") || strstr(p, "/../"))
+                return false;
+
+        if (strlen(p)+1 > PATH_MAX)
+                return false;
+
+        /* The following two checks are not really dangerous, but hey, they still are confusing */
+        if (startswith(p, "./") || endswith(p, "/.") || strstr(p, "/./"))
+                return false;
+
+        if (strstr(p, "//"))
+                return false;
+
+        return true;
+}
+
+/* Converts the value of SYMLINK= to an absolute path of the symlink below /dev/. The value may
+ * already be prefixed with "/dev/". */
+static int devlink_to_path(const char *devlink, char *path, size_t size) {
+        const char *p;
+        size_t l;
+
+        if (!devlink_is_safe(devlink))
+                return -EINVAL;
+
+        p = path_startswith(devlink, "/dev/");
+        if (!p)
+                p = devlink;
+        if (isempty(p) || p[0] == '/')
+                return -EINVAL;
+
+        if (strscpyl(path, size, "/dev/", p, NULL) == 0)
+                return -ENAMETOOLONG;
+
+        /* drop trailing slashes */
+        l = strlen(path);
+        while (l > 0 && path[l-1] == '/')
+                path[--l] = '\0';
+
+        return 0;
+}
+
 int udev_rules_apply_to_event(struct udev_rules *rules,
                               struct udev_event *event,
                               usec_t timeout_usec,
@@ -1964,12 +2186,13 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                                 const char *devlink;
 
                                 devlink =  udev_list_entry_get_name(list_entry) + strlen("/dev/");
-                                if (match_key(rules, cur, devlink) == 0) {
+                                if (match_value(rules, cur, devlink)) {
                                         match = true;
                                         break;
                                 }
                         }
-                        if (!match)
+                        /* with '!=', the token matches only if no symlink matches */
+                        if (match != (cur->key.op == OP_MATCH))
                                 goto nomatch;
                         break;
                 }
@@ -2004,12 +2227,13 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                         bool match = false;
 
                         udev_list_entry_foreach(list_entry, udev_device_get_tags_list_entry(event->dev)) {
-                                if (streq(rules_str(rules, cur->key.value_off), udev_list_entry_get_name(list_entry))) {
+                                if (match_value(rules, cur, udev_list_entry_get_name(list_entry))) {
                                         match = true;
                                         break;
                                 }
                         }
-                        if (!match && (cur->key.op != OP_NOMATCH))
+                        /* with '!=', the token matches only if no tag matches */
+                        if (match != (cur->key.op == OP_MATCH))
                                 goto nomatch;
                         break;
                 }
@@ -2090,11 +2314,17 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                                                         goto try_parent;
                                                 break;
                                         case TK_M_TAGS: {
-                                                bool match = udev_device_has_tag(event->dev_parent, rules_str(rules, cur->key.value_off));
+                                                struct udev_list_entry *list_entry;
+                                                bool match = false;
 
-                                                if (match && key->key.op == OP_NOMATCH)
-                                                        goto try_parent;
-                                                if (!match && key->key.op == OP_MATCH)
+                                                udev_list_entry_foreach(list_entry, udev_device_get_tags_list_entry(event->dev_parent)) {
+                                                        if (match_value(rules, key, udev_list_entry_get_name(list_entry))) {
+                                                                match = true;
+                                                                break;
+                                                        }
+                                                }
+                                                /* with '!=', the token matches only if no tag matches */
+                                                if (match != (key->key.op == OP_MATCH))
                                                         goto try_parent;
                                                 break;
                                         }
@@ -2140,7 +2370,7 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                         break;
                 }
                 case TK_M_PROGRAM: {
-                        char program[UTIL_PATH_SIZE];
+                        char program[UTIL_LINE_SIZE];
                         char **envp;
                         char result[UTIL_LINE_SIZE];
 
@@ -2153,7 +2383,7 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                                   rules_str(rules, rule->rule.filename_off),
                                   rule->rule.filename_line);
 
-                        if (udev_event_spawn(event, timeout_usec, timeout_warn_usec, program, envp, sigmask, result, sizeof(result)) < 0) {
+                        if (udev_event_spawn(event, timeout_usec, timeout_warn_usec, program, envp, sigmask, result, sizeof(result), NULL) < 0) {
                                 if (cur->key.op != OP_NOMATCH)
                                         goto nomatch;
                         } else {
@@ -2181,7 +2411,7 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                         break;
                 }
                 case TK_M_IMPORT_PROG: {
-                        char import[UTIL_PATH_SIZE];
+                        char import[UTIL_LINE_SIZE];
 
                         udev_event_apply_format(event, rules_str(rules, cur->key.value_off), import, sizeof(import), false);
                         log_debug("IMPORT '%s' %s:%u",
@@ -2244,39 +2474,26 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                         break;
                 }
                 case TK_M_IMPORT_CMDLINE: {
-                        FILE *f;
+                        _cleanup_free_ char *value = NULL;
                         bool imported = false;
+                        const char *key;
+                        int r;
 
-                        f = fopen("/proc/cmdline", "re");
-                        if (f != NULL) {
-                                char cmdline[4096];
+                        key = rules_str(rules, cur->key.value_off);
 
-                                if (fgets(cmdline, sizeof(cmdline), f) != NULL) {
-                                        const char *key = rules_str(rules, cur->key.value_off);
-                                        char *pos;
+                        r = proc_cmdline_get_key(key, &value);
+                        if (r < 0)
+                                log_debug_errno(r, "Failed to read %s from /proc/cmdline, ignoring: %m", key);
+                        else if (r > 0) {
+                                imported = true;
 
-                                        pos = strstr(cmdline, key);
-                                        if (pos != NULL) {
-                                                pos += strlen(key);
-                                                if (pos[0] == '\0' || isspace(pos[0])) {
-                                                        /* we import simple flags as 'FLAG=1' */
-                                                        udev_device_add_property(event->dev, key, "1");
-                                                        imported = true;
-                                                } else if (pos[0] == '=') {
-                                                        const char *value;
-
-                                                        pos++;
-                                                        value = pos;
-                                                        while (pos[0] != '\0' && !isspace(pos[0]))
-                                                                pos++;
-                                                        pos[0] = '\0';
-                                                        udev_device_add_property(event->dev, key, value);
-                                                        imported = true;
-                                                }
-                                        }
-                                }
-                                fclose(f);
+                                if (value)
+                                        udev_device_add_property(event->dev, key, value);
+                                else
+                                        /* we import simple flags as 'FLAG=1' */
+                                        udev_device_add_property(event->dev, key, "1");
                         }
+
                         if (!imported && cur->key.op != OP_NOMATCH)
                                 goto nomatch;
                         break;
@@ -2425,10 +2642,16 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                                   rule->rule.filename_line);
                         break;
                 case TK_A_SECLABEL: {
+                        char label_str[UTIL_LINE_SIZE] = {};
                         const char *name, *label;
 
                         name = rules_str(rules, cur->key.attr_off);
-                        label = rules_str(rules, cur->key.value_off);
+                        udev_event_apply_format(event, rules_str(rules, cur->key.value_off), label_str, sizeof(label_str), false);
+                        if (label_str[0] != '\0')
+                                label = label_str;
+                        else
+                                label = rules_str(rules, cur->key.value_off);
+
                         if (cur->key.op == OP_ASSIGN || cur->key.op == OP_ASSIGN_FINAL)
                                 udev_list_cleanup(&event->seclabel_list);
                         udev_list_entry_add(&event->seclabel_list, name, label);
@@ -2458,33 +2681,35 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
 
                                 /* append value separated by space */
                                 udev_event_apply_format(event, value, temp, sizeof(temp), false);
+                                if (esc == ESCAPE_REPLACE) {
+                                        int count = util_replace_chars(temp, NULL);
+                                        if (count > 0)
+                                                log_debug("%i character(s) replaced", count);
+                                }
                                 strscpyl(value_new, sizeof(value_new), value_old, " ", temp, NULL);
-                        } else
+                        } else {
                                 udev_event_apply_format(event, value, value_new, sizeof(value_new), false);
+                                if (esc == ESCAPE_REPLACE) {
+                                        int count = util_replace_chars(value_new, NULL);
+                                        if (count > 0)
+                                                log_debug("%i character(s) replaced", count);
+                                }
+                        }
 
                         udev_device_add_property(event->dev, name, value_new);
                         break;
                 }
                 case TK_A_TAG: {
                         char tag[UTIL_PATH_SIZE];
-                        const char *p;
 
                         udev_event_apply_format(event, rules_str(rules, cur->key.value_off), tag, sizeof(tag), false);
                         if (cur->key.op == OP_ASSIGN || cur->key.op == OP_ASSIGN_FINAL)
                                 udev_device_cleanup_tags_list(event->dev);
-                        for (p = tag; *p != '\0'; p++) {
-                                if ((*p >= 'a' && *p <= 'z') ||
-                                    (*p >= 'A' && *p <= 'Z') ||
-                                    (*p >= '0' && *p <= '9') ||
-                                    *p == '-' || *p == '_')
-                                        continue;
-                                log_error("ignoring invalid tag name '%s'", tag);
-                                break;
-                        }
                         if (cur->key.op == OP_REMOVE)
                                 udev_device_remove_tag(event->dev, tag);
-                        else
-                                udev_device_add_tag(event->dev, tag);
+                        else if (udev_device_add_tag(event->dev, tag) == -EINVAL && tag[0] != '\0')
+                                log_error("ignoring invalid tag name '%s' %s:%u", tag,
+                                          rules_str(rules, rule->rule.filename_off), rule->rule.filename_line);
                         break;
                 }
                 case TK_A_NAME: {
@@ -2547,20 +2772,36 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                         next = strchr(pos, ' ');
                         while (next != NULL) {
                                 next[0] = '\0';
-                                log_debug("LINK '%s' %s:%u", pos,
-                                          rules_str(rules, rule->rule.filename_off), rule->rule.filename_line);
-                                strscpyl(filename, sizeof(filename), "/dev/", pos, NULL);
-                                udev_device_add_devlink(event->dev, filename);
+                                if (devlink_to_path(pos, filename, sizeof(filename)) < 0)
+                                        log_error("invalid SYMLINK '%s', ignoring %s:%u", pos,
+                                                  rules_str(rules, rule->rule.filename_off), rule->rule.filename_line);
+                                else if (cur->key.op == OP_REMOVE) {
+                                        log_debug("Dropped SYMLINK '%s' %s:%u", pos,
+                                                  rules_str(rules, rule->rule.filename_off), rule->rule.filename_line);
+                                        udev_device_remove_devlink(event->dev, filename);
+                                } else {
+                                        log_debug("LINK '%s' %s:%u", pos,
+                                                  rules_str(rules, rule->rule.filename_off), rule->rule.filename_line);
+                                        udev_device_add_devlink(event->dev, filename);
+                                }
                                 while (isspace(next[1]))
                                         next++;
                                 pos = &next[1];
                                 next = strchr(pos, ' ');
                         }
                         if (pos[0] != '\0') {
-                                log_debug("LINK '%s' %s:%u", pos,
-                                          rules_str(rules, rule->rule.filename_off), rule->rule.filename_line);
-                                strscpyl(filename, sizeof(filename), "/dev/", pos, NULL);
-                                udev_device_add_devlink(event->dev, filename);
+                                if (devlink_to_path(pos, filename, sizeof(filename)) < 0)
+                                        log_error("invalid SYMLINK '%s', ignoring %s:%u", pos,
+                                                  rules_str(rules, rule->rule.filename_off), rule->rule.filename_line);
+                                else if (cur->key.op == OP_REMOVE) {
+                                        log_debug("Dropped SYMLINK '%s' %s:%u", pos,
+                                                  rules_str(rules, rule->rule.filename_off), rule->rule.filename_line);
+                                        udev_device_remove_devlink(event->dev, filename);
+                                } else {
+                                        log_debug("LINK '%s' %s:%u", pos,
+                                                  rules_str(rules, rule->rule.filename_off), rule->rule.filename_line);
+                                        udev_device_add_devlink(event->dev, filename);
+                                }
                         }
                         break;
                 }
@@ -2606,6 +2847,7 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                 case TK_A_RUN_BUILTIN:
                 case TK_A_RUN_PROGRAM: {
                         struct udev_list_entry *entry;
+                        char cmd[UTIL_LINE_SIZE];
 
                         if (event->run_final)
                                 break;
@@ -2613,11 +2855,18 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                                 event->run_final = true;
                         if (cur->key.op == OP_ASSIGN || cur->key.op == OP_ASSIGN_FINAL)
                                 udev_list_cleanup(&event->run_list);
+
+                        udev_event_apply_format(event, rules_str(rules, cur->key.value_off), cmd, sizeof(cmd), false);
+
                         log_debug("RUN '%s' %s:%u",
-                                  rules_str(rules, cur->key.value_off),
+                                  cmd,
                                   rules_str(rules, rule->rule.filename_off),
                                   rule->rule.filename_line);
-                        entry = udev_list_entry_add(&event->run_list, rules_str(rules, cur->key.value_off), NULL);
+                        entry = udev_list_entry_add(&event->run_list, cmd, NULL);
+                        if (entry == NULL) {
+                                log_oom();
+                                break;
+                        }
                         udev_list_entry_set_num(entry, cur->key.builtin_cmd);
                         break;
                 }

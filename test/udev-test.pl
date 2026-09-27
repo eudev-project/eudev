@@ -1328,6 +1328,151 @@ KERNEL=="sda", IMPORT{builtin}="path_id"
 KERNEL=="sda", ENV{ID_PATH}=="?*", SYMLINK+="disk/by-path/\$env{ID_PATH}"
 EOF
         },
+        {
+                desc            => "TAG match with alternatives and glob",
+                devpath         => "/devices/pci0000:00/0000:00:1f.2/host0/target0:0:0/0:0:0:0/block/sda",
+                exp_name        => "found",
+                not_exp_name    => "bad",
+                rules           => <<EOF
+KERNEL=="sda", TAG+="green"
+TAG=="blue|gre*", SYMLINK+="found"
+TAG=="blue|red*", SYMLINK+="bad"
+EOF
+        },
+        {
+                desc            => "TAG negative match",
+                devpath         => "/devices/pci0000:00/0000:00:1f.2/host0/target0:0:0/0:0:0:0/block/sda",
+                exp_name        => "found",
+                not_exp_name    => "bad",
+                rules           => <<EOF
+KERNEL=="sda", TAG+="green", TAG+="blue"
+TAG!="green", SYMLINK+="bad"
+TAG!="red", SYMLINK+="found"
+EOF
+        },
+        {
+                desc            => "TAGS match with glob",
+                devpath         => "/devices/pci0000:00/0000:00:1f.2/host0/target0:0:0/0:0:0:0/block/sda",
+                exp_name        => "found",
+                not_exp_name    => "bad",
+                rules           => <<EOF
+KERNEL=="sda", TAG+="green"
+TAGS=="gr*", SYMLINK+="found"
+TAGS=="blue", SYMLINK+="bad"
+EOF
+        },
+        {
+                desc            => "SYMLINK negative match",
+                devpath         => "/devices/pci0000:00/0000:00:1f.2/host0/target0:0:0/0:0:0:0/block/sda",
+                exp_name        => "found",
+                not_exp_name    => "bad",
+                rules           => <<EOF
+KERNEL=="sda", SYMLINK+="link1 link2"
+SYMLINK!="link1", SYMLINK+="bad"
+SYMLINK!="nolink", SYMLINK+="found"
+EOF
+        },
+        {
+                desc            => "ENV assignment with string_escape=replace",
+                devpath         => "/devices/pci0000:00/0000:00:1f.2/host0/target0:0:0/0:0:0:0/block/sda",
+                exp_name        => "found",
+                not_exp_name    => "bad",
+                rules           => <<EOF
+KERNEL=="sda", ENV{TESTENV}="a b/c"
+KERNEL=="sda", OPTIONS="string_escape=replace", ENV{ESCAPED}="\$env{TESTENV}"
+KERNEL=="sda", ENV{TESTENV}=="a b/c", ENV{ESCAPED}=="a_b_c", SYMLINK+="found"
+KERNEL=="sda", ENV{ESCAPED}=="a b/c", SYMLINK+="bad"
+EOF
+        },
+        {
+                desc            => "SYMLINK remove operator",
+                devpath         => "/devices/pci0000:00/0000:00:1f.2/host0/target0:0:0/0:0:0:0/block/sda",
+                exp_name        => "found",
+                not_exp_name    => "bad",
+                rules           => <<EOF
+KERNEL=="sda", SYMLINK+="found bad link"
+KERNEL=="sda", SYMLINK-="bad nonexistent"
+KERNEL=="sda", SYMLINK=="link", SYMLINK!="bad", SYMLINK-="link"
+KERNEL=="sda", SYMLINK=="link", SYMLINK+="bad"
+EOF
+        },
+        {
+                desc            => "escaped string value e\"...\"",
+                devpath         => "/devices/pci0000:00/0000:00:1f.2/host0/target0:0:0/0:0:0:0/block/sda",
+                exp_name        => "found",
+                not_exp_name    => "bad",
+                rules           => <<EOF
+KERNEL=="sda", ENV{A}=e"x\\x2dy\\ttab\\"q\\\\z"
+KERNEL=="sda", ENV{A}=="x-y\ttab\\"q\\z", SYMLINK+="found"
+KERNEL=="sda", ENV{A}=="x\\x2dy*", SYMLINK+="bad"
+EOF
+        },
+        {
+                desc            => "case insensitive match i\"...\"",
+                devpath         => "/devices/pci0000:00/0000:00:1f.2/host0/target0:0:0/0:0:0:0/block/sda",
+                exp_name        => "found",
+                not_exp_name    => "bad",
+                rules           => <<EOF
+KERNEL=="sda", ENV{A}="AbC"
+KERNEL==i"SDA", ENV{A}==i"abc", ATTRS{vendor}==i"ata", ATTRS{model}==ie"st\\x39*", \\
+  ENV{A}==i"x|ABC", ENV{A}==i"x*|ab?", ENV{A}!=i"abd", SYMLINK+="found"
+KERNEL=="sda", ENV{A}=="abc", SYMLINK+="bad"
+KERNEL=="sda", ENV{A}!=i"abc", SYMLINK+="bad"
+KERNEL=="sda", SYMLINK+=i"bad"
+EOF
+        },
+        {
+                desc            => "RUN value is formatted when the rule is applied",
+                devpath         => "/devices/pci0000:00/0000:00:1f.2/host0/target0:0:0/0:0:0:0/block/sda",
+                exp_name        => "found",
+                not_exp_name    => "bad",
+                exp_rem_error   => "yes",
+                option          => "clean",
+                rules           => <<EOF
+KERNEL=="sda", ACTION=="add", ENV{A}="found"
+KERNEL=="sda", ACTION=="add", RUN+="/bin/ln -s sda /dev/\$env{A}"
+KERNEL=="sda", ACTION=="add", ENV{A}="bad"
+EOF
+        },
+        {
+                desc            => "SYMLINK with /dev/ prefix and invalid path",
+                devpath         => "/devices/pci0000:00/0000:00:1f.2/host0/target0:0:0/0:0:0:0/block/sda",
+                exp_name        => "found",
+                not_exp_name    => "../bad",
+                rules           => <<EOF
+KERNEL=="sda", SYMLINK+="../bad /dev/found dir/../../bad"
+EOF
+        },
+        {
+                desc            => "invalid TAG is ignored",
+                devpath         => "/devices/pci0000:00/0000:00:1f.2/host0/target0:0:0/0:0:0:0/block/sda",
+                exp_name        => "found",
+                not_exp_name    => "bad",
+                rules           => <<EOF
+KERNEL=="sda", TAG+="../bad", TAG+="good", TAG+="b:ad"
+TAG=="*bad*", SYMLINK+="bad"
+TAG=="good", SYMLINK+="found"
+EOF
+        },
+        {
+                desc            => "IMPORT{program} drops truncated last line",
+                devpath         => "/devices/pci0000:00/0000:00:1f.2/host0/target0:0:0/0:0:0:0/block/sda",
+                exp_name        => "found",
+                not_exp_name    => "bad",
+                rules           => <<EOF
+KERNEL=="sda", IMPORT{program}="/bin/sh -c 'echo TRUNC_OK=yes; printf TRUNC_BAD=; yes x | head -c 400000 | tr -d [:space:]'"
+KERNEL=="sda", ENV{TRUNC_OK}=="yes", ENV{TRUNC_BAD}!="?*", SYMLINK+="found"
+KERNEL=="sda", ENV{TRUNC_BAD}=="?*", SYMLINK+="bad"
+EOF
+        },
+        {
+                desc            => "PROGRAM with too many arguments",
+                devpath         => "/devices/pci0000:00/0000:00:1f.2/host0/target0:0:0/0:0:0:0/block/sda",
+                exp_name        => "found",
+                rules           => <<EOF
+KERNEL=="sda", PROGRAM="/bin/echo 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49 50 51 52 53 54 55 56 57 58 59 60 61 62 63 64 65 66 67 68 69 70 71 72 73 74 75 76 77 78 79 80 81 82 83 84 85 86 87 88 89 90 91 92 93 94 95 96 97 98 99 100 101 102 103 104 105 106 107 108 109 110 111 112 113 114 115 116 117 118 119 120 121 122 123 124 125 126 127 128 129 130 131 132 133 134 135 136 137 138 139 140 141 142 143 144 145 146 147 148 149 150 151 152 153 154 155 156 157 158 159 160 161 162 163 164 165 166 167 168 169 170 171 172 173 174 175 176 177 178 179 180 181 182 183 184 185 186 187 188 189 190 191 192 193 194 195 196 197 198 199 200 201 202 203 204 205 206 207 208 209 210 211 212 213 214 215 216 217 218 219 220 221 222 223 224 225 226 227 228 229 230 231 232 233 234 235 236 237 238 239 240 241 242 243 244 245 246 247 248 249 250 251 252 253 254 255 256 257 258 259 260 261 262 263 264 265 266 267 268 269 270 271 272 273 274 275 276 277 278 279 280 281 282 283 284 285 286 287 288 289 290 291 292 293 294 295 296 297 298 299 300", RESULT=="1 2 3 *126", SYMLINK+="found"
+EOF
+        },
 );
 
 sub udev {

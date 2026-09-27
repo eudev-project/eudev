@@ -221,40 +221,98 @@ static void cleanup_dir(DIR *dir, mode_t mask, int depth) {
         }
 }
 
+/*
+ * Assume that dir is a directory with file names matching udev data base
+ * entries for devices in /run/udev/data (such as "b8:16"), and removes
+ * all files except those that haven't been deleted in /run/udev/data
+ * (i.e. they were skipped during db cleanup because of the db_persist flag).
+ * Returns true if the directory is empty after cleanup.
+ */
+static bool cleanup_dir_after_db_cleanup(DIR *dir, DIR *datadir) {
+        unsigned int kept = 0;
+        struct dirent *dent;
+
+        assert(dir && datadir);
+
+        for (dent = readdir(dir); dent != NULL; dent = readdir(dir)) {
+                struct stat data_stats, link_stats;
+
+                if (streq(dent->d_name, ".") || streq(dent->d_name, ".."))
+                        continue;
+                if (fstatat(dirfd(dir), dent->d_name, &link_stats, AT_SYMLINK_NOFOLLOW) < 0) {
+                        if (errno != ENOENT)
+                                kept++;
+                        continue;
+                }
+
+                if (fstatat(dirfd(datadir), dent->d_name, &data_stats, 0) < 0)
+                        (void) unlinkat(dirfd(dir), dent->d_name,
+                                        S_ISDIR(link_stats.st_mode) ? AT_REMOVEDIR : 0);
+                else
+                        /* The entry still exists under /run/udev/data */
+                        kept++;
+        }
+
+        return kept == 0;
+}
+
+static void cleanup_dirs_after_db_cleanup(DIR *dir, DIR *datadir) {
+        struct dirent *dent;
+
+        assert(dir && datadir);
+
+        for (dent = readdir(dir); dent != NULL; dent = readdir(dir)) {
+                struct stat stats;
+
+                if (streq(dent->d_name, ".") || streq(dent->d_name, ".."))
+                        continue;
+                if (fstatat(dirfd(dir), dent->d_name, &stats, AT_SYMLINK_NOFOLLOW) < 0)
+                        continue;
+                if (S_ISDIR(stats.st_mode)) {
+                        _cleanup_closedir_ DIR *dir2 = NULL;
+
+                        dir2 = fdopendir(openat(dirfd(dir), dent->d_name, O_RDONLY|O_NONBLOCK|O_DIRECTORY|O_CLOEXEC));
+                        if (dir2 && cleanup_dir_after_db_cleanup(dir2, datadir))
+                                (void) unlinkat(dirfd(dir), dent->d_name, AT_REMOVEDIR);
+                } else
+                        (void) unlinkat(dirfd(dir), dent->d_name, 0);
+        }
+}
+
 static void cleanup_db(struct udev *udev __attribute__((unused))) {
-        DIR *dir;
+        _cleanup_closedir_ DIR *dir1 = NULL, *dir2 = NULL, *dir3 = NULL, *dir4 = NULL;
 
         unlink(UDEV_ROOT_RUN "/udev/queue.bin");
 
-        dir = opendir(UDEV_ROOT_RUN "/udev/data");
-        if (dir != NULL) {
-                cleanup_dir(dir, S_ISVTX, 1);
-                closedir(dir);
+        dir1 = opendir(UDEV_ROOT_RUN "/udev/data");
+        if (dir1 != NULL)
+                cleanup_dir(dir1, S_ISVTX, 1);
+
+        /* Devices with the db_persist property are not deleted from the database, keep
+         * their links and tags too, so that udevd has the same information about them
+         * after it is restarted. */
+        dir2 = opendir(UDEV_ROOT_RUN "/udev/links");
+        if (dir2 != NULL) {
+                if (dir1 != NULL)
+                        cleanup_dirs_after_db_cleanup(dir2, dir1);
+                else
+                        cleanup_dir(dir2, 0, 2);
         }
 
-        dir = opendir(UDEV_ROOT_RUN "/udev/links");
-        if (dir != NULL) {
-                cleanup_dir(dir, 0, 2);
-                closedir(dir);
+        dir3 = opendir(UDEV_ROOT_RUN "/udev/tags");
+        if (dir3 != NULL) {
+                if (dir1 != NULL)
+                        cleanup_dirs_after_db_cleanup(dir3, dir1);
+                else
+                        cleanup_dir(dir3, 0, 2);
         }
 
-        dir = opendir(UDEV_ROOT_RUN "/udev/tags");
-        if (dir != NULL) {
-                cleanup_dir(dir, 0, 2);
-                closedir(dir);
-        }
+        dir4 = opendir(UDEV_ROOT_RUN "/udev/static_node-tags");
+        if (dir4 != NULL)
+                cleanup_dir(dir4, 0, 2);
 
-        dir = opendir(UDEV_ROOT_RUN "/udev/static_node-tags");
-        if (dir != NULL) {
-                cleanup_dir(dir, 0, 2);
-                closedir(dir);
-        }
-
-        dir = opendir(UDEV_ROOT_RUN "/udev/watch");
-        if (dir != NULL) {
-                cleanup_dir(dir, 0, 1);
-                closedir(dir);
-        }
+        /* Do not remove /run/udev/watch. It will be handled by udevd well on restart.
+         * And should not be removed by external program when udevd is running. */
 }
 
 static void help(void) {

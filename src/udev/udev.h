@@ -90,13 +90,14 @@ int udev_event_spawn(struct udev_event *event,
                      usec_t timeout_usec,
                      usec_t timeout_warn_usec,
                      const char *cmd, char **envp, const sigset_t *sigmask,
-                     char *result, size_t ressize);
+                     char *result, size_t ressize, bool *ret_truncated);
 void udev_event_execute_rules(struct udev_event *event,
                               usec_t timeout_usec, usec_t timeout_warn_usec,
                               struct udev_list *properties_list,
                               struct udev_rules *rules,
                               const sigset_t *sigset);
 void udev_event_execute_run(struct udev_event *event, usec_t timeout_usec, usec_t timeout_warn_usec, const sigset_t *sigset);
+#define UDEV_ARGV_MAX 128
 int udev_build_argv(struct udev *udev, char *cmd, int *argc, char *argv[]);
 
 /* udev-watch.c */
@@ -158,6 +159,7 @@ enum udev_builtin_cmd {
 #ifdef HAVE_KMOD
         UDEV_BUILTIN_KMOD,
 #endif
+        UDEV_BUILTIN_NET_DRIVER,
         UDEV_BUILTIN_NET_ID,
         UDEV_BUILTIN_PATH_ID,
         UDEV_BUILTIN_USB_ID,
@@ -182,6 +184,7 @@ extern const struct udev_builtin udev_builtin_keyboard;
 #ifdef HAVE_KMOD
 extern const struct udev_builtin udev_builtin_kmod;
 #endif
+extern const struct udev_builtin udev_builtin_net_driver;
 extern const struct udev_builtin udev_builtin_net_id;
 extern const struct udev_builtin udev_builtin_path_id;
 extern const struct udev_builtin udev_builtin_usb_id;

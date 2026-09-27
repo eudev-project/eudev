@@ -61,7 +61,7 @@ int main(int argc, char **argv) {
         } else {
                 device = udev_device_new_from_syspath(udev, argv[1]);
                 if (device == NULL)
-                        return log_error_errno(r, "Failed to get device from syspath: %m");
+                        return log_error_errno(errno, "Failed to get device from syspath: %m");
         }
 
         hid_device = udev_device_get_parent(device);
@@ -76,7 +76,7 @@ int main(int argc, char **argv) {
         if (desc_path == NULL)
                 return log_oom();
 
-        fd = open(desc_path, O_RDONLY | O_NOFOLLOW | O_CLOEXEC);
+        fd = open(desc_path, O_RDONLY | O_NOFOLLOW | O_CLOEXEC | O_NOCTTY);
         if (fd < 0)
                 return log_error_errno(errno,
                                               "Failed to open report descriptor at '%s': %m", desc_path);

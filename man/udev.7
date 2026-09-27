@@ -91,6 +91,22 @@ Remove the value from a key that holds a list of entries\&.
 Assign a value to a key finally; disallow any later changes\&.
 .RE
 .PP
+Values are written as double quoted strings, such as ("string")\&. To include a quotation mark (") in the value, precede it by a backslash (\e")\&. Any other occurrences of a backslash followed by a character are not unescaped\&. That is, "\et\en" is treated as four characters: backslash, lowercase t, backslash, lowercase n\&.
+.PP
+The string can be prefixed with a lowercase e (e"string\en") to mark the string as C\-style escaped, see
+\m[blue]\fBEscape sequences in C\fR\m[]\&\s-2\u[1]\d\s+2\&. For example, e"string\en" is parsed as 7 characters: 6 lowercase letters and a newline\&. This can be useful for writing special characters when a kernel driver requires them\&.
+.PP
+The string can be prefixed with a lowercase i (i"string") to mark that the string or pattern will match case\-insensitively\&. For example, i"foo" will match
+foo,
+FOO,
+FoO
+and so on\&. The prefix can be used only for match (==) or unmatch (!=) rules, e\&.g\&.
+\fIATTR{foo}==i"abcd"\fR\&.
+.PP
+Please note that
+\fBNUL\fR
+is not allowed in either string variant\&.
+.PP
 The following key names can be used to match against device properties\&. Some of the keys also match against properties of the parent devices in sysfs, not only the device that has generated the event\&. If multiple keys that match a parent device are specified in a single rule, all these keys must match at one and the same parent device\&.
 .PP
 \fIACTION\fR
@@ -115,7 +131,8 @@ Match the name of a network interface\&. It can be used once the NAME key has be
 .PP
 \fISYMLINK\fR
 .RS 4
-Match the name of a symlink targeting the node\&. It can be used once a SYMLINK key has been set in one of the preceding rules\&. There may be multiple symlinks; only one needs to match\&.
+Match the name of a symlink targeting the node\&. It can be used once a SYMLINK key has been set in one of the preceding rules\&. There may be multiple symlinks; only one needs to match\&. If the operator is
+!=, the token returns true only if there is no symlink matched\&.
 .RE
 .PP
 \fISUBSYSTEM\fR
@@ -158,7 +175,8 @@ matches are specified, all of them must match on the same device\&. Trailing whi
 .PP
 \fITAGS\fR
 .RS 4
-Search the devpath upwards for a device with matching tag\&.
+Search the devpath upwards for a device with matching tag\&. If the operator is
+!=, the token returns true only if there is no tag matched\&.
 .RE
 .PP
 \fIENV{\fR\fI\fIkey\fR\fR\fI}\fR
@@ -168,7 +186,8 @@ Match against a device property value\&.
 .PP
 \fITAG\fR
 .RS 4
-Match against a device tag\&.
+Match against one of device tags\&. It can be used once a TAG key has been set in one of the preceding rules\&. There may be multiple tags; only one needs to match\&. If the operator is
+!=, the token returns true only if there is no tag matched\&.
 .RE
 .PP
 \fITEST{\fR\fI\fIoctal mode mask\fR\fR\fI}\fR
@@ -243,7 +262,9 @@ The name to use for a network interface\&. The name of a device node cannot be c
 .PP
 \fISYMLINK\fR
 .RS 4
-The name of a symlink targeting the node\&. Every matching rule adds this value to the list of symlinks to be created\&.
+The name of a symlink targeting the node\&. Every matching rule adds this value to the list of symlinks to be created\&. With the
+\-=
+operator, the specified symlinks are removed from that list again, which allows to suppress symlinks added by earlier rules\&.
 .sp
 The set of characters to name a symlink is limited\&. Allowed characters are
 0\-9A\-Za\-z#+\-\&.:=@_/, valid UTF\-8 character sequences, and
@@ -393,7 +414,16 @@ Specify the priority of the created symlinks\&. Devices with higher priorities o
 .PP
 \fBstring_escape=\fR\fB\fInone|replace\fR\fR
 .RS 4
-Usually control and other possibly unsafe characters are replaced in strings used for device naming\&. The mode of replacement can be specified with this option\&.
+When
+replace, possibly unsafe characters in strings assigned to
+\fINAME\fR,
+\fISYMLINK\fR, and
+\fIENV{\fR\fI\fIkey\fR\fR\fI}\fR
+are replaced\&. When
+none, no replacement is performed\&. When unset, the replacement is performed for
+\fINAME\fR,
+\fISYMLINK\fR, but not for
+\fIENV{\fR\fI\fIkey\fR\fR\fI}\fR\&. Defaults to unset\&.
 .RE
 .PP
 \fBstatic_node=\fR
@@ -418,11 +448,10 @@ The
 \fIPROGRAM\fR,
 \fIOWNER\fR,
 \fIGROUP\fR,
-\fIMODE\fR, and
+\fIMODE\fR,
+\fISECLABEL\fR, and
 \fIRUN\fR
-fields support simple string substitutions\&. The
-\fIRUN\fR
-substitutions are performed after all rules have been processed, right before the program is executed, allowing for the use of device properties set by earlier matching rules\&. For all other fields, substitutions are performed while the individual rule is being processed\&. The available substitutions are:
+fields support simple string substitutions\&. The substitutions are performed while the individual rule is being processed, so they use the device properties set by the preceding rules\&. The available substitutions are:
 .PP
 \fB$kernel\fR, \fB%k\fR
 .RS 4
@@ -575,3 +604,9 @@ is set at run\-time, and its value identifies a file in the file system, then th
 .PP
 \fBudevd\fR(8),
 \fBudevadm\fR(8)
+.SH "NOTES"
+.IP " 1." 4
+Escape sequences in C
+.RS 4
+\%https://en.wikipedia.org/wiki/Escape_sequences_in_C#Table_of_escape_sequences
+.RE

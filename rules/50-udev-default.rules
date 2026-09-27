@@ -4,23 +4,34 @@
 ACTION=="remove", ENV{REMOVE_CMD}!="", RUN+="$env{REMOVE_CMD}"
 ACTION=="remove", GOTO="default_end"
 
+# The md driver increments diskseq *after* emitting 'change' uevent.
+# Drop the line below if it is fixed on the kernel side.
+SUBSYSTEM=="block", KERNEL=="md*", ENV{ID_IGNORE_DISKSEQ}="1"
+
 SUBSYSTEM=="virtio-ports", KERNEL=="vport*", ATTR{name}=="?*", SYMLINK+="virtio-ports/$attr{name}"
 
 # select "system RTC" or just use the first one
 SUBSYSTEM=="rtc", ATTR{hctosys}=="1", SYMLINK+="rtc"
 SUBSYSTEM=="rtc", KERNEL=="rtc0", SYMLINK+="rtc", OPTIONS+="link_priority=-100"
 
+SUBSYSTEM=="hidraw", IMPORT{builtin}="hwdb"
+
 SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", IMPORT{builtin}="usb_id", IMPORT{builtin}="hwdb --subsystem=usb"
 ENV{MODALIAS}!="", IMPORT{builtin}="hwdb --subsystem=$env{SUBSYSTEM}"
+
+SUBSYSTEM=="net", IMPORT{builtin}="net_driver"
+
+SUBSYSTEM=="ptp", ATTR{clock_name}=="KVM virtual PTP", SYMLINK+="ptp_kvm"
+SUBSYSTEM=="ptp", ATTR{clock_name}=="hyperv", SYMLINK+="ptp_hyperv"
+SUBSYSTEM=="ptp", ATTR{clock_name}=="ptp_vmw", SYMLINK+="ptp_vmware"
+SUBSYSTEM=="ptp", ATTR{clock_name}=="s390 Physical Clock", SYMLINK+="ptp_s390_physical"
+SUBSYSTEM=="ptp", ATTR{clock_name}=="s390 STCKE Clock", SYMLINK+="ptp_s390_stcke"
 
 ACTION!="add", GOTO="default_end"
 
 SUBSYSTEM=="tty", KERNEL=="ptmx", GROUP="tty", MODE="0666"
 SUBSYSTEM=="tty", KERNEL=="tty", GROUP="tty", MODE="0666"
-SUBSYSTEM=="tty", KERNEL=="tty[0-9]*", GROUP="tty", MODE="0620"
-SUBSYSTEM=="tty", KERNEL=="sclp_line[0-9]*", GROUP="tty", MODE="0620"
-SUBSYSTEM=="tty", KERNEL=="ttysclp[0-9]*", GROUP="tty", MODE="0620"
-SUBSYSTEM=="tty", KERNEL=="3270/tty[0-9]*", GROUP="tty", MODE="0620"
+SUBSYSTEM=="tty", KERNEL=="tty[0-9]*|hvc[0-9]*|sclp_line[0-9]*|ttysclp[0-9]*|3270/tty[0-9]*", GROUP="tty", MODE="0620"
 SUBSYSTEM=="vc", KERNEL=="vcs*|vcsa*", GROUP="tty"
 KERNEL=="tty[A-Z]*[0-9]|ttymxc[0-9]*|pppox[0-9]*|ircomm[0-9]*|noz[0-9]*|rfcomm[0-9]*", GROUP="dialout"
 
@@ -38,6 +49,7 @@ SUBSYSTEM=="cec", GROUP="video"
 
 SUBSYSTEM=="drm", KERNEL=="renderD*", GROUP="video", MODE="0666"
 SUBSYSTEM=="kfd", GROUP="video", MODE="0666"
+SUBSYSTEM=="accel", GROUP="video", MODE="0666"
 
 SUBSYSTEM=="misc", KERNEL=="sgx_enclave", GROUP="sgx", MODE="0660"
 SUBSYSTEM=="misc", KERNEL=="sgx_vepc", GROUP="sgx", MODE="0660"
@@ -100,18 +112,5 @@ KERNEL=="vhost-vsock", GROUP="kvm", MODE="0666", OPTIONS+="static_node=vhost-vso
 KERNEL=="vhost-net", GROUP="kvm", MODE="0666", OPTIONS+="static_node=vhost-net"
 
 KERNEL=="udmabuf", GROUP="kvm"
-
-SUBSYSTEM=="ptp", ATTR{clock_name}=="KVM virtual PTP", SYMLINK += "ptp_kvm"
-
-SUBSYSTEM=="ptp", ATTR{clock_name}=="hyperv", SYMLINK += "ptp_hyperv"
-
-SUBSYSTEM!="dmi", GOTO="dmi_end"
-ENV{ID_VENDOR}="$attr{sys_vendor}"
-ENV{ID_SYSFS_ATTRIBUTE_MODEL}=="|product_name", ENV{ID_MODEL}="$attr{product_name}"
-ENV{ID_SYSFS_ATTRIBUTE_MODEL}=="product_version", ENV{ID_MODEL}="$attr{product_version}"
-# fallback to board information
-ENV{ID_VENDOR}=="", ENV{ID_VENDOR}="$attr{board_vendor}"
-ENV{ID_MODEL}=="", ENV{ID_MODEL}="$attr{board_name}"
-LABEL="dmi_end"
 
 LABEL="default_end"

@@ -37,13 +37,16 @@
 #include "libudev-private.h"
 #include "scsi_id.h"
 #include "udev-util.h"
+#include "utf8.h"
 
 static const struct option options[] = {
         { "device",             required_argument, NULL, 'd' },
         { "config",             required_argument, NULL, 'f' },
         { "page",               required_argument, NULL, 'p' },
-        { "blacklisted",        no_argument,       NULL, 'b' },
-        { "whitelisted",        no_argument,       NULL, 'g' },
+        { "denylisted",         no_argument,       NULL, 'b' },
+        { "allowlisted",        no_argument,       NULL, 'g' },
+        { "blacklisted",        no_argument,       NULL, 'b' }, /* backward compat */
+        { "whitelisted",        no_argument,       NULL, 'g' }, /* backward compat */
         { "replace-whitespace", no_argument,       NULL, 'u' },
         { "sg-version",         required_argument, NULL, 's' },
         { "verbose",            no_argument,       NULL, 'v' },
@@ -91,6 +94,13 @@ static void set_type(unsigned type_num, char *to, size_t len) {
                 break;
         case 0xf:
                 type = "optical";
+                break;
+        case 0x14:
+                /*
+                 * Use "zbc" here to be brief and consistent with "lsscsi" command.
+                 * Other tools, e.g., "sg3_utils" would say "host managed zoned block".
+                 */
+                type = "zbc";
                 break;
         default:
                 type = "generic";
@@ -311,8 +321,8 @@ static void help(void) {
                "  -f --config=                     Location of config file\n"
                "  -p --page=0x80|0x83|pre-spc3-83  SCSI page (0x80, 0x83, pre-spc3-83)\n"
                "  -s --sg-version=3|4              Use SGv3 or SGv4\n"
-               "  -b --blacklisted                 Treat device as blacklisted\n"
-               "  -g --whitelisted                 Treat device as whitelisted\n"
+               "  -b --denylisted                  Treat device as denylisted\n"
+               "  -g --allowlisted                 Treat device as allowlisted\n"
                "  -u --replace-whitespace          Replace all whitespace by underscores\n"
                "  -v --verbose                     Verbose logging\n"
                "  -x --export                      Print values as environment keys\n"
@@ -324,7 +334,7 @@ static int set_options(struct udev *udev __attribute__((unused)),
                        int argc, char **argv,
                        char *maj_min_dev)
 {
-        int option;
+        int option, r;
 
         /*
          * optind is a global extern used by getopt. Since we can call
@@ -369,7 +379,11 @@ static int set_options(struct udev *udev __attribute__((unused)),
                         break;
 
                 case 's':
-                        sg_version = atoi(optarg);
+                        r = safe_atoi(optarg, &sg_version);
+                        if (r < 0) {
+                                log_error_errno(r, "Invalid SG version '%s'", optarg);
+                                return -1;
+                        }
                         if (sg_version < 3 || sg_version > 4) {
                                 log_error("Unknown SG version '%s'", optarg);
                                 return -1;
@@ -487,6 +501,10 @@ static int set_inq_values(struct udev *udev, struct scsi_id_device *dev_scsi, co
         return 0;
 }
 
+static bool scsi_string_is_valid(const char *s) {
+        return !isempty(s) && utf8_is_printable_newline(s, strlen(s), false);
+}
+
 /*
  * scsi_id: try to get an id, if one is found, printf it to stdout.
  * returns a value passed to exit() - 0 if printed an id, else 1.
@@ -498,7 +516,7 @@ static int scsi_id(struct udev *udev, char *maj_min_dev)
         int page_code;
         int retval = 0;
 
-        if (set_inq_values(udev, &dev_scsi, maj_min_dev) < 0) {
+        if (set_inq_values(udev, &dev_scsi, maj_min_dev) != 0) {
                 retval = 1;
                 goto out;
         }
@@ -531,19 +549,19 @@ static int scsi_id(struct udev *udev, char *maj_min_dev)
                         util_replace_chars(serial_str, NULL);
                         printf("ID_SERIAL_SHORT=%s\n", serial_str);
                 }
-                if (dev_scsi.wwn[0] != '\0') {
+                if (scsi_string_is_valid(dev_scsi.wwn)) {
                         printf("ID_WWN=0x%s\n", dev_scsi.wwn);
-                        if (dev_scsi.wwn_vendor_extension[0] != '\0') {
+                        if (scsi_string_is_valid(dev_scsi.wwn_vendor_extension)) {
                                 printf("ID_WWN_VENDOR_EXTENSION=0x%s\n", dev_scsi.wwn_vendor_extension);
                                 printf("ID_WWN_WITH_EXTENSION=0x%s%s\n", dev_scsi.wwn, dev_scsi.wwn_vendor_extension);
                         } else {
                                 printf("ID_WWN_WITH_EXTENSION=0x%s\n", dev_scsi.wwn);
                         }
                 }
-                if (dev_scsi.tgpt_group[0] != '\0') {
+                if (scsi_string_is_valid(dev_scsi.tgpt_group)) {
                         printf("ID_TARGET_PORT=%s\n", dev_scsi.tgpt_group);
                 }
-                if (dev_scsi.unit_serial_number[0] != '\0') {
+                if (scsi_string_is_valid(dev_scsi.unit_serial_number)) {
                         printf("ID_SCSI_SERIAL=%s\n", dev_scsi.unit_serial_number);
                 }
                 goto out;

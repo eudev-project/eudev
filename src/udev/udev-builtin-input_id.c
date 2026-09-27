@@ -63,7 +63,7 @@ static void extract_info(struct udev_device *dev, const char *devpath, bool test
         struct input_absinfo xabsinfo = {}, yabsinfo = {};
         _cleanup_close_ int fd = -1;
 
-        fd = open(devpath, O_RDONLY|O_CLOEXEC);
+        fd = open(devpath, O_RDONLY|O_CLOEXEC|O_NOCTTY);
         if (fd < 0)
                 return;
 
@@ -128,7 +128,7 @@ static void get_cap_mask(struct udev_device *dev __attribute__((unused)),
                 log_debug("%s decoded bit map:", attr);
                 val = bitmask_size / sizeof (unsigned long);
                 /* skip over leading zeros */
-                while (bitmask[val-1] == 0 && val > 0)
+                while (val > 0 && bitmask[val-1] == 0)
                         --val;
                 for (i = 0; i < val; ++i) {
                         DISABLE_WARNING_FORMAT_NONLITERAL;
@@ -138,8 +138,37 @@ static void get_cap_mask(struct udev_device *dev __attribute__((unused)),
         }
 }
 
+static void get_input_id_attr(struct udev_device *dev, const char *attr, __u16 *ret) {
+        const char *v;
+        unsigned long val;
+        char *end;
+
+        v = udev_device_get_sysattr_value(dev, attr);
+        if (!v)
+                return;
+
+        errno = 0;
+        val = strtoul(v, &end, 16);
+        if (errno != 0 || end == v || *end != '\0' || val > 0xffff)
+                return;
+
+        *ret = (__u16) val;
+}
+
+static struct input_id get_input_id(struct udev_device *dev) {
+        struct input_id id = {};
+
+        get_input_id_attr(dev, "id/bustype", &id.bustype);
+        get_input_id_attr(dev, "id/vendor", &id.vendor);
+        get_input_id_attr(dev, "id/product", &id.product);
+        get_input_id_attr(dev, "id/version", &id.version);
+
+        return id;
+}
+
 /* pointer devices */
 static bool test_pointers(struct udev_device *dev,
+                          const struct input_id *id,
                           const unsigned long* bitmask_ev,
                           const unsigned long* bitmask_abs,
                           const unsigned long* bitmask_key,
@@ -150,21 +179,27 @@ static bool test_pointers(struct udev_device *dev,
         bool has_abs_coordinates = false;
         bool has_rel_coordinates = false;
         bool has_mt_coordinates = false;
-        bool has_joystick_axes_or_buttons = false;
+        size_t num_joystick_axes = 0;
+        size_t num_joystick_buttons = 0;
+        bool has_pad_buttons = false;
         bool is_direct = false;
         bool has_touch = false;
         bool has_3d_coordinates = false;
         bool has_keys = false;
-        bool stylus_or_pen = false;
+        bool has_stylus = false;
+        bool has_pen = false;
         bool finger_but_no_pen = false;
         bool has_mouse_button = false;
         bool is_mouse = false;
+        bool is_abs_mouse = false;
         bool is_touchpad = false;
         bool is_touchscreen = false;
         bool is_tablet = false;
+        bool is_tablet_pad = false;
         bool is_joystick = false;
         bool is_accelerometer = false;
-        bool is_pointing_stick= false;
+        bool is_pointing_stick = false;
+        bool has_wheel = false;
 
         has_keys = test_bit(EV_KEY, bitmask_ev);
         has_abs_coordinates = test_bit(ABS_X, bitmask_abs) && test_bit(ABS_Y, bitmask_abs);
@@ -180,7 +215,8 @@ static bool test_pointers(struct udev_device *dev,
         }
 
         is_pointing_stick = test_bit(INPUT_PROP_POINTING_STICK, bitmask_props);
-        stylus_or_pen = test_bit(BTN_STYLUS, bitmask_key) || test_bit(BTN_TOOL_PEN, bitmask_key);
+        has_stylus = test_bit(BTN_STYLUS, bitmask_key);
+        has_pen = test_bit(BTN_TOOL_PEN, bitmask_key);
         finger_but_no_pen = test_bit(BTN_TOOL_FINGER, bitmask_key) && !test_bit(BTN_TOOL_PEN, bitmask_key);
         for (button = BTN_MOUSE; button < BTN_JOYSTICK && !has_mouse_button; button++)
                 has_mouse_button = test_bit(button, bitmask_key);
@@ -192,6 +228,8 @@ static bool test_pointers(struct udev_device *dev,
                 has_mt_coordinates = false;
         is_direct = test_bit(INPUT_PROP_DIRECT, bitmask_props);
         has_touch = test_bit(BTN_TOUCH, bitmask_key);
+        has_pad_buttons = test_bit(BTN_0, bitmask_key) && test_bit(BTN_1, bitmask_key) && !has_pen;
+        has_wheel = test_bit(EV_REL, bitmask_ev) && (test_bit(REL_WHEEL, bitmask_rel) || test_bit(REL_HWHEEL, bitmask_rel));
 
         /* joysticks don't necessarily have buttons; e. g.
          * rudders/pedals are joystick-like, but buttonless; they have
@@ -202,40 +240,52 @@ static bool test_pointers(struct udev_device *dev,
          * Catz Mad Catz M.M.O.TE). Skip those.
          */
         if (!test_bit(BTN_JOYSTICK - 1, bitmask_key)) {
-                for (button = BTN_JOYSTICK; button < BTN_DIGI && !has_joystick_axes_or_buttons; button++)
-                        has_joystick_axes_or_buttons = test_bit(button, bitmask_key);
-                for (button = BTN_TRIGGER_HAPPY1; button <= BTN_TRIGGER_HAPPY40 && !has_joystick_axes_or_buttons; button++)
-                        has_joystick_axes_or_buttons = test_bit(button, bitmask_key);
-                for (button = BTN_DPAD_UP; button <= BTN_DPAD_RIGHT && !has_joystick_axes_or_buttons; button++)
-                        has_joystick_axes_or_buttons = test_bit(button, bitmask_key);
+                for (button = BTN_JOYSTICK; button < BTN_DIGI; button++)
+                        if (test_bit(button, bitmask_key))
+                                num_joystick_buttons++;
+                for (button = BTN_TRIGGER_HAPPY1; button <= BTN_TRIGGER_HAPPY40; button++)
+                        if (test_bit(button, bitmask_key))
+                                num_joystick_buttons++;
+                for (button = BTN_DPAD_UP; button <= BTN_DPAD_RIGHT; button++)
+                        if (test_bit(button, bitmask_key))
+                                num_joystick_buttons++;
         }
-        for (axis = ABS_RX; axis < ABS_PRESSURE && !has_joystick_axes_or_buttons; axis++)
-                has_joystick_axes_or_buttons = test_bit(axis, bitmask_abs);
+        for (axis = ABS_RX; axis < ABS_PRESSURE; axis++)
+                if (test_bit(axis, bitmask_abs))
+                        num_joystick_axes++;
 
         if (has_abs_coordinates) {
-                if (stylus_or_pen)
+                if (has_stylus || has_pen)
                         is_tablet = true;
                 else if (finger_but_no_pen && !is_direct)
                         is_touchpad = true;
                 else if (has_mouse_button)
                         /* This path is taken by VMware's USB mouse, which has
                          * absolute axes, but no touch/pressure button. */
-                        is_mouse = true;
+                        is_abs_mouse = true;
                 else if (has_touch || is_direct)
                         is_touchscreen = true;
-                else if (has_joystick_axes_or_buttons)
+                else if (num_joystick_buttons > 0 || num_joystick_axes > 0)
                         is_joystick = true;
-        } else if (has_joystick_axes_or_buttons) {
+        } else if (num_joystick_buttons > 0 || num_joystick_axes > 0) {
                 is_joystick = true;
         }
 
         if (has_mt_coordinates) {
-                if (stylus_or_pen)
+                if (has_stylus || has_pen)
                         is_tablet = true;
                 else if (finger_but_no_pen && !is_direct)
                         is_touchpad = true;
                 else if (has_touch || is_direct)
                         is_touchscreen = true;
+        }
+
+        if (is_tablet && has_pad_buttons)
+                is_tablet_pad = true;
+
+        if (has_pad_buttons && has_wheel && !has_rel_coordinates) {
+                is_tablet = true;
+                is_tablet_pad = true;
         }
 
         if (!is_tablet && !is_touchpad && !is_joystick &&
@@ -244,9 +294,49 @@ static bool test_pointers(struct udev_device *dev,
             !has_abs_coordinates)) /* mouse buttons and no axis */
                 is_mouse = true;
 
+        /* There is no such thing as an i2c mouse */
+        if (is_mouse && id->bustype == BUS_I2C)
+                is_pointing_stick = true;
+
+        /* Joystick un-detection. Some keyboards have random joystick buttons
+         * set. Avoid those being labeled as ID_INPUT_JOYSTICK with some heuristics.
+         * The well-known keys represent a (randomly picked) set of key groups.
+         * A joystick may have one of those but probably not several. And a joystick with less than 2 buttons
+         * or axes is not a joystick either.
+         * libinput uses similar heuristics, any changes here should be added to libinput too.
+         */
+        if (is_joystick) {
+                static const unsigned int well_known_keyboard_keys[] = {
+                        KEY_LEFTCTRL, KEY_CAPSLOCK, KEY_NUMLOCK, KEY_INSERT,
+                        KEY_MUTE, KEY_CALC, KEY_FILE, KEY_MAIL, KEY_PLAYPAUSE,
+                        KEY_BRIGHTNESSDOWN,
+                };
+                size_t num_well_known_keys = 0;
+                size_t i;
+
+                if (has_keys)
+                        for (i = 0; i < ELEMENTSOF(well_known_keyboard_keys); i++)
+                                if (test_bit(well_known_keyboard_keys[i], bitmask_key))
+                                        num_well_known_keys++;
+
+                if (num_well_known_keys >= 4 || num_joystick_buttons + num_joystick_axes < 2) {
+                        log_debug("Input device has %zu joystick buttons and %zu axes but also %zu keyboard key sets, "
+                                  "assuming this is a keyboard, not a joystick.",
+                                  num_joystick_buttons, num_joystick_axes, num_well_known_keys);
+                        is_joystick = false;
+                }
+
+                if (has_wheel && has_pad_buttons) {
+                        log_debug("Input device has %zu joystick buttons as well as tablet pad buttons, "
+                                  "assuming this is a tablet pad, not a joystick.", num_joystick_buttons);
+
+                        is_joystick = false;
+                }
+        }
+
         if (is_pointing_stick)
                 udev_builtin_add_property(dev, test, "ID_INPUT_POINTINGSTICK", "1");
-        if (is_mouse)
+        if (is_mouse || is_abs_mouse)
                 udev_builtin_add_property(dev, test, "ID_INPUT_MOUSE", "1");
         if (is_touchpad)
                 udev_builtin_add_property(dev, test, "ID_INPUT_TOUCHPAD", "1");
@@ -256,8 +346,10 @@ static bool test_pointers(struct udev_device *dev,
                 udev_builtin_add_property(dev, test, "ID_INPUT_JOYSTICK", "1");
         if (is_tablet)
                 udev_builtin_add_property(dev, test, "ID_INPUT_TABLET", "1");
+        if (is_tablet_pad)
+                udev_builtin_add_property(dev, test, "ID_INPUT_TABLET_PAD", "1");
 
-        return is_tablet || is_mouse || is_touchpad || is_touchscreen || is_joystick || is_pointing_stick;
+        return is_tablet || is_mouse || is_abs_mouse || is_touchpad || is_touchscreen || is_joystick || is_pointing_stick;
 }
 
 /* key like devices */
@@ -330,6 +422,8 @@ static int builtin_input_id(struct udev_device *dev, int argc __attribute__((unu
                 pdev = udev_device_get_parent_with_subsystem_devtype(pdev, "input", NULL);
 
         if (pdev) {
+                struct input_id id = get_input_id(pdev);
+
                 /* Use this as a flag that input devices were detected, so that this
                  * program doesn't need to be called more than once per device */
                 udev_builtin_add_property(dev, test, "ID_INPUT", "1");
@@ -338,7 +432,7 @@ static int builtin_input_id(struct udev_device *dev, int argc __attribute__((unu
                 get_cap_mask(dev, pdev, "capabilities/rel", bitmask_rel, sizeof(bitmask_rel), test);
                 get_cap_mask(dev, pdev, "capabilities/key", bitmask_key, sizeof(bitmask_key), test);
                 get_cap_mask(dev, pdev, "properties", bitmask_props, sizeof(bitmask_props), test);
-                is_pointer = test_pointers(dev, bitmask_ev, bitmask_abs,
+                is_pointer = test_pointers(dev, &id, bitmask_ev, bitmask_abs,
                                            bitmask_key, bitmask_rel,
                                            bitmask_props, test);
                 is_key = test_key(dev, bitmask_ev, bitmask_key, test);

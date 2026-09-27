@@ -55,6 +55,12 @@ struct trie {
         size_t nodes_count;
         size_t children_count;
         size_t values_count;
+
+        /* If true, hwdb.bin is created in the compatible format (v1) without the information
+         * about the origin of the properties (priority, line number, and source filename),
+         * which can be read by all versions of libudev. Otherwise, the format with this
+         * additional information (v2) is created, as systemd-hwdb does. */
+        bool compat;
 };
 
 struct trie_node {
@@ -80,6 +86,9 @@ struct trie_child_entry {
 struct trie_value_entry {
         size_t key_off;
         size_t value_off;
+        size_t filename_off;
+        uint32_t line_number;
+        uint16_t file_priority;
 };
 
 static int trie_children_cmp(const void *v1, const void *v2) {
@@ -145,8 +154,9 @@ static int trie_values_cmp_r(const void *v1, const void *v2, void* arg) {
 }
 
 static int trie_node_add_value(struct trie *trie, struct trie_node *node,
-                          const char *key, const char *value) {
-        ssize_t k, v;
+                               const char *key, const char *value,
+                               const char *filename, uint16_t file_priority, uint32_t line_number) {
+        ssize_t k, v, fn;
         struct trie_value_entry *val;
 
         k = strbuf_add_string(trie->strings, key, strlen(key));
@@ -155,6 +165,12 @@ static int trie_node_add_value(struct trie *trie, struct trie_node *node,
         v = strbuf_add_string(trie->strings, value, strlen(value));
         if (v < 0)
                 return v;
+        fn = 0;
+        if (!trie->compat) {
+                fn = strbuf_add_string(trie->strings, filename, strlen(filename));
+                if (fn < 0)
+                        return fn;
+        }
 
         if (node->values_count) {
                 struct trie_value_entry search = {
@@ -164,8 +180,13 @@ static int trie_node_add_value(struct trie *trie, struct trie_node *node,
 
                 val = xbsearch_r(&search, node->values, node->values_count, sizeof(struct trie_value_entry), trie_values_cmp_r, trie);
                 if (val) {
-                        /* replace existing earlier key with new value */
+                        /* At this point we have 2 identical properties on the same match-string.
+                         * Since we process files in order, we just replace the previous value.
+                         */
                         val->value_off = v;
+                        val->filename_off = fn;
+                        val->file_priority = file_priority;
+                        val->line_number = line_number;
                         return 0;
                 }
         }
@@ -178,6 +199,9 @@ static int trie_node_add_value(struct trie *trie, struct trie_node *node,
         node->values = val;
         node->values[node->values_count].key_off = k;
         node->values[node->values_count].value_off = v;
+        node->values[node->values_count].filename_off = fn;
+        node->values[node->values_count].file_priority = file_priority;
+        node->values[node->values_count].line_number = line_number;
         node->values_count++;
 	trie_values_cmp_param = trie;
         qsort(node->values, node->values_count, sizeof(struct trie_value_entry), trie_values_cmp);
@@ -185,13 +209,14 @@ static int trie_node_add_value(struct trie *trie, struct trie_node *node,
 }
 
 static int trie_insert(struct trie *trie, struct trie_node *node, const char *search,
-                       const char *key, const char *value) {
+                       const char *key, const char *value,
+                       const char *filename, uint16_t file_priority, uint32_t line_number) {
         size_t i = 0;
         int err = 0;
 
         for (;;) {
                 size_t p;
-                uint8_t c;
+                char c;
                 struct trie_node *child;
 
                 for (p = 0; (c = trie->strings->buf[node->prefix_off + p]); p++) {
@@ -239,7 +264,7 @@ static int trie_insert(struct trie *trie, struct trie_node *node, const char *se
 
                 c = search[i];
                 if (c == '\0')
-                        return trie_node_add_value(trie, node, key, value);
+                        return trie_node_add_value(trie, node, key, value, filename, file_priority, line_number);
 
                 child = node_lookup(node, c);
                 if (!child) {
@@ -263,7 +288,7 @@ static int trie_insert(struct trie *trie, struct trie_node *node, const char *se
                                 return err;
                         }
 
-                        return trie_node_add_value(trie, child, key, value);
+                        return trie_node_add_value(trie, child, key, value, filename, file_priority, line_number);
                 }
 
                 node = child;
@@ -292,7 +317,7 @@ static void trie_store_nodes_size(struct trie_f *trie, struct trie_node *node) {
         for (i = 0; i < node->children_count; i++)
                 trie->strings_off += sizeof(struct trie_child_entry_f);
         for (i = 0; i < node->values_count; i++)
-                trie->strings_off += sizeof(struct trie_value_entry_f);
+                trie->strings_off += trie->trie->compat ? sizeof(struct trie_value_entry_f) : sizeof(struct trie_value_entry2_f);
 }
 
 static int64_t trie_store_nodes(struct trie_f *trie, struct trie_node *node) {
@@ -338,12 +363,15 @@ static int64_t trie_store_nodes(struct trie_f *trie, struct trie_node *node) {
 
         /* append values array */
         for (i = 0; i < node->values_count; i++) {
-                struct trie_value_entry_f v = {
+                struct trie_value_entry2_f v = {
                         .key_off = htole64(trie->strings_off + node->values[i].key_off),
                         .value_off = htole64(trie->strings_off + node->values[i].value_off),
+                        .filename_off = htole64(trie->strings_off + node->values[i].filename_off),
+                        .line_number = htole32(node->values[i].line_number),
+                        .file_priority = htole16(node->values[i].file_priority),
                 };
 
-                fwrite(&v, sizeof(struct trie_value_entry_f), 1, trie->f);
+                fwrite(&v, trie->trie->compat ? sizeof(struct trie_value_entry_f) : sizeof(struct trie_value_entry2_f), 1, trie->f);
                 trie->values_count++;
         }
 
@@ -364,7 +392,7 @@ static int trie_store(struct trie *trie, const char *filename) {
                 .header_size = htole64(sizeof(struct trie_header_f)),
                 .node_size = htole64(sizeof(struct trie_node_f)),
                 .child_entry_size = htole64(sizeof(struct trie_child_entry_f)),
-                .value_entry_size = htole64(sizeof(struct trie_value_entry_f)),
+                .value_entry_size = htole64(trie->compat ? sizeof(struct trie_value_entry_f) : sizeof(struct trie_value_entry2_f)),
         };
         int err;
 
@@ -413,6 +441,7 @@ static int trie_store(struct trie *trie, const char *filename) {
         }
 
         log_debug("=== trie on-disk ===");
+        log_debug("filename:         %s", filename);
         log_debug("size:             %8"PRIi64" bytes", size);
         log_debug("header:           %8zu bytes", sizeof(struct trie_header_f));
         log_debug("nodes:            %8"PRIu64" bytes (%8"PRIu64")",
@@ -420,7 +449,7 @@ static int trie_store(struct trie *trie, const char *filename) {
         log_debug("child pointers:   %8"PRIu64" bytes (%8"PRIu64")",
                   t.children_count * sizeof(struct trie_child_entry_f), t.children_count);
         log_debug("value pointers:   %8"PRIu64" bytes (%8"PRIu64")",
-                  t.values_count * sizeof(struct trie_value_entry_f), t.values_count);
+                  t.values_count * (trie->compat ? sizeof(struct trie_value_entry_f) : sizeof(struct trie_value_entry2_f)), t.values_count);
         log_debug("string store:     %8zu bytes", trie->strings->len);
         log_debug("strings start:    %8"PRIu64, t.strings_off);
 
@@ -428,7 +457,7 @@ static int trie_store(struct trie *trie, const char *filename) {
 }
 
 static int insert_data(struct trie *trie, struct udev_list *match_list,
-                       char *line, const char *filename __attribute__((unused))) {
+                       char *line, const char *filename, uint16_t file_priority, uint32_t line_number) {
         char *value;
         struct udev_list_entry *entry;
 
@@ -454,12 +483,13 @@ static int insert_data(struct trie *trie, struct udev_list *match_list,
         }
 
         udev_list_entry_foreach(entry, udev_list_get_entry(match_list))
-                trie_insert(trie, trie->root, udev_list_entry_get_name(entry), line, value);
+                trie_insert(trie, trie->root, udev_list_entry_get_name(entry), line, value,
+                            filename, file_priority, line_number);
 
         return 0;
 }
 
-static int import_file(struct udev *udev, struct trie *trie, const char *filename) {
+static int import_file(struct udev *udev, struct trie *trie, const char *filename, const char *path_in_root, uint16_t file_priority) {
         enum {
                 HW_MATCH,
                 HW_DATA,
@@ -531,7 +561,7 @@ static int import_file(struct udev *udev, struct trie *trie, const char *filenam
 
                         /* first data */
                         state = HW_DATA;
-                        err = insert_data(trie, &match_list, line, filename);
+                        err = insert_data(trie, &match_list, line, path_in_root, file_priority, line_number);
                         if (err < 0)
                                 r = err;
                         break;
@@ -552,7 +582,7 @@ static int import_file(struct udev *udev, struct trie *trie, const char *filenam
                                 break;
                         }
 
-                        err = insert_data(trie, &match_list, line, filename);
+                        err = insert_data(trie, &match_list, line, path_in_root, file_priority, line_number);
                         if (err < 0)
                                 r = err;
                         break;
@@ -570,6 +600,7 @@ static int import_file(struct udev *udev, struct trie *trie, const char *filenam
 static void help(void) {
         printf("Usage: udevadm hwdb OPTIONS\n"
                "  -u,--update          update the hardware database\n"
+               "  -s,--strict          when updating, return non-zero exit value on any parsing error\n"
                "  -o,--output=.../hwdb.bin generate in .../hwdb.bin instead of /etc/udev/hwdb.bin\n"
                "  --usr                generate in " UDEV_LIBEXEC_DIR " instead of /etc/udev\n"
                "  -t,--test=MODALIAS   query database and print result\n"
@@ -579,6 +610,7 @@ static void help(void) {
                "The HWDB is searched in "
                UDEV_HWDB_DIR ", " UDEV_LIBEXEC_DIR "/hwdb.d, "
                "and the UDEV_HWDB_PATH search path.\n"
+               "The format of hwdb.bin is configured with hwdb_format= in udev.conf.\n"
                "\n");
 }
 
@@ -589,6 +621,7 @@ static int adm_hwdb(struct udev *udev, int argc, char *argv[]) {
 
         static const struct option options[] = {
                 { "update", no_argument,       NULL, 'u' },
+                { "strict", no_argument,       NULL, 's' },
                 { "usr",    no_argument,       NULL, ARG_USR },
                 { "output", required_argument, NULL, 'o' },
                 { "test",   required_argument, NULL, 't' },
@@ -599,8 +632,9 @@ static int adm_hwdb(struct udev *udev, int argc, char *argv[]) {
         const char *test = NULL;
         const char *root = "";
         bool update = false;
+        bool strict = false;
         struct trie *trie = NULL;
-        int err, c;
+        int err, c, format;
         int rc = EXIT_SUCCESS;
 
         _cleanup_free_ char *hwdb_bin = strdup("/etc/udev/hwdb.bin");
@@ -609,10 +643,13 @@ static int adm_hwdb(struct udev *udev, int argc, char *argv[]) {
                 goto out;
         }
 
-        while ((c = getopt_long(argc, argv, "uo:t:r:h", options, NULL)) >= 0)
+        while ((c = getopt_long(argc, argv, "uso:t:r:h", options, NULL)) >= 0)
                 switch(c) {
                 case 'u':
                         update = true;
+                        break;
+                case 's':
+                        strict = true;
                         break;
                 case ARG_USR:
                         free(hwdb_bin);
@@ -652,6 +689,7 @@ static int adm_hwdb(struct udev *udev, int argc, char *argv[]) {
 
         if (update) {
                 char **files, **f;
+                uint16_t file_priority = 1;
 
                 if (strlen(root)) {
                         /* --root has been specified, prepend it to
@@ -672,6 +710,24 @@ static int adm_hwdb(struct udev *udev, int argc, char *argv[]) {
                         rc = EXIT_FAILURE;
                         goto out;
                 }
+
+                /* By default, create hwdb.bin in the compatible format (1), which can be read by
+                 * all versions of libudev, like upstream's 'udevadm hwdb' does. The format is
+                 * configured with hwdb_format= in udev.conf, below the root directory if specified. */
+                if (strlen(root))
+                        format = udev_read_hwdb_format(root);
+                else
+                        format = udev_get_hwdb_format(udev);
+                if (format == -ENOMEM) {
+                        rc = EXIT_FAILURE;
+                        goto out;
+                }
+                if (format < 0) {
+                        log_warning("Invalid hwdb_format= in udev.conf, using 1.");
+                        format = 1;
+                }
+                log_debug("creating hwdb.bin in format %i", format);
+                trie->compat = format == 1;
 
                 /* string store */
                 trie->strings = strbuf_new();
@@ -701,8 +757,20 @@ static int adm_hwdb(struct udev *udev, int argc, char *argv[]) {
                         goto out;
                 }
                 STRV_FOREACH(f, files) {
-                        log_debug("reading file '%s'", *f);
-                        import_file(udev, trie, *f);
+                        const char *path_in_root = *f;
+
+                        /* Strip the root from the filename stored in the database, to not
+                         * leak build paths and keep the database reproducible. The files
+                         * are listed as the root directly followed by the path. */
+                        if (!isempty(root) && startswith(*f, root)) {
+                                path_in_root = *f + strlen(root);
+                                while (path_in_root[0] == '/' && path_in_root[1] == '/')
+                                        path_in_root++;
+                        }
+
+                        log_debug("reading file '%s' -> '%s'", *f, path_in_root);
+                        if (import_file(udev, trie, *f, path_in_root, file_priority++) < 0 && strict)
+                                rc = EXIT_FAILURE;
                 }
                 strv_free(files);
 

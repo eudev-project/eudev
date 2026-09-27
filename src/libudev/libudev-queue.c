@@ -238,6 +238,9 @@ _public_ int udev_queue_get_fd(struct udev_queue *udev_queue) {
         int fd;
         int r;
 
+        if (udev_queue == NULL)
+                return -EINVAL;
+
         if (udev_queue->fd >= 0)
                 return udev_queue->fd;
 
@@ -263,6 +266,8 @@ _public_ int udev_queue_get_fd(struct udev_queue *udev_queue) {
  * Returns: the result of clearing the watch for queue changes.
  */
 _public_ int udev_queue_flush(struct udev_queue *udev_queue) {
+        if (udev_queue == NULL)
+                return -EINVAL;
         if (udev_queue->fd < 0)
                 return -EINVAL;
 

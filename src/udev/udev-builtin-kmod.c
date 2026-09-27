@@ -67,22 +67,39 @@ _printf_(6,0) static void udev_kmod_log(void *data __attribute__((unused)), int 
         log_internalv(priority, 0, file, line, fn, format, args);
 }
 
-static int builtin_kmod(struct udev_device *dev, int argc, char *argv[], bool test __attribute__((unused))) {
+static int builtin_kmod(struct udev_device *dev, int argc, char *argv[], bool test) {
         struct udev *udev = udev_device_get_udev(dev);
         int i;
+
+        if (test) {
+                log_debug("Running in test mode, skipping execution of 'kmod' builtin command.");
+                return EXIT_SUCCESS;
+        }
 
         if (!ctx)
                 return 0;
 
-        if (argc < 3 || !streq(argv[1], "load")) {
-                log_error("expect: %s load <module>", argv[0]);
+        if (argc < 2 || !streq(argv[1], "load")) {
+                log_error("expect: %s load [module...]", argv[0]);
                 return EXIT_FAILURE;
         }
 
-        for (i = 2; argv[i]; i++) {
-                log_debug("Execute '%s' '%s'", argv[1], argv[i]);
-                load_module(udev, argv[i]);
-        }
+        if (!argv[2]) {
+                const char *modalias;
+
+                modalias = udev_device_get_property_value(dev, "MODALIAS");
+                if (!modalias) {
+                        log_warning("Failed to read property \"MODALIAS\".");
+                        return EXIT_FAILURE;
+                }
+
+                log_debug("Execute '%s' '%s'", argv[1], modalias);
+                load_module(udev, modalias);
+        } else
+                for (i = 2; argv[i]; i++) {
+                        log_debug("Execute '%s' '%s'", argv[1], argv[i]);
+                        load_module(udev, argv[i]);
+                }
 
         return EXIT_SUCCESS;
 }

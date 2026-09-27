@@ -412,7 +412,7 @@ static struct udev_list_entry *udev_device_add_property_from_string(struct udev_
 static int udev_device_set_syspath(struct udev_device *udev_device, const char *syspath)
 {
         const char *pos;
-        size_t len;
+        size_t len, n;
 
         free(udev_device->syspath);
         udev_device->syspath = strdup(syspath);
@@ -420,6 +420,11 @@ static int udev_device_set_syspath(struct udev_device *udev_device, const char *
                 return -ENOMEM;
         udev_device->devpath = udev_device->syspath + strlen("/sys");
         udev_device_add_property_internal(udev_device, "DEVPATH", udev_device->devpath);
+
+        /* clear the previous sysname and sysnum, e.g. when the device is renamed */
+        free(udev_device->sysname);
+        udev_device->sysname = NULL;
+        udev_device->sysnum = NULL;
 
         pos = strrchr(udev_device->syspath, '/');
         if (pos == NULL)
@@ -437,12 +442,13 @@ static int udev_device_set_syspath(struct udev_device *udev_device, const char *
         }
 
         /* trailing number */
-        while (len > 0 && isdigit(udev_device->sysname[--len]))
-                udev_device->sysnum = &udev_device->sysname[len];
+        n = 0;
+        while (n < len && isdigit(udev_device->sysname[len - n - 1]))
+                n++;
 
-        /* sysname is completely numeric */
-        if (len == 0)
-                udev_device->sysnum = NULL;
+        /* do not set sysnum for number only sysname */
+        if (n > 0 && n < len)
+                udev_device->sysnum = &udev_device->sysname[len - n];
 
         return 0;
 }
@@ -604,17 +610,19 @@ int udev_device_read_db(struct udev_device *udev_device)
         if (udev_device->db_loaded)
                 return 0;
 
-        udev_device->db_loaded = true;
-
         id = udev_device_get_id_filename(udev_device);
         if (id == NULL)
                 return -1;
 
         strscpyl(filename, sizeof(filename), UDEV_ROOT_RUN "/udev/data/", id, NULL);
 
+        /* We will retry if we couldn't access the file, e.g. because the device has not been
+         * processed by udevd yet, but not if parsing failed. */
         f = fopen(filename, "re");
         if (f == NULL)
                 return log_debug_errno(errno, "no db file to read %s: %m", filename);
+
+        udev_device->db_loaded = true;
 
         /* devices with a database entry are initialized */
         udev_device->is_initialized = true;
@@ -645,7 +653,10 @@ int udev_device_read_db(struct udev_device *udev_device)
                         udev_device_add_tag(udev_device, val);
                         break;
                 case 'W':
-                        udev_device_set_watch_handle(udev_device, atoi(val));
+                        /* Deprecated. Previously, watch handle is both saved in database and /run/udev/watch.
+                         * However, the handle saved in database may not be updated when the handle is updated
+                         * or removed. Moreover, it is not necessary to store the handle within the database,
+                         * as its value becomes meaningless when udevd is restarted. */
                         break;
                 case 'I':
                         udev_device_set_usec_initialized(udev_device, strtoull(val, NULL, 10));
@@ -882,6 +893,11 @@ _public_ struct udev_device *udev_device_new_from_device_id(struct udev *udev, c
         char subsys[UTIL_PATH_SIZE];
         char *sysname;
 
+        if (id == NULL) {
+                errno = EINVAL;
+                return NULL;
+        }
+
         switch(id[0]) {
         case 'b':
         case 'c':
@@ -953,10 +969,46 @@ _public_ struct udev_device *udev_device_new_from_device_id(struct udev *udev, c
  *
  * Returns: a new udev device, or #NULL, if it does not exist
  **/
-_public_ struct udev_device *udev_device_new_from_subsystem_sysname(struct udev *udev, const char *subsystem, const char *sysname)
+/* Checks that a name does not contain "." or ".." path components, or duplicated or
+ * leading slashes, so that it cannot be used to escape the directories in /sys. */
+static bool name_is_normalized(const char *p)
+{
+        if (isempty(p))
+                return false;
+
+        if (streq(p, ".") || streq(p, ".."))
+                return false;
+
+        if (startswith(p, "../") || endswith(p, "/..") || strstr(p, "/../"))
+                return false;
+
+        if (startswith(p, "./") || endswith(p, "/.") || strstr(p, "/./"))
+                return false;
+
+        if (p[0] == '/' || strstr(p, "//"))
+                return false;
+
+        return true;
+}
+
+_public_ struct udev_device *udev_device_new_from_subsystem_sysname(struct udev *udev, const char *subsystem, const char *sysname_in)
 {
         char path[UTIL_PATH_SIZE];
+        char sysname[UTIL_PATH_SIZE];
         struct stat statbuf;
+        char *p;
+
+        if (subsystem == NULL || sysname_in == NULL ||
+            !name_is_normalized(subsystem) || !name_is_normalized(sysname_in)) {
+                errno = EINVAL;
+                return NULL;
+        }
+
+        /* translate sysname back to sysfs filename */
+        strscpy(sysname, sizeof(sysname), sysname_in);
+        for (p = sysname; *p != '\0'; p++)
+                if (*p == '/')
+                        *p = '!';
 
         if (streq(subsystem, "subsystem")) {
                 strscpyl(path, sizeof(path), "/sys/subsystem/", sysname, NULL);
@@ -1108,6 +1160,9 @@ _public_ struct udev_device *udev_device_get_parent(struct udev_device *udev_dev
                 udev_device->parent_set = true;
                 udev_device->parent_device = device_new_from_parent(udev_device);
         }
+        /* the lookup of the parent is cached, also set errno on subsequent calls */
+        if (udev_device->parent_device == NULL)
+                errno = ENOENT;
         return udev_device->parent_device;
 }
 
@@ -1545,83 +1600,84 @@ out:
  **/
 _public_ int udev_device_set_sysattr_value(struct udev_device *udev_device, const char *sysattr, char *value)
 {
-        struct udev_device *dev;
         char path[UTIL_PATH_SIZE];
-        struct stat statbuf;
-        int fd;
-        ssize_t size, value_len;
-        int ret = 0;
+        _cleanup_free_ char *v = NULL;
+        struct udev_list_entry *list_entry;
+        ssize_t size;
+        size_t len;
+        int fd, r;
 
         if (udev_device == NULL)
                 return -EINVAL;
-        dev = udev_device;
         if (sysattr == NULL)
                 return -EINVAL;
-        if (value == NULL) {
-                struct udev_list_entry *list_entry;
 
+        if (value == NULL) {
+                /* remove the cached value */
                 list_entry = udev_list_get_entry(&udev_device->sysattr_value_list);
                 list_entry = udev_list_entry_get_by_name(list_entry, sysattr);
                 if (list_entry != NULL)
                         udev_list_entry_delete(list_entry);
-                goto out;
-        } else
-                value_len = strlen(value);
-
-        strscpyl(path, sizeof(path), udev_device_get_syspath(dev), "/", sysattr, NULL);
-        if (lstat(path, &statbuf) != 0) {
-                udev_list_entry_add(&dev->sysattr_value_list, sysattr, NULL);
-                ret = -ENXIO;
-                goto out;
+                return 0;
         }
 
-        if (S_ISLNK(statbuf.st_mode)) {
-                ret = -EINVAL;
-                goto out;
-        }
+        strscpyl(path, sizeof(path), udev_device_get_syspath(udev_device), "/", sysattr, NULL);
 
-        /* skip directories */
-        if (S_ISDIR(statbuf.st_mode)) {
-                ret = -EISDIR;
-                goto out;
-        }
+        len = strlen(value);
 
-        /* skip non-readable files */
-        if ((statbuf.st_mode & S_IRUSR) == 0) {
-                ret = -EACCES;
-                goto out;
-        }
+        /* drop trailing newlines */
+        while (len > 0 && value[len - 1] == '\n')
+                len--;
 
-        /* Value is limited to 4k */
-        if (value_len > 4096) {
-                ret = -EINVAL;
-                goto out;
-        }
-        util_remove_trailing_chars(value, '\n');
+        /* value length is limited to 4k */
+        if (len > 4096)
+                return -EINVAL;
 
-        /* write attribute value */
-        fd = open(path, O_WRONLY|O_CLOEXEC);
+        v = strndup(value, len);
+        if (v == NULL)
+                return -ENOMEM;
+
+        /* Do not check the permissions of the attribute, write-only attributes like "remove" are
+         * fine. Let the kernel do it and propagate the error. */
+        fd = open(path, O_WRONLY|O_CLOEXEC|O_NOFOLLOW);
         if (fd < 0) {
-                ret = -errno;
-                goto out;
+                r = errno == ELOOP ? -EINVAL : -errno;
+                goto fail;
         }
-        size = write(fd, value, value_len);
+        size = write(fd, v, len);
+        if (size < 0)
+                r = -errno;
+        else if ((size_t) size != len)
+                r = -EIO;
+        else
+                r = 0;
         close(fd);
-        if (size < 0) {
-                ret = -errno;
-                goto out;
-        }
-        if (size < value_len) {
-                ret = -EIO;
-                goto out;
-        }
+        if (r < 0)
+                goto fail;
 
-        /* wrote a valid value, store it in cache and return it */
-        udev_list_entry_add(&dev->sysattr_value_list, sysattr, value);
-out:
-        if (dev != udev_device)
-                udev_device_unref(dev);
-        return ret;
+        /* Do not cache action string written into uevent file. */
+        if (streq(sysattr, "uevent"))
+                return 0;
+
+        /* wrote a valid value, store it in cache */
+        if (udev_list_entry_add(&udev_device->sysattr_value_list, sysattr, v) == NULL) {
+                /* The value has been written, hence do not fail. But do not leave a cache
+                 * entry without a value behind, which would make the attribute look absent. */
+                log_debug("failed to cache sysfs attribute value '%s', ignoring", sysattr);
+                list_entry = udev_list_get_entry(&udev_device->sysattr_value_list);
+                list_entry = udev_list_entry_get_by_name(list_entry, sysattr);
+                if (list_entry != NULL)
+                        udev_list_entry_delete(list_entry);
+        }
+        return 0;
+
+fail:
+        /* On failure, clear cache entry, as we do not know how it fails. */
+        list_entry = udev_list_get_entry(&udev_device->sysattr_value_list);
+        list_entry = udev_list_entry_get_by_name(list_entry, sysattr);
+        if (list_entry != NULL)
+                udev_list_entry_delete(list_entry);
+        return r;
 }
 
 static int udev_device_sysattr_list_read(struct udev_device *udev_device)
@@ -1675,6 +1731,10 @@ static int udev_device_sysattr_list_read(struct udev_device *udev_device)
  **/
 _public_ struct udev_list_entry *udev_device_get_sysattr_list_entry(struct udev_device *udev_device)
 {
+        if (udev_device == NULL) {
+                errno = EINVAL;
+                return NULL;
+        }
         if (!udev_device->sysattr_list_read) {
                 int ret;
                 ret = udev_device_sysattr_list_read(udev_device);
@@ -1709,6 +1769,19 @@ int udev_device_add_devlink(struct udev_device *udev_device, const char *devlink
         if (list_entry == NULL)
                 return -ENOMEM;
         return 0;
+}
+
+void udev_device_remove_devlink(struct udev_device *udev_device, const char *devlink)
+{
+        struct udev_list_entry *list_entry;
+
+        list_entry = udev_list_get_entry(&udev_device->devlinks_list);
+        list_entry = udev_list_entry_get_by_name(list_entry, devlink);
+        if (list_entry == NULL)
+                return;
+
+        udev_device->devlinks_uptodate = false;
+        udev_list_entry_delete(list_entry);
 }
 
 const char *udev_device_get_id_filename(struct udev_device *udev_device)
@@ -1760,6 +1833,8 @@ const char *udev_device_get_id_filename(struct udev_device *udev_device)
  **/
 _public_ int udev_device_get_is_initialized(struct udev_device *udev_device)
 {
+        if (udev_device == NULL)
+                return -EINVAL;
         if (!udev_device->info_loaded)
                 udev_device_read_db(udev_device);
         return udev_device->is_initialized;
@@ -1770,9 +1845,14 @@ void udev_device_set_is_initialized(struct udev_device *udev_device)
         udev_device->is_initialized = true;
 }
 
+/* All tags are managed under /run/udev/tags, and the directories there are
+ * named with tags. Hence, each tag must be a valid filename. */
 static bool is_valid_tag(const char *tag)
 {
-        return !strchr(tag, ':') && !strchr(tag, ' ');
+        return tag[0] != '\0' &&
+                tag[strspn(tag, "abcdefghijklmnopqrstuvwxyz"
+                                "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+                                "0123456789-_")] == '\0';
 }
 
 int udev_device_add_tag(struct udev_device *udev_device, const char *tag)
@@ -2053,9 +2133,19 @@ struct udev_device *udev_device_new_from_nulstr(struct udev *udev, char *nulstr,
                 size_t keylen;
 
                 key = nulstr + bufpos;
-                keylen = strlen(key);
+                keylen = strnlen(key, buflen - bufpos);
                 if (keylen == 0)
                         break;
+                if ((ssize_t) keylen == buflen - bufpos) {
+                        /* the last string is not NUL terminated */
+                        log_debug("failed to parse nulstr, invalid device");
+
+                        udev_device_unref(device);
+
+                        errno = EINVAL;
+
+                        return NULL;
+                }
 
                 bufpos += keylen + 1;
                 udev_device_add_property_from_string_parse(device, key);

@@ -35,16 +35,40 @@
 static int builtin_btrfs(struct udev_device *dev, int argc, char *argv[], bool test) {
         struct btrfs_ioctl_vol_args args = {};
         _cleanup_close_ int fd = -1;
+        const char *node;
         int err;
 
-        if (argc != 3 || !streq(argv[1], "ready"))
+        if (!IN_SET(argc, 2, 3) || !streq(argv[1], "ready")) {
+                log_error("Invalid arguments.");
                 return EXIT_FAILURE;
+        }
 
-        fd = open("/dev/btrfs-control", O_RDWR|O_CLOEXEC);
+        node = udev_device_get_devnode(dev);
+        if (!node) {
+                log_error("Failed to get device node of '%s'", udev_device_get_syspath(dev));
+                return EXIT_FAILURE;
+        }
+
+        if (argc == 3 && !streq(argv[2], node)) {
+                log_debug("Device node '%s' is not owned by the device, it must be '%s'.", argv[2], node);
+                return EXIT_FAILURE;
+        }
+
+        if (strlen(node) >= sizeof(args.name)) {
+                log_debug("Device name too long for BTRFS_IOC_DEVICES_READY call: %s", node);
+                return EXIT_FAILURE;
+        }
+
+        if (test) {
+                log_debug("Running in test mode, skipping execution of 'btrfs' builtin command.");
+                return EXIT_SUCCESS;
+        }
+
+        fd = open("/dev/btrfs-control", O_RDWR|O_CLOEXEC|O_NOCTTY);
         if (fd < 0)
                 return EXIT_FAILURE;
 
-        strscpy(args.name, sizeof(args.name), argv[2]);
+        strscpy(args.name, sizeof(args.name), node);
         err = ioctl(fd, BTRFS_IOC_DEVICES_READY, &args);
         if (err < 0)
                 return EXIT_FAILURE;

@@ -96,8 +96,6 @@ static bool device_has_info(struct udev_device *udev_device)
                         return true;
         if (udev_device_get_tags_list_entry(udev_device) != NULL)
                 return true;
-        if (udev_device_get_watch_handle(udev_device) >= 0)
-                return true;
         return false;
 }
 
@@ -147,8 +145,6 @@ int udev_device_update_db(struct udev_device *udev_device)
                                 fprintf(f, "S:%s\n", udev_list_entry_get_name(list_entry) + strlen("/dev/"));
                         if (udev_device_get_devlink_priority(udev_device) != 0)
                                 fprintf(f, "L:%i\n", udev_device_get_devlink_priority(udev_device));
-                        if (udev_device_get_watch_handle(udev_device) >= 0)
-                                fprintf(f, "W:%i\n", udev_device_get_watch_handle(udev_device));
                 }
 
                 if (udev_device_get_usec_initialized(udev_device) > 0)

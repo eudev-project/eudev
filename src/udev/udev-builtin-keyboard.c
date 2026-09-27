@@ -166,6 +166,9 @@ static void set_trackpoint_sensitivity(struct udev_device *dev, const char *valu
         if (r < 0) {
                 log_error("Unable to parse POINTINGSTICK_SENSITIVITY '%s' for '%s'", value, udev_device_get_devnode(dev));
                 return;
+        } else if (val_i < 0 || val_i > 255) {
+                log_error("POINTINGSTICK_SENSITIVITY %d outside range [0..255] for '%s' ", val_i, udev_device_get_devnode(dev));
+                return;
         }
 
         xsprintf(val_s, "%d", val_i);
@@ -175,22 +178,38 @@ static void set_trackpoint_sensitivity(struct udev_device *dev, const char *valu
                 log_error_errno(r, "Failed to write 'sensitivity' attribute for '%s': %m", udev_device_get_devnode(pdev));
 }
 
+/* the device node vanished or has no medium */
+static bool errno_is_device_absent_or_empty(int r) {
+        return IN_SET(abs(r), ENODEV, ENXIO, ENOENT, ENOMEDIUM);
+}
+
 static int open_device(const char *devnode) {
         int fd;
 
         fd = open(devnode, O_RDWR|O_CLOEXEC|O_NONBLOCK|O_NOCTTY);
-        if (fd < 0)
-                return log_error_errno(errno, "Error opening device \"%s\": %m", devnode);
+        if (fd < 0) {
+                bool ignore = errno_is_device_absent_or_empty(errno);
+
+                return log_full_errno(ignore ? LOG_DEBUG : LOG_WARNING, errno,
+                                      "Error opening device \"%s\"%s: %m",
+                                      devnode, ignore ? ", ignoring" : "");
+        }
 
         return fd;
 }
 
-static int builtin_keyboard(struct udev_device *dev, int argc __attribute__((unused)), char *argv[] __attribute__((unused)), bool test __attribute__((unused))) {
+static int builtin_keyboard(struct udev_device *dev, int argc __attribute__((unused)), char *argv[] __attribute__((unused)), bool test) {
         struct udev_list_entry *entry;
         unsigned release[1024];
         unsigned release_count = 0;
         _cleanup_close_ int fd = -1;
         const char *node;
+        int has_abs = -1;
+
+        if (test) {
+                log_debug("Running in test mode, skipping execution of 'keyboard' builtin command.");
+                return EXIT_SUCCESS;
+        }
 
         node = udev_device_get_devnode(dev);
         if (!node) {
@@ -231,7 +250,7 @@ static int builtin_keyboard(struct udev_device *dev, int argc __attribute__((unu
                         if (fd == -1) {
                                 fd = open_device(node);
                                 if (fd < 0)
-                                        return EXIT_FAILURE;
+                                        return errno_is_device_absent_or_empty(fd) ? EXIT_SUCCESS : EXIT_FAILURE;
                         }
 
                         map_keycode(fd, node, scancode, keycode);
@@ -248,8 +267,26 @@ static int builtin_keyboard(struct udev_device *dev, int argc __attribute__((unu
                         if (fd == -1) {
                                 fd = open_device(node);
                                 if (fd < 0)
-                                        return EXIT_FAILURE;
+                                        return errno_is_device_absent_or_empty(fd) ? EXIT_SUCCESS : EXIT_FAILURE;
                         }
+
+                        if (has_abs == -1) {
+                                unsigned long bits;
+                                int rc;
+
+                                rc = ioctl(fd, EVIOCGBIT(0, sizeof(bits)), &bits);
+                                if (rc < 0) {
+                                        log_error_errno(errno, "Unable to EVIOCGBIT device \"%s\"", node);
+                                        return EXIT_FAILURE;
+                                }
+
+                                has_abs = !!(bits & (1 << EV_ABS));
+                                if (!has_abs)
+                                        log_warning("EVDEV_ABS override set but no EV_ABS present on device \"%s\"", node);
+                        }
+
+                        if (!has_abs)
+                                continue;
 
                         override_abs(fd, node, evcode, udev_list_entry_get_value(entry));
                 } else if (streq(key, "POINTINGSTICK_SENSITIVITY")) {

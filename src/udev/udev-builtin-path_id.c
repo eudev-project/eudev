@@ -29,8 +29,25 @@
 #include <errno.h>
 #include <dirent.h>
 #include <getopt.h>
+#include <linux/usb/ch11.h>
+
+/* hub protocol values of the USB specification, for older kernel headers */
+#ifndef USB_HUB_PR_HS_NO_TT
+#define USB_HUB_PR_HS_NO_TT     0 /* Hi-speed hub without TT */
+#endif
+#ifndef USB_HUB_PR_HS_SINGLE_TT
+#define USB_HUB_PR_HS_SINGLE_TT 1 /* Hi-speed hub with single TT */
+#endif
+#ifndef USB_HUB_PR_HS_MULTI_TT
+#define USB_HUB_PR_HS_MULTI_TT  2 /* Hi-speed hub with multiple TT */
+#endif
+#ifndef USB_HUB_PR_SS
+#define USB_HUB_PR_SS           3 /* Super speed hub */
+#endif
 
 #include "udev.h"
+#include "udev-util.h"
+#include "def.h"
 
 _printf_(2,3)
 static int path_prepend(char **path, const char *fmt, ...) {
@@ -167,6 +184,8 @@ static struct udev_device *handle_scsi_sas(struct udev_device *parent, char **pa
         const char *sas_address = NULL;
         const char *phy_id;
         const char *phy_count;
+        unsigned num_phys;
+        bool wide_port;
         char *lun = NULL;
 
         targetdev = udev_device_get_parent_with_subsystem_devtype(parent, "scsi", "scsi_target");
@@ -200,8 +219,21 @@ static struct udev_device *handle_scsi_sas(struct udev_device *parent, char **pa
                goto out;
         }
 
-        /* Check if we are simple disk */
-        if (strncmp(phy_count, "1", 2) != 0) {
+        if (udev_get_sas_legacy_path(udev))
+                /* Previous eudev behaviour (sas_legacy_path=yes in udev.conf): everything but a
+                 * single phy, including num_phys=0 and unparsable values, is handled as a wide port. */
+                wide_port = !streq(phy_count, "1");
+        else {
+                if (safe_atou(phy_count, &num_phys) < 0) {
+                        parent = NULL;
+                        goto out;
+                }
+
+                /* Check if this is a wide port (i.e. num_phys is 2 or higher) */
+                wide_port = num_phys > 1;
+        }
+
+        if (wide_port) {
                  parent = handle_scsi_sas_wide_port(parent, path);
                  goto out;
         }
@@ -303,6 +335,56 @@ static struct udev_device *handle_scsi_iscsi(struct udev_device *parent, char **
 out:
         udev_device_unref(sessiondev);
         udev_device_unref(conndev);
+        return parent;
+}
+
+static struct udev_device *handle_scsi_ata(struct udev_device *parent, char **path, char **compat_path) {
+        struct udev *udev  = udev_device_get_udev(parent);
+        struct udev_device *targetdev;
+        struct udev_device *target_parent;
+        struct udev_device *atadev;
+        const char *port_no, *name;
+        unsigned host, bus, target, lun;
+
+        assert(parent);
+        assert(path);
+
+        name = udev_device_get_sysname(parent);
+        if (!name)
+                return NULL;
+        if (sscanf(name, "%u:%u:%u:%u", &host, &bus, &target, &lun) != 4)
+                return NULL;
+
+        targetdev = udev_device_get_parent_with_subsystem_devtype(parent, "scsi", "scsi_host");
+        if (!targetdev)
+                return NULL;
+
+        target_parent = udev_device_get_parent(targetdev);
+        if (!target_parent)
+                return NULL;
+
+        atadev = udev_device_new_from_subsystem_sysname(udev, "ata_port", udev_device_get_sysname(target_parent));
+        if (!atadev)
+                return NULL;
+
+        port_no = udev_device_get_sysattr_value(atadev, "port_no");
+        if (!port_no) {
+               parent = NULL;
+               goto out;
+        }
+
+        if (bus != 0)
+                /* Devices behind port multiplier have a bus != 0 */
+                path_prepend(path, "ata-%s.%u.0", port_no, bus);
+        else
+                /* Master/slave are distinguished by target id */
+                path_prepend(path, "ata-%s.%u", port_no, target);
+
+        /* old compatible persistent link for ATA devices */
+        if (compat_path)
+                path_prepend(compat_path, "ata-%s", port_no);
+out:
+        udev_device_unref(atadev);
         return parent;
 }
 
@@ -426,7 +508,7 @@ static struct udev_device *handle_scsi_hyperv(struct udev_device *parent, char *
         return parent;
 }
 
-static struct udev_device *handle_scsi(struct udev_device *parent, char **path, bool *supported_parent) {
+static struct udev_device *handle_scsi(struct udev_device *parent, char **path, char **compat_path, bool *supported_parent) {
         const char *devtype;
         const char *name;
         const char *id;
@@ -465,19 +547,8 @@ static struct udev_device *handle_scsi(struct udev_device *parent, char **path, 
                 goto out;
         }
 
-        /*
-         * We do not support the ATA transport class, it uses global counters
-         * to name the ata devices which numbers spread across multiple
-         * controllers.
-         *
-         * The real link numbers are not exported. Also, possible chains of ports
-         * behind port multipliers cannot be composed that way.
-         *
-         * Until all that is solved at the kernel level, there are no by-path/
-         * links for ATA devices.
-         */
         if (strstr(name, "/ata") != NULL) {
-                parent = NULL;
+                parent = handle_scsi_ata(parent, path, compat_path);
                 goto out;
         }
 
@@ -518,10 +589,54 @@ static void handle_scsi_tape(struct udev_device *dev, char **path) {
                 path_prepend(path, "st%c", name[2]);
 }
 
+static int get_usb_revision(struct udev_device *dev) {
+        unsigned long protocol;
+        const char *s;
+        char *end;
+
+        assert(dev);
+
+        /* Returns usb revision 1, 2, or 3. */
+
+        s = udev_device_get_sysattr_value(dev, "bDeviceProtocol");
+        if (!s)
+                return -ENOENT;
+
+        errno = 0;
+        protocol = strtoul(s, &end, 16);
+        if (errno != 0 || end == s || *end != '\0' || protocol > UINT8_MAX)
+                return -EINVAL;
+
+        switch (protocol) {
+        case USB_HUB_PR_HS_NO_TT: /* Full speed hub (USB1) or Hi-speed hub without TT (USB2) */
+
+                /* See speed_show() in drivers/usb/core/sysfs.c of the kernel. */
+                s = udev_device_get_sysattr_value(dev, "speed");
+                if (!s)
+                        return -ENOENT;
+
+                if (streq(s, "480"))
+                        return 2;
+
+                return 1;
+
+        case USB_HUB_PR_HS_SINGLE_TT: /* Hi-speed hub with single TT */
+        case USB_HUB_PR_HS_MULTI_TT: /* Hi-speed hub with multiple TT */
+                return 2;
+
+        case USB_HUB_PR_SS: /* Super speed hub */
+                return 3;
+
+        default:
+                return -EPROTONOSUPPORT;
+        }
+}
+
 static struct udev_device *handle_usb(struct udev_device *parent, char **path) {
         const char *devtype;
         const char *str;
         const char *port;
+        int r;
 
         devtype = udev_device_get_devtype(parent);
         if (devtype == NULL)
@@ -536,7 +651,24 @@ static struct udev_device *handle_usb(struct udev_device *parent, char **path) {
         port++;
 
         parent = skip_subsystem(parent, "usb");
-        path_prepend(path, "usb-0:%s", port);
+
+        /* USB host number may change across reboots (and probably even without reboot). The part after USB
+         * host number is determined by device topology and so does not change. Hence, drop the host number
+         * and always use '0' instead.
+         *
+         * xHCI host controllers may register two (or more?) USB root hubs for USB 2.0 and USB 3.0, and the
+         * sysname, whose host number replaced with 0, of a device under the hubs may conflict with others.
+         * To avoid the conflict, let's include the USB revision of the root hub to the PATH_ID.
+         * See issue https://github.com/systemd/systemd/issues/19406 for more details. */
+        r = get_usb_revision(parent);
+        if (r < 0) {
+                log_debug_errno(r, "Failed to get the USB revision number, ignoring: %m");
+                path_prepend(path, "usb-0:%s", port);
+        } else {
+                assert(r > 0);
+                path_prepend(path, "usbv%i-0:%s", r, port);
+        }
+
         return parent;
 }
 
@@ -576,9 +708,113 @@ out:
         return parent;
 }
 
+static int find_real_nvme_parent(struct udev_device *dev, struct udev_device **ret) {
+        _cleanup_udev_device_unref_ struct udev_device *nvme = NULL;
+        const char *sysname, *end, *devpath;
+
+        /* If the device belongs to "nvme-subsystem" (not to be confused with "nvme"), which happens when
+         * NVMe multipathing is enabled in the kernel (/sys/module/nvme_core/parameters/multipath is Y),
+         * then the syspath is something like the following:
+         *   /sys/devices/virtual/nvme-subsystem/nvme-subsys0/nvme0n1
+         * Hence, we need to find the 'real parent' in "nvme" subsystem, e.g,
+         *   /sys/devices/pci0000:00/0000:00:1c.4/0000:3c:00.0/nvme/nvme0 */
+
+        assert(dev);
+        assert(ret);
+
+        sysname = udev_device_get_sysname(dev);
+        if (!sysname)
+                return -ENODEV;
+
+        /* The sysname format of nvme block device is nvme%d[c%d]n%d[p%d], e.g. nvme0n1p2 or nvme0c1n2.
+         * (Note, nvme device with 'c' can be ignored, as they are hidden. )
+         * The sysname format of nvme subsystem device is nvme%d.
+         * See nvme_alloc_ns() and nvme_init_ctrl() in drivers/nvme/host/core.c for more details. */
+        end = startswith(sysname, "nvme");
+        if (!end)
+                return -ENXIO;
+
+        end += strspn(end, DIGITS);
+        sysname = strndupa(sysname, end - sysname);
+
+        nvme = udev_device_new_from_subsystem_sysname(udev_device_get_udev(dev), "nvme", sysname);
+        if (!nvme)
+                return -ENODEV;
+
+        devpath = udev_device_get_devpath(nvme);
+        if (!devpath)
+                return -ENODEV;
+
+        /* If the 'real parent' is (still) virtual, e.g. for nvmf disks, refuse to set ID_PATH. */
+        if (startswith(devpath, "/devices/virtual/"))
+                return -ENXIO;
+
+        *ret = nvme;
+        nvme = NULL;
+        return 0;
+}
+
+static int handle_pnp(struct udev_device *parent, char **path) {
+        _cleanup_udev_device_unref_ struct udev_device *firmware_node = NULL;
+        _cleanup_free_ char *firmware_node_path = NULL;
+        const char *syspath, *sysname;
+
+        assert(parent);
+        assert(path);
+
+        syspath = udev_device_get_syspath(parent);
+        if (!syspath)
+                return -ENODEV;
+
+        firmware_node_path = realpath(strjoina(syspath, "/firmware_node"), NULL);
+        if (!firmware_node_path)
+                return -errno;
+
+        firmware_node = udev_device_new_from_syspath(udev_device_get_udev(parent), firmware_node_path);
+        if (!firmware_node)
+                return -ENODEV;
+
+        if (!streq_ptr(udev_device_get_subsystem(firmware_node), "acpi"))
+                return -ENODEV;
+
+        sysname = udev_device_get_sysname(firmware_node);
+        if (!sysname)
+                return -ENODEV;
+
+        path_prepend(path, "acpi-%s", sysname);
+
+        return 0;
+}
+
+static void add_id_with_usb_revision(struct udev_device *dev, bool test, char *path) {
+        char *p;
+
+        assert(dev);
+        assert(path);
+
+        /* When the path contains the USB revision, let's adds ID_PATH_WITH_USB_REVISION property and
+         * drop the version specifier for later use. */
+
+        p = strstr(path, "-usbv");
+        if (!p)
+                return;
+        p += strlen("-usbv");
+        if (p[0] < '0' || p[0] > '9')
+                return;
+        if (p[1] != '-')
+                return;
+
+        udev_builtin_add_property(dev, test, "ID_PATH_WITH_USB_REVISION", path);
+
+        /* Drop the USB revision specifier for backward compatibility. */
+        memmove(p - 1, p + 1, strlen(p + 1) + 1);
+}
+
 static int builtin_path_id(struct udev_device *dev, int argc __attribute__((unused)), char *argv[] __attribute__((unused)), bool test) {
+        _cleanup_udev_device_unref_ struct udev_device *dev_other_branch = NULL;
         struct udev_device *parent;
         char *path = NULL;
+        _cleanup_free_ char *compat_path = NULL;
         bool supported_transport = false;
         bool supported_parent = false;
 
@@ -600,7 +836,7 @@ static int builtin_path_id(struct udev_device *dev, int argc __attribute__((unus
                 } else if (streq(subsys, "scsi_tape")) {
                         handle_scsi_tape(parent, &path);
                 } else if (streq(subsys, "scsi")) {
-                        parent = handle_scsi(parent, &path, &supported_parent);
+                        parent = handle_scsi(parent, &path, &compat_path, &supported_parent);
                         supported_transport = true;
                 } else if (streq(subsys, "cciss")) {
                         parent = handle_cciss(parent, &path);
@@ -614,33 +850,83 @@ static int builtin_path_id(struct udev_device *dev, int argc __attribute__((unus
                 } else if (streq(subsys, "serio")) {
                         path_prepend(&path, "serio-%s", udev_device_get_sysnum(parent));
                         parent = skip_subsystem(parent, "serio");
+                } else if (streq(subsys, "auxiliary")) {
+                        const char *sfnum;
+                        unsigned n;
+
+                        /* sfnum is the user-defined sub-function number (devlink port add ...
+                         * sfnum N). Prepend it so an SF leaf device gets an ID_PATH distinct
+                         * from its parent PF/VF; aux devices without 'sfnum' emit no token to
+                         * preserve pre-patch ID_PATH values. */
+                        sfnum = udev_device_get_sysattr_value(parent, "sfnum");
+                        if (sfnum && safe_atou(sfnum, &n) >= 0) {
+                                path_prepend(&path, "sf-%u", n);
+                                if (compat_path)
+                                        path_prepend(&compat_path, "sf-%u", n);
+                        }
                 } else if (streq(subsys, "pci")) {
                         path_prepend(&path, "pci-%s", udev_device_get_sysname(parent));
+                        if (compat_path)
+                                path_prepend(&compat_path, "pci-%s", udev_device_get_sysname(parent));
                         parent = skip_subsystem(parent, "pci");
                         supported_parent = true;
                 } else if (streq(subsys, "platform")) {
                         path_prepend(&path, "platform-%s", udev_device_get_sysname(parent));
+                        if (compat_path)
+                                path_prepend(&compat_path, "platform-%s", udev_device_get_sysname(parent));
                         parent = skip_subsystem(parent, "platform");
+                        supported_transport = true;
+                        supported_parent = true;
+                } else if (streq(subsys, "amba")) {
+                        path_prepend(&path, "amba-%s", udev_device_get_sysname(parent));
+                        if (compat_path)
+                                path_prepend(&compat_path, "amba-%s", udev_device_get_sysname(parent));
+                        parent = skip_subsystem(parent, "amba");
                         supported_transport = true;
                         supported_parent = true;
                 } else if (streq(subsys, "acpi")) {
                         path_prepend(&path, "acpi-%s", udev_device_get_sysname(parent));
+                        if (compat_path)
+                                path_prepend(&compat_path, "acpi-%s", udev_device_get_sysname(parent));
                         parent = skip_subsystem(parent, "acpi");
                         supported_parent = true;
+                } else if (streq(subsys, "pnp")) {
+                        if (handle_pnp(parent, &path) >= 0)
+                                supported_parent = true;
+                        parent = skip_subsystem(parent, "pnp");
                 } else if (streq(subsys, "xen")) {
                         path_prepend(&path, "xen-%s", udev_device_get_sysname(parent));
+                        if (compat_path)
+                                path_prepend(&compat_path, "xen-%s", udev_device_get_sysname(parent));
                         parent = skip_subsystem(parent, "xen");
                         supported_parent = true;
+                } else if (streq(subsys, "virtio")) {
+                        parent = skip_subsystem(parent, "virtio");
+                        supported_transport = true;
                 } else if (streq(subsys, "scm")) {
                         path_prepend(&path, "scm-%s", udev_device_get_sysname(parent));
+                        if (compat_path)
+                                path_prepend(&compat_path, "scm-%s", udev_device_get_sysname(parent));
                         parent = skip_subsystem(parent, "scm");
                         supported_transport = true;
                         supported_parent = true;
-                } else if (streq(subsys, "nvme")) {
+                } else if (streq(subsys, "nvme") || streq(subsys, "nvme-subsystem")) {
                         const char *nsid = udev_device_get_sysattr_value(dev, "nsid");
 
                         if (nsid) {
                                 path_prepend(&path, "nvme-%s", nsid);
+                                if (compat_path)
+                                        path_prepend(&compat_path, "nvme-%s", nsid);
+
+                                if (streq(subsys, "nvme-subsystem")) {
+                                        if (find_real_nvme_parent(dev, &dev_other_branch) < 0) {
+                                                free(path);
+                                                return EXIT_FAILURE;
+                                        }
+
+                                        parent = dev_other_branch;
+                                }
+
                                 parent = skip_subsystem(parent, "nvme");
                                 supported_parent = true;
                                 supported_transport = true;
@@ -665,7 +951,7 @@ static int builtin_path_id(struct udev_device *dev, int argc __attribute__((unus
          * devices do not expose their buses and do not provide a unique
          * and predictable name that way.
          */
-        if (streq(udev_device_get_subsystem(dev), "block") && !supported_transport) {
+        if (streq_ptr(udev_device_get_subsystem(dev), "block") && !supported_transport) {
                 free(path);
                 path = NULL;
         }
@@ -676,8 +962,10 @@ out:
                 size_t i;
                 const char *p;
 
+                add_id_with_usb_revision(dev, test, path);
+
                 /* compose valid udev tag name */
-                for (p = path, i = 0; *p; p++) {
+                for (p = path, i = 0; *p && i < sizeof(tag) - 1; p++) {
                         if ((*p >= '0' && *p <= '9') ||
                             (*p >= 'A' && *p <= 'Z') ||
                             (*p >= 'a' && *p <= 'z') ||
@@ -703,6 +991,15 @@ out:
 
                 udev_builtin_add_property(dev, test, "ID_PATH", path);
                 udev_builtin_add_property(dev, test, "ID_PATH_TAG", tag);
+
+                /*
+                 * Compatible link generation for ATA devices
+                 * we assign compat_link to the env variable
+                 * ID_PATH_ATA_COMPAT
+                 */
+                if (compat_path)
+                        udev_builtin_add_property(dev, test, "ID_PATH_ATA_COMPAT", compat_path);
+
                 free(path);
                 return EXIT_SUCCESS;
         }

@@ -6,11 +6,6 @@
 # The lookup keys are composed in:
 #   70-mouse.rules
 #
-# Note: The format of the "mouse:" prefix match key is a contract between the
-# rules file and the hardware data, it might change in later revisions to
-# support more or better matches, it is not necessarily expected to be a stable
-# ABI.
-#
 # Match key format:
 # mouse:<subsystem>:v<vid>p<pid>:name:<name>:
 #
@@ -46,12 +41,22 @@
 #   udevadm info /dev/input/eventXX.
 #
 # Allowed properties are:
+#   ID_INPUT_3D_MOUSE
 #   ID_INPUT_TRACKBALL
 #   MOUSE_DPI
 #   MOUSE_WHEEL_CLICK_ANGLE
 #   MOUSE_WHEEL_CLICK_ANGLE_HORIZONTAL
 #   MOUSE_WHEEL_CLICK_COUNT
 #   MOUSE_WHEEL_CLICK_COUNT_HORIZONTAL
+#
+#########################################
+#         ID_INPUT_3D_MOUSE             #
+#########################################
+#
+# Specified if the device is a 3D mouse[1]. This gives access to the
+# hidraw device node to applications that consume its events directly.
+#
+# [1]: See https://en.wikipedia.org/wiki/3Dconnexion for definition
 #
 #########################################
 #         ID_INPUT_TRACKBALL            #
@@ -149,6 +154,43 @@ mouse:*:name:*TrackBall*:*
  ID_INPUT_TRACKBALL=1
 
 ##########################################
+# 3D Connexion
+##########################################
+# From https://github.com/FreeSpacenav/spacenavd/blob/39856625a6de1e8c4b57c5938e1bf29d13cf1a9f/src/dev.c#L63
+mouse:usb:v046dpc603:name:*
+mouse:usb:v046dpc605:name:*
+mouse:usb:v046dpc606:name:*
+mouse:usb:v046dpc621:name:*
+mouse:usb:v046dpc623:name:*
+mouse:usb:v046dpc625:name:*
+mouse:usb:v046dpc626:name:*
+mouse:usb:v046dpc627:name:*
+mouse:usb:v046dpc628:name:*
+mouse:usb:v046dpc629:name:*
+mouse:usb:v046dpc62b:name:*
+mouse:usb:v046dpc640:name:*
+mouse:usb:v256fpc62e:name:*
+mouse:usb:v256fpc62f:name:*
+mouse:usb:v256fpc631:name:*
+mouse:usb:v256fpc632:name:*
+mouse:usb:v256fpc633:name:*
+mouse:usb:v256fpc635:name:*
+mouse:usb:v256fpc636:name:*
+mouse:usb:v256fpc63a:name:*
+ ID_INPUT_3D_MOUSE=1
+
+mouse:bluetooth:v256fpc63a:name:*
+ ID_INPUT_3D_MOUSE=1
+
+##########################################
+# Adesso
+##########################################
+
+# Adesso Wireless keyboard with integrated trackball (MosArt 062a:4101)
+mouse:usb:v062ap4101:*
+ ID_INPUT_TRACKBALL=1
+
+##########################################
 # Apple
 ##########################################
 
@@ -157,6 +199,23 @@ mouse:*:name:*TrackBall*:*
 # as $username`s mouse
 mouse:bluetooth:v05acp030d:name:*:*
  MOUSE_DPI=1300@1000
+
+##########################################
+# Asus
+##########################################
+
+# Asus Cerberus
+mouse:usb:v04d9pa0d6:name:E-Signal/A-One USB Gaming Mouse:*
+ MOUSE_DPI=800@500 *1350@500 1600@500 2650@500
+
+##########################################
+# Cherry
+##########################################
+
+# Cherry MW 2310
+mouse:usb:v1A81p1701:name:G-Tech Wireless Dongle Mouse:*
+ KEYBOARD_KEY_90005=back
+ KEYBOARD_KEY_90004=forward
 
 ##########################################
 # Chicony
@@ -217,6 +276,33 @@ mouse:usb:v056ep0155:name:ELECOM ELECOM Relacon:*
  MOUSE_DPI=*500 1000 1500
  MOUSE_WHEEL_CLICK_ANGLE=30
 
+# Elecom IST Pro (via wired usb) (M-IPT10MRSABK)
+mouse:usb:v056ep018a:name:ELECOM ELECOM IST PRO Mouse:*
+ ID_INPUT_TRACKBALL=1
+
+# Elecom IST Pro (via usb receiver) (M-IPT10MRSABK)
+mouse:usb:v056ep01a9:name:ELECOM ELECOM Bridge G1000 Mouse:*
+ ID_INPUT_TRACKBALL=1
+
+# Elecom IST Pro (via Bluetooth) (M-IPT10MRSABK)
+mouse:bluetooth:v056ep018a:name:ELECOM IST PRO Mouse:*
+ ID_INPUT_TRACKBALL=1
+
+# Elecom HUGE Plus (via wired usb) (M-HT1MR)
+mouse:usb:v056ep01aa:name:HUGE PLUS HUGE PLUS:*
+ ID_INPUT_TRACKBALL=1
+ MOUSE_DPI=500 *1000 1500
+
+# Elecom HUGE Plus (via usb receiver) (M-HT1MR)
+mouse:usb:v056ep01ab:name:HUGE PLUS HUGE PLUS:*
+ ID_INPUT_TRACKBALL=1
+ MOUSE_DPI=500 *1000 1500
+
+# Elecom HUGE Plus (via Bluetooth) (M-HT1MR)
+mouse:bluetooth:v056ep01ac:name:HUGE PLUS:*
+ ID_INPUT_TRACKBALL=1
+ MOUSE_DPI=500 *1000 1500
+
 ##########################################
 # Fujitsu Siemens
 ##########################################
@@ -243,6 +329,14 @@ mouse:usb:v1ea7p000b:name:2.4G RF Mouse:*
 # WK-727
 mouse:usb:v04d9p0499:name:*:*
  MOUSE_DPI=800@125
+
+##########################################
+# Glorious
+##########################################
+
+# Glorious Model O Minus
+mouse:usb:v258ap0036:name:Glorious Model O:*
+ MOUSE_DPI=400@1000 800@1000 *1600@1000 3200@1000
 
 ##########################################
 # HandShoe Mouse
@@ -279,6 +373,10 @@ mouse:usb:v093ap2510:name:PIXART USB OPTICAL MOUSE:*
 mouse:usb:v03f0p0641:name:PixArt HP X1200 USB Optical Mouse:*
  MOUSE_DPI=1100@125
 
+# HP 150 Wired Mouse
+mouse:usb:v03f0p6a41:name:PixArt HP USB Optical Mouse:
+ MOUSE_DPI=1700@132
+
 ##########################################
 # IBM
 ##########################################
@@ -297,6 +395,10 @@ mouse:usb:v047dp8018:name:Kensington Expert Wireless TB Mouse:*
 mouse:bluetooth:v047dp8019:name:Expert Wireless TB Mouse:*
  ID_INPUT_TRACKBALL=1
  MOUSE_DPI=400@125
+
+# Kensington SlimBlade Pro trackball (via Bluetooth)
+mouse:bluetooth:v047dp80d4:name:SlimBlade Pro:*
+ ID_INPUT_TRACKBALL=1
 
 ##########################################
 # Lenovo
@@ -329,6 +431,10 @@ mouse:usb:v17efp6045:name:Lenovo USB Laser Mouse:*
 # ThinkPad USB Laser Mouse
 mouse:usb:v17efp6044:name:ThinkPad USB Laser Mouse:*
  MOUSE_DPI=1200@125
+
+# Lenovo Essential USB Mouse (SM-8823)
+mouse:usb:v17efp608d:name:PixArt Lenovo USB Optical Mouse:*
+ MOUSE_DPI=1600@125
 
 ##########################################
 # Logitech
@@ -393,6 +499,18 @@ mouse:usb:v046dpc08b:name:Logitech G502 HERO SE:*
 mouse:usb:v046dpc08b:name:Logitech G502 HERO Gaming Mouse:*
  MOUSE_DPI=1200@1000 *2400@1000 3200@1000 6400@1000
 
+# Logitech G502 X
+mouse:usb:v046dpc099:name:Logitech G502 X:*
+ MOUSE_DPI=800@1000 1200@1000 *1600@1000 2400@1000 3200@1000
+
+# Logitech G502 X LIGHTSPEED (Wired)
+mouse:usb:v046dpc098:name:Logitech, Inc. G502 X LIGHTSPEED:*
+# Logitech G502 X LIGHTSPEED (Wireless)
+# The USB receiver is also used by other mice. See #27118.
+# If you want to enable the entry, please copy below to your custom hwdb file.
+#mouse:usb:v046dpc547:name:Logitech USB Receiver:*
+ MOUSE_DPI=1200@1000 *2400@1000 3200@1000 6400@1000
+
 # Logitech G700 Laser Mouse (Wired)
 mouse:usb:v046dpc06b:name:Logitech G700 Laser Mouse:*
 # Logitech G700 Laser Mouse (Wireless)
@@ -416,6 +534,7 @@ mouse:usb:v046dp4079:name:Logitech G Pro:*
 
 # Logitech Wireless Mouse M185
 mouse:usb:v046dp4008:name:Logitech M185:*
+mouse:usb:v046dp4008:name:Logitech M185/M225:*
 mouse:usb:v046dpc52b:name:Logitech Unifying Device. Wireless PID:4008:*
  MOUSE_DPI=1000@125
 
@@ -523,10 +642,20 @@ mouse:bluetooth:v046dpb019:name:MX Master 2S Mouse:*
  MOUSE_WHEEL_CLICK_COUNT=24
  MOUSE_WHEEL_CLICK_COUNT_HORIZONTAL=14
 
+# Logitech MX Master 3S (via Bolt Receiver and Bluetooth)
+mouse:usb:v046dpc548:name:Logitech USB Receiver Mouse:*
+mouse:bluetooth:v046dpb035:name:MX Master 3S B Mouse:*
+ MOUSE_DPI=1000@142
+
+# Logitech MX Master 4 (via Bluetooth)
+mouse:bluetooth:v046dpb042:name:MX Master 4 Mouse:*
+ MOUSE_DPI=1000@142
+
 # Logitech MX Ergo
 mouse:usb:v046dp406f:name:Logitech MX Ergo:*
 mouse:usb:v046dpc52b:name:Logitech Unifying Device. Wireless PID:406f:*
 mouse:bluetooth:v046dpb01d:name:MX Ergo Mouse:*
+mouse:bluetooth:v046dpb01d:name:Logitech MX Ergo Multi-Device Trackball :*
  ID_INPUT_TRACKBALL=1
  MOUSE_DPI=380@125
 
@@ -596,6 +725,10 @@ mouse:usb:v046dpc517:name:Logitech USB Receiver:*
 
 # Logitech RX1000 Laser Mouse
 mouse:usb:v046dpc046:name:Logitech USB Optical Mouse:*
+ MOUSE_DPI=1000@125
+
+# Logitech RX1500
+mouse:usb:v046dpc061:name:Logitech USB Laser Mouse:*
  MOUSE_DPI=1000@125
 
 # Logitech M100 Optical Mouse
@@ -729,12 +862,36 @@ mouse:usb:v0e8fp00a7:name:DaKai 2.4G RX:*
  MOUSE_DPI=*800@126 1600@126
 
 ##########################################
+# Nulea
+##########################################
+
+# Note: The Nulea uses a generic USB dongle. Overriding its value would cause
+# other mice to be erroneously registered as trackballs, so only bluetooth
+# detection is added.
+# Nulea M501 Wireless Trackball (Bluetooth)
+mouse:bluetooth:v000ep3412:name:Nulea BT5.0 Mouse:*
+ ID_INPUT_TRACKBALL=1
+
+##########################################
 # Oklick
 ##########################################
 
 # Oklick 406S Bluetooth Laser Mouse
 mouse:bluetooth:v056ep0061:name:Laser  BTmouse:*
  MOUSE_DPI=*800@333 1600@333
+
+##########################################
+# ProtoArc
+##########################################
+
+# ProtoArc EM01 NL
+mouse:usb:v25a7pfa61:name:Compx 2.4G Receiver Mouse:*
+ ID_INPUT_TRACKBALL=1
+ MOUSE_DPI=200@250 *400@250 800@250 1200@250 1600@250
+
+mouse:bluetooth:v25a7pfaa0:name:EM01 NL:*
+ ID_INPUT_TRACKBALL=1
+ MOUSE_DPI=200@150 *400@150 800@150 1200@150 1600@150
 
 ##########################################
 # P-Active
@@ -755,6 +912,14 @@ mouse:usb:v1532p0042:name:Razer Razer Abyssus:*
 # Razer DeathAdder Black Edition
 mouse:usb:v1532p0029:name:Razer Razer DeathAdder:*
  MOUSE_DPI=3500@1000
+
+# Razer Cobra RZ04-03750300-R3U1
+mouse:usb:v1532p00a3:name:Razer Razer Cobra:*
+ MOUSE_DPI=400@1000 800@1000 *1600@1000 3200@1000 6400@1000
+
+# Razer Basilisk V3
+mouse:usb:v1532p0099:name:Razer Razer Basilisk V3:*
+ MOUSE_DPI=400@125 800@125 1600@125 3200@125 6400@125 400@500 800@500 1600@500 3200@500 6400@500 400@1000 800@1000 *1600@1000 3200@1000 6400@1000
 
 ##########################################
 # Roccat
