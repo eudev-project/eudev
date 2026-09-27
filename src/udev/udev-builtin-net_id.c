@@ -102,6 +102,7 @@ static int get_matching_parent(
 }
 
 static int get_port_specifier(struct udev_device *dev, char **ret) {
+        const char *phys_port_name;
         unsigned dev_port;
         char *buf;
         int r;
@@ -109,7 +110,18 @@ static int get_port_specifier(struct udev_device *dev, char **ret) {
         assert(dev);
         assert(ret);
 
-        /* Try to use the kernel provided port index for the case when multiple ports on a single PCI
+        /* First, try to use the kernel provided front panel port name for multiple port PCI device. */
+        r = device_get_sysattr_safe_string(dev, "phys_port_name", &phys_port_name);
+        if (r >= 0 && !isempty(phys_port_name)) {
+                buf = strjoin("n", phys_port_name, NULL);
+                if (!buf)
+                        return -ENOMEM;
+
+                *ret = buf;
+                return 1;
+        }
+
+        /* Then, try to use the kernel provided port index for the case when multiple ports on a single PCI
          * function. */
         r = device_get_sysattr_unsigned(dev, "dev_port", &dev_port);
         if (r < 0)
