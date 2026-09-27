@@ -465,6 +465,9 @@ static int builtin_net_id(struct udev_device *dev, int argc __attribute__((unuse
         struct netnames names = {};
         int err;
 
+        if (!naming_scheme_has(NAMING_SYSTEMD))
+                return udev_builtin_net_id_eudev(dev, test);
+
         /* handle only ARPHRD_ETHER and ARPHRD_SLIP devices */
         s = udev_device_get_sysattr_value(dev, "type");
         if (!s)

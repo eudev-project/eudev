@@ -55,8 +55,16 @@ typedef enum NamingSchemeFlags {
                                                      * devices (e.g. mlx5_core SFs), based on the parent PF's
                                                      * PCI path and the user-defined sfnum, with an "S" suffix. */
 
+        /* eudev: the naming logic of systemd's net_id, i.e. everything systemd changed there since
+         * version 220, which eudev's net_id was forked from, and did not put behind one of the flags
+         * above. All of systemd's schemes have it. The "eudev" scheme does not have it and is
+         * implemented by the unchanged net_id of eudev 3.2.15 and older, see
+         * udev-builtin-net_id-eudev.c, so that it keeps producing the same names. */
+        NAMING_SYSTEMD                   = 1 << 30,
+
         /* And now the masks that combine the features above */
-        NAMING_V238 = 0,
+        NAMING_EUDEV = 0,
+        NAMING_V238 = NAMING_SYSTEMD,
         NAMING_V239 = NAMING_V238 | NAMING_SR_IOV_V | NAMING_NPAR_ARI,
         NAMING_V240 = NAMING_V239 | NAMING_INFINIBAND | NAMING_ZERO_ACPI_INDEX | NAMING_ALLOW_RERENAMES,
         NAMING_V241 = NAMING_V240 | NAMING_STABLE_VIRTUAL_MACS,

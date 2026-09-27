@@ -199,6 +199,7 @@ bool udev_builtin_validate(struct udev *udev);
 int udev_builtin_add_property(struct udev_device *dev, bool test, const char *key, const char *val);
 int udev_builtin_hwdb_lookup(struct udev_device *dev, const char *prefix, const char *modalias,
                              const char *filter, bool test);
+int udev_builtin_net_id_eudev(struct udev_device *dev, bool test);
 
 /* udevadm commands */
 struct udevadm_cmd {

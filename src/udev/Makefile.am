@@ -57,6 +57,7 @@ libudev_core_la_SOURCES = \
 	udev-builtin-input_id.c \
 	udev-builtin-net_driver.c \
 	udev-builtin-net_id.c \
+	udev-builtin-net_id-eudev.c \
 	netif-naming-scheme.c \
 	netif-naming-scheme.h \
 	udev-builtin-path_id.c \

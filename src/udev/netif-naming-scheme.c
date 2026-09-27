@@ -8,12 +8,13 @@
 #include "netif-naming-scheme.h"
 #include "util.h"
 
-/* eudev: the default can be changed at build time, e.g. with CPPFLAGS=-DDEFAULT_NET_NAMING_SCHEME='"v238"'. */
+/* eudev: the default can be changed at build time, e.g. with CPPFLAGS=-DDEFAULT_NET_NAMING_SCHEME='"eudev"'. */
 #ifndef DEFAULT_NET_NAMING_SCHEME
 #define DEFAULT_NET_NAMING_SCHEME "latest"
 #endif
 
 static const NamingScheme naming_schemes[] = {
+        { "eudev", NAMING_EUDEV },
         { "v238",  NAMING_V238 },
         { "v239",  NAMING_V239 },
         { "v240",  NAMING_V240 },
