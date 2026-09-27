@@ -105,4 +105,5 @@ static inline bool naming_scheme_has(NamingSchemeFlags flags) {
 
 int device_get_sysattr_int(struct udev_device *device, const char *sysattr, int *ret_value);
 int device_get_sysattr_unsigned(struct udev_device *device, const char *sysattr, unsigned *ret_value);
+int device_get_sysattr_bool(struct udev_device *device, const char *sysattr);
 int device_get_sysattr_safe_string(struct udev_device *device, const char *sysattr, const char **ret_value);

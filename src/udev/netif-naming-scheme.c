@@ -134,6 +134,16 @@ finish:
         return cache;
 }
 
+static int parse_boolean(const char *v) {
+        if (streq(v, "1") || strcaseeq(v, "yes") || strcaseeq(v, "y") ||
+            strcaseeq(v, "true") || strcaseeq(v, "t") || strcaseeq(v, "on"))
+                return 1;
+        if (streq(v, "0") || strcaseeq(v, "no") || strcaseeq(v, "n") ||
+            strcaseeq(v, "false") || strcaseeq(v, "f") || strcaseeq(v, "off"))
+                return 0;
+        return -EINVAL;
+}
+
 static int device_get_sysattr_value(struct udev_device *dev, const char *sysattr, const char **ret) {
         const char *value;
 
@@ -203,6 +213,17 @@ int device_get_sysattr_unsigned(struct udev_device *device, const char *sysattr,
                 *ret_value = v;
         /* We return "true" if the value is positive. */
         return v > 0;
+}
+
+int device_get_sysattr_bool(struct udev_device *device, const char *sysattr) {
+        const char *value;
+        int r;
+
+        r = device_get_sysattr_value(device, sysattr, &value);
+        if (r < 0)
+                return r;
+
+        return parse_boolean(value);
 }
 
 int device_get_sysattr_safe_string(struct udev_device *device, const char *sysattr, const char **ret_value) {

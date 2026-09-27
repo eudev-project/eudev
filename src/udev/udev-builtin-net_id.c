@@ -348,6 +348,12 @@ static int is_pci_multifunction(struct udev_device *dev) {
         return config[PCI_HEADER_TYPE] & PCI_HEADER_TYPE_MULTIFUNC;
 }
 
+static bool is_pci_ari_enabled(struct udev_device *dev) {
+        assert(dev);
+
+        return device_get_sysattr_bool(dev, "ari_enabled") > 0;
+}
+
 static int pci_get_hotplug_slot_from_address(
                 struct udev_device *dev,
                 struct udev_device *pci,
@@ -459,6 +465,13 @@ static int get_pci_slot_specifiers(
         r = sscanf(sysname, "%x:%x:%x.%u", &domain, &bus, &slot, &func);
         if (r != 4)
                 return log_device_debug_errno(dev, EINVAL, "Failed to parse slot information from PCI device sysname.");
+
+        if (naming_scheme_has(NAMING_NPAR_ARI) &&
+            is_pci_ari_enabled(dev))
+                /* ARI devices support up to 256 functions on a single device ("slot"), and interpret the
+                 * traditional 5-bit slot and 3-bit function number as a single 8-bit function number,
+                 * where the slot makes up the upper 5 bits. */
+                func += slot * 8;
 
         /* The PCI domain is only prepended when it is not 0. */
         if (domain > 0 && asprintf(&domain_spec, "P%u", domain) < 0)
