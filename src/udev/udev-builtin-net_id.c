@@ -70,6 +70,7 @@ static bool device_in_subsystem(struct udev_device *dev, const char *subsystem) 
 static int get_matching_parent(
                 struct udev_device *dev,
                 const char * const *parent_subsystems,
+                bool skip_virtio,
                 struct udev_device **ret) {
 
         struct udev_device *parent;
@@ -77,6 +78,13 @@ static int get_matching_parent(
         assert(dev);
 
         parent = udev_device_get_parent(dev);
+
+        /* This provides the parent device, but skips intermediate virtio devices. There can only ever be one
+         * virtio bus per parent device, so we can safely ignore any virtio buses. See
+         * https://lore.kernel.org/virtualization/CAPXgP137A=CdmggtVPUZXbnpTbU9Tewq-sOjg9T8ohYktct1kQ@mail.gmail.com/ */
+        while (skip_virtio && parent && device_in_subsystem(parent, "virtio"))
+                parent = udev_device_get_parent(parent);
+
         if (!parent)
                 return -ENOENT;
 
@@ -391,7 +399,7 @@ static int names_pci(struct udev_device *dev, const char *prefix, bool test) {
         assert(prefix);
 
         /* check if our direct parent is a PCI device with no other bus in-between */
-        if (get_matching_parent(dev, (const char *[]) { "pci", NULL }, &parent) < 0)
+        if (get_matching_parent(dev, (const char *[]) { "pci", NULL }, /* skip_virtio= */ true, &parent) < 0)
                 return 0;
 
         (void) names_pci_onboard_label(dev, parent, prefix, test);
@@ -542,7 +550,7 @@ static int names_ccw(struct udev_device *dev, const char *prefix, bool test) {
         /* get path names for Linux on System z network devices */
 
         /* Network devices are always grouped CCW devices */
-        if (get_matching_parent(dev, (const char *[]) { "ccwgroup", NULL }, &cdev) < 0)
+        if (get_matching_parent(dev, (const char *[]) { "ccwgroup", NULL }, /* skip_virtio= */ false, &cdev) < 0)
                 return 0;
 
         log_device_debug(dev, "Device is CCW.");
