@@ -19,12 +19,18 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        distro: ['dyne/devuan:chimaera', 'alpine:latest']
+        distro:
+          - 'devuan/devuan:daedalus'
+          - 'devuan/devuan:excalibur'
+          - 'devuan/devuan:ceres'
+          - 'alpine:3.21'
+          - 'alpine:latest'
+          - 'alpine:edge'
     container:
       image: ${{ matrix.distro }}
     steps:
       - name: install prerequisites (alpine)
-        if: ${{ matrix.distro == 'alpine:latest' }}
+        if: ${{ startsWith(matrix.distro, 'alpine:') }}
         run: >-
           apk --no-cache add \
             build-base \
@@ -41,7 +47,7 @@ jobs:
             tree
 
       - name: install prerequisites (devuan)
-        if: ${{ matrix.distro == 'dyne/devuan:chimaera' }}
+        if: ${{ startsWith(matrix.distro, 'devuan/') }}
         run: >-
           apt-get update && apt-get install -y \
             build-essential \
@@ -61,7 +67,7 @@ jobs:
             tree
 
       - name: checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v7
       - name: generate configure script
         run: ./autogen.sh
       - name: configure
