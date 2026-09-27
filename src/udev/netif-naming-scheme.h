@@ -97,6 +97,7 @@ typedef struct NamingScheme {
 } NamingScheme;
 
 const NamingScheme* naming_scheme_from_name(const char *name);
+const NamingScheme* naming_scheme_init(struct udev *udev);
 const NamingScheme* naming_scheme(void);
 
 static inline bool naming_scheme_has(NamingSchemeFlags flags) {

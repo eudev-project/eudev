@@ -1523,6 +1523,9 @@ static int builtin_net_id(struct udev_device *dev, int argc __attribute__((unuse
         const char *prefix;
         int r;
 
+        /* Normally already done by the init hook, but read udev.conf also when that did not run */
+        naming_scheme_init(udev_device_get_udev(dev));
+
         if (!naming_scheme_has(NAMING_SYSTEMD))
                 return udev_builtin_net_id_eudev(dev, test);
 
@@ -1557,9 +1560,9 @@ static int builtin_net_id(struct udev_device *dev, int argc __attribute__((unuse
         return EXIT_SUCCESS;
 }
 
-static int builtin_net_id_init(struct udev *udev __attribute__((unused))) {
+static int builtin_net_id_init(struct udev *udev) {
         /* Load naming scheme here to suppress log messages in workers. */
-        naming_scheme();
+        naming_scheme_init(udev);
         return 0;
 }
 

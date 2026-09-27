@@ -141,11 +141,14 @@ and
 v261, or
 latest
 for the latest one, which is the default\&. The schemes are described in
-\fBudev\fR(7)\&. The
+\fBudev\fR(7)\&. This option takes precedence over
+\fInet_naming_scheme=\fR
+in
+\fBudev.conf\fR(5)\&. The
 \fI$NET_NAMING_SCHEME\fR
 environment variable of
 \fBudevd\fR
-takes precedence over this option, unless its value starts with
+takes precedence over both, unless its value starts with
 :\&.
 .RE
 .SH "SEE ALSO"

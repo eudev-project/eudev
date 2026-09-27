@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "libudev-private.h"
 #include "log.h"
 #include "netif-naming-scheme.h"
 #include "utf8.h"
@@ -90,9 +91,16 @@ static int parse_proc_cmdline_item(const char *key, const char *value) {
         return 0;
 }
 
-const NamingScheme* naming_scheme(void) {
-        static const NamingScheme *cache = NULL;
-        const char *e, *k;
+static const NamingScheme *cache = NULL;
+
+/* eudev: the scheme is also read from net_naming_scheme= in udev.conf. The precedence is:
+ * $NET_NAMING_SCHEME, the kernel command line, udev.conf, $NET_NAMING_SCHEME prefixed with ':',
+ * the default. Unlike systemd, an unknown name falls back to the next source instead of the
+ * default, so that e.g. a typo on the kernel command line does not override udev.conf.
+ * Called by the init hook of the builtin, which udevd runs before forking workers. */
+const NamingScheme* naming_scheme_init(struct udev *udev) {
+        const char *e, *k[4];
+        size_t i;
         int r;
 
         if (cache)
@@ -103,25 +111,25 @@ const NamingScheme* naming_scheme(void) {
         if (r < 0)
                 log_debug_errno(r, "Failed to parse kernel command line, ignoring: %m");
 
-        /* Also acquire it from an env var */
+        /* Also acquire it from an env var. If prefixed with ':' the kernel cmdline and udev.conf
+         * take precedence, otherwise the env var does. */
         e = getenv("NET_NAMING_SCHEME");
-        if (e) {
-                if (*e == ':') {
-                        /* If prefixed with ':' the kernel cmdline takes precedence */
-                        k = cmdline_naming_scheme ?: e + 1;
-                } else
-                        k = e; /* Otherwise the env var takes precedence */
-        } else
-                k = cmdline_naming_scheme;
+        k[0] = e && *e != ':' ? e : NULL;
+        k[1] = cmdline_naming_scheme;
+        k[2] = udev_get_net_naming_scheme(udev);
+        k[3] = e && *e == ':' ? e + 1 : NULL;
 
-        if (k) {
-                cache = naming_scheme_from_name(k);
+        for (i = 0; i < ELEMENTSOF(k); i++) {
+                if (!k[i])
+                        continue;
+
+                cache = naming_scheme_from_name(k[i]);
                 if (cache) {
                         log_info("Using interface naming scheme '%s'.", cache->name);
                         goto finish;
                 }
 
-                log_warning("Unknown interface naming scheme '%s' requested, ignoring.", k);
+                log_warning("Unknown interface naming scheme '%s' requested, ignoring.", k[i]);
         }
 
         cache = naming_scheme_from_name(DEFAULT_NET_NAMING_SCHEME);
@@ -132,6 +140,10 @@ finish:
         free(cmdline_naming_scheme);
         cmdline_naming_scheme = NULL;
         return cache;
+}
+
+const NamingScheme* naming_scheme(void) {
+        return cache ?: naming_scheme_init(NULL);
 }
 
 static int parse_boolean(const char *v) {

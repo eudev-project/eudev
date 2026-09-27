@@ -676,16 +676,20 @@ A Broadcom bus (BCMA) core, unless it is 0\&.
 .SS "Naming schemes"
 .PP
 New versions add new kinds of names and improve existing ones, which changes the names of some devices\&. The rules of a given version are called a naming scheme, and it can be selected with
+\fInet_naming_scheme=\fR
+in
+\fBudev.conf\fR(5)
+or
 \fInet\&.naming_scheme=\fR
 on the kernel command line (see
-\fBudevd\fR(8)) to keep the names stable\&. The environment variable
+\fBudevd\fR(8)), which takes precedence, to keep the names stable\&. The environment variable
 \fI$NET_NAMING_SCHEME\fR
 may also be used, e\&.g\&. to preview the names with
-\fBudevadm test\-builtin net_id\fR; it takes precedence over the kernel command line, unless it is prefixed with
+\fBudevadm test\-builtin net_id\fR; it takes precedence over both, unless it is prefixed with
 :\&. The schemes
 v238
 and later are the ones of systemd and generate the same names as systemd does, except that names longer than 15 characters are not exported\&. The default is
-latest\&. Unknown names are ignored with a warning\&. The following schemes are defined:
+latest\&. Unknown names are ignored with a warning, and the next setting in the order above is used\&. The following schemes are defined:
 .PP
 eudev
 .RS 4

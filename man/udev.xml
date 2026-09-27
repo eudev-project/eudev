@@ -914,17 +914,20 @@
         <para>New versions add new kinds of names and improve existing ones, which
         changes the names of some devices. The rules of a given version are
         called a naming scheme, and it can be selected with
-        <varname>net.naming_scheme=</varname> on the kernel command line (see
-        <citerefentry><refentrytitle>udevd</refentrytitle><manvolnum>8</manvolnum></citerefentry>)
-        to keep the names stable. The environment variable
+        <varname>net_naming_scheme=</varname> in
+        <citerefentry><refentrytitle>udev.conf</refentrytitle><manvolnum>5</manvolnum></citerefentry>
+        or <varname>net.naming_scheme=</varname> on the kernel command line (see
+        <citerefentry><refentrytitle>udevd</refentrytitle><manvolnum>8</manvolnum></citerefentry>),
+        which takes precedence, to keep the names stable. The environment variable
         <varname>$NET_NAMING_SCHEME</varname> may also be used, e.g. to preview
         the names with <command>udevadm test-builtin net_id</command>; it
-        takes precedence over the kernel command line, unless it is prefixed
-        with <literal>:</literal>. The schemes <literal>v238</literal> and
+        takes precedence over both, unless it is prefixed with
+        <literal>:</literal>. The schemes <literal>v238</literal> and
         later are the ones of systemd and generate the same names as systemd
         does, except that names longer than 15 characters are not exported. The default is
-        <literal>latest</literal>. Unknown names are ignored with a warning.
-        The following schemes are defined:</para>
+        <literal>latest</literal>. Unknown names are ignored with a warning, and
+        the next setting in the order above is used. The following schemes are
+        defined:</para>
 
         <variablelist>
           <varlistentry>

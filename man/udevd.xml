@@ -191,9 +191,11 @@
           and <literal>v261</literal>, or <literal>latest</literal> for the
           latest one, which is the default. The schemes are described in
           <citerefentry><refentrytitle>udev</refentrytitle><manvolnum>7</manvolnum></citerefentry>.
+          This option takes precedence over <varname>net_naming_scheme=</varname>
+          in <citerefentry><refentrytitle>udev.conf</refentrytitle><manvolnum>5</manvolnum></citerefentry>.
           The <varname>$NET_NAMING_SCHEME</varname> environment variable of
-          <command>udevd</command> takes precedence over this option, unless
-          its value starts with <literal>:</literal>.</para>
+          <command>udevd</command> takes precedence over both, unless its
+          value starts with <literal>:</literal>.</para>
         </listitem>
       </varlistentry>
     </variablelist>

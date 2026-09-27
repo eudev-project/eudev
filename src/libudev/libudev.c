@@ -53,6 +53,7 @@ struct udev {
                        const char *format, va_list args);
         void *userdata;
         bool sas_legacy_path;
+        char *net_naming_scheme;
 };
 
 static int parse_boolean(const char *v) {
@@ -195,6 +196,14 @@ static void udev_read_conf(struct udev *udev, const char *filename) {
                                         udev->sas_legacy_path = b;
                                 continue;
                         }
+
+                        if (streq(key, "net_naming_scheme")) {
+                                /* validated by the net_id builtin, which knows the schemes; an
+                                 * empty value, e.g. "", resets it */
+                                free(udev->net_naming_scheme);
+                                udev->net_naming_scheme = val[0] != '\0' ? strdup(val) : NULL;
+                                continue;
+                        }
                 }
         }
 }
@@ -250,6 +259,7 @@ int udev_read_hwdb_format(const char *root) {
         level = log_get_max_level();
         udev_read_conf(&tmp, filename);
         log_set_max_level(level);
+        free(tmp.net_naming_scheme);
 
         return tmp.hwdb_format;
 }
@@ -259,6 +269,14 @@ bool udev_get_sas_legacy_path(struct udev *udev) {
         if (udev == NULL)
                 return false;
         return udev->sas_legacy_path;
+}
+
+/* Not part of the public API, used by the net_id builtin. Returns the value of
+ * net_naming_scheme= in udev.conf, or NULL if it is not set. */
+const char *udev_get_net_naming_scheme(struct udev *udev) {
+        if (udev == NULL)
+                return NULL;
+        return udev->net_naming_scheme;
 }
 
 /**
@@ -291,6 +309,7 @@ _public_ struct udev *udev_unref(struct udev *udev) {
         udev->refcount--;
         if (udev->refcount > 0)
                 return udev;
+        free(udev->net_naming_scheme);
         free(udev);
         return NULL;
 }
