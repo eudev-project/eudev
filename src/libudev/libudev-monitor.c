@@ -150,7 +150,7 @@ __attribute__((unused)) static bool udev_has_devtmpfs(struct udev *udev __attrib
 }
 
 static void monitor_set_nl_address(struct udev_monitor *udev_monitor) {
-        union sockaddr_union snl;
+        union sockaddr_union snl = {};
         socklen_t addrlen;
         int r;
 
