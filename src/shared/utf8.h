@@ -25,6 +25,7 @@
  
 bool unichar_is_valid(uint32_t c);
 
+char *utf8_is_valid(const char *s) _pure_;
 char *ascii_is_valid(const char *s) _pure_;
 
 bool utf8_is_printable_newline(const char* str, size_t length, bool newline) _pure_;

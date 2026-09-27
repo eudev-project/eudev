@@ -165,6 +165,24 @@ bool utf8_is_printable_newline(const char* str, size_t length, bool newline) {
         return true;
 }
 
+char *utf8_is_valid(const char *str) {
+        const char *p;
+
+        assert(str);
+
+        for (p = str; *p; ) {
+                int len;
+
+                len = utf8_encoded_valid_unichar(p);
+                if (len < 0)
+                        return NULL;
+
+                p += len;
+        }
+
+        return (char*) str;
+}
+
 char *ascii_is_valid(const char *str) {
         const char *p;
 
