@@ -65,3 +65,6 @@ struct timespec *timespec_store(struct timespec *ts, usec_t u);
 
 struct timeval *timeval_store(struct timeval *tv, usec_t u);
 char *format_timespan(char *buf, size_t l, usec_t t, usec_t accuracy);
+
+int parse_time(const char *t, usec_t *ret, usec_t default_unit);
+int parse_sec(const char *t, usec_t *ret);
