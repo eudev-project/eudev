@@ -47,3 +47,27 @@ struct udev_device *find_device(struct udev *udev,
         else
                 return NULL;
 }
+
+bool colors_enabled(void) {
+        static int cached = -1;
+
+        if (cached < 0)
+                cached = isatty(STDOUT_FILENO) > 0 && !getenv("NO_COLOR") && !streq_ptr(getenv("TERM"), "dumb");
+        return cached;
+}
+
+#define DEFINE_ANSI_FUNC(name, seq)                             \
+        const char *ansi_##name(void) {                         \
+                return colors_enabled() ? seq : "";             \
+        }
+
+/* The 256-color variants of systemd are replaced by their 16-color fallbacks. */
+DEFINE_ANSI_FUNC(normal,            "\x1B[0m")
+DEFINE_ANSI_FUNC(highlight,         "\x1B[0;1;39m")
+DEFINE_ANSI_FUNC(highlight_red,     "\x1B[0;1;31m")
+DEFINE_ANSI_FUNC(highlight_green,   "\x1B[0;1;32m")
+DEFINE_ANSI_FUNC(highlight_yellow,  "\x1B[0;1;33m")
+DEFINE_ANSI_FUNC(highlight_blue,    "\x1B[0;1;34m")
+DEFINE_ANSI_FUNC(highlight_magenta, "\x1B[0;1;35m")
+DEFINE_ANSI_FUNC(highlight_cyan,    "\x1B[0;1;36m")
+DEFINE_ANSI_FUNC(grey,              "\x1B[0;90m")

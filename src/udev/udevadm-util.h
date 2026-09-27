@@ -22,3 +22,17 @@
 struct udev_device *find_device(struct udev *udev,
                                 const char *id,
                                 const char *prefix);
+
+/* Colors for the output on standard output, as systemd's ansi-color.h uses them. They
+ * are empty strings unless standard output is a terminal, $NO_COLOR is not set and
+ * $TERM is not "dumb". */
+bool colors_enabled(void);
+const char *ansi_normal(void);
+const char *ansi_highlight(void);
+const char *ansi_highlight_red(void);
+const char *ansi_highlight_green(void);
+const char *ansi_highlight_yellow(void);
+const char *ansi_highlight_blue(void);
+const char *ansi_highlight_magenta(void);
+const char *ansi_highlight_cyan(void);
+const char *ansi_grey(void);

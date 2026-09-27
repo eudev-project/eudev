@@ -30,6 +30,7 @@
 
 #include "udev.h"
 #include "udev-util.h"
+#include "udevadm-util.h"
 
 static void maybe_insert_empty_line(void) {
         if (log_get_max_level() < LOG_INFO)
