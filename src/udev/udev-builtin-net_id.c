@@ -816,7 +816,6 @@ static int names_devicetree(struct udev_device *dev, const char *prefix, bool te
         _cleanup_free_ char *devicetree_path = NULL;
         _cleanup_closedir_ DIR *dir = NULL;
         const char *ofnode_path, *ofnode_syspath, *devicetree_syspath;
-        struct udev_device *parent;
         struct dirent *de;
         int r;
 
@@ -830,14 +829,24 @@ static int names_devicetree(struct udev_device *dev, const char *prefix, bool te
         if (!streq(prefix, "en"))
                 return -EOPNOTSUPP;
 
-        /* check if our direct parent has an of_node */
-        parent = udev_device_get_parent(dev);
-        if (!parent)
-                return log_device_debug_errno(dev, ENOENT, "Failed to get parent device.");
+        /* check if the device itself has an of_node */
+        if (naming_scheme_has(NAMING_DEVICETREE_PORT_ALIASES)) {
+                ofnode_dev = device_new_child(dev, "of_node");
+                if (!ofnode_dev)
+                        log_device_debug(dev, "Failed to get device of_node, ignoring.");
+        }
+        if (!ofnode_dev) {
+                struct udev_device *parent;
 
-        ofnode_dev = device_new_child(parent, "of_node");
-        if (!ofnode_dev)
-                return log_device_debug_errno(parent, ENOENT, "Failed to get 'of_node' child device.");
+                /* check if our direct parent has an of_node as a fallback */
+                parent = udev_device_get_parent(dev);
+                if (!parent)
+                        return log_device_debug_errno(dev, ENOENT, "Failed to get parent device.");
+
+                ofnode_dev = device_new_child(parent, "of_node");
+                if (!ofnode_dev)
+                        return log_device_debug_errno(parent, ENOENT, "Failed to get device of_node.");
+        }
 
         ofnode_syspath = udev_device_get_syspath(ofnode_dev);
 
