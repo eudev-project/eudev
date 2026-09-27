@@ -620,6 +620,8 @@ static void event_queue_cleanup(struct udev *udev __attribute__((unused)), enum 
 }
 
 static void worker_returned(int fd_worker) {
+        assert(fd_worker >= 0);
+
         for (;;) {
                 struct worker_message msg;
                 struct iovec iovec;
