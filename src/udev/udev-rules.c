@@ -850,6 +850,36 @@ static int attr_subst_subdir(char *attr, size_t len) {
         return found;
 }
 
+/* Make the absolute canonical path 'path' relative to the absolute canonical directory 'dir',
+ * like systemd's path_make_relative(). */
+static int make_relative_path(const char *dir, const char *path, char *ret, size_t size) {
+        size_t i, common = 0;
+        const char *d;
+        char *p = ret;
+
+        /* find the longest common leading path, ending at a component boundary */
+        for (i = 0; dir[i] != '\0' && dir[i] == path[i]; i++)
+                if (dir[i] == '/')
+                        common = i;
+        if ((dir[i] == '\0' && IN_SET(path[i], '/', '\0')) ||
+            (path[i] == '\0' && dir[i] == '/'))
+                common = i;
+
+        ret[0] = '\0';
+
+        /* go up once for each remaining component of dir */
+        for (d = dir + common; *d != '\0'; d++)
+                if (*d == '/')
+                        size = strpcpy(&p, size, "../");
+
+        if (size > 0)
+                size = strpcpy(&p, size, path[common] == '/' ? path + common + 1 : path + common);
+        if (size == 0)
+                return -ENAMETOOLONG;
+
+        return 0;
+}
+
 /* like systemd's verify_regular_at(AT_FDCWD, path, follow) */
 static int verify_regular(const char *path, bool follow) {
         struct stat st;
@@ -2824,41 +2854,76 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                 }
                 case TK_A_ATTR: {
                         const char *key_name = rules_str(rules, cur->key.attr_off);
+                        const char *syspath = udev_device_get_syspath(event->dev);
+                        const char *filename = rules_str(rules, rule->rule.filename_off);
+                        unsigned int line = rule->rule.filename_line;
+                        _cleanup_free_ char *canonical = NULL;
                         char attr[UTIL_PATH_SIZE];
+                        char resolved[UTIL_PATH_SIZE];
                         char value[UTIL_NAME_SIZE];
-                        FILE *f;
+                        int r;
 
-                        if (util_resolve_subsys_kernel(event->udev, key_name, attr, sizeof(attr), 0) != 0)
-                                strscpyl(attr, sizeof(attr), udev_device_get_syspath(event->dev), "/", key_name, NULL);
-                        attr_subst_subdir(attr, sizeof(attr));
+                        /* First, try to resolve "[<SUBSYSTEM>/<KERNEL>]<attribute>" format. */
+                        if (util_resolve_subsys_kernel(event->udev, key_name, attr, sizeof(attr), 0) != 0) {
+                                if (key_name[0] == '[') {
+                                        log_warning("Failed to resolve sysfs attribute \"%s\", ignoring %s:%u", key_name, filename, line);
+                                        break;
+                                }
 
-                        udev_event_apply_format(event, rules_str(rules, cur->key.value_off), value, sizeof(value), false);
-                        if (!EVENT_MODE_DESTRUCTIVE(event)) {
-                                int r;
+                                /* If not, make the path to sysfs attribute absolute, to make '*' resolvable by attr_subst_subdir(). */
+                                if (strscpyl(attr, sizeof(attr), syspath, "/", key_name, NULL) == 0) {
+                                        log_warning("The path to the attribute \"%s/%s\" is too long, refusing to set the attribute %s:%u",
+                                                    syspath, key_name, filename, line);
+                                        break;
+                                }
 
-                                log_debug("Running in test mode, skipping writing ATTR{%s}=\"%s\" %s:%u", attr, value,
-                                          rules_str(rules, rule->rule.filename_off),
-                                          rule->rule.filename_line);
+                                /* Resolve '*' in the path. */
+                                attr_subst_subdir(attr, sizeof(attr));
+                        }
 
-                                r = verify_regular(attr, false);
-                                if (r < 0 && !IN_SET(r, -EACCES, -EPERM))
-                                        log_error_errno(r, "Failed to verify sysfs attribute \"%s\" is a regular file: %m", attr);
-                                else
-                                        event_cache_written_sysattr(event, attr, value);
+                        /* Then, make the path relative again. This also checks if the path being inside of the sysfs. */
+                        canonical = realpath(attr, NULL);
+                        if (canonical == NULL) {
+                                log_error_errno(errno, "Could not chase sysfs attribute \"%s\", ignoring %s:%u: %m", attr, filename, line);
                                 break;
                         }
-                        log_debug("ATTR '%s' writing '%s' %s:%u", attr, value,
-                                  rules_str(rules, rule->rule.filename_off),
-                                  rule->rule.filename_line);
-                        f = fopen(attr, "we");
-                        if (f != NULL) {
-                                if (fprintf(f, "%s", value) <= 0)
-                                        log_error_errno(errno, "error writing ATTR{%s}: %m", attr);
+                        if (isempty(path_startswith(canonical, "/sys"))) {
+                                log_error("Could not chase sysfs attribute \"%s\", ignoring %s:%u: it is outside of /sys", attr, filename, line);
+                                break;
+                        }
+                        r = make_relative_path(syspath, canonical, resolved, sizeof(resolved));
+                        if (r < 0) {
+                                log_error_errno(r, "Could not chase sysfs attribute \"%s\", ignoring %s:%u: %m", attr, filename, line);
+                                break;
+                        }
+
+                        /* Apply formatting to the value. */
+                        udev_event_apply_format(event, rules_str(rules, cur->key.value_off), value, sizeof(value), false);
+
+                        if (EVENT_MODE_DESTRUCTIVE(event)) {
+                                log_debug("Writing \"%s\" to sysfs attribute \"%s\" %s:%u", value, resolved, filename, line);
+                                r = udev_device_set_sysattr_value(event->dev, resolved, value);
+                                if (r < 0)
+                                        log_error_errno(r, "Failed to write \"%s\" to sysfs attribute \"%s\", ignoring %s:%u: %m",
+                                                        value, resolved, filename, line);
                                 else
-                                        event_cache_written_sysattr(event, attr, value);
-                                fclose(f);
+                                        event_cache_written_sysattr(event, resolved, value);
                         } else {
-                                log_error_errno(errno, "error opening ATTR{%s} for writing: %m", attr);
+                                log_debug("Running in test mode, skipping writing \"%s\" to sysfs attribute \"%s\" %s:%u",
+                                          value, resolved, filename, line);
+
+                                /* We assume the attribute is writable if the path points to a regular file, and cache
+                                 * the value to make it shown by 'udevadm test' or obtained by later ATTR match token. */
+                                r = verify_regular(canonical, true);
+                                if (r < 0 && !IN_SET(r, -EACCES, -EPERM))
+                                        log_error_errno(r, "Failed to verify sysfs attribute \"%s\" is a regular file: %m", resolved);
+                                else {
+                                        event_cache_written_sysattr(event, resolved, value);
+
+                                        r = udev_device_cache_sysattr_value(event->dev, resolved, value);
+                                        if (r < 0)
+                                                log_warning_errno(r, "Failed to cache sysfs attribute \"%s\", ignoring: %m", resolved);
+                                }
                         }
                         break;
                 }

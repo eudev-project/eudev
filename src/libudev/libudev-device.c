@@ -1684,6 +1684,42 @@ fail:
         return r;
 }
 
+/* Update the cached value of a sys attribute without writing it, e.g. when 'udevadm test' skips
+ * a write. Returns 1 when cached, 0 when not (the "uevent" file is never cached). */
+int udev_device_cache_sysattr_value(struct udev_device *udev_device, const char *sysattr, const char *value)
+{
+        _cleanup_free_ char *v = NULL;
+        struct udev_list_entry *list_entry;
+        size_t len;
+
+        if (udev_device == NULL || sysattr == NULL || value == NULL)
+                return -EINVAL;
+
+        /* like udev_device_set_sysattr_value(), do not cache the action string written into uevent */
+        if (streq(sysattr, "uevent"))
+                return 0;
+
+        /* drop trailing newlines, including carriage returns */
+        len = strlen(value);
+        while (len > 0 && strchr(NEWLINE, value[len - 1]))
+                len--;
+
+        v = strndup(value, len);
+        if (v == NULL)
+                return -ENOMEM;
+
+        if (udev_list_entry_add(&udev_device->sysattr_value_list, sysattr, v) == NULL) {
+                /* do not leave a cache entry without a value behind */
+                list_entry = udev_list_get_entry(&udev_device->sysattr_value_list);
+                list_entry = udev_list_entry_get_by_name(list_entry, sysattr);
+                if (list_entry != NULL)
+                        udev_list_entry_delete(list_entry);
+                return -ENOMEM;
+        }
+
+        return 1;
+}
+
 static int udev_device_sysattr_list_read(struct udev_device *udev_device)
 {
         struct dirent *dent;
