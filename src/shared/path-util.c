@@ -617,18 +617,17 @@ char* path_extend_internal(char **x, ...) {
         }
         va_end(ap);
 
+        /* no need to generate a slash if there is nothing yet or it already ends in one */
+        slash = old_sz == 0 || (*x)[old_sz-1] == '/';
+
         nx = realloc(x ? *x : NULL, GREEDY_ALLOC_ROUND_UP(sz+1));
         if (!nx)
                 return NULL;
         if (x)
                 *x = nx;
 
-        if (old_sz > 0)
-                slash = nx[old_sz-1] == '/';
-        else {
-                nx[old_sz] = 0;
-                slash = true; /* no need to generate a slash anymore */
-        }
+        if (old_sz == 0)
+                nx[0] = 0;
 
         q = nx + old_sz;
 
