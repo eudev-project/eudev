@@ -734,11 +734,10 @@ static int proc_cmdline_get_key(const char *key, char **value) {
                 if (r == 0)
                         break;
 
-                /* Automatically filter out arguments that are intended only for the initrd, if we are not in the
-                 * initrd. */
-                if (!in_initrd() && startswith(word, "rd."))
-                        continue;
-
+                /* Note: unlike upstream, arguments starting with "rd." are not filtered out when not
+                 * running in the initrd, as in_initrd() requires /etc/initrd-release, which the
+                 * initrds used with eudev usually do not provide. A key never matches a word with
+                 * the "rd." prefix, unless the key itself is specified with it. */
                 e = proc_cmdline_key_startswith(word, key);
                 if (!e)
                         continue;
