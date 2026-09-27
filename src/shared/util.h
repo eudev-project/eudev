@@ -110,6 +110,7 @@ int parse_uid(const char *s, uid_t* ret_uid);
 
 int safe_atou(const char *s, unsigned *ret_u);
 int safe_atoi(const char *s, int *ret_i);
+int parse_boolean(const char *v) _pure_;
 
 #define SAFE_ATO_REFUSE_PLUS_MINUS (1U << 30)
 #define SAFE_ATO_REFUSE_LEADING_ZERO (1U << 29)

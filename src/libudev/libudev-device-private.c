@@ -22,6 +22,7 @@
 #include <string.h>
 #include <stddef.h>
 #include <stdbool.h>
+#include <errno.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/stat.h>
@@ -30,6 +31,8 @@
 #include "libudev.h"
 #include "libudev-private.h"
 #include "fileio.h"
+#include "log.h"
+#include "utf8.h"
 
 static void udev_device_tag(struct udev_device *dev, const char *tag, bool add)
 {
@@ -228,4 +231,109 @@ int udev_device_delete_db(struct udev_device *udev_device)
 
         unlink(filename);
         return 0;
+}
+
+/* Reads a sysfs attribute. Unlike udev_device_get_sysattr_value(), returns a negative errno-style
+ * error code: -ENOENT if the attribute does not exist or cannot be read. */
+int device_get_sysattr_value(struct udev_device *device, const char *sysattr, const char **ret)
+{
+        const char *value;
+
+        assert(device);
+        assert(sysattr);
+
+        value = udev_device_get_sysattr_value(device, sysattr);
+        if (!value)
+                return -ENOENT;
+
+        if (ret)
+                *ret = value;
+        return 0;
+}
+
+bool sysattr_string_is_safe(const char *p)
+{
+        /* Like systemd's string_is_safe() with STRING_ALLOW_EMPTY, STRING_ALLOW_NEWLINES,
+         * STRING_ALLOW_BACKSLASHES, STRING_ALLOW_QUOTES and STRING_ALLOW_GLOBS: the string must be
+         * valid UTF-8 and must not contain control characters other than newline. */
+
+        assert(p);
+
+        return utf8_is_valid(p) && !string_has_cc(p, "\n");
+}
+
+/* Like device_get_sysattr_value(), but refuses with -ENXIO values that contain control characters
+ * other than newline, or invalid UTF-8. Use it for strings that end up in properties, paths or log
+ * messages. */
+int device_get_sysattr_safe_string(struct udev_device *device, const char *sysattr, const char **ret)
+{
+        const char *value;
+        int r;
+
+        r = device_get_sysattr_value(device, sysattr, &value);
+        if (r < 0)
+                return r;
+
+        if (!sysattr_string_is_safe(value)) {
+                log_debug("%s: '%s' sysattr contains invalid characters, refusing.",
+                          udev_device_get_sysname(device), sysattr);
+                return -ENXIO;
+        }
+
+        if (ret)
+                *ret = value;
+        return 0;
+}
+
+/* The following return a negative errno-style error code on failure. On success they return 1 if
+ * the value is positive, 0 otherwise. */
+int device_get_sysattr_int(struct udev_device *device, const char *sysattr, int *ret)
+{
+        const char *value;
+        int r, v;
+
+        r = device_get_sysattr_value(device, sysattr, &value);
+        if (r < 0)
+                return r;
+
+        r = safe_atoi(value, &v);
+        if (r < 0)
+                return log_debug_errno(r, "%s: Failed to parse '%s' attribute: %m",
+                                       udev_device_get_sysname(device), sysattr);
+
+        if (ret)
+                *ret = v;
+        return v > 0;
+}
+
+int device_get_sysattr_unsigned_full(struct udev_device *device, const char *sysattr, unsigned base, unsigned *ret)
+{
+        const char *value;
+        unsigned v;
+        int r;
+
+        r = device_get_sysattr_value(device, sysattr, &value);
+        if (r < 0)
+                return r;
+
+        r = safe_atou_full(value, base, &v);
+        if (r < 0)
+                return log_debug_errno(r, "%s: Failed to parse '%s' attribute: %m",
+                                       udev_device_get_sysname(device), sysattr);
+
+        if (ret)
+                *ret = v;
+        return v > 0;
+}
+
+int device_get_sysattr_bool(struct udev_device *device, const char *sysattr)
+{
+        const char *value;
+        int r;
+
+        r = device_get_sysattr_value(device, sysattr, &value);
+        if (r < 0)
+                return r;
+
+        return parse_boolean(value);
 }

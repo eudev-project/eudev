@@ -7,7 +7,6 @@
 #include "libudev-private.h"
 #include "log.h"
 #include "netif-naming-scheme.h"
-#include "utf8.h"
 #include "util.h"
 
 /* eudev: the default can be changed at build time, e.g. with CPPFLAGS=-DDEFAULT_NET_NAMING_SCHEME='"eudev"'. */
@@ -146,16 +145,6 @@ const NamingScheme* naming_scheme(void) {
         return cache ?: naming_scheme_init(NULL);
 }
 
-static int parse_boolean(const char *v) {
-        if (streq(v, "1") || strcaseeq(v, "yes") || strcaseeq(v, "y") ||
-            strcaseeq(v, "true") || strcaseeq(v, "t") || strcaseeq(v, "on"))
-                return 1;
-        if (streq(v, "0") || strcaseeq(v, "no") || strcaseeq(v, "n") ||
-            strcaseeq(v, "false") || strcaseeq(v, "f") || strcaseeq(v, "off"))
-                return 0;
-        return -EINVAL;
-}
-
 int device_get_property_bool(struct udev_device *dev, const char *key) {
         const char *value;
 
@@ -198,41 +187,8 @@ static int naming_sysattr_allowed(struct udev_device *dev, const char *sysattr) 
         return r;
 }
 
-static int device_get_sysattr_value(struct udev_device *dev, const char *sysattr, const char **ret) {
-        const char *value;
-
-        value = udev_device_get_sysattr_value(dev, sysattr);
-        if (!value)
-                return -ENOENT;
-
-        *ret = value;
-        return 0;
-}
-
-static bool sysattr_string_is_safe(const char *p) {
-        /* Like systemd's string_is_safe() with STRING_ALLOW_EMPTY, STRING_ALLOW_NEWLINES,
-         * STRING_ALLOW_BACKSLASHES, STRING_ALLOW_QUOTES and STRING_ALLOW_GLOBS: the string must be
-         * valid UTF-8 and must not contain control characters other than newline. */
-
-        while (*p) {
-                int len;
-
-                if ((*p > 0 && *p < ' ' && *p != '\n') || *p == 0x7f)
-                        return false;
-
-                len = utf8_encoded_valid_unichar(p);
-                if (len < 0)
-                        return false;
-
-                p += len;
-        }
-
-        return true;
-}
-
 int device_get_sysattr_int_filtered(struct udev_device *device, const char *sysattr, int *ret_value) {
-        const char *value;
-        int r, v;
+        int r;
 
         r = naming_sysattr_allowed(device, sysattr);
         if (r < 0)
@@ -240,24 +196,10 @@ int device_get_sysattr_int_filtered(struct udev_device *device, const char *sysa
         if (r == 0)
                 return -ENOENT;
 
-        r = device_get_sysattr_value(device, sysattr, &value);
-        if (r < 0)
-                return r;
-
-        r = safe_atoi(value, &v);
-        if (r < 0)
-                return log_debug_errno(r, "%s: Failed to parse '%s' attribute: %m",
-                                       udev_device_get_sysname(device), sysattr);
-
-        if (ret_value)
-                *ret_value = v;
-        /* We return "true" if the value is positive. */
-        return v > 0;
+        return device_get_sysattr_int(device, sysattr, ret_value);
 }
 
 int device_get_sysattr_unsigned_filtered(struct udev_device *device, const char *sysattr, unsigned *ret_value) {
-        const char *value;
-        unsigned v;
         int r;
 
         r = naming_sysattr_allowed(device, sysattr);
@@ -266,23 +208,10 @@ int device_get_sysattr_unsigned_filtered(struct udev_device *device, const char 
         if (r == 0)
                 return -ENOENT;
 
-        r = device_get_sysattr_value(device, sysattr, &value);
-        if (r < 0)
-                return r;
-
-        r = safe_atou_full(value, 0, &v);
-        if (r < 0)
-                return log_debug_errno(r, "%s: Failed to parse '%s' attribute: %m",
-                                       udev_device_get_sysname(device), sysattr);
-
-        if (ret_value)
-                *ret_value = v;
-        /* We return "true" if the value is positive. */
-        return v > 0;
+        return device_get_sysattr_unsigned(device, sysattr, ret_value);
 }
 
 int device_get_sysattr_bool_filtered(struct udev_device *device, const char *sysattr) {
-        const char *value;
         int r;
 
         r = naming_sysattr_allowed(device, sysattr);
@@ -291,15 +220,10 @@ int device_get_sysattr_bool_filtered(struct udev_device *device, const char *sys
         if (r == 0)
                 return -ENOENT;
 
-        r = device_get_sysattr_value(device, sysattr, &value);
-        if (r < 0)
-                return r;
-
-        return parse_boolean(value);
+        return device_get_sysattr_bool(device, sysattr);
 }
 
 int device_get_sysattr_safe_string_filtered(struct udev_device *device, const char *sysattr, const char **ret_value) {
-        const char *value;
         int r;
 
         r = naming_sysattr_allowed(device, sysattr);
@@ -308,17 +232,5 @@ int device_get_sysattr_safe_string_filtered(struct udev_device *device, const ch
         if (r == 0)
                 return -ENOENT;
 
-        r = device_get_sysattr_value(device, sysattr, &value);
-        if (r < 0)
-                return r;
-
-        if (!sysattr_string_is_safe(value)) {
-                log_debug("%s: '%s' sysattr contains invalid characters, refusing.",
-                          udev_device_get_sysname(device), sysattr);
-                return -ENXIO;
-        }
-
-        if (ret_value)
-                *ret_value = value;
-        return 0;
+        return device_get_sysattr_safe_string(device, sysattr, ret_value);
 }

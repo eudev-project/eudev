@@ -87,6 +87,15 @@ void udev_device_set_db_persist(struct udev_device *udev_device);
 int udev_device_update_db(struct udev_device *udev_device);
 int udev_device_delete_db(struct udev_device *udev_device);
 int udev_device_tag_index(struct udev_device *dev, bool add);
+int device_get_sysattr_value(struct udev_device *device, const char *sysattr, const char **ret);
+bool sysattr_string_is_safe(const char *p);
+int device_get_sysattr_safe_string(struct udev_device *device, const char *sysattr, const char **ret);
+int device_get_sysattr_int(struct udev_device *device, const char *sysattr, int *ret);
+int device_get_sysattr_unsigned_full(struct udev_device *device, const char *sysattr, unsigned base, unsigned *ret);
+static inline int device_get_sysattr_unsigned(struct udev_device *device, const char *sysattr, unsigned *ret) {
+        return device_get_sysattr_unsigned_full(device, sysattr, 0, ret);
+}
+int device_get_sysattr_bool(struct udev_device *device, const char *sysattr);
 
 /* libudev-monitor.c - netlink/unix socket communication  */
 int udev_monitor_disconnect(struct udev_monitor *udev_monitor);

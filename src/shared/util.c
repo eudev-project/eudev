@@ -399,6 +399,19 @@ int safe_atoi(const char *s, int *ret_i) {
         return 0;
 }
 
+int parse_boolean(const char *v) {
+        assert(v);
+
+        if (streq(v, "1") || strcaseeq(v, "yes") || strcaseeq(v, "y") ||
+            strcaseeq(v, "true") || strcaseeq(v, "t") || strcaseeq(v, "on"))
+                return 1;
+        if (streq(v, "0") || strcaseeq(v, "no") || strcaseeq(v, "n") ||
+            strcaseeq(v, "false") || strcaseeq(v, "f") || strcaseeq(v, "off"))
+                return 0;
+
+        return -EINVAL;
+}
+
 int safe_atollu(const char *s, long long unsigned *ret_llu) {
         char *x = NULL;
         unsigned long long l;

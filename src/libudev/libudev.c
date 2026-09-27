@@ -56,16 +56,6 @@ struct udev {
         char *net_naming_scheme;
 };
 
-static int parse_boolean(const char *v) {
-        if (streq(v, "1") || strcaseeq(v, "yes") || strcaseeq(v, "y") ||
-            strcaseeq(v, "true") || strcaseeq(v, "t") || strcaseeq(v, "on"))
-                return 1;
-        if (streq(v, "0") || strcaseeq(v, "no") || strcaseeq(v, "n") ||
-            strcaseeq(v, "false") || strcaseeq(v, "f") || strcaseeq(v, "off"))
-                return 0;
-        return -EINVAL;
-}
-
 /**
  * udev_get_userdata:
  * @udev: udev library context
