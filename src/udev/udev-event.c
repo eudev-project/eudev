@@ -588,7 +588,7 @@ static void spawn_read(struct udev_event *event,
                                         if (len > ressize - 1 - respos) {
                                                 len = ressize - 1 - respos;
                                                 if (!truncated)
-                                                        log_error("'%s' ressize %zu too short", cmd, ressize);
+                                                        log_warning("Truncating stdout of '%s' up to %zu byte.", cmd, ressize - 1);
                                                 truncated = true;
                                         }
                                         memcpy(&result[respos], buf, len);
