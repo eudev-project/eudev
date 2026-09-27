@@ -144,6 +144,48 @@ static int parse_boolean(const char *v) {
         return -EINVAL;
 }
 
+static int device_get_property_bool(struct udev_device *dev, const char *key) {
+        const char *value;
+
+        value = udev_device_get_property_value(dev, key);
+        if (!value)
+                return -ENOENT;
+
+        return parse_boolean(value);
+}
+
+static int naming_sysattr_allowed_by_default(struct udev_device *dev) {
+        int r;
+
+        assert(dev);
+
+        r = device_get_property_bool(dev, "ID_NET_NAME_ALLOW");
+        if (r == -ENOENT)
+                return true;
+
+        return r;
+}
+
+static int naming_sysattr_allowed(struct udev_device *dev, const char *sysattr) {
+        char *sysattr_property, *p;
+        int r;
+
+        assert(dev);
+        assert(sysattr);
+
+        sysattr_property = strjoina("ID_NET_NAME_ALLOW_", sysattr);
+        for (p = sysattr_property; *p; p++)
+                if (*p >= 'a' && *p <= 'z')
+                        *p = *p - 'a' + 'A';
+
+        r = device_get_property_bool(dev, sysattr_property);
+        if (r == -ENOENT)
+                /* If ID_NET_NAME_ALLOW is not set or set to 1 default is to allow */
+                return naming_sysattr_allowed_by_default(dev);
+
+        return r;
+}
+
 static int device_get_sysattr_value(struct udev_device *dev, const char *sysattr, const char **ret) {
         const char *value;
 
@@ -176,9 +218,15 @@ static bool sysattr_string_is_safe(const char *p) {
         return true;
 }
 
-int device_get_sysattr_int(struct udev_device *device, const char *sysattr, int *ret_value) {
+int device_get_sysattr_int_filtered(struct udev_device *device, const char *sysattr, int *ret_value) {
         const char *value;
         int r, v;
+
+        r = naming_sysattr_allowed(device, sysattr);
+        if (r < 0)
+                return r;
+        if (r == 0)
+                return -ENOENT;
 
         r = device_get_sysattr_value(device, sysattr, &value);
         if (r < 0)
@@ -195,10 +243,16 @@ int device_get_sysattr_int(struct udev_device *device, const char *sysattr, int 
         return v > 0;
 }
 
-int device_get_sysattr_unsigned(struct udev_device *device, const char *sysattr, unsigned *ret_value) {
+int device_get_sysattr_unsigned_filtered(struct udev_device *device, const char *sysattr, unsigned *ret_value) {
         const char *value;
         unsigned v;
         int r;
+
+        r = naming_sysattr_allowed(device, sysattr);
+        if (r < 0)
+                return r;
+        if (r == 0)
+                return -ENOENT;
 
         r = device_get_sysattr_value(device, sysattr, &value);
         if (r < 0)
@@ -215,9 +269,15 @@ int device_get_sysattr_unsigned(struct udev_device *device, const char *sysattr,
         return v > 0;
 }
 
-int device_get_sysattr_bool(struct udev_device *device, const char *sysattr) {
+int device_get_sysattr_bool_filtered(struct udev_device *device, const char *sysattr) {
         const char *value;
         int r;
+
+        r = naming_sysattr_allowed(device, sysattr);
+        if (r < 0)
+                return r;
+        if (r == 0)
+                return -ENOENT;
 
         r = device_get_sysattr_value(device, sysattr, &value);
         if (r < 0)
@@ -226,9 +286,15 @@ int device_get_sysattr_bool(struct udev_device *device, const char *sysattr) {
         return parse_boolean(value);
 }
 
-int device_get_sysattr_safe_string(struct udev_device *device, const char *sysattr, const char **ret_value) {
+int device_get_sysattr_safe_string_filtered(struct udev_device *device, const char *sysattr, const char **ret_value) {
         const char *value;
         int r;
+
+        r = naming_sysattr_allowed(device, sysattr);
+        if (r < 0)
+                return r;
+        if (r == 0)
+                return -ENOENT;
 
         r = device_get_sysattr_value(device, sysattr, &value);
         if (r < 0)

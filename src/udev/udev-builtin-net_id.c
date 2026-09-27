@@ -209,7 +209,7 @@ static int get_port_specifier(struct udev_device *dev, char **ret) {
         assert(ret);
 
         /* First, try to use the kernel provided front panel port name for multiple port PCI device. */
-        r = device_get_sysattr_safe_string(dev, "phys_port_name", &phys_port_name);
+        r = device_get_sysattr_safe_string_filtered(dev, "phys_port_name", &phys_port_name);
         if (r >= 0 && !isempty(phys_port_name)) {
                 if (naming_scheme_has(NAMING_SR_IOV_R)) {
                         int vf_id = -1;
@@ -238,7 +238,7 @@ static int get_port_specifier(struct udev_device *dev, char **ret) {
 
         /* Then, try to use the kernel provided port index for the case when multiple ports on a single PCI
          * function. */
-        r = device_get_sysattr_unsigned(dev, "dev_port", &dev_port);
+        r = device_get_sysattr_unsigned_filtered(dev, "dev_port", &dev_port);
         if (r < 0)
                 return log_device_debug_errno(dev, r, "Failed to get device port index: %m");
         if (r > 0) {
@@ -272,10 +272,10 @@ static int pci_get_onboard_index(struct udev_device *dev, unsigned *ret) {
         assert(ret);
 
         /* ACPI _DSM — device specific method for naming a PCI or PCI Express device */
-        r = device_get_sysattr_unsigned(dev, "acpi_index", &idx);
+        r = device_get_sysattr_unsigned_filtered(dev, "acpi_index", &idx);
         if (r < 0)
                 /* SMBIOS type 41 — Onboard Devices Extended Information */
-                r = device_get_sysattr_unsigned(dev, "index", &idx);
+                r = device_get_sysattr_unsigned_filtered(dev, "index", &idx);
         if (r < 0)
                 return log_device_debug_errno(dev, r, "Could not obtain onboard index: %m");
 
@@ -328,7 +328,7 @@ static int names_pci_onboard_label(struct udev_device *dev, struct udev_device *
         assert(prefix);
 
         /* retrieve on-board label from firmware */
-        r = device_get_sysattr_safe_string(pci_dev, "label", &label);
+        r = device_get_sysattr_safe_string_filtered(pci_dev, "label", &label);
         if (r < 0)
                 return log_device_debug_errno(pci_dev, r, "Failed to get PCI onboard label: %m");
 
@@ -372,7 +372,7 @@ static int is_pci_multifunction(struct udev_device *dev) {
 static bool is_pci_ari_enabled(struct udev_device *dev) {
         assert(dev);
 
-        return device_get_sysattr_bool(dev, "ari_enabled") > 0;
+        return device_get_sysattr_bool_filtered(dev, "ari_enabled") > 0;
 }
 
 static bool is_pci_bridge(struct udev_device *dev) {
@@ -381,7 +381,7 @@ static bool is_pci_bridge(struct udev_device *dev) {
 
         assert(dev);
 
-        if (device_get_sysattr_safe_string(dev, "modalias", &v) < 0)
+        if (device_get_sysattr_safe_string_filtered(dev, "modalias", &v) < 0)
                 return false;
 
         if (!startswith(v, "pci:"))
@@ -423,7 +423,7 @@ static int parse_hotplug_slot_from_function_id(struct udev_device *dev, int slot
                 return 0;
         }
 
-        if (device_get_sysattr_safe_string(dev, "function_id", &attr) < 0) {
+        if (device_get_sysattr_safe_string_filtered(dev, "function_id", &attr) < 0) {
                 *ret = 0;
                 return 0;
         }
@@ -483,7 +483,7 @@ static int pci_get_hotplug_slot_from_address(
                 if (!path)
                         return -ENOMEM;
 
-                if (device_get_sysattr_safe_string(pci, path, &address) < 0)
+                if (device_get_sysattr_safe_string_filtered(pci, path, &address) < 0)
                         continue;
 
                 /* match slot address with device by stripping the function */
@@ -832,7 +832,7 @@ static int names_devicetree(struct udev_device *dev, const char *prefix, bool te
                 if (!alias_index)
                         continue;
 
-                if (device_get_sysattr_safe_string(aliases_dev, alias, &alias_path) < 0)
+                if (device_get_sysattr_safe_string_filtered(aliases_dev, alias, &alias_path) < 0)
                         continue;
 
                 if (!path_equal(ofnode_path, alias_path))
@@ -850,7 +850,7 @@ static int names_devicetree(struct udev_device *dev, const char *prefix, bool te
                 }
 
                 /* ...but make sure we don't have an alias conflict */
-                if (i == 0 && device_get_sysattr_safe_string(aliases_dev, conflict, NULL) >= 0)
+                if (i == 0 && device_get_sysattr_safe_string_filtered(aliases_dev, conflict, NULL) >= 0)
                         return log_device_debug_errno(dev, EEXIST,
                                                       "Ethernet alias conflict: ethernet and ethernet0 both exist.");
 
@@ -1163,7 +1163,7 @@ static int names_mac(struct udev_device *dev, const char *prefix, bool test) {
         assert(dev);
         assert(prefix);
 
-        r = device_get_sysattr_unsigned(dev, "type", &iftype);
+        r = device_get_sysattr_unsigned_filtered(dev, "type", &iftype);
         if (r < 0)
                 return log_device_debug_errno(dev, r, "Failed to read 'type' attribute: %m");
 
@@ -1174,14 +1174,14 @@ static int names_mac(struct udev_device *dev, const char *prefix, bool test) {
                 return log_device_debug_errno(dev, EOPNOTSUPP, "Not generating MAC name for infiniband device.");
 
         /* check for NET_ADDR_PERM, skip random MAC addresses */
-        r = device_get_sysattr_unsigned(dev, "addr_assign_type", &assign_type);
+        r = device_get_sysattr_unsigned_filtered(dev, "addr_assign_type", &assign_type);
         if (r < 0)
                 return log_device_debug_errno(dev, r, "Failed to read/parse addr_assign_type: %m");
 
         if (assign_type != NET_ADDR_PERM)
                 return log_device_debug_errno(dev, EINVAL, "addr_assign_type=%u, MAC address is not permanent.", assign_type);
 
-        r = device_get_sysattr_safe_string(dev, "address", &s);
+        r = device_get_sysattr_safe_string_filtered(dev, "address", &s);
         if (r < 0)
                 return log_device_debug_errno(dev, r, "Failed to read 'address' attribute: %m");
 
@@ -1232,7 +1232,7 @@ static int names_netdevsim(struct udev_device *dev, const char *prefix, bool tes
         if (r < 0)
                 return log_device_debug_errno(netdevsimdev, r, "Failed to parse device sysnum: %m");
 
-        r = device_get_sysattr_safe_string(dev, "phys_port_name", &phys_port_name);
+        r = device_get_sysattr_safe_string_filtered(dev, "phys_port_name", &phys_port_name);
         if (r < 0)
                 return log_device_debug_errno(dev, r, "Failed to get 'phys_port_name' attribute: %m");
         if (isempty(phys_port_name))
@@ -1290,7 +1290,7 @@ static int get_ifname_prefix(struct udev_device *dev, const char **ret) {
         assert(dev);
         assert(ret);
 
-        r = device_get_sysattr_unsigned(dev, "type", &iftype);
+        r = device_get_sysattr_unsigned_filtered(dev, "type", &iftype);
         if (r < 0)
                 return r;
 
@@ -1332,7 +1332,7 @@ static int device_is_stacked(struct udev_device *dev) {
         if (ifindex <= 0)
                 return -ENOENT;
 
-        r = device_get_sysattr_int(dev, "iflink", &iflink);
+        r = device_get_sysattr_int_filtered(dev, "iflink", &iflink);
         if (r < 0)
                 return r;
 

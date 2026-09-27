@@ -103,7 +103,7 @@ static inline bool naming_scheme_has(NamingSchemeFlags flags) {
         return FLAGS_SET(naming_scheme()->flags, flags);
 }
 
-int device_get_sysattr_int(struct udev_device *device, const char *sysattr, int *ret_value);
-int device_get_sysattr_unsigned(struct udev_device *device, const char *sysattr, unsigned *ret_value);
-int device_get_sysattr_bool(struct udev_device *device, const char *sysattr);
-int device_get_sysattr_safe_string(struct udev_device *device, const char *sysattr, const char **ret_value);
+int device_get_sysattr_int_filtered(struct udev_device *device, const char *sysattr, int *ret_value);
+int device_get_sysattr_unsigned_filtered(struct udev_device *device, const char *sysattr, unsigned *ret_value);
+int device_get_sysattr_bool_filtered(struct udev_device *device, const char *sysattr);
+int device_get_sysattr_safe_string_filtered(struct udev_device *device, const char *sysattr, const char **ret_value);
