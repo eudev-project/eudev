@@ -344,10 +344,10 @@ static int missing(int fd)
 static void everybody(void)
 {
         struct udev_list_node *him_node;
-        const char *state = "";
 
         udev_list_node_foreach(him_node, &bunch) {
                 struct _mate *him = node_to_mate(him_node);
+                const char *state;
 
                 switch (him->state) {
                 case STATE_NONE:
@@ -358,6 +358,9 @@ static void everybody(void)
                         break;
                 case STATE_CONFIRMED:
                         state = "confirmed";
+                        break;
+                default:
+                        state = "unknown";
                         break;
                 }
                 fprintf(stderr, "ID: %s=%s\n", him->name, state);
