@@ -55,6 +55,12 @@ struct trie {
         size_t nodes_count;
         size_t children_count;
         size_t values_count;
+
+        /* If true, hwdb.bin is created in the compatible format (v1) without the information
+         * about the origin of the properties (priority, line number, and source filename),
+         * which can be read by all versions of libudev. Otherwise, the format with this
+         * additional information (v2) is created, as systemd-hwdb does. */
+        bool compat;
 };
 
 struct trie_node {
@@ -159,9 +165,12 @@ static int trie_node_add_value(struct trie *trie, struct trie_node *node,
         v = strbuf_add_string(trie->strings, value, strlen(value));
         if (v < 0)
                 return v;
-        fn = strbuf_add_string(trie->strings, filename, strlen(filename));
-        if (fn < 0)
-                return fn;
+        fn = 0;
+        if (!trie->compat) {
+                fn = strbuf_add_string(trie->strings, filename, strlen(filename));
+                if (fn < 0)
+                        return fn;
+        }
 
         if (node->values_count) {
                 struct trie_value_entry search = {
@@ -308,7 +317,7 @@ static void trie_store_nodes_size(struct trie_f *trie, struct trie_node *node) {
         for (i = 0; i < node->children_count; i++)
                 trie->strings_off += sizeof(struct trie_child_entry_f);
         for (i = 0; i < node->values_count; i++)
-                trie->strings_off += sizeof(struct trie_value_entry2_f);
+                trie->strings_off += trie->trie->compat ? sizeof(struct trie_value_entry_f) : sizeof(struct trie_value_entry2_f);
 }
 
 static int64_t trie_store_nodes(struct trie_f *trie, struct trie_node *node) {
@@ -362,7 +371,7 @@ static int64_t trie_store_nodes(struct trie_f *trie, struct trie_node *node) {
                         .file_priority = htole16(node->values[i].file_priority),
                 };
 
-                fwrite(&v, sizeof(struct trie_value_entry2_f), 1, trie->f);
+                fwrite(&v, trie->trie->compat ? sizeof(struct trie_value_entry_f) : sizeof(struct trie_value_entry2_f), 1, trie->f);
                 trie->values_count++;
         }
 
@@ -383,7 +392,7 @@ static int trie_store(struct trie *trie, const char *filename) {
                 .header_size = htole64(sizeof(struct trie_header_f)),
                 .node_size = htole64(sizeof(struct trie_node_f)),
                 .child_entry_size = htole64(sizeof(struct trie_child_entry_f)),
-                .value_entry_size = htole64(sizeof(struct trie_value_entry2_f)),
+                .value_entry_size = htole64(trie->compat ? sizeof(struct trie_value_entry_f) : sizeof(struct trie_value_entry2_f)),
         };
         int err;
 
@@ -439,7 +448,7 @@ static int trie_store(struct trie *trie, const char *filename) {
         log_debug("child pointers:   %8"PRIu64" bytes (%8"PRIu64")",
                   t.children_count * sizeof(struct trie_child_entry_f), t.children_count);
         log_debug("value pointers:   %8"PRIu64" bytes (%8"PRIu64")",
-                  t.values_count * sizeof(struct trie_value_entry2_f), t.values_count);
+                  t.values_count * (trie->compat ? sizeof(struct trie_value_entry_f) : sizeof(struct trie_value_entry2_f)), t.values_count);
         log_debug("string store:     %8zu bytes", trie->strings->len);
         log_debug("strings start:    %8"PRIu64, t.strings_off);
 
@@ -599,6 +608,7 @@ static void help(void) {
                "The HWDB is searched in "
                UDEV_HWDB_DIR ", " UDEV_LIBEXEC_DIR "/hwdb.d, "
                "and the UDEV_HWDB_PATH search path.\n"
+               "The format of hwdb.bin is configured with hwdb_format= in udev.conf.\n"
                "\n");
 }
 
@@ -620,7 +630,7 @@ static int adm_hwdb(struct udev *udev, int argc, char *argv[]) {
         const char *root = "";
         bool update = false;
         struct trie *trie = NULL;
-        int err, c;
+        int err, c, format;
         int rc = EXIT_SUCCESS;
 
         _cleanup_free_ char *hwdb_bin = strdup("/etc/udev/hwdb.bin");
@@ -693,6 +703,24 @@ static int adm_hwdb(struct udev *udev, int argc, char *argv[]) {
                         rc = EXIT_FAILURE;
                         goto out;
                 }
+
+                /* By default, create hwdb.bin in the compatible format (1), which can be read by
+                 * all versions of libudev, like upstream's 'udevadm hwdb' does. The format is
+                 * configured with hwdb_format= in udev.conf, below the root directory if specified. */
+                if (strlen(root))
+                        format = udev_read_hwdb_format(root);
+                else
+                        format = udev_get_hwdb_format(udev);
+                if (format == -ENOMEM) {
+                        rc = EXIT_FAILURE;
+                        goto out;
+                }
+                if (format < 0) {
+                        log_warning("Invalid hwdb_format= in udev.conf, using 1.");
+                        format = 1;
+                }
+                log_debug("creating hwdb.bin in format %i", format);
+                trie->compat = format == 1;
 
                 /* string store */
                 trie->strings = strbuf_new();

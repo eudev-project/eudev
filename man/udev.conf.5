@@ -39,6 +39,37 @@ and
 \fBdebug\fR\&.
 .RE
 .PP
+\fIhwdb_format\fR
+.RS 4
+The format of the compiled hardware database
+hwdb\&.bin
+created by
+\fBudevadm hwdb \-\-update\fR\&. Valid values are
+\fB1\fR
+and
+\fB2\fR, invalid values are ignored with a warning\&. Defaults to
+\fB1\fR\&.
+.sp
+Format
+\fB1\fR
+is the compatible format, which can be read by all versions of libudev\&. When a device matches multiple entries of the hardware database which set the same property, it is undefined which of the values is used\&.
+.sp
+Format
+\fB2\fR
+additionally stores the origin (the source file and the line number) of every property, so that for the same property the value from a later file or a later line takes precedence\&. This format can only be read by libudev from this release or newer: older versions of libudev, including an old
+\fBudevd\fR
+which was not restarted after an upgrade, misread such a database\&.
+.sp
+When
+\fBudevadm hwdb \-\-update\fR
+is used with
+\fB\-\-root=\fR, the value is taken from
+udev\&.conf
+below the specified root directory instead, and defaults to
+\fB1\fR
+if it is not set there\&.
+.RE
+.PP
 In addition,
 udevd
 can be configured by command\-line options and the kernel command line (see

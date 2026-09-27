@@ -34,6 +34,9 @@
 
 /* libudev.c */
 int udev_get_rules_path(struct udev *udev, char **path[], usec_t *ts_usec[]);
+int udev_parse_hwdb_format(const char *s);
+int udev_get_hwdb_format(struct udev *udev);
+int udev_read_hwdb_format(const char *root);
 
 /* libudev-device.c */
 struct udev_device *udev_device_new_from_nulstr(struct udev *udev, char *nulstr, ssize_t buflen);

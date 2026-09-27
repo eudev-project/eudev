@@ -75,6 +75,37 @@
           <option>debug</option>.</para>
         </listitem>
       </varlistentry>
+
+      <varlistentry>
+        <term><varname>hwdb_format</varname></term>
+
+        <listitem>
+          <para>The format of the compiled hardware database
+          <filename>hwdb.bin</filename> created by <command>udevadm hwdb
+          --update</command>. Valid values are <option>1</option> and
+          <option>2</option>, invalid values are ignored with a warning.
+          Defaults to <option>1</option>.</para>
+
+          <para>Format <option>1</option> is the compatible format, which can
+          be read by all versions of libudev. When a device matches multiple
+          entries of the hardware database which set the same property, it is
+          undefined which of the values is used.</para>
+
+          <para>Format <option>2</option> additionally stores the origin (the
+          source file and the line number) of every property, so that for the
+          same property the value from a later file or a later line takes
+          precedence. This format can only be read by libudev from this
+          release or newer: older versions of libudev, including an old
+          <command>udevd</command> which was not restarted after an upgrade,
+          misread such a database.</para>
+
+          <para>When <command>udevadm hwdb --update</command> is used with
+          <option>--root=</option>, the value is taken from
+          <filename>udev.conf</filename> below the specified root directory
+          instead, and defaults to <option>1</option> if it is not set
+          there.</para>
+        </listitem>
+      </varlistentry>
     </variablelist>
 
     <para>

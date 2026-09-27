@@ -46,6 +46,8 @@
  */
 struct udev {
         int refcount;
+        /* format of hwdb.bin created by 'udevadm hwdb', hwdb_format= in udev.conf, negative if invalid */
+        int hwdb_format;
         void (*log_fn)(struct udev *udev,
                        int priority, const char *file, int line, const char *fn,
                        const char *format, va_list args);
@@ -80,27 +82,18 @@ _public_ void udev_set_userdata(struct udev *udev, void *userdata) {
         udev->userdata = userdata;
 }
 
-/**
- * udev_new:
- *
- * Create udev library context. This reads the udev configuration
- * file, and fills in the default values.
- *
- * The initial refcount is 1, and needs to be decremented to
- * release the resources of the udev library context.
- *
- * Returns: a new udev library context
- **/
-_public_ struct udev *udev_new(void) {
-        struct udev *udev;
+int udev_parse_hwdb_format(const char *s) {
+        if (streq(s, "1"))
+                return 1;
+        if (streq(s, "2"))
+                return 2;
+        return -EINVAL;
+}
+
+static void udev_read_conf(struct udev *udev, const char *filename) {
         _cleanup_fclose_ FILE *f = NULL;
 
-        udev = new0(struct udev, 1);
-        if (udev == NULL)
-                return NULL;
-        udev->refcount = 1;
-
-        f = fopen( UDEV_CONF_FILE, "re");
+        f = fopen(filename, "re");
         if (f != NULL) {
                 char line[UTIL_LINE_SIZE];
                 unsigned line_nr = 0;
@@ -163,6 +156,13 @@ _public_ struct udev *udev_new(void) {
                                 val++;
                         }
 
+                        if (streq(key, "hwdb_format")) {
+                                udev->hwdb_format = udev_parse_hwdb_format(val);
+                                if (udev->hwdb_format < 0)
+                                        log_debug("%s:%u: invalid hwdb_format '%s'.", filename, line_nr, val);
+                                continue;
+                        }
+
                         if (streq(key, "udev_log")) {
                                 int prio;
 
@@ -175,8 +175,61 @@ _public_ struct udev *udev_new(void) {
                         }
                 }
         }
+}
+
+/**
+ * udev_new:
+ *
+ * Create udev library context. This reads the udev configuration
+ * file, and fills in the default values.
+ *
+ * The initial refcount is 1, and needs to be decremented to
+ * release the resources of the udev library context.
+ *
+ * Returns: a new udev library context
+ **/
+_public_ struct udev *udev_new(void) {
+        struct udev *udev;
+
+        udev = new0(struct udev, 1);
+        if (udev == NULL)
+                return NULL;
+        udev->refcount = 1;
+        udev->hwdb_format = 1;
+
+        udev_read_conf(udev, UDEV_CONF_FILE);
 
         return udev;
+}
+
+/* Returns the format of hwdb.bin configured with hwdb_format= in udev.conf, 1 or 2, or
+ * -EINVAL if the configured value is invalid. */
+int udev_get_hwdb_format(struct udev *udev) {
+        if (udev == NULL)
+                return 1;
+        return udev->hwdb_format;
+}
+
+/* Like udev_get_hwdb_format(), but reads the udev.conf below the specified root directory,
+ * e.g. when creating hwdb.bin for an offline image. */
+int udev_read_hwdb_format(const char *root) {
+        struct udev tmp = {
+                .refcount = 1,
+                .hwdb_format = 1,
+        };
+        _cleanup_free_ char *filename = NULL;
+        int level;
+
+        filename = strjoin(root, "/", UDEV_CONF_FILE, NULL);
+        if (filename == NULL)
+                return -ENOMEM;
+
+        /* do not apply udev_log= of the configuration below the root */
+        level = log_get_max_level();
+        udev_read_conf(&tmp, filename);
+        log_set_max_level(level);
+
+        return tmp.hwdb_format;
 }
 
 /**
