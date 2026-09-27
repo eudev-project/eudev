@@ -11,18 +11,24 @@ dist_udevrules_DATA = \
 	60-autosuspend.rules \
 	60-block.rules \
 	60-cdrom_id.rules \
+	60-dmi-id.rules \
 	60-drm.rules \
 	60-evdev.rules \
 	60-fido-id.rules \
+	60-gpiochip.rules \
+	60-infiniband.rules \
 	60-input-id.rules \
 	60-persistent-alsa.rules \
+	60-persistent-hidraw.rules \
 	60-persistent-input.rules \
+	60-persistent-media-controller.rules \
 	60-persistent-storage-mtd.rules \
 	60-persistent-storage-tape.rules \
 	60-persistent-v4l.rules \
 	60-sensor.rules \
 	60-serial.rules \
 	64-btrfs.rules \
+	65-integration.rules \
 	70-camera.rules \
 	70-joystick.rules \
 	70-memory.rules \
