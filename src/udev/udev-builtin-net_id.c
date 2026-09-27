@@ -337,8 +337,8 @@ static int pci_get_hotplug_slot_from_address(
 static int pci_get_hotplug_slot(struct udev_device *dev, uint32_t *ret) {
         _cleanup_udev_device_unref_ struct udev_device *pci = NULL;
         _cleanup_closedir_ DIR *dir = NULL;
+        struct udev_device *slot_dev;
         const char *slots;
-        uint32_t slot = 0;  /* avoid false maybe-uninitialized warning */
         int r;
 
         assert(dev);
@@ -355,14 +355,21 @@ static int pci_get_hotplug_slot(struct udev_device *dev, uint32_t *ret) {
         if (!dir)
                 return log_device_debug_errno(dev, errno, "Cannot open 'slots' subdirectory: %m");
 
-        r = pci_get_hotplug_slot_from_address(dev, pci, dir, &slot);
-        if (r < 0)
-                return r;
-        if (r == 0)
-                return -ENOENT;
+        for (slot_dev = dev; slot_dev; ) {
+                uint32_t slot = 0;  /* avoid false maybe-uninitialized warning */
 
-        *ret = slot;
-        return 0;
+                r = pci_get_hotplug_slot_from_address(slot_dev, pci, dir, &slot);
+                if (r < 0)
+                        return r;
+                if (r > 0) {
+                        *ret = slot;
+                        return 0;
+                }
+
+                slot_dev = udev_device_get_parent_with_subsystem_devtype(slot_dev, "pci", NULL);
+        }
+
+        return -ENOENT;
 }
 
 static int get_pci_slot_specifiers(
