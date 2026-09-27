@@ -771,7 +771,7 @@ _public_ struct udev_device *udev_device_new_from_syspath(struct udev *udev, con
 {
         const char *subdir;
         char path[UTIL_PATH_SIZE];
-        char *pos;
+        const char *pos;
         struct stat statbuf;
         struct udev_device *udev_device;
 
@@ -1112,7 +1112,7 @@ static struct udev_device *device_new_from_parent(struct udev_device *udev_devic
 {
         struct udev_device *udev_device_parent = NULL;
         char path[UTIL_PATH_SIZE];
-        const char *subdir;
+        char *subdir;
 
         strscpy(path, sizeof(path), udev_device->syspath);
         subdir = path + strlen("/sys/");

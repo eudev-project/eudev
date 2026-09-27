@@ -479,7 +479,7 @@ int unlink_noerrno(const char *path);
  * Normal bsearch requires base to be nonnull. Here were require
  * that only if nmemb > 0.
  */
-static inline void* bsearch_safe(const void *key, const void *base,
+static inline void* bsearch_safe(const void *key, void *base,
                                  size_t nmemb, size_t size,
                                  int (*compar)(const void *, const void *)) {
         if (nmemb <= 0)
