@@ -20,6 +20,7 @@
  * assign them with NAME=.
  */
 
+#include <ctype.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <inttypes.h>
@@ -489,6 +490,68 @@ static int names_vio(struct udev_device *dev, const char *prefix, bool test) {
         return 0;
 }
 
+static int names_platform(struct udev_device *dev, const char *prefix, bool test) {
+        _cleanup_free_ char *p = NULL;
+        const char *validchars;
+        char vendor[5], model_str[5], instance_str[3];
+        unsigned model, instance;
+        char str[IFNAMSIZ];
+        char *c;
+        int r;
+
+        assert(dev);
+        assert(prefix);
+
+        /* get ACPI path names for ARM64 platform devices */
+
+        /* check if our direct parent is a platform device with no other bus in-between */
+        if (get_matching_parent(dev, (const char *[]) { "platform", NULL }, /* skip_virtio= */ false, NULL) < 0)
+                return 0;
+
+        log_device_debug(dev, "Parent device is in the platform subsystem.");
+
+        r = get_first_syspath_component(dev, "/sys/devices/platform/", &p);
+        if (r < 0)
+                return log_device_debug_errno(dev, r, "Failed to get platform ID: %m");
+
+        /* Platform devices are named after ACPI table match, and instance id
+         * eg. "/sys/devices/platform/HISI00C2:00"
+         * The Vendor (3 or 4 char), followed by hexadecimal model number : instance id. */
+        if (r == 10 && p[7] == ':') {
+                /* 3 char vendor string */
+                strscpy(vendor, 4, p);
+                strscpy(model_str, sizeof model_str, p + 3);
+                strscpy(instance_str, sizeof instance_str, p + 8);
+                validchars = UPPERCASE_LETTERS;
+        } else if (r == 11 && p[8] == ':') {
+                /* 4 char vendor string */
+                strscpy(vendor, sizeof vendor, p);
+                strscpy(model_str, sizeof model_str, p + 4);
+                strscpy(instance_str, sizeof instance_str, p + 9);
+                validchars = UPPERCASE_LETTERS DIGITS;
+        } else
+                return -EOPNOTSUPP;
+
+        if (!in_charset(vendor, validchars))
+                return log_device_debug_errno(dev, EINVAL, "Platform vendor contains invalid characters: '%s'", vendor);
+
+        for (c = vendor; *c; c++)
+                *c = tolower(*c);
+
+        r = safe_atou_full(model_str, 16, &model);
+        if (r < 0)
+                return log_device_debug_errno(dev, r, "Failed to parse model number \"%s\": %m", model_str);
+
+        r = safe_atou_full(instance_str, 16, &instance);
+        if (r < 0)
+                return log_device_debug_errno(dev, r, "Failed to parse instance id \"%s\": %m", instance_str);
+
+        if (snprintf_ok(str, sizeof str, "%sa%s%xi%u", prefix, vendor, model, instance))
+                udev_builtin_add_property(dev, test, "ID_NET_NAME_PATH", str);
+        log_device_debug(dev, "Platform identifier: vendor=%s model=%x instance=%u", vendor, model, instance);
+        return 0;
+}
+
 static int names_pci(struct udev_device *dev, const char *prefix, bool test) {
         struct udev_device *parent;
 
@@ -881,6 +944,7 @@ static int builtin_net_id(struct udev_device *dev, int argc __attribute__((unuse
         (void) names_mac(dev, prefix, test);
         (void) names_ccw(dev, prefix, test);
         (void) names_vio(dev, prefix, test);
+        (void) names_platform(dev, prefix, test);
         (void) names_pci(dev, prefix, test);
         (void) names_usb(dev, prefix, test);
         (void) names_bcma(dev, prefix, test);
