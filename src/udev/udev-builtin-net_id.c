@@ -558,6 +558,56 @@ static int pci_get_hotplug_slot(struct udev_device *dev, uint32_t *ret) {
         return -ENOENT;
 }
 
+static int get_device_firmware_node_sun(struct udev_device *dev, uint32_t *ret) {
+        const char *attr;
+        unsigned sun;
+        int r;
+
+        assert(dev);
+        assert(ret);
+
+        r = device_get_sysattr_safe_string_filtered(dev, "firmware_node/sun", &attr);
+        if (r < 0)
+                return log_device_debug_errno(dev, r, "Failed to read firmware_node/sun, ignoring: %m");
+
+        r = safe_atou_full(attr, 0, &sun);
+        if (r < 0)
+                return log_device_debug_errno(dev, r, "Failed to parse firmware_node/sun '%s', ignoring: %m", attr);
+        if (sun == 0)
+                return log_device_debug_errno(dev, EINVAL, "firmware_node/sun == 0, ignoring.");
+
+        *ret = sun;
+        return 0;
+}
+
+static int pci_get_slot_from_firmware_node_sun(struct udev_device *dev, uint32_t *ret) {
+        struct udev_device *slot_dev;
+
+        assert(dev);
+        assert(ret);
+
+        if (!naming_scheme_has(NAMING_FIRMWARE_NODE_SUN))
+                return -EOPNOTSUPP;
+
+        /* Try getting the ACPI _SUN for the device */
+        if (get_device_firmware_node_sun(dev, ret) >= 0)
+                return 0;
+
+        slot_dev = udev_device_get_parent_with_subsystem_devtype(dev, "pci", NULL);
+        if (!slot_dev)
+                return log_device_debug_errno(dev, ENOENT, "Failed to find parent PCI device, ignoring.");
+
+        if (is_pci_bridge(slot_dev) && is_pci_multifunction(dev) <= 0)
+                return log_device_debug_errno(dev, ESTALE,
+                                              "Not using slot information because the parent PCI slot is a bridge and the PCI device is not multifunction.");
+
+        /* Try getting the ACPI _SUN from the parent pcieport */
+        if (get_device_firmware_node_sun(slot_dev, ret) >= 0)
+                return 0;
+
+        return -ENOENT;
+}
+
 static int get_pci_slot_specifiers(
                 struct udev_device *dev,
                 char **ret_domain,
@@ -632,14 +682,17 @@ static int names_pci_slot(struct udev_device *dev, struct udev_device *pci_dev, 
         log_device_debug(dev, "PCI path identifier: domain=%s bus_and_slot=%s func=%s port=%s -> %s",
                          strna(domain), bus_and_slot, strna(func), strna(port), isempty(str) ? "n/a" : str);
 
-        r = pci_get_hotplug_slot(pci_dev, &slot);
-        if (r < 0)
-                return r;
-        if (r > 0) {
-                /* If the hotplug slot is found through the function ID, then drop the domain from the name.
-                 * See comments in parse_hotplug_slot_from_function_id(). */
-                free(domain);
-                domain = NULL;
+        if (pci_get_slot_from_firmware_node_sun(pci_dev, &slot) < 0) {
+                /* If we don't find a slot using firmware_node/sun, fallback to hotplug_slot */
+                r = pci_get_hotplug_slot(pci_dev, &slot);
+                if (r < 0)
+                        return r;
+                if (r > 0) {
+                        /* If the hotplug slot is found through the function ID, then drop the domain from the name.
+                         * See comments in parse_hotplug_slot_from_function_id(). */
+                        free(domain);
+                        domain = NULL;
+                }
         }
 
         if (snprintf_ok(str, sizeof str, "%s%ss%" PRIu32 "%s%s%s",
