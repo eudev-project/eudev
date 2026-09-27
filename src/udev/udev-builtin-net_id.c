@@ -75,6 +75,21 @@ static bool device_in_subsystem(struct udev_device *dev, const char *subsystem) 
         return streq_ptr(udev_device_get_subsystem(dev), subsystem);
 }
 
+/* Like sd_device_new_child(): returns the device the path below the device points to. */
+static struct udev_device *device_new_child(struct udev_device *dev, const char *suffix) {
+        _cleanup_free_ char *path = NULL, *resolved = NULL;
+
+        path = strjoin(udev_device_get_syspath(dev), "/", suffix, NULL);
+        if (!path)
+                return NULL;
+
+        resolved = realpath(path, NULL);
+        if (!resolved || !path_startswith(resolved, "/sys"))
+                return NULL;
+
+        return udev_device_new_from_syspath(udev_device_get_udev(dev), resolved);
+}
+
 static int get_matching_parent(
                 struct udev_device *dev,
                 const char * const *parent_subsystems,
@@ -130,6 +145,57 @@ static int get_first_syspath_component(struct udev_device *dev, const char *pref
 
         *ret = buf;
         return (int) n; /* return the length of the string */
+}
+
+static int get_virtfn_info(struct udev_device *pcidev, struct udev_device **ret_physfn_pcidev, char **ret_suffix) {
+        _cleanup_udev_device_unref_ struct udev_device *physfn_pcidev = NULL;
+        _cleanup_closedir_ DIR *dir = NULL;
+        struct dirent *de;
+        const char *syspath;
+
+        assert(pcidev);
+        assert(ret_physfn_pcidev);
+        assert(ret_suffix);
+
+        syspath = udev_device_get_syspath(pcidev);
+
+        /* Get physical function's pci device. */
+        physfn_pcidev = device_new_child(pcidev, "physfn");
+        if (!physfn_pcidev)
+                return -ENOENT;
+
+        dir = opendir(udev_device_get_syspath(physfn_pcidev));
+        if (!dir)
+                return -errno;
+
+        /* Find the virtual function number by finding the right virtfn link. */
+        while ((de = readdir(dir))) {
+                _cleanup_udev_device_unref_ struct udev_device *child = NULL;
+                const char *n;
+
+                /* Only accepts e.g. virtfn0, virtfn1, and so on. */
+                n = startswith(de->d_name, "virtfn");
+                if (isempty(n) || !in_charset(n, DIGITS))
+                        continue;
+
+                child = device_new_child(physfn_pcidev, de->d_name);
+                if (!child)
+                        continue;
+
+                if (streq(udev_device_get_syspath(child), syspath)) {
+                        char *suffix;
+
+                        suffix = strjoin("v", n, NULL);
+                        if (!suffix)
+                                return -ENOMEM;
+
+                        *ret_physfn_pcidev = TAKE_PTR(physfn_pcidev);
+                        *ret_suffix = suffix;
+                        return 0;
+                }
+        }
+
+        return -ENOENT;
 }
 
 static int get_port_specifier(struct udev_device *dev, char **ret) {
@@ -560,6 +626,8 @@ static int names_platform(struct udev_device *dev, const char *prefix, bool test
 }
 
 static int names_pci(struct udev_device *dev, const char *prefix, bool test) {
+        _cleanup_udev_device_unref_ struct udev_device *physfn_pcidev = NULL;
+        _cleanup_free_ char *virtfn_suffix = NULL;
         struct udev_device *parent;
 
         assert(dev);
@@ -569,9 +637,15 @@ static int names_pci(struct udev_device *dev, const char *prefix, bool test) {
         if (get_matching_parent(dev, (const char *[]) { "pci", NULL }, /* skip_virtio= */ true, &parent) < 0)
                 return 0;
 
-        (void) names_pci_onboard_label(dev, parent, prefix, test);
-        (void) names_pci_onboard(dev, parent, prefix, NULL, test);
-        (void) names_pci_slot(dev, parent, prefix, NULL, test);
+        /* If this is an SR-IOV virtual device, get base name using physical device and add virtfn suffix. */
+        if (naming_scheme_has(NAMING_SR_IOV_V) &&
+            get_virtfn_info(parent, &physfn_pcidev, &virtfn_suffix) >= 0)
+                parent = physfn_pcidev;
+        else
+                (void) names_pci_onboard_label(dev, parent, prefix, test);
+
+        (void) names_pci_onboard(dev, parent, prefix, virtfn_suffix, test);
+        (void) names_pci_slot(dev, parent, prefix, virtfn_suffix, test);
         return 0;
 }
 
