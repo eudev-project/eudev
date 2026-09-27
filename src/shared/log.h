@@ -124,7 +124,9 @@ noreturn void log_assert_failed_unreachable(
 
 /* This modifies the buffer passed! */
 
-#define log_oom() log_oom_internal(__FILE__, __LINE__, __func__)
+/* log_oom_internal() always returns -ENOMEM; spell it out here, so that
+ * the value is known at the call site (e.g. to static analyzers) */
+#define log_oom() ({ log_oom_internal(__FILE__, __LINE__, __func__); -ENOMEM; })
 
 const char *log_target_to_string(LogTarget target) _const_;
 LogTarget log_target_from_string(const char *s) _pure_;
