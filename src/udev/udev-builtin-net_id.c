@@ -1107,6 +1107,45 @@ static int names_netdevsim(struct udev_device *dev, const char *prefix, bool tes
         return 0;
 }
 
+static int names_xen(struct udev_device *dev, const char *prefix, bool test) {
+        _cleanup_free_ char *vif = NULL;
+        const char *p;
+        unsigned id;
+        char str[IFNAMSIZ];
+        int r;
+
+        assert(dev);
+        assert(prefix);
+
+        /* get xen vif "slot" based names. */
+
+        if (!naming_scheme_has(NAMING_XEN_VIF))
+                return 0;
+
+        /* check if our direct parent is a Xen VIF device with no other bus in-between */
+        if (get_matching_parent(dev, (const char *[]) { "xen", NULL }, /* skip_virtio= */ false, NULL) < 0)
+                return 0;
+
+        /* Use the vif-n name to extract "n" */
+        r = get_first_syspath_component(dev, "/sys/devices/", &vif);
+        if (r < 0)
+                return log_device_debug_errno(dev, r, "Failed to get Xen VIF name: %m");
+
+        p = startswith(vif, "vif-");
+        if (!p)
+                return log_device_debug_errno(dev, EINVAL, "Invalid vif name: '%s'.", vif);
+
+        r = safe_atou_full(p, SAFE_ATO_REFUSE_PLUS_MINUS | SAFE_ATO_REFUSE_LEADING_ZERO |
+                           SAFE_ATO_REFUSE_LEADING_WHITESPACE | 10, &id);
+        if (r < 0)
+                return log_device_debug_errno(dev, r, "Failed to parse vif index from '%s': %m", p);
+
+        if (snprintf_ok(str, sizeof str, "%sX%u", prefix, id))
+                udev_builtin_add_property(dev, test, "ID_NET_NAME_SLOT", str);
+        log_device_debug(dev, "Xen identifier: id=%u", id);
+        return 0;
+}
+
 static int get_ifname_prefix(struct udev_device *dev, const char **ret) {
         unsigned iftype;
         int r;
@@ -1192,6 +1231,7 @@ static int builtin_net_id(struct udev_device *dev, int argc __attribute__((unuse
         (void) names_vio(dev, prefix, test);
         (void) names_platform(dev, prefix, test);
         (void) names_netdevsim(dev, prefix, test);
+        (void) names_xen(dev, prefix, test);
         (void) names_pci(dev, prefix, test);
         (void) names_usb(dev, prefix, test);
         (void) names_bcma(dev, prefix, test);
