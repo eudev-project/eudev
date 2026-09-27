@@ -2818,6 +2818,12 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                         attr_subst_subdir(attr, sizeof(attr));
 
                         udev_event_apply_format(event, rules_str(rules, cur->key.value_off), value, sizeof(value), false);
+                        if (!EVENT_MODE_DESTRUCTIVE(event)) {
+                                log_debug("Running in test mode, skipping writing ATTR{%s}=\"%s\" %s:%u", attr, value,
+                                          rules_str(rules, rule->rule.filename_off),
+                                          rule->rule.filename_line);
+                                break;
+                        }
                         log_debug("ATTR '%s' writing '%s' %s:%u", attr, value,
                                   rules_str(rules, rule->rule.filename_off),
                                   rule->rule.filename_line);
@@ -2839,6 +2845,11 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                         udev_event_apply_format(event, rules_str(rules, cur->key.attr_off), filename, sizeof(filename), false);
                         sysctl_normalize(filename);
                         udev_event_apply_format(event, rules_str(rules, cur->key.value_off), value, sizeof(value), false);
+                        if (!EVENT_MODE_DESTRUCTIVE(event)) {
+                                log_debug("Running in test mode, skipping writing SYSCTL{%s}=\"%s\" %s:%u", filename, value,
+                                          rules_str(rules, rule->rule.filename_off), rule->rule.filename_line);
+                                break;
+                        }
                         log_debug("SYSCTL '%s' writing '%s' %s:%u", filename, value,
                                   rules_str(rules, rule->rule.filename_off), rule->rule.filename_line);
                         r = sysctl_write(filename, value);
