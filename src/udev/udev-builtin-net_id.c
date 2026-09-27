@@ -100,6 +100,7 @@
 
 #include "udev.h"
 #include "fileio.h"
+#include "netif-naming-scheme.h"
 #include "utf8.h"
 
 enum netname_type{
@@ -498,6 +499,8 @@ static int builtin_net_id(struct udev_device *dev, int argc __attribute__((unuse
                         prefix = "ww";
         }
 
+        udev_builtin_add_property(dev, test, "ID_NET_NAMING_SCHEME", naming_scheme()->name);
+
         err = names_mac(dev, &names);
         if (err >= 0 && names.mac_valid) {
                 char str[IFNAMSIZ];
@@ -580,8 +583,15 @@ out:
         return EXIT_SUCCESS;
 }
 
+static int builtin_net_id_init(struct udev *udev __attribute__((unused))) {
+        /* Load naming scheme here to suppress log messages in workers. */
+        naming_scheme();
+        return 0;
+}
+
 const struct udev_builtin udev_builtin_net_id = {
         .name = "net_id",
         .cmd = builtin_net_id,
+        .init = builtin_net_id_init,
         .help = "Network device properties",
 };
