@@ -144,7 +144,7 @@ static int parse_boolean(const char *v) {
         return -EINVAL;
 }
 
-static int device_get_property_bool(struct udev_device *dev, const char *key) {
+int device_get_property_bool(struct udev_device *dev, const char *key) {
         const char *value;
 
         value = udev_device_get_property_value(dev, key);
