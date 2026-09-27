@@ -61,7 +61,7 @@ int main(int argc, char **argv) {
         } else {
                 device = udev_device_new_from_syspath(udev, argv[1]);
                 if (device == NULL)
-                        return log_error_errno(r, "Failed to get device from syspath: %m");
+                        return log_error_errno(errno, "Failed to get device from syspath: %m");
         }
 
         hid_device = udev_device_get_parent(device);
