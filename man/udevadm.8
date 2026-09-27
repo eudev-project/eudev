@@ -403,6 +403,24 @@ Print help text\&.
 .PP
 Simulate a udev event run for the given device, and print debug output\&.
 .PP
+This command does not change the system: network interfaces are not renamed, device nodes, their permissions and their symlinks are not changed, sysfs attributes and sysctls are not written, and the udev database is not updated\&. Programs specified by
+\fIRUN\fR
+are not executed\&. Programs specified by
+\fIPROGRAM\fR
+and
+\fIIMPORT{program}\fR
+are not executed either, except for the udev helpers
+\fBata_id\fR,
+\fBcdrom_id\fR,
+\fBdmi_memory_id\fR,
+\fBfido_id\fR,
+\fBmtd_probe\fR
+and
+\fBscsi_id\fR; any other program is treated as successful with empty output, so the properties it would set are not shown\&. The built\-in commands act as described for
+\fBudevadm test\-builtin\fR\&. What would be done, i\&.e\&. the network interface name, the owner, group, permission and symlinks of the device node, the sysfs attributes and sysctls to write, the tags, the properties and the queued
+\fIRUN\fR
+commands, is printed on standard output, and the debug messages on standard error\&.
+.PP
 \fB\-a\fR, \fB\-\-action=\fR\fB\fIstring\fR\fR
 .RS 4
 The action string\&.
@@ -427,6 +445,14 @@ Run a built\-in command
 \fICOMMAND\fR
 for device
 \fIDEVPATH\fR, and print debug output\&.
+.PP
+This command does not change the system: the
+\fBkmod\fR
+built\-in does not load kernel modules, the
+\fBkeyboard\fR
+built\-in does not change key mappings, and the
+\fBbtrfs\fR
+built\-in only checks its arguments\&.
 .PP
 \fB\-h\fR, \fB\-\-help\fR
 .RS 4

@@ -588,6 +588,22 @@
       <arg><replaceable>devpath</replaceable></arg>
     </title>
       <para>Simulate a udev event run for the given device, and print debug output.</para>
+      <para>This command does not change the system: network interfaces are not
+      renamed, device nodes, their permissions and their symlinks are not changed,
+      sysfs attributes and sysctls are not written, and the udev database is not
+      updated. Programs specified by <varname>RUN</varname> are not executed.
+      Programs specified by <varname>PROGRAM</varname> and
+      <varname>IMPORT{program}</varname> are not executed either, except for the
+      udev helpers <command>ata_id</command>, <command>cdrom_id</command>,
+      <command>dmi_memory_id</command>, <command>fido_id</command>,
+      <command>mtd_probe</command> and <command>scsi_id</command>; any other
+      program is treated as successful with empty output, so the properties it
+      would set are not shown. The built-in commands act as described for
+      <command>udevadm test-builtin</command>. What would be done, i.e. the
+      network interface name, the owner, group, permission and symlinks of the
+      device node, the sysfs attributes and sysctls to write, the tags, the
+      properties and the queued <varname>RUN</varname> commands, is printed on
+      standard output, and the debug messages on standard error.</para>
       <variablelist>
         <varlistentry>
           <term><option>-a</option></term>
@@ -627,6 +643,10 @@
       <para>Run a built-in command <replaceable>COMMAND</replaceable>
       for device <replaceable>DEVPATH</replaceable>, and print debug
       output.</para>
+      <para>This command does not change the system: the <command>kmod</command>
+      built-in does not load kernel modules, the <command>keyboard</command>
+      built-in does not change key mappings, and the <command>btrfs</command>
+      built-in only checks its arguments.</para>
       <variablelist>
         <varlistentry>
           <term><option>-h</option></term>
