@@ -946,7 +946,13 @@ static int names_devicetree(struct udev_device *dev, const char *prefix, bool te
 
         if (streq(prefix, "en"))
                 r = names_devicetree_alias_prefix(dev, prefix, "ethernet", test);
-        else
+        else if (naming_scheme_has(NAMING_DEVICETREE_ALIASES_WLAN) &&
+                 streq(prefix, "wl")) {
+                r = names_devicetree_alias_prefix(dev, prefix, "wifi", test);
+                /* Sometimes DeviceTrees have WLAN devices with alias ethernetN, fall back to those */
+                if (r == 0)
+                        r = names_devicetree_alias_prefix(dev, prefix, "ethernet", test);
+        } else
                 return -EOPNOTSUPP; /* Unsupported interface type */
         if (r < 0)
                 return r;
