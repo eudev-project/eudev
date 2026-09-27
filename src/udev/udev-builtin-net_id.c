@@ -921,7 +921,7 @@ static int parse_ether_addr(const char *s, uint8_t ret[6]) {
 }
 
 static int names_mac(struct udev_device *dev, const char *prefix, bool test) {
-        unsigned assign_type;
+        unsigned iftype, assign_type;
         uint8_t mac[6];
         const char *s;
         char str[IFNAMSIZ];
@@ -929,6 +929,16 @@ static int names_mac(struct udev_device *dev, const char *prefix, bool test) {
 
         assert(dev);
         assert(prefix);
+
+        r = device_get_sysattr_unsigned(dev, "type", &iftype);
+        if (r < 0)
+                return log_device_debug_errno(dev, r, "Failed to read 'type' attribute: %m");
+
+        /* The persistent part of a hardware address of an InfiniBand NIC is 8 bytes long. We cannot
+         * fit this much in an iface name.
+         * TODO: but it can be used as alternative names?? */
+        if (iftype == ARPHRD_INFINIBAND)
+                return log_device_debug_errno(dev, EOPNOTSUPP, "Not generating MAC name for infiniband device.");
 
         /* check for NET_ADDR_PERM, skip random MAC addresses */
         r = device_get_sysattr_unsigned(dev, "addr_assign_type", &assign_type);
@@ -973,7 +983,7 @@ static int get_ifname_prefix(struct udev_device *dev, const char **ret) {
         if (r < 0)
                 return r;
 
-        /* handle only ARPHRD_ETHER and ARPHRD_SLIP devices */
+        /* handle only ARPHRD_ETHER, ARPHRD_SLIP, and ARPHRD_INFINIBAND devices */
         switch (iftype) {
         case ARPHRD_ETHER: {
                 const char *devtype = udev_device_get_devtype(dev);
@@ -986,6 +996,13 @@ static int get_ifname_prefix(struct udev_device *dev, const char **ret) {
                         *ret = "en";
                 return 0;
         }
+        case ARPHRD_INFINIBAND:
+                if (!naming_scheme_has(NAMING_INFINIBAND))
+                        return -EOPNOTSUPP;
+
+                *ret = "ib";
+                return 0;
+
         case ARPHRD_SLIP:
                 *ret = "sl";
                 return 0;
