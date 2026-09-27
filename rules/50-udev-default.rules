@@ -47,9 +47,9 @@ SUBSYSTEM=="dvb", GROUP="video"
 SUBSYSTEM=="media", GROUP="video"
 SUBSYSTEM=="cec", GROUP="video"
 
-SUBSYSTEM=="drm", KERNEL=="renderD*", GROUP="video", MODE="0666"
-SUBSYSTEM=="kfd", GROUP="video", MODE="0666"
-SUBSYSTEM=="accel", GROUP="video", MODE="0666"
+SUBSYSTEM=="drm", KERNEL=="renderD*", GROUP="render", MODE="0666"
+SUBSYSTEM=="kfd", GROUP="render", MODE="0666"
+SUBSYSTEM=="accel", GROUP="render", MODE="0666"
 
 SUBSYSTEM=="misc", KERNEL=="sgx_enclave", GROUP="sgx", MODE="0660"
 SUBSYSTEM=="misc", KERNEL=="sgx_vepc", GROUP="sgx", MODE="0660"
