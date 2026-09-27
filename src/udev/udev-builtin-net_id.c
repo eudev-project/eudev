@@ -44,6 +44,10 @@
 #define ALTIFNAMSIZ 128
 #endif
 
+#ifndef ARPHRD_MCTP
+#define ARPHRD_MCTP 290
+#endif
+
 #ifndef NET_ADDR_PERM
 #define NET_ADDR_PERM 0
 #endif
@@ -1393,7 +1397,7 @@ static int get_ifname_prefix(struct udev_device *dev, const char **ret) {
         if (r < 0)
                 return r;
 
-        /* handle only ARPHRD_ETHER, ARPHRD_SLIP, and ARPHRD_INFINIBAND devices */
+        /* handle only ARPHRD_ETHER, ARPHRD_SLIP, ARPHRD_INFINIBAND, and ARPHRD_MCTP devices */
         switch (iftype) {
         case ARPHRD_ETHER: {
                 const char *devtype = udev_device_get_devtype(dev);
@@ -1415,6 +1419,13 @@ static int get_ifname_prefix(struct udev_device *dev, const char **ret) {
 
         case ARPHRD_SLIP:
                 *ret = "sl";
+                return 0;
+
+        case ARPHRD_MCTP:
+                if (!naming_scheme_has(NAMING_MCTP))
+                        return -EOPNOTSUPP;
+
+                *ret = "mc";
                 return 0;
 
         default:
