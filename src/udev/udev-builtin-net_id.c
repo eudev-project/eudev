@@ -460,7 +460,7 @@ static int builtin_net_id(struct udev_device *dev, int argc __attribute__((unuse
         const char *p;
         unsigned int i;
         const char *devtype;
-        const char *prefix = "en";
+        const char *prefix;
         struct netnames names = {};
         int err;
 
