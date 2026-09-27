@@ -82,6 +82,7 @@ static void help(void) {
                "  -t --type=                        Type of events to trigger\n"
                "          devices                     sysfs devices (default)\n"
                "          subsystems                  sysfs subsystems and drivers\n"
+               "          all                         sysfs devices, subsystems, and drivers\n"
                "  -c --action=ACTION                Event action value, default is \"change\"\n"
                "  -s --subsystem-match=SUBSYSTEM    Trigger devices from a matching subsystem\n"
                "  -S --subsystem-nomatch=SUBSYSTEM  Exclude devices from a matching subsystem\n"
@@ -120,6 +121,7 @@ static int adm_trigger(struct udev *udev, int argc, char *argv[]) {
         enum {
                 TYPE_DEVICES,
                 TYPE_SUBSYSTEMS,
+                TYPE_ALL,
         } device_type = TYPE_DEVICES;
         const char *action = "change";
         _cleanup_udev_enumerate_unref_ struct udev_enumerate *udev_enumerate = NULL;
@@ -146,6 +148,8 @@ static int adm_trigger(struct udev *udev, int argc, char *argv[]) {
                                 device_type = TYPE_DEVICES;
                         else if (streq(optarg, "subsystems"))
                                 device_type = TYPE_SUBSYSTEMS;
+                        else if (streq(optarg, "all"))
+                                device_type = TYPE_ALL;
                         else {
                                 log_error("unknown type --type=%s", optarg);
                                 return 2;
@@ -237,6 +241,11 @@ static int adm_trigger(struct udev *udev, int argc, char *argv[]) {
                 exec_list(udev_enumerate, action);
                 return 0;
         case TYPE_DEVICES:
+                udev_enumerate_scan_devices(udev_enumerate);
+                exec_list(udev_enumerate, action);
+                return 0;
+        case TYPE_ALL:
+                udev_enumerate_scan_subsystems(udev_enumerate);
                 udev_enumerate_scan_devices(udev_enumerate);
                 exec_list(udev_enumerate, action);
                 return 0;

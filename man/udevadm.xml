@@ -236,8 +236,9 @@
           <term><option>--type=<replaceable>TYPE</replaceable></option></term>
           <listitem>
             <para>Trigger a specific type of devices. Valid types are:
-            <command>devices</command>, <command>subsystems</command>.
-            The default value is <command>devices</command>.</para>
+            <command>devices</command>, <command>subsystems</command>,
+            <command>all</command>. The default value is
+            <command>devices</command>.</para>
           </listitem>
         </varlistentry>
         <varlistentry>
