@@ -520,9 +520,16 @@ static int pci_get_hotplug_slot(struct udev_device *dev, uint32_t *ret) {
                         /* We found the match between PCI device and slot. However, we won't use the slot
                          * index if the device is a PCI bridge, because it can have other child devices that
                          * will try to claim the same index and that would create name collision. */
-                        if (naming_scheme_has(NAMING_BRIDGE_NO_SLOT) && is_pci_bridge(slot_dev))
-                                return log_device_debug_errno(dev, ESTALE,
-                                                              "Not using slot information because the PCI device is a bridge.");
+                        if (naming_scheme_has(NAMING_BRIDGE_NO_SLOT) && is_pci_bridge(slot_dev)) {
+                                if (naming_scheme_has(NAMING_BRIDGE_MULTIFUNCTION_SLOT) && is_pci_multifunction(dev) <= 0)
+                                        return log_device_debug_errno(dev, ESTALE,
+                                                                      "Not using slot information because the PCI device associated with "
+                                                                      "the hotplug slot is a bridge and the PCI device has a single function.");
+
+                                if (!naming_scheme_has(NAMING_BRIDGE_MULTIFUNCTION_SLOT))
+                                        return log_device_debug_errno(dev, ESTALE,
+                                                                      "Not using slot information because the PCI device is a bridge.");
+                        }
 
                         *ret = slot;
                         return 0; /* domain can be still used. */
