@@ -661,9 +661,8 @@ static inline int negative_errno(void) {
          * negative. Instead of "return -errno;", use "return negative_errno();"
          * It will suppress bogus gcc warnings in case it assumes 'errno' might
          * be 0 and thus the caller's error-handling might not be triggered. */
-        //assert_return(errno > 0, -EINVAL);
-		if (errno > 0)
-			return -EINVAL;
+        if (errno <= 0)
+                return -EINVAL;
         return -errno;
 }
 
