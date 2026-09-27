@@ -53,6 +53,7 @@
 #endif
 
 #define ONBOARD_14BIT_INDEX_MAX ((1U << 14) - 1)
+#define ONBOARD_16BIT_INDEX_MAX ((1U << 16) - 1)
 
 #define log_device_debug(dev, fmt, ...) \
         log_debug("%s: " fmt, udev_device_get_sysname(dev), ##__VA_ARGS__)
@@ -241,8 +242,9 @@ static bool is_valid_onboard_index(unsigned idx) {
          * report for example). Let's define a cut-off where we don't consider the index reliable anymore. We
          * pick some arbitrary cut-off, which is somewhere beyond the realistic number of physical network
          * interface a system might have. Ideally the kernel would already filter this crap for us, but it
-         * doesn't currently. */
-        return idx <= ONBOARD_14BIT_INDEX_MAX;
+         * doesn't currently. The initial cut-off value (2^14-1) was too conservative for s390 PCI which
+         * allows for index values up 2^16-1 which is now enabled with the NAMING_16BIT_INDEX naming flag. */
+        return idx <= (naming_scheme_has(NAMING_16BIT_INDEX) ? ONBOARD_16BIT_INDEX_MAX : ONBOARD_14BIT_INDEX_MAX);
 }
 
 static int pci_get_onboard_index(struct udev_device *dev, unsigned *ret) {
