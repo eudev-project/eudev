@@ -56,10 +56,18 @@ void udev_watch_restore(struct udev *udev) {
         if (rename(WATCH_DIR, WATCH_DIR ".old") == 0) {
                 DIR *dir;
                 struct dirent *ent;
+                int dfd;
 
                 dir = opendir(WATCH_DIR ".old");
                 if (dir == NULL) {
                         log_error_errno(errno, "unable to open old watches dir " WATCH_DIR ".old; old watches will not be restored: %m");
+                        return;
+                }
+
+                dfd = dirfd(dir);
+                if (dfd < 0) {
+                        log_error_errno(errno, "unable to open old watches dir " WATCH_DIR ".old; old watches will not be restored: %m");
+                        closedir(dir);
                         return;
                 }
 
@@ -77,7 +85,7 @@ void udev_watch_restore(struct udev *udev) {
                         if (safe_atoi(ent->d_name, &wd) < 0)
                                 goto unlink;
 
-                        len = readlinkat(dirfd(dir), ent->d_name, device, sizeof(device));
+                        len = readlinkat(dfd, ent->d_name, device, sizeof(device));
                         if (len <= 0 || len == (ssize_t)sizeof(device))
                                 goto unlink;
                         device[len] = '\0';
@@ -90,7 +98,7 @@ void udev_watch_restore(struct udev *udev) {
                         udev_watch_begin(udev, dev);
                         udev_device_unref(dev);
 unlink:
-                        unlinkat(dirfd(dir), ent->d_name, 0);
+                        unlinkat(dfd, ent->d_name, 0);
                 }
 
                 closedir(dir);
