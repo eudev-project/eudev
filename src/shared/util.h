@@ -99,6 +99,14 @@ int parse_uid(const char *s, uid_t* ret_uid);
 int safe_atou(const char *s, unsigned *ret_u);
 int safe_atoi(const char *s, int *ret_i);
 
+#define SAFE_ATO_REFUSE_PLUS_MINUS (1U << 30)
+#define SAFE_ATO_REFUSE_LEADING_ZERO (1U << 29)
+#define SAFE_ATO_REFUSE_LEADING_WHITESPACE (1U << 28)
+#define SAFE_ATO_ALL_FLAGS (SAFE_ATO_REFUSE_PLUS_MINUS|SAFE_ATO_REFUSE_LEADING_ZERO|SAFE_ATO_REFUSE_LEADING_WHITESPACE)
+#define SAFE_ATO_MASK_FLAGS(base) ((base) & ~SAFE_ATO_ALL_FLAGS)
+
+int safe_atou_full(const char *s, unsigned base, unsigned *ret_u);
+
 int safe_atollu(const char *s, unsigned long long *ret_u);
 int safe_atolli(const char *s, long long int *ret_i);
 

@@ -301,6 +301,83 @@ int safe_atou(const char *s, unsigned *ret_u) {
         return 0;
 }
 
+static const char *mangle_base(const char *s, unsigned *base) {
+        const char *k;
+
+        assert(s);
+        assert(base);
+
+        /* Base already explicitly specified, then don't do anything. */
+        if (SAFE_ATO_MASK_FLAGS(*base) != 0)
+                return s;
+
+        /* Support Python 3 style "0b" and 0x" prefixes, because they truly make sense, much more than C's "0" prefix for octal. */
+        k = startswith(s, "0b") ?: startswith(s, "0B");
+        if (k) {
+                *base = 2 | (*base & SAFE_ATO_ALL_FLAGS);
+                return k;
+        }
+
+        k = startswith(s, "0o") ?: startswith(s, "0O");
+        if (k) {
+                *base = 8 | (*base & SAFE_ATO_ALL_FLAGS);
+                return k;
+        }
+
+        return s;
+}
+
+int safe_atou_full(const char *s, unsigned base, unsigned *ret_u) {
+        char *x = NULL;
+        unsigned long l;
+
+        assert(s);
+        assert(SAFE_ATO_MASK_FLAGS(base) <= 16);
+
+        /* strtoul() is happy to parse negative values, and silently converts them to unsigned values without
+         * generating an error. We want a clean error, hence let's look for the "-" prefix on our own, and
+         * generate an error. But let's do so only after strtoul() validated that the string is clean
+         * otherwise, so that we return EINVAL preferably over ERANGE. */
+
+        if (FLAGS_SET(base, SAFE_ATO_REFUSE_LEADING_WHITESPACE) &&
+            strchr(WHITESPACE, s[0]))
+                return -EINVAL;
+
+        s += strspn(s, WHITESPACE);
+
+        if (FLAGS_SET(base, SAFE_ATO_REFUSE_PLUS_MINUS) &&
+            (s[0] == '+' || s[0] == '-'))
+                return -EINVAL; /* Note that we check the "-" prefix again a second time below, but return a
+                                 * different error. I.e. if the SAFE_ATO_REFUSE_PLUS_MINUS flag is set we
+                                 * blanket refuse +/- prefixed integers, while if it is missing we'll just
+                                 * return ERANGE, because the string actually parses correctly, but doesn't
+                                 * fit in the return type. */
+
+        if (FLAGS_SET(base, SAFE_ATO_REFUSE_LEADING_ZERO) &&
+            s[0] == '0' && !streq(s, "0"))
+                return -EINVAL; /* This is particularly useful to avoid ambiguities between C's octal
+                                 * notation and assumed-to-be-decimal integers with a leading zero. */
+
+        s = mangle_base(s, &base);
+
+        errno = 0;
+        l = strtoul(s, &x, SAFE_ATO_MASK_FLAGS(base) /* Let's mask off the flags bits so that only the actual
+                                                      * base is left */);
+        if (errno > 0)
+                return -errno;
+        if (!x || x == s || *x != 0)
+                return -EINVAL;
+        if (l != 0 && s[0] == '-')
+                return -ERANGE;
+        if ((unsigned long) (unsigned) l != l)
+                return -ERANGE;
+
+        if (ret_u)
+                *ret_u = (unsigned) l;
+
+        return 0;
+}
+
 int safe_atoi(const char *s, int *ret_i) {
         char *x = NULL;
         long l;
