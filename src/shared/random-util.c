@@ -116,3 +116,22 @@ void random_bytes(void *p, size_t n) {
         for (q = p; q < (uint8_t*) p + n; q ++)
                 *q = rand();
 }
+
+uint64_t random_u64_range(uint64_t m) {
+        uint64_t x, remainder;
+
+        /* Generates a random number in the range 0…m-1, unbiased. (Java's algorithm) */
+
+        if (m == 0) /* Let's take m == 0 as special case to return an integer from the full range */
+                return random_u64();
+        if (m == 1)
+                return 0;
+
+        remainder = UINT64_MAX % m;
+
+        do {
+                x = random_u64();
+        } while (x >= UINT64_MAX - remainder);
+
+        return x % m;
+}

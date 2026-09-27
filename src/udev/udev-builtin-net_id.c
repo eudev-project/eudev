@@ -68,10 +68,6 @@ static inline const char *strempty(const char *s) {
         return s ?: "";
 }
 
-static inline const char *strna(const char *s) {
-        return s ?: "n/a";
-}
-
 static bool device_in_subsystem(struct udev_device *dev, const char *subsystem) {
         return streq_ptr(udev_device_get_subsystem(dev), subsystem);
 }

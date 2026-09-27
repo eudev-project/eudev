@@ -47,6 +47,7 @@ noinst_HEADERS = \
 	list.h \
 	log.h \
 	macro.h \
+	main-func.h \
 	mempool.h \
 	missing.h \
 	mkdir.h \

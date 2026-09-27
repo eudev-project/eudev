@@ -73,6 +73,10 @@ static inline const char* one_zero(bool b) {
         return b ? "1" : "0";
 }
 
+static inline const char *strna(const char *s) {
+        return s ?: "n/a";
+}
+
 static inline bool isempty(const char *p) {
         return !p || !p[0];
 }
@@ -542,7 +546,7 @@ int unlink_noerrno(const char *path);
  * Normal bsearch requires base to be nonnull. Here were require
  * that only if nmemb > 0.
  */
-static inline void* bsearch_safe(const void *key, void *base,
+static inline void* bsearch_safe(const void *key, const void *base,
                                  size_t nmemb, size_t size,
                                  int (*compar)(const void *, const void *)) {
         if (nmemb <= 0)
@@ -551,6 +555,14 @@ static inline void* bsearch_safe(const void *key, void *base,
         assert(base);
         return bsearch(key, base, nmemb, size, compar);
 }
+
+#define typesafe_bsearch(k, b, n, func)                                 \
+        ({                                                              \
+                const typeof((b)[0]) *_k = k;                           \
+                int (*_func_)(const typeof((b)[0])*, const typeof((b)[0])*) = func; \
+                bsearch_safe((const void*) _k, (b), (n), sizeof((b)[0]),  \
+                             (int (*)(const void *, const void *)) _func_); \
+        })
 
 static inline void qsort_safe(void *base, size_t nmemb, size_t size,
                               int (*compar)(const void *, const void *)) {

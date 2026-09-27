@@ -36,3 +36,5 @@ static inline uint32_t random_u32(void) {
         random_bytes(&u, sizeof(u));
         return u;
 }
+
+uint64_t random_u64_range(uint64_t max);

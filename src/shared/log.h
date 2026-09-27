@@ -145,6 +145,12 @@ noreturn void log_assert_failed_unreachable(
 /* log_oom_internal() always returns -ENOMEM; spell it out here, so that
  * the value is known at the call site (e.g. to static analyzers) */
 #define log_oom() ({ log_oom_internal(__FILE__, __LINE__, __func__); -ENOMEM; })
+#define log_oom_debug() log_debug_errno(ENOMEM, "Out of memory.")
+
+/* systemd marks errors that were not taken from errno with SYNTHETIC_ERRNO(), so that they are not
+ * logged as ERRNO= to the journal. eudev does not log such structured fields, hence the macro only
+ * exists so that code from systemd can be used unchanged. */
+#define SYNTHETIC_ERRNO(num) (abs(num))
 
 const char *log_target_to_string(LogTarget target) _const_;
 LogTarget log_target_from_string(const char *s) _pure_;
