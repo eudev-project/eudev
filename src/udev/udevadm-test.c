@@ -172,6 +172,13 @@ static void dump_event(struct udev_event *event) {
         }
 }
 
+static void maybe_insert_empty_line(void) {
+        if (log_get_max_level() < LOG_INFO)
+                return;
+
+        fputs("\n", stderr);
+}
+
 static void help(void) {
 
         printf("%s test OPTIONS <syspath>\n\n"
@@ -237,10 +244,9 @@ static int adm_test(struct udev *udev, int argc, char *argv[]) {
                 goto out;
         }
 
-        printf("This program is for debugging only, it does not run any program\n"
-               "specified by a RUN key. It may show incorrect results, because\n"
-               "some values may be different, or not available at a simulation run.\n"
-               "\n");
+        log_info("This program is for debugging only, it does not run any program\n"
+                 "specified by a RUN key. It may show incorrect results, because\n"
+                 "some values may be different, or not available at a simulation run.");
 
         sigprocmask(SIG_SETMASK, NULL, &sigmask_orig);
 
@@ -287,7 +293,9 @@ static int adm_test(struct udev *udev, int argc, char *argv[]) {
                                  rules,
                                  &sigmask_orig);
 
+        maybe_insert_empty_line();
         dump_event(event);
+        maybe_insert_empty_line();
 out:
         if (event != NULL && event->fd_signal >= 0)
                 close(event->fd_signal);
