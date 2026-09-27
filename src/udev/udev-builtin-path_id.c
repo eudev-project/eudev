@@ -31,6 +31,20 @@
 #include <getopt.h>
 #include <linux/usb/ch11.h>
 
+/* hub protocol values of the USB specification, for older kernel headers */
+#ifndef USB_HUB_PR_HS_NO_TT
+#define USB_HUB_PR_HS_NO_TT     0 /* Hi-speed hub without TT */
+#endif
+#ifndef USB_HUB_PR_HS_SINGLE_TT
+#define USB_HUB_PR_HS_SINGLE_TT 1 /* Hi-speed hub with single TT */
+#endif
+#ifndef USB_HUB_PR_HS_MULTI_TT
+#define USB_HUB_PR_HS_MULTI_TT  2 /* Hi-speed hub with multiple TT */
+#endif
+#ifndef USB_HUB_PR_SS
+#define USB_HUB_PR_SS           3 /* Super speed hub */
+#endif
+
 #include "udev.h"
 #include "udev-util.h"
 #include "def.h"
