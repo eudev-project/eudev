@@ -13,6 +13,7 @@ dist_udevhwdb_DATA = \
 	20-usb-classes.hwdb \
 	20-usb-vendor-model.hwdb \
 	20-vmbus-class.hwdb \
+	60-autosuspend-chromiumos.hwdb \
 	60-autosuspend-fingerprint-reader.hwdb \
 	60-autosuspend.hwdb \
 	60-evdev.hwdb \
