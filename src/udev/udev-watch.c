@@ -220,8 +220,13 @@ void udev_watch_begin(struct udev *udev __attribute__((unused)), struct udev_dev
         log_debug("adding watch on '%s'", devnode);
         wd = inotify_add_watch(inotify_fd, devnode, IN_CLOSE_WRITE);
         if (wd < 0) {
-                log_error_errno(errno, "inotify_add_watch(%d, %s, %o) failed: %m",
-                    inotify_fd, devnode, IN_CLOSE_WRITE);
+                /* the device may already be gone, e.g. a partition removed right after it appeared */
+                if (IN_SET(errno, ENOENT, ENODEV, ENXIO))
+                        log_debug_errno(errno, "inotify_add_watch(%d, %s, %o) failed: %m",
+                            inotify_fd, devnode, IN_CLOSE_WRITE);
+                else
+                        log_error_errno(errno, "inotify_add_watch(%d, %s, %o) failed: %m",
+                            inotify_fd, devnode, IN_CLOSE_WRITE);
                 return;
         }
 
