@@ -741,6 +741,111 @@ static int names_platform(struct udev_device *dev, const char *prefix, bool test
         return 0;
 }
 
+static int names_devicetree(struct udev_device *dev, const char *prefix, bool test) {
+        _cleanup_udev_device_unref_ struct udev_device *aliases_dev = NULL, *ofnode_dev = NULL, *devicetree_dev = NULL;
+        _cleanup_free_ char *devicetree_path = NULL;
+        _cleanup_closedir_ DIR *dir = NULL;
+        const char *ofnode_path, *ofnode_syspath, *devicetree_syspath;
+        struct udev_device *parent;
+        struct dirent *de;
+        int r;
+
+        assert(dev);
+        assert(prefix);
+
+        if (!naming_scheme_has(NAMING_DEVICETREE_ALIASES))
+                return 0;
+
+        /* only ethernet supported for now */
+        if (!streq(prefix, "en"))
+                return -EOPNOTSUPP;
+
+        /* check if our direct parent has an of_node */
+        parent = udev_device_get_parent(dev);
+        if (!parent)
+                return log_device_debug_errno(dev, ENOENT, "Failed to get parent device.");
+
+        ofnode_dev = device_new_child(parent, "of_node");
+        if (!ofnode_dev)
+                return log_device_debug_errno(parent, ENOENT, "Failed to get 'of_node' child device.");
+
+        ofnode_syspath = udev_device_get_syspath(ofnode_dev);
+
+        /* /proc/device-tree should be a symlink to /sys/firmware/devicetree/base. */
+        devicetree_path = realpath("/proc/device-tree", NULL);
+        if (devicetree_path && path_startswith(devicetree_path, "/sys"))
+                devicetree_dev = udev_device_new_from_syspath(udev_device_get_udev(dev), devicetree_path);
+        if (!devicetree_dev)
+                return log_debug_errno(ENOENT, "Failed to create udev_device object from '/proc/device-tree'.");
+
+        devicetree_syspath = udev_device_get_syspath(devicetree_dev);
+
+        /*
+         * Example paths:
+         * devicetree_syspath = /sys/firmware/devicetree/base
+         * ofnode_syspath = /sys/firmware/devicetree/base/soc/ethernet@deadbeef
+         * ofnode_path = soc/ethernet@deadbeef
+         */
+        ofnode_path = path_startswith(ofnode_syspath, devicetree_syspath);
+        if (!ofnode_path)
+                return log_device_debug_errno(ofnode_dev, EINVAL,
+                                              "The device '%s' is not a child device of '%s'.",
+                                              ofnode_syspath, devicetree_syspath);
+
+        /* Get back our leading / to match the contents of the aliases */
+        ofnode_path = strjoina("/", ofnode_path);
+
+        aliases_dev = device_new_child(devicetree_dev, "aliases");
+        if (!aliases_dev)
+                return log_device_debug_errno(devicetree_dev, ENOENT, "Failed to get 'aliases' child device.");
+
+        dir = opendir(udev_device_get_syspath(aliases_dev));
+        if (!dir)
+                return log_device_debug_errno(aliases_dev, errno, "Failed to open directory: %m");
+
+        while ((de = readdir(dir))) {
+                const char *alias = de->d_name, *alias_path, *alias_index, *conflict;
+                char str[IFNAMSIZ];
+                unsigned i;
+
+                if (!IN_SET(de->d_type, DT_REG, DT_LNK))
+                        continue;
+
+                alias_index = startswith(alias, "ethernet");
+                if (!alias_index)
+                        continue;
+
+                if (device_get_sysattr_safe_string(aliases_dev, alias, &alias_path) < 0)
+                        continue;
+
+                if (!path_equal(ofnode_path, alias_path))
+                        continue;
+
+                /* If there's no index, we default to 0... */
+                if (isempty(alias_index)) {
+                        i = 0;
+                        conflict = "ethernet0";
+                } else {
+                        r = safe_atou_full(alias_index, 0, &i);
+                        if (r < 0)
+                                return log_device_debug_errno(dev, r, "Could not get index of alias '%s': %m", alias);
+                        conflict = "ethernet";
+                }
+
+                /* ...but make sure we don't have an alias conflict */
+                if (i == 0 && device_get_sysattr_safe_string(aliases_dev, conflict, NULL) >= 0)
+                        return log_device_debug_errno(dev, EEXIST,
+                                                      "Ethernet alias conflict: ethernet and ethernet0 both exist.");
+
+                if (snprintf_ok(str, sizeof str, "%sd%u", prefix, i))
+                        udev_builtin_add_property(dev, test, "ID_NET_NAME_ONBOARD", str);
+                log_device_debug(dev, "DeviceTree identifier: alias_index=%u", i);
+                return 0;
+        }
+
+        return -ENOENT;
+}
+
 static int names_pci(struct udev_device *dev, const char *prefix, bool test) {
         _cleanup_udev_device_unref_ struct udev_device *physfn_pcidev = NULL;
         _cleanup_free_ char *virtfn_suffix = NULL;
@@ -1234,6 +1339,7 @@ static int builtin_net_id(struct udev_device *dev, int argc __attribute__((unuse
         udev_builtin_add_property(dev, test, "ID_NET_NAMING_SCHEME", naming_scheme()->name);
 
         (void) names_mac(dev, prefix, test);
+        (void) names_devicetree(dev, prefix, test);
         (void) names_ccw(dev, prefix, test);
         (void) names_vio(dev, prefix, test);
         (void) names_platform(dev, prefix, test);
