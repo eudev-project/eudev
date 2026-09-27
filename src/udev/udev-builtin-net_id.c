@@ -381,6 +381,52 @@ static bool is_pci_bridge(struct udev_device *dev) {
         return b;
 }
 
+static int parse_hotplug_slot_from_function_id(struct udev_device *dev, int slots_dirfd, uint32_t *ret) {
+        uint64_t function_id;
+        char filename[NAME_MAX+1];
+        const char *attr;
+        int r;
+
+        /* The <sysname>/function_id attribute is unique to the s390 PCI driver. If present, we know that the
+         * slot's directory name for this device is /sys/bus/pci/slots/XXXXXXXX/ where XXXXXXXX is the fixed
+         * length 8 hexadecimal character string representation of function_id. Therefore we can short cut
+         * here and just check for the existence of the slot directory. As this directory has to exist, we're
+         * emitting a debug message for the unlikely case it's not found. Note that the domain part doesn't
+         * belong to the slot name here because there's a 1-to-1 relationship between PCI function and its
+         * hotplug slot. See https://docs.kernel.org/arch/s390/pci.html for more details. */
+
+        assert(dev);
+        assert(slots_dirfd >= 0);
+        assert(ret);
+
+        if (!naming_scheme_has(NAMING_SLOT_FUNCTION_ID)) {
+                *ret = 0;
+                return 0;
+        }
+
+        if (device_get_sysattr_safe_string(dev, "function_id", &attr) < 0) {
+                *ret = 0;
+                return 0;
+        }
+
+        r = safe_atou64(attr, &function_id);
+        if (r < 0)
+                return log_device_debug_errno(dev, r, "Failed to parse function_id, ignoring: '%s'", attr);
+
+        if (function_id <= 0 || function_id > UINT32_MAX)
+                return log_device_debug_errno(dev, EINVAL, "Invalid function id (0x%" PRIx64 "), ignoring.",
+                                              function_id);
+
+        if (!snprintf_ok(filename, sizeof(filename), "%08" PRIx64, function_id))
+                return log_device_debug_errno(dev, ENAMETOOLONG, "PCI slot path is too long, ignoring.");
+
+        if (faccessat(slots_dirfd, filename, F_OK, 0) < 0)
+                return log_device_debug_errno(dev, errno, "Cannot access '%s' under pci slots, ignoring: %m", filename);
+
+        *ret = (uint32_t) function_id;
+        return 1; /* Found. We should ignore domain part. */
+}
+
 static int pci_get_hotplug_slot_from_address(
                 struct udev_device *dev,
                 struct udev_device *pci,
@@ -457,6 +503,14 @@ static int pci_get_hotplug_slot(struct udev_device *dev, uint32_t *ret) {
         for (slot_dev = dev; slot_dev; ) {
                 uint32_t slot = 0;  /* avoid false maybe-uninitialized warning */
 
+                r = parse_hotplug_slot_from_function_id(slot_dev, dirfd(dir), &slot);
+                if (r < 0)
+                        return r;
+                if (r > 0) {
+                        *ret = slot;
+                        return 1; /* domain should be ignored. */
+                }
+
                 r = pci_get_hotplug_slot_from_address(slot_dev, pci, dir, &slot);
                 if (r < 0)
                         return r;
@@ -469,7 +523,7 @@ static int pci_get_hotplug_slot(struct udev_device *dev, uint32_t *ret) {
                                                               "Not using slot information because the PCI device is a bridge.");
 
                         *ret = slot;
-                        return 0;
+                        return 0; /* domain can be still used. */
                 }
 
                 slot_dev = udev_device_get_parent_with_subsystem_devtype(slot_dev, "pci", NULL);
@@ -555,6 +609,12 @@ static int names_pci_slot(struct udev_device *dev, struct udev_device *pci_dev, 
         r = pci_get_hotplug_slot(pci_dev, &slot);
         if (r < 0)
                 return r;
+        if (r > 0) {
+                /* If the hotplug slot is found through the function ID, then drop the domain from the name.
+                 * See comments in parse_hotplug_slot_from_function_id(). */
+                free(domain);
+                domain = NULL;
+        }
 
         if (snprintf_ok(str, sizeof str, "%s%ss%" PRIu32 "%s%s%s",
                         prefix, strempty(domain), slot, strempty(func), strempty(port), strempty(suffix)))
