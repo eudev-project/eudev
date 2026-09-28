@@ -31,6 +31,7 @@
 #include <sys/sysmacros.h>
 
 #include "udev.h"
+#include "udev-rules-check.h"
 #include "path-util.h"
 #include "conf-files.h"
 #include "fileio.h"
@@ -40,6 +41,24 @@
 #include "strv.h"
 #include "util.h"
 #include "sysctl-util.h"
+
+/* While 'udevadm verify' checks a rules file, see udev-rules-check.c, the levels of all
+ * messages about it are collected, also of the ones that are not shown with the current
+ * log level. */
+static struct udev_rules_check *checking = NULL;
+/* the first line of a rule that is continued on the following lines, which systemd reports */
+static unsigned checking_first_line = 0;
+
+#undef log_full_errno
+#define log_full_errno(level, error, ...)                                         \
+        ({                                                                        \
+                int _l = (level), _e = (error);                                   \
+                if (checking)                                                     \
+                        udev_rules_check_note_level(checking, _l);                \
+                (log_get_max_level() >= LOG_PRI(_l))                              \
+                ? log_internal(_l, _e, __FILE__, __LINE__, __func__, __VA_ARGS__) \
+                : -abs(_e);                                                       \
+        })
 
 #define PREALLOC_TOKEN          2048
 #define IMPORT_PROGRAM_SIZE     (128 * 1024)
@@ -63,6 +82,10 @@ static const char* const rules_dirs[] = {
 #endif
         "/usr/local/lib/udev/rules.d",
         NULL};
+
+const char* const* udev_rules_get_dirs(void) {
+        return rules_dirs;
+}
 
 struct udev_rules {
         struct udev *udev;
@@ -107,6 +130,23 @@ enum operation_type {
         OP_ASSIGN,
         OP_ASSIGN_FINAL,
 };
+
+static UdevRulesCheckOp check_op(enum operation_type op) {
+        switch (op) {
+        case OP_NOMATCH:
+                return CHECK_OP_NOMATCH;
+        case OP_ADD:
+                return CHECK_OP_ADD;
+        case OP_REMOVE:
+                return CHECK_OP_REMOVE;
+        case OP_ASSIGN:
+                return CHECK_OP_ASSIGN;
+        case OP_ASSIGN_FINAL:
+                return CHECK_OP_ASSIGN_FINAL;
+        default:
+                return CHECK_OP_MATCH;
+        }
+}
 
 enum string_glob_type {
         GL_UNSET,
@@ -378,6 +418,12 @@ static const struct option_def *option_lookup(const char *value, const char **re
         }
 
         return NULL;
+}
+
+bool udev_rules_option_is_known(const char *value) {
+        const char *arg;
+
+        return option_lookup(value, &arg);
 }
 
 #define MAX_TK                64
@@ -1497,12 +1543,18 @@ static int add_rule(struct udev_rules *rules, char *line,
                 rule_tmp.rule.rule.filename_off = filename_off;
         rule_tmp.rule.rule.filename_line = lineno;
 
+        if (checking)
+                udev_rules_check_line_begin(checking, checking_first_line, line);
+
         linepos = line;
         for (;;) {
                 char *key;
                 char *value;
                 enum operation_type op;
                 bool is_case_insensitive;
+
+                if (checking)
+                        udev_rules_check_delimiters(checking, linepos);
 
                 if (get_key(rules->udev, &linepos, &key, &op, &value, &is_case_insensitive) != 0) {
                         char buf[2] = {};
@@ -1525,6 +1577,9 @@ static int add_rule(struct udev_rules *rules, char *line,
                                 log_error("hint: comments can only start at beginning of line");
                         goto invalid;
                 }
+
+                if (checking)
+                        udev_rules_check_token(checking, key, check_op(op), value, is_case_insensitive);
 
                 if (is_case_insensitive && op > OP_MATCH_MAX) {
                         log_error("invalid prefix 'i' for '%s', the 'i' prefix can be specified only for '==' or '!=' operator", key);
@@ -2038,10 +2093,14 @@ static int add_rule(struct udev_rules *rules, char *line,
         if (sort_token(rules, &rule_tmp) != 0)
                 goto invalid;
 
+        if (checking)
+                udev_rules_check_line_end(checking, true);
         return 0;
 invalid:
         log_error("invalid rule '%s:%u'", filename, lineno);
 ignore:
+        if (checking)
+                udev_rules_check_line_end(checking, false);
         return -1;
 }
 
@@ -2088,6 +2147,8 @@ static int parse_file(struct udev_rules *rules, const char *filename) {
                 if (len < 3)
                         continue;
 
+                checking_first_line = line_nr;
+
                 /* continue reading if backslash+newline is found */
                 while (line[len-2] == '\\') {
                         if (fgets(&line[len-2], (sizeof(line)-len)+2, f) == NULL) {
@@ -2127,7 +2188,45 @@ static int parse_file(struct udev_rules *rules, const char *filename) {
                                 log_error("GOTO '%s' has no matching label in: '%s'", label, filename);
                 }
         }
+
+        if (checking)
+                udev_rules_check_file_end(checking);
         return 0;
+}
+
+int udev_rules_parse_file_for_check(struct udev *udev, int resolve_names, const char *filename,
+                                    struct udev_rules_check *c) {
+        struct udev_rules *rules;
+        int r;
+
+        assert(filename);
+        assert(c);
+
+        /* parse_file() ignores missing files */
+        if (access(filename, R_OK) < 0)
+                return -errno;
+
+        rules = new0(struct udev_rules, 1);
+        if (!rules)
+                return -ENOMEM;
+        rules->udev = udev;
+        rules->resolve_names = resolve_names;
+
+        rules->tokens = malloc(PREALLOC_TOKEN * sizeof(struct token));
+        rules->token_max = PREALLOC_TOKEN;
+        rules->strbuf = strbuf_new();
+        if (!rules->tokens || !rules->strbuf) {
+                udev_rules_unref(rules);
+                return -ENOMEM;
+        }
+
+        udev_rules_check_file_begin(c, filename);
+        checking = c;
+        r = parse_file(rules, filename);
+        checking = NULL;
+
+        udev_rules_unref(rules);
+        return r;
 }
 
 struct udev_rules *udev_rules_new(struct udev *udev, int resolve_names) {
