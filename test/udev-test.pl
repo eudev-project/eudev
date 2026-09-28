@@ -20,6 +20,9 @@
 use warnings;
 use strict;
 
+# automake reports a test exiting with this as skipped
+my $EXIT_TEST_SKIP      = 77;
+
 my $udev_bin            = "./test-udev";
 my $valgrind            = 0;
 my $udev_bin_valgrind   = "valgrind --tool=memcheck --leak-check=yes --quiet $udev_bin";
@@ -1772,6 +1775,17 @@ sub udev_setup {
         system("rm", "-rf", "$udev_run");
 }
 
+# check if we are permitted to create block device nodes, e.g. not in a container without CAP_MKNOD
+sub can_mknod {
+        my $block_device_filename = "$udev_dev/.mknod-test";
+
+        if (system("mknod", $block_device_filename, "b", "8", "0") != 0) {
+                return 0;
+        }
+        unlink $block_device_filename;
+        return 1;
+}
+
 sub run_test {
         my ($rules, $number) = @_;
 
@@ -1847,11 +1861,22 @@ sub run_test {
 # only run if we have root permissions
 # due to mknod restrictions
 if (!($<==0)) {
-        print "Must have root permissions to run properly.\n";
-        exit;
+        print "Must have root permissions to run properly, skipping the test.\n";
+        exit($EXIT_TEST_SKIP);
+}
+
+if (! -x $udev_bin || ! -d "test/sys") {
+        print "$udev_bin or test/sys is missing, run 'make check', skipping the test.\n";
+        exit($EXIT_TEST_SKIP);
 }
 
 udev_setup();
+
+if (!can_mknod()) {
+        print "Cannot create device nodes, skipping the test.\n";
+        system("rm", "-rf", "$udev_dev");
+        exit($EXIT_TEST_SKIP);
+}
 
 my $test_num = 1;
 my @list;
