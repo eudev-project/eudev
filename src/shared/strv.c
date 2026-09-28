@@ -250,3 +250,39 @@ char **strv_remove(char **l, const char *s) {
         *t = NULL;
         return l;
 }
+
+int strv_split_and_extend(char ***l, const char *s, const char *separators, bool filter_duplicates) {
+        const char *p = s;
+
+        assert(l);
+        assert(s);
+        assert(separators);
+
+        /* Appends the fields of s separated by any of the characters in separators to the list.
+         * Empty fields are dropped. */
+
+        for (;;) {
+                size_t n;
+                char *v;
+                int r;
+
+                p += strspn(p, separators);
+                if (*p == '\0')
+                        return 0;
+
+                n = strcspn(p, separators);
+                v = strndup(p, n);
+                if (!v)
+                        return -ENOMEM;
+                p += n;
+
+                if (filter_duplicates && strv_contains(*l, v)) {
+                        free(v);
+                        continue;
+                }
+
+                r = strv_consume(l, v);
+                if (r < 0)
+                        return r;
+        }
+}

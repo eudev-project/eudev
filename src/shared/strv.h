@@ -45,6 +45,8 @@ char *strv_find(char * const *l, const char *name) _pure_;
 
 char **strv_sort(char **l);
 
+int strv_split_and_extend(char ***l, const char *s, const char *separators, bool filter_duplicates);
+
 char **strv_new(const char *x, ...) _sentinel_;
 char **strv_new_ap(const char *x, va_list ap);
 
