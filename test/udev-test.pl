@@ -1643,6 +1643,41 @@ KERNEL=="sda", ENV{EVIL}=="1", SYMLINK+="bad"
 KERNEL=="sda", ENV{GOOD}=="1", ENV{LONG}=="*xEVIL=1", ENV{BEFORE}=="1", ENV{AFTER}!="1", ENV{BIGFAIL}=="1", SYMLINK+="found"
 EOF
         },
+        {
+                desc            => "empty tag directories are removed 1/4 (keep)",
+                devpath         => "/devices/pci0000:00/0000:00:1f.2/host0/target0:0:0/0:0:0:0/block/sda",
+                exp_name        => "tagdir1",
+                option          => "keep",
+                rules           => <<EOF
+KERNEL=="sda", TAG+="shared", TAG+="onlysda", SYMLINK+="tagdir1"
+EOF
+        },
+        {
+                desc            => "empty tag directories are removed 2/4 (keep)",
+                devpath         => "/devices/pci0000:00/0000:00:1f.2/host0/target0:0:0/0:0:0:0/block/sda/sda1",
+                exp_name        => "tagdir2",
+                option          => "keep",
+                rules           => <<EOF
+KERNEL=="sda1", TAG+="shared", SYMLINK+="tagdir2"
+EOF
+        },
+        {
+                desc            => "empty tag directories are removed 3/4",
+                devpath         => "/devices/pci0000:00/0000:00:1f.2/host0/target0:0:0/0:0:0:0/block/sda",
+                exp_name        => "tagdir3",
+                rules           => <<EOF
+KERNEL=="sda", PROGRAM="/bin/sh -c 'test -e /run/udev/tags/onlysda/b8:0 && test -e /run/udev/tags/shared/b8:0'", SYMLINK+="tagdir3"
+EOF
+        },
+        {
+                desc            => "empty tag directories are removed 4/4",
+                devpath         => "/devices/pci0000:00/0000:00:1f.2/host0/target0:0:0/0:0:0:0/block/sda/sda1",
+                exp_name        => "found",
+                option          => "clean",
+                rules           => <<EOF
+KERNEL=="sda1", PROGRAM="/bin/sh -c 'test -d /run/udev/tags && ! test -e /run/udev/tags/onlysda && test -e /run/udev/tags/shared/b8:1'", SYMLINK+="found"
+EOF
+        },
 );
 
 sub udev {

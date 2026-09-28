@@ -42,14 +42,37 @@ static void udev_device_tag(struct udev_device *dev, const char *tag, bool add)
         strscpyl(filename, sizeof(filename), UDEV_ROOT_RUN "/udev/tags/", tag, "/", id, NULL);
 
         if (add) {
-                int fd;
+                unsigned int i;
 
-                mkdir_parents(filename, 0755);
-                fd = open(filename, O_WRONLY|O_CREAT|O_CLOEXEC|O_TRUNC|O_NOFOLLOW, 0444);
-                if (fd >= 0)
-                        close(fd);
+                /* A worker removing the last device of the tag may remove the directory of the tag
+                 * right after it is created here, then create it again. */
+                for (i = 0; i < 16; i++) {
+                        int fd;
+
+                        (void) mkdir_parents(filename, 0755);
+                        fd = open(filename, O_WRONLY|O_CREAT|O_CLOEXEC|O_TRUNC|O_NOFOLLOW, 0444);
+                        if (fd >= 0) {
+                                close(fd);
+                                break;
+                        }
+                        if (errno != ENOENT)
+                                break;
+                }
         } else {
-                unlink(filename);
+                char *slash;
+
+                if (unlink(filename) < 0)
+                        return;
+
+                /* Unlike systemd, remove the directory of the tag when it is empty now, so that
+                 * /run/udev/tags/ does not keep a directory for every tag that was ever used. This
+                 * fails, as it should, when the directory is not empty, e.g. when another worker
+                 * has just added a device to the tag. */
+                slash = strrchr(filename, '/');
+                if (slash) {
+                        *slash = '\0';
+                        (void) rmdir(filename);
+                }
         }
 }
 
