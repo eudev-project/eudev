@@ -8,8 +8,10 @@ libudev_shared_la_SOURCES=\
 	conf-files.c \
 	device-nodes.c \
 	dev-setup.c \
+	efivars.c \
 	fileio.c \
 	hashmap.c \
+	id128-util.c \
 	json-writer.c \
 	label.c \
 	log.c \
@@ -39,9 +41,11 @@ noinst_HEADERS = \
 	def.h \
 	device-nodes.h \
 	dev-setup.h \
+	efivars.h \
 	fileio.h \
 	formats-util.h \
 	hashmap.h \
+	id128-util.h \
 	ioprio.h \
 	json-writer.h \
 	label.h \
