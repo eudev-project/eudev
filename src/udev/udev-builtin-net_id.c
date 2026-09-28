@@ -28,6 +28,8 @@
 #include <unistd.h>
 #include <net/if.h>
 #include <net/if_arp.h>
+#include <arpa/inet.h>
+#include <sys/socket.h>
 #include <linux/pci_regs.h>
 
 #include "udev.h"
@@ -52,6 +54,19 @@
 #define HEXDIGITS DIGITS "abcdefABCDEF"
 #endif
 
+#ifndef INFINIBAND_ALEN
+#define INFINIBAND_ALEN 20
+#endif
+
+/* Like struct hw_addr_data of systemd. */
+#define HW_ADDR_MAX_SIZE 32
+#define HW_ADDR_TO_STRING_MAX (3*HW_ADDR_MAX_SIZE)
+
+struct hw_addr_data {
+        size_t length;
+        uint8_t bytes[HW_ADDR_MAX_SIZE];
+};
+
 #define ONBOARD_14BIT_INDEX_MAX ((1U << 14) - 1)
 #define ONBOARD_16BIT_INDEX_MAX ((1U << 16) - 1)
 
@@ -68,7 +83,8 @@ static bool device_in_subsystem(struct udev_device *dev, const char *subsystem) 
         return streq_ptr(udev_device_get_subsystem(dev), subsystem);
 }
 
-/* Like sd_device_new_child(): returns the device the path below the device points to. */
+/* Like sd_device_new_child(): returns the device the path below the device points to. When it fails,
+ * sd_device_new_child() returns -ENODEV, which the callers use in their log messages. */
 static struct udev_device *device_new_child(struct udev_device *dev, const char *suffix) {
         _cleanup_free_ char *path = NULL, *resolved = NULL;
 
@@ -624,7 +640,7 @@ static int pci_get_slot_from_firmware_node_sun(struct udev_device *dev, uint32_t
 
         slot_dev = udev_device_get_parent_with_subsystem_devtype(dev, "pci", NULL);
         if (!slot_dev)
-                return log_device_debug_errno(dev, ENOENT, "Failed to find parent PCI device, ignoring.");
+                return log_device_debug_errno(dev, ENOENT, "Failed to find parent PCI device, ignoring: %m");
 
         if (is_pci_bridge(slot_dev) && is_pci_multifunction(dev) <= 0)
                 return log_device_debug_errno(dev, ESTALE,
@@ -783,7 +799,8 @@ static int names_vio(struct udev_device *dev, const char *prefix, enum udev_even
 
         if (snprintf_ok(str, sizeof str, "%sv%u", prefix, slotid))
                 udev_builtin_add_property(dev, mode, "ID_NET_NAME_SLOT", str);
-        log_device_debug(dev, "Vio slot identifier: slotid=%u", slotid);
+        log_device_debug(dev, "Vio slot identifier: slotid=%u -> %s",
+                         slotid, str + strlen(prefix));
         return 0;
 }
 
@@ -845,7 +862,8 @@ static int names_platform(struct udev_device *dev, const char *prefix, enum udev
 
         if (snprintf_ok(str, sizeof str, "%sa%s%xi%u", prefix, vendor, model, instance))
                 udev_builtin_add_property(dev, mode, "ID_NET_NAME_PATH", str);
-        log_device_debug(dev, "Platform identifier: vendor=%s model=%x instance=%u", vendor, model, instance);
+        log_device_debug(dev, "Platform identifier: vendor=%s model=%x instance=%u -> %s",
+                         vendor, model, instance, str + strlen(prefix));
         return 0;
 }
 
@@ -871,7 +889,7 @@ static int names_devicetree_alias_prefix(struct udev_device *dev, const char *pr
         if (naming_scheme_has(NAMING_DEVICETREE_PORT_ALIASES)) {
                 ofnode_dev = device_new_child(dev, "of_node");
                 if (!ofnode_dev)
-                        log_device_debug(dev, "Failed to get device of_node, ignoring.");
+                        log_device_debug_errno(dev, ENODEV, "Failed to get device of_node, ignoring: %m");
         }
         if (!ofnode_dev) {
                 struct udev_device *parent;
@@ -879,11 +897,11 @@ static int names_devicetree_alias_prefix(struct udev_device *dev, const char *pr
                 /* check if our direct parent has an of_node as a fallback */
                 parent = udev_device_get_parent(dev);
                 if (!parent)
-                        return log_device_debug_errno(dev, ENOENT, "Failed to get parent device.");
+                        return log_device_debug_errno(dev, ENOENT, "Failed to get parent device: %m");
 
                 ofnode_dev = device_new_child(parent, "of_node");
                 if (!ofnode_dev)
-                        return log_device_debug_errno(parent, ENOENT, "Failed to get device of_node.");
+                        return log_device_debug_errno(parent, ENODEV, "Failed to get device of_node: %m");
         }
 
         ofnode_syspath = udev_device_get_syspath(ofnode_dev);
@@ -893,7 +911,7 @@ static int names_devicetree_alias_prefix(struct udev_device *dev, const char *pr
         if (devicetree_path && path_startswith(devicetree_path, "/sys"))
                 devicetree_dev = udev_device_new_from_syspath(udev_device_get_udev(dev), devicetree_path);
         if (!devicetree_dev)
-                return log_debug_errno(ENOENT, "Failed to create udev_device object from '/proc/device-tree'.");
+                return log_debug_errno(ENODEV, "Failed to create udev_device object from '/proc/device-tree': %m");
 
         devicetree_syspath = udev_device_get_syspath(devicetree_dev);
 
@@ -914,7 +932,7 @@ static int names_devicetree_alias_prefix(struct udev_device *dev, const char *pr
 
         aliases_dev = device_new_child(devicetree_dev, "aliases");
         if (!aliases_dev)
-                return log_device_debug_errno(devicetree_dev, ENOENT, "Failed to get 'aliases' child device.");
+                return log_device_debug_errno(devicetree_dev, ENODEV, "Failed to get 'aliases' child device: %m");
 
         dir = opendir(udev_device_get_syspath(aliases_dev));
         if (!dir)
@@ -957,7 +975,8 @@ static int names_devicetree_alias_prefix(struct udev_device *dev, const char *pr
 
                 if (snprintf_ok(str, sizeof str, "%sd%u", prefix, i))
                         udev_builtin_add_property(dev, mode, "ID_NET_NAME_ONBOARD", str);
-                log_device_debug(dev, "DeviceTree identifier: alias_index=%u", i);
+                log_device_debug(dev, "DeviceTree identifier: alias_index=%u -> \"%s\"",
+                                 i, str + strlen(prefix));
                 return 1;
         }
 
@@ -1118,7 +1137,7 @@ static int names_usb(struct udev_device *dev, const char *prefix, enum udev_even
 
         usbdev = udev_device_get_parent_with_subsystem_devtype(dev, "usb", "usb_interface");
         if (!usbdev)
-                return log_device_debug_errno(dev, ENOENT, "Could not find USB parent device.");
+                return log_device_debug_errno(dev, ENOENT, "Could not find USB parent device: %m");
 
         r = get_usb_specifier(usbdev, &suffix);
         if (r < 0)
@@ -1130,7 +1149,7 @@ static int names_usb(struct udev_device *dev, const char *prefix, enum udev_even
                 return names_pci_slot(dev, pcidev, prefix, suffix, mode);
 
         if (!naming_scheme_has(NAMING_USB_HOST))
-                return log_device_debug_errno(usbdev, ENOENT, "Failed to get parent PCI bus.");
+                return log_device_debug_errno(usbdev, ENOENT, "Failed to get parent PCI bus: %m");
 
         /* Otherwise, e.g. on-chip asics that have USB ports, use the USB specifier as is. */
         if (snprintf_ok(str, sizeof str, "%s%s", prefix, suffix))
@@ -1173,11 +1192,11 @@ static int names_bcma(struct udev_device *dev, const char *prefix, enum udev_eve
 
         bcmadev = udev_device_get_parent_with_subsystem_devtype(dev, "bcma", NULL);
         if (!bcmadev)
-                return log_device_debug_errno(dev, ENOENT, "Could not get BCMA parent device.");
+                return log_device_debug_errno(dev, ENOENT, "Could not get BCMA parent device: %m");
 
         pcidev = udev_device_get_parent_with_subsystem_devtype(bcmadev, "pci", NULL);
         if (!pcidev)
-                return log_device_debug_errno(dev, ENOENT, "Could not get PCI parent device.");
+                return log_device_debug_errno(dev, ENOENT, "Could not get PCI parent device: %m");
 
         r = get_bcma_specifier(bcmadev, &suffix);
         if (r < 0)
@@ -1226,31 +1245,91 @@ static int names_ccw(struct udev_device *dev, const char *prefix, enum udev_even
         /* Use the CCW bus-ID as network device name */
         if (snprintf_ok(str, sizeof str, "%sc%s", prefix, bus_id))
                 udev_builtin_add_property(dev, mode, "ID_NET_NAME_PATH", str);
-        log_device_debug(dev, "CCW identifier: ccw_busid=%s", bus_id);
+        log_device_debug(dev, "CCW identifier: ccw_busid=%s -> \"%s\"",
+                         bus_id, str + strlen(prefix));
         return 0;
 }
 
 /* IEEE Organizationally Unique Identifier vendor string */
-static int ieee_oui(struct udev_device *dev, const uint8_t mac[6], enum udev_event_mode mode) {
+static int ieee_oui(struct udev_device *dev, const struct hw_addr_data *hw_addr, enum udev_event_mode mode) {
         char str[32];
 
         assert(dev);
-        assert(mac);
+        assert(hw_addr);
+
+        if (hw_addr->length != 6)
+                return -EOPNOTSUPP;
 
         /* skip commonly misused 00:00:00 (Xerox) prefix */
-        if (mac[0] == 0 && mac[1] == 0 && mac[2] == 0)
+        if (hw_addr->bytes[0] == 0 &&
+            hw_addr->bytes[1] == 0 &&
+            hw_addr->bytes[2] == 0)
                 return -EINVAL;
 
         xsprintf(str, "OUI:%02X%02X%02X%02X%02X%02X",
-                 mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+                 hw_addr->bytes[0],
+                 hw_addr->bytes[1],
+                 hw_addr->bytes[2],
+                 hw_addr->bytes[3],
+                 hw_addr->bytes[4],
+                 hw_addr->bytes[5]);
 
         return udev_builtin_hwdb_lookup(dev, NULL, str, NULL, mode);
 }
 
-/* Parse a hardware address like systemd's parse_hw_addr(), but only accept addresses of 6 bytes. */
-static int parse_ether_addr(const char *s, uint8_t ret[6]) {
-        size_t field_size, len = 0;
+static int parse_hw_addr_one_field(const char **s, char sep, size_t len, uint8_t *buf) {
+        uint16_t data = 0;
+        const char *p;
+        size_t i;
+        bool cont;
+
+        assert(s);
+        assert(*s);
+        assert(IN_SET(len, 1, 2));
+        assert(buf);
+
+        p = *s;
+
+        for (i = 0; i < len * 2; i++) {
+                int x;
+
+                if (*p == '\0' || *p == sep) {
+                        if (i == 0)
+                                return -EINVAL;
+                        break;
+                }
+
+                x = unhexchar(*p);
+                if (x < 0)
+                        return -EINVAL;
+
+                data <<= 4;
+                data += x;
+
+                p++;
+        }
+
+        if (*p != '\0' && *p != sep)
+                return -EINVAL;
+
+        if (len == 1)
+                buf[0] = data;
+        else {
+                buf[0] = (data & 0xff00) >> 8;
+                buf[1] = data & 0xff;
+        }
+
+        cont = *p == sep;
+        *s = p + cont;
+        return cont;
+}
+
+/* Like systemd's parse_hw_addr(), i.e. parse_hw_addr_full() with expected_len == 0. */
+static int parse_hw_addr(const char *s, struct hw_addr_data *ret) {
+        size_t field_size, max_len = INFINIBAND_ALEN, len = 0, i;
+        uint8_t bytes[HW_ADDR_MAX_SIZE];
         char sep;
+        int r;
 
         assert(s);
         assert(ret);
@@ -1260,9 +1339,25 @@ static int parse_ether_addr(const char *s, uint8_t ret[6]) {
          * Dot separated 2 bytes format: xxyy.zzaa.bbcc
          * Colon separated 1 bytes format: xx:yy:zz:aa:bb:cc
          * Hyphen separated 1 bytes format: xx-yy-zz-aa-bb-cc
-         */
+         * IPv4 format: used by IPv4 tunnel, e.g. ipgre
+         * IPv6 format: used by IPv6 tunnel, e.g. ip6gre
+         *
+         * Addresses of 4 (AF_INET), 16 (AF_INET6), 6 (ETH_ALEN), or 20 (INFINIBAND_ALEN) bytes are
+         * accepted. */
+
+        if (inet_pton(AF_INET, s, bytes) > 0) {
+                ret->length = 4;
+                memcpy(ret->bytes, bytes, ret->length);
+                return 0;
+        }
+        if (inet_pton(AF_INET6, s, bytes) > 0) {
+                ret->length = 16;
+                memcpy(ret->bytes, bytes, ret->length);
+                return 0;
+        }
 
         sep = s[strspn(s, HEXDIGITS)];
+
         if (sep == '.')
                 field_size = 2;
         else if (IN_SET(sep, ':', '-'))
@@ -1270,53 +1365,49 @@ static int parse_ether_addr(const char *s, uint8_t ret[6]) {
         else
                 return -EINVAL;
 
-        for (;;) {
-                unsigned data = 0;
-                size_t i;
-
-                for (i = 0; i < field_size * 2; i++) {
-                        int x;
-
-                        if (*s == '\0' || *s == sep) {
-                                if (i == 0)
-                                        return -EINVAL;
-                                break;
-                        }
-
-                        x = unhexchar(*s);
-                        if (x < 0)
-                                return -EINVAL;
-
-                        data = (data << 4) | (unsigned) x;
-                        s++;
-                }
-
-                if (*s != '\0' && *s != sep)
-                        return -EINVAL;
-
-                if (len + field_size > 6)
-                        return -EINVAL;
-
-                if (field_size == 2) {
-                        ret[len++] = (data & 0xff00) >> 8;
-                        ret[len++] = data & 0xff;
-                } else
-                        ret[len++] = data;
-
-                if (*s == '\0')
+        for (i = 0; i < max_len / field_size; i++) {
+                r = parse_hw_addr_one_field(&s, sep, field_size, bytes + i * field_size);
+                if (r < 0)
+                        return r;
+                if (r == 0) {
+                        len = (i + 1) * field_size;
                         break;
-                s++;
+                }
         }
 
-        if (len != 6)
+        if (len == 0)
                 return -EINVAL;
 
+        if (!IN_SET(len, 4, 16, 6, INFINIBAND_ALEN))
+                return -EINVAL;
+
+        ret->length = len;
+        memcpy(ret->bytes, bytes, ret->length);
         return 0;
+}
+
+/* Like systemd's HW_ADDR_TO_STR(). */
+static const char *hw_addr_to_string(const struct hw_addr_data *addr, char buffer[HW_ADDR_TO_STRING_MAX]) {
+        size_t i;
+
+        assert(addr);
+        assert(buffer);
+        assert(addr->length <= HW_ADDR_MAX_SIZE);
+
+        for (i = 0; i < addr->length; i++) {
+                sprintf(&buffer[3*i], "%02"PRIx8, addr->bytes[i]);
+                if (i < addr->length - 1)
+                        buffer[3*i + 2] = ':';
+        }
+
+        buffer[addr->length > 0 ? 3*addr->length - 1 : 0] = '\0';
+        return buffer;
 }
 
 static int names_mac(struct udev_device *dev, const char *prefix, enum udev_event_mode mode) {
         unsigned iftype, assign_type;
-        uint8_t mac[6];
+        struct hw_addr_data hw_addr;
+        char hw_addr_str[HW_ADDR_TO_STRING_MAX];
         const char *s;
         char str[ALTIFNAMSIZ];
         int r;
@@ -1346,16 +1437,23 @@ static int names_mac(struct udev_device *dev, const char *prefix, enum udev_even
         if (r < 0)
                 return log_device_debug_errno(dev, r, "Failed to read 'address' attribute: %m");
 
-        r = parse_ether_addr(s, mac);
+        r = parse_hw_addr(s, &hw_addr);
         if (r < 0)
-                return log_device_debug_errno(dev, EOPNOTSUPP, "Not generating MAC name for device with MAC address '%s'.", s);
+                return log_device_debug_errno(dev, r, "Failed to parse 'address' attribute: %m");
+
+        if (hw_addr.length != 6)
+                return log_device_debug_errno(dev, EOPNOTSUPP,
+                                              "Not generating MAC name for device with MAC address of length %zu.",
+                                              hw_addr.length);
 
         xsprintf(str, "%sx%02x%02x%02x%02x%02x%02x", prefix,
-                 mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+                 hw_addr.bytes[0], hw_addr.bytes[1], hw_addr.bytes[2],
+                 hw_addr.bytes[3], hw_addr.bytes[4], hw_addr.bytes[5]);
         udev_builtin_add_property(dev, mode, "ID_NET_NAME_MAC", str);
-        log_device_debug(dev, "MAC address identifier: hw_addr=%s -> %s", s, str + strlen(prefix));
+        log_device_debug(dev, "MAC address identifier: hw_addr=%s -> %s",
+                         hw_addr_to_string(&hw_addr, hw_addr_str), str + strlen(prefix));
 
-        (void) ieee_oui(dev, mac, mode);
+        (void) ieee_oui(dev, &hw_addr, mode);
         return 0;
 }
 
@@ -1390,7 +1488,8 @@ static int names_netdevsim(struct udev_device *dev, const char *prefix, enum ude
 
         if (snprintf_ok(str, sizeof str, "%si%un%s", prefix, addr, phys_port_name))
                 udev_builtin_add_property(dev, mode, "ID_NET_NAME_PATH", str);
-        log_device_debug(dev, "Netdevsim identifier: address=%u, port_name=%s", addr, phys_port_name);
+        log_device_debug(dev, "Netdevsim identifier: address=%u, port_name=%s -> %s",
+                         addr, phys_port_name, str + strlen(prefix));
         return 0;
 }
 
@@ -1429,7 +1528,8 @@ static int names_xen(struct udev_device *dev, const char *prefix, enum udev_even
 
         if (snprintf_ok(str, sizeof str, "%sX%u", prefix, id))
                 udev_builtin_add_property(dev, mode, "ID_NET_NAME_SLOT", str);
-        log_device_debug(dev, "Xen identifier: id=%u", id);
+        log_device_debug(dev, "Xen identifier: id=%u -> %s",
+                         id, str + strlen(prefix));
         return 0;
 }
 
