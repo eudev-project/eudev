@@ -971,9 +971,11 @@ static int parse_argv(int argc, char *argv[]) {
                         assert_not_reached("Unknown option");
                 }
 
+        /* like systemd since 3ad76abc43, which does this with its new option parser */
+        if (argc - optind != 1)
+                return log_error_errno(SYNTHETIC_ERRNO(EINVAL), "Need exactly one DEVICE argument.");
+
         arg_node = argv[optind];
-        if (!arg_node)
-                return log_error_errno(SYNTHETIC_ERRNO(EINVAL), "No device specified.");
 
         /* eudev: "udevadm test" runs cdrom_id with --dry-run, so that it does not lock the tray */
         if (arg_dry_run && (arg_lock || arg_unlock || arg_eject)) {
