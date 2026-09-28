@@ -923,6 +923,7 @@ static int import_parent_into_properties(struct udev_device *dev, const char *fi
                                          const char *filename, unsigned int lineno) {
         struct udev_device *dev_parent;
         struct udev_list_entry *list_entry;
+        int n = 0;
 
         dev_parent = udev_device_get_parent(dev);
         if (dev_parent == NULL)
@@ -932,10 +933,13 @@ static int import_parent_into_properties(struct udev_device *dev, const char *fi
                 const char *key = udev_list_entry_get_name(list_entry);
                 const char *val = udev_list_entry_get_value(list_entry);
 
-                if (fnmatch(filter, key, 0) == 0)
-                        import_property(dev, key, val, filename, lineno);
+                if (fnmatch(filter, key, 0) == 0 &&
+                    import_property(dev, key, val, filename, lineno) >= 0)
+                        n++;
         }
-        return 0;
+
+        /* the number of imported properties */
+        return n;
 }
 
 #define WAIT_LOOP_PER_SECOND                50
@@ -2443,6 +2447,7 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
         struct token *rule;
         enum escape_type esc = ESCAPE_UNSET;
         bool can_set_name;
+        bool ok;
 
         if (rules->tokens == NULL)
                 return -1;
@@ -2694,11 +2699,11 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                         char import[UTIL_PATH_SIZE];
 
                         udev_event_apply_format(event, rules_str(rules, cur->key.value_off), import, sizeof(import), false, properties_list);
-                        if (import_file_into_properties(event->dev, import,
-                                                        rules_str(rules, rule->rule.filename_off),
-                                                        rule->rule.filename_line) != 0)
-                                if (cur->key.op != OP_NOMATCH)
-                                        goto nomatch;
+                        ok = import_file_into_properties(event->dev, import,
+                                                         rules_str(rules, rule->rule.filename_off),
+                                                         rule->rule.filename_line) == 0;
+                        if (ok == (cur->key.op == OP_NOMATCH))
+                                goto nomatch;
                         break;
                 }
                 case TK_M_IMPORT_PROG: {
@@ -2710,11 +2715,11 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                                   rules_str(rules, rule->rule.filename_off),
                                   rule->rule.filename_line);
 
-                        if (import_program_into_properties(event, timeout_usec, timeout_warn_usec, import, sigmask,
-                                                           rules_str(rules, rule->rule.filename_off),
-                                                           rule->rule.filename_line) != 0)
-                                if (cur->key.op != OP_NOMATCH)
-                                        goto nomatch;
+                        ok = import_program_into_properties(event, timeout_usec, timeout_warn_usec, import, sigmask,
+                                                            rules_str(rules, rule->rule.filename_off),
+                                                            rule->rule.filename_line) == 0;
+                        if (ok == (cur->key.op == OP_NOMATCH))
+                                goto nomatch;
                         break;
                 }
                 case TK_M_IMPORT_BUILTIN: {
@@ -2728,9 +2733,9 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                                                   rules_str(rules, rule->rule.filename_off),
                                                   rule->rule.filename_line);
                                         /* return the result from earlier run */
-                                        if (event->builtin_ret & (1 << cur->key.builtin_cmd))
-                                        if (cur->key.op != OP_NOMATCH)
-                                                        goto nomatch;
+                                        ok = !(event->builtin_ret & (1 << cur->key.builtin_cmd));
+                                        if (ok == (cur->key.op == OP_NOMATCH))
+                                                goto nomatch;
                                         break;
                                 }
                                 /* mark as ran */
@@ -2743,14 +2748,15 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                                   rules_str(rules, rule->rule.filename_off),
                                   rule->rule.filename_line);
 
-                        if (udev_builtin_run(event->dev, cur->key.builtin_cmd, command, event->event_mode) != 0) {
+                        ok = udev_builtin_run(event->dev, cur->key.builtin_cmd, command, event->event_mode) == 0;
+                        if (!ok) {
                                 /* remember failure */
                                 log_debug("IMPORT builtin '%s' returned non-zero",
                                           udev_builtin_name(cur->key.builtin_cmd));
                                 event->builtin_ret |= (1 << cur->key.builtin_cmd);
-                                if (cur->key.op != OP_NOMATCH)
-                                        goto nomatch;
                         }
+                        if (ok == (cur->key.op == OP_NOMATCH))
+                                goto nomatch;
                         break;
                 }
                 case TK_M_IMPORT_DB: {
@@ -2761,10 +2767,8 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                         if (value != NULL)
                                 import_property(event->dev, key, value,
                                                 rules_str(rules, rule->rule.filename_off), rule->rule.filename_line);
-                        else {
-                                if (cur->key.op != OP_NOMATCH)
-                                        goto nomatch;
-                        }
+                        if ((value != NULL) == (cur->key.op == OP_NOMATCH))
+                                goto nomatch;
                         break;
                 }
                 case TK_M_IMPORT_CMDLINE: {
@@ -2786,7 +2790,7 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                                                 rules_str(rules, rule->rule.filename_off), rule->rule.filename_line);
                         }
 
-                        if (!imported && cur->key.op != OP_NOMATCH)
+                        if (imported == (cur->key.op == OP_NOMATCH))
                                 goto nomatch;
                         break;
                 }
@@ -2794,11 +2798,12 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                         char import[UTIL_PATH_SIZE];
 
                         udev_event_apply_format(event, rules_str(rules, cur->key.value_off), import, sizeof(import), false, properties_list);
-                        if (import_parent_into_properties(event->dev, import,
-                                                          rules_str(rules, rule->rule.filename_off),
-                                                          rule->rule.filename_line) != 0)
-                                if (cur->key.op != OP_NOMATCH)
-                                        goto nomatch;
+                        /* Like systemd-udevd, match only when at least one property was imported. */
+                        ok = import_parent_into_properties(event->dev, import,
+                                                           rules_str(rules, rule->rule.filename_off),
+                                                           rule->rule.filename_line) > 0;
+                        if (ok == (cur->key.op == OP_NOMATCH))
+                                goto nomatch;
                         break;
                 }
                 case TK_M_RESULT:
