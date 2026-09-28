@@ -936,6 +936,11 @@ static int rename_netif_dev_fromname_toname(struct udev_device *dev __attribute_
 
         log_debug("changing net interface name from '%s' to '%s'\n",oldname,name);
 
+        /* do not let strscpy() below silently truncate the requested name */
+        if (strlen(name) >= IFNAMSIZ)
+                return log_error_errno(EINVAL, "Error changing net interface name %s to %s, the name is longer than %i characters: %m",
+                                       oldname, name, IFNAMSIZ - 1);
+
         sk = socket(PF_INET, SOCK_DGRAM, 0);
         if (sk < 0)
                 return log_error_errno(-errno, "error opening socket: %m");
