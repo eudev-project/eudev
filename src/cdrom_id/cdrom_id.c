@@ -406,6 +406,9 @@ static int cd_profiles_old_mmc(Context *c) {
         else
                 c->media_feature = FEATURE_CD_ROM;
 
+        /* eudev: there is media, so return 1 like cd_profiles() does, so that the TOC and the media
+         * state are read. systemd 38f3e20883 returns 0 here, which loses e.g.
+         * ID_CDROM_MEDIA_TRACK_COUNT_DATA and with it the blkid probe in 60-persistent-storage.rules. */
         return 1;
 }
 
@@ -668,7 +671,7 @@ static int cd_media_toc(Context *c) {
         struct scsi_cmd sc;
         unsigned char header[12] = {};
         unsigned char toc[65536] = {};
-        unsigned num_tracks;
+        unsigned num_tracks, n_data = 0, n_audio = 0;
         size_t len;
         int r;
 
@@ -719,10 +722,15 @@ static int cd_media_toc(Context *c) {
                           toc[i + 2], toc[i + 1] & 0x0FU, is_data_track ? "data":"audio", block);
 
                 if (is_data_track)
-                        c->media_track_count_data++;
+                        n_data++;
                 else
-                        c->media_track_count_audio++;
+                        n_audio++;
         }
+
+        /* eudev: the TOC replaces the single data track that cd_profiles_old_mmc() assumes for a
+         * pre-MMC2 drive whose disc information cannot be read, instead of adding to it */
+        c->media_track_count_data = n_data;
+        c->media_track_count_audio = n_audio;
 
         scsi_cmd_init(&sc);
         scsi_cmd_set(&sc, 0, GPCMD_READ_TOC_PMA_ATIP);
