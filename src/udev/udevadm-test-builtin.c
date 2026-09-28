@@ -46,7 +46,8 @@ static void help(struct udev *udev) {
 
 static int adm_builtin(struct udev *udev, int argc, char *argv[]) {
         static const struct option options[] = {
-                { "help", no_argument, NULL, 'h' },
+                { "help",    no_argument, NULL, 'h' },
+                { "version", no_argument, NULL, 'V' },
                 {}
         };
         char *command = NULL;
@@ -60,6 +61,9 @@ static int adm_builtin(struct udev *udev, int argc, char *argv[]) {
                 switch (c) {
                 case 'h':
                         help(udev);
+                        goto out;
+                case 'V':
+                        printf("%s\n", UDEV_VERSION);
                         goto out;
                 }
 
