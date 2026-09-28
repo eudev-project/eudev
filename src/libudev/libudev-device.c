@@ -693,6 +693,7 @@ _public_ const char *udev_device_get_property_value(struct udev_device *udev_dev
 int udev_device_read_db(struct udev_device *udev_device)
 {
         char filename[UTIL_PATH_SIZE];
+        char path[UTIL_PATH_SIZE];
         char line[UTIL_LINE_SIZE];
         const char *id;
         FILE *f;
@@ -718,19 +719,31 @@ int udev_device_read_db(struct udev_device *udev_device)
         udev_device->is_initialized = true;
 
         while (fgets(line, sizeof(line), f)) {
-                ssize_t len;
+                size_t len;
                 const char *val;
                 struct udev_list_entry *entry;
 
                 len = strlen(line);
-                if (len < 4)
-                        break;
-                line[len-1] = '\0';
+                if (len > 0 && line[len-1] == '\n')
+                        line[--len] = '\0';
+                else if (!feof(f)) {
+                        int c;
+
+                        /* The line does not fit into the buffer. Ignore it as a whole, its remainder
+                         * must not be parsed as a line of its own. */
+                        log_debug("overlong line in db file %s, ignoring", filename);
+                        while ((c = fgetc(f)) != EOF && c != '\n')
+                                ;
+                        continue;
+                }
+
+                if (len < 2 || line[1] != ':')
+                        continue;
                 val = &line[2];
                 switch(line[0]) {
                 case 'S':
-                        strscpyl(filename, sizeof(filename), "/dev/", val, NULL);
-                        udev_device_add_devlink(udev_device, filename);
+                        strscpyl(path, sizeof(path), "/dev/", val, NULL);
+                        udev_device_add_devlink(udev_device, path);
                         break;
                 case 'L':
                         udev_device_set_devlink_priority(udev_device, atoi(val));

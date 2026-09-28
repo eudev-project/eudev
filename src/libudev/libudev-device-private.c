@@ -99,6 +99,28 @@ static bool device_has_info(struct udev_device *udev_device)
         return false;
 }
 
+/* Each entry of the database is a "<key>:<value>" line, and the database is read with a buffer of
+ * UTIL_LINE_SIZE. libudev already refuses devlinks, properties and tags containing control
+ * characters, but make sure that no entry can ever break the database, e.g. with a line break. */
+static bool db_entry_is_safe(struct udev_device *udev_device, const char *key, const char *name, const char *value)
+{
+        _cleanup_free_ char *escaped = NULL;
+        size_t len;
+
+        /* "<key>:<name>\n" or "<key>:<name>=<value>\n" must fit, see udev_device_read_db() */
+        len = strlen(key) + 1 + strlen(name) + 1;
+        if (value)
+                len += 1 + strlen(value);
+
+        if (!string_has_cc(name, NULL) && (!value || !string_has_cc(value, NULL)) && len < UTIL_LINE_SIZE)
+                return true;
+
+        escaped = cescape(name);
+        log_debug("%s: not writing invalid or too long %s: entry '%s' to the db, ignoring",
+                  udev_device_get_sysname(udev_device), key, escaped ?: "");
+        return false;
+}
+
 int udev_device_update_db(struct udev_device *udev_device)
 {
         bool has_info;
@@ -141,8 +163,12 @@ int udev_device_update_db(struct udev_device *udev_device)
                 struct udev_list_entry *list_entry;
 
                 if (major(udev_device_get_devnum(udev_device)) > 0) {
-                        udev_list_entry_foreach(list_entry, udev_device_get_devlinks_list_entry(udev_device))
-                                fprintf(f, "S:%s\n", udev_list_entry_get_name(list_entry) + strlen("/dev/"));
+                        udev_list_entry_foreach(list_entry, udev_device_get_devlinks_list_entry(udev_device)) {
+                                const char *link = udev_list_entry_get_name(list_entry) + strlen("/dev/");
+
+                                if (db_entry_is_safe(udev_device, "S", link, NULL))
+                                        fprintf(f, "S:%s\n", link);
+                        }
                         if (udev_device_get_devlink_priority(udev_device) != 0)
                                 fprintf(f, "L:%i\n", udev_device_get_devlink_priority(udev_device));
                 }
@@ -151,7 +177,11 @@ int udev_device_update_db(struct udev_device *udev_device)
                         fprintf(f, "I:"USEC_FMT"\n", udev_device_get_usec_initialized(udev_device));
 
                 udev_list_entry_foreach(list_entry, udev_device_get_properties_list_entry(udev_device)) {
-                        if (!udev_list_entry_get_num(list_entry))
+                        if (!udev_list_entry_get_num(list_entry) || !udev_list_entry_get_value(list_entry))
+                                continue;
+                        if (!db_entry_is_safe(udev_device, "E",
+                                              udev_list_entry_get_name(list_entry),
+                                              udev_list_entry_get_value(list_entry)))
                                 continue;
                         fprintf(f, "E:%s=%s\n",
                                 udev_list_entry_get_name(list_entry),
@@ -159,7 +189,8 @@ int udev_device_update_db(struct udev_device *udev_device)
                 }
 
                 udev_list_entry_foreach(list_entry, udev_device_get_tags_list_entry(udev_device))
-                        fprintf(f, "G:%s\n", udev_list_entry_get_name(list_entry));
+                        if (db_entry_is_safe(udev_device, "G", udev_list_entry_get_name(list_entry), NULL))
+                                fprintf(f, "G:%s\n", udev_list_entry_get_name(list_entry));
         }
 
         fclose(f);
