@@ -38,10 +38,12 @@
 #include "libudev.h"
 #include "libudev-private.h"
 #include "def.h"
+#include "fileio.h"
 #include "path-util.h"
 #include "utf8.h"
 
 static int udev_device_read_uevent_file(struct udev_device *udev_device);
+static void devname_simplify(char *path);
 static int udev_device_set_devnode(struct udev_device *udev_device, const char *devnode);
 static struct udev_list_entry *udev_device_add_property_internal(struct udev_device *udev_device, const char *key, const char *value);
 
@@ -94,7 +96,7 @@ struct udev_device {
         dev_t devnum;
         int ifindex;
         int watch_handle;
-        int maj, min;
+        char *parse_major, *parse_minor;        /* MAJOR= and MINOR= while parsing a message */
         bool parent_set;
         bool subsystem_set;
         bool devtype_set;
@@ -455,10 +457,12 @@ int udev_device_add_property(struct udev_device *udev_device, const char *key, c
 
 static struct udev_list_entry *udev_device_add_property_from_string(struct udev_device *udev_device, const char *property)
 {
-        char name[UTIL_LINE_SIZE];
+        _cleanup_free_ char *name = NULL;
         char *val;
 
-        strscpy(name, sizeof(name), property);
+        name = strdup(property);
+        if (name == NULL)
+                return NULL;
         val = strchr(name, '=');
         if (val == NULL)
                 return NULL;
@@ -467,33 +471,6 @@ static struct udev_list_entry *udev_device_add_property_from_string(struct udev_
         if (val[0] == '\0')
                 val = NULL;
         return udev_device_add_property_internal(udev_device, name, val);
-}
-
-/* Checks a "KEY=VALUE" string received from the kernel or udevd, and logs why it is ignored. */
-static bool property_string_is_valid(struct udev_device *udev_device, const char *property)
-{
-        _cleanup_free_ char *key = NULL;
-        const char *eq;
-
-        eq = strchr(property, '=');
-        if (eq) {
-                key = strndup(property, eq - property);
-                if (!key) {
-                        log_oom();
-                        return false;
-                }
-                if (property_is_valid(key, eq + 1))
-                        return true;
-        }
-
-        if (log_get_max_level() >= LOG_DEBUG) {
-                _cleanup_free_ char *escaped = cescape(property);
-
-                log_debug("%s%sInvalid property '%s', ignoring",
-                          udev_device->sysname ?: "", udev_device->sysname ? ": " : "",
-                          escaped ?: "(null)");
-        }
-        return false;
 }
 
 static int udev_device_set_syspath(struct udev_device *udev_device, const char *syspath)
@@ -567,8 +544,205 @@ static int udev_device_set_action(struct udev_device *udev_device, const char *a
         return 0;
 }
 
+/* like systemd's STR_IN_SET() */
+static bool str_in_set(const char *s, const char *const *set)
+{
+        for (; *set; set++)
+                if (streq(s, *set))
+                        return true;
+        return false;
+}
+#define STR_IN_SET(s, ...) str_in_set((s), (const char *const[]) { __VA_ARGS__, NULL })
+
+static int free_and_strdup(char **p, const char *s)
+{
+        char *t;
+
+        t = strdup(s);
+        if (!t)
+                return -ENOMEM;
+        free(*p);
+        *p = t;
+        return 0;
+}
+
+/* Parses the numbers of the properties libudev interprets, like systemd's sd-device does. */
+
+/* DEVMODE=, like safe_atou() of systemd: e.g. "0660" is octal */
+static int parse_devmode(const char *s, mode_t *ret)
+{
+        unsigned u;
+        int r;
+
+        r = safe_atou_full(s, 0, &u);
+        if (r < 0)
+                return r;
+        if (u > 07777)
+                return -EINVAL;
+        *ret = u;
+        return 0;
+}
+
+/* DEVUID= and DEVGID=, like parse_uid() of systemd: decimal only, without a sign, leading zeros or
+ * whitespace, and neither (uid_t) -1 nor the 16-bit -1 */
+static int parse_devuid(const char *s, uid_t *ret)
+{
+        unsigned u;
+        int r;
+
+        r = safe_atou_full(s, 10 | SAFE_ATO_REFUSE_PLUS_MINUS | SAFE_ATO_REFUSE_LEADING_ZERO |
+                              SAFE_ATO_REFUSE_LEADING_WHITESPACE, &u);
+        if (r < 0)
+                return r;
+        if (u == 0xFFFFFFFFU || u == 0xFFFFU)
+                return -ENXIO;
+        *ret = u;
+        return 0;
+}
+
+/* IFINDEX=, like parse_ifindex() of systemd */
+static int parse_ifindex(const char *s, int *ret)
+{
+        unsigned u;
+        int r;
+
+        r = safe_atou_full(s, 0, &u);
+        if (r < 0)
+                return r;
+        if (u == 0 || u > INT_MAX)
+                return -EINVAL;
+        *ret = u;
+        return 0;
+}
+
+/* MAJOR= and MINOR=, like device_set_devnum() of systemd. A major number of 0 means no device
+ * node, then the minor number is not checked. */
+static int parse_devnum(const char *major_str, const char *minor_str, dev_t *ret)
+{
+        unsigned maj, min = 0;
+        int r;
+
+        r = safe_atou_full(major_str, 0, &maj);
+        if (r < 0)
+                return r;
+        if (maj == 0) {
+                *ret = 0;
+                return 0;
+        }
+        if (maj > (1U << 12) - 1)
+                return -EINVAL;
+
+        if (minor_str) {
+                r = safe_atou_full(minor_str, 0, &min);
+                if (r < 0)
+                        return r;
+                if (min > (1U << 20) - 1)
+                        return -EINVAL;
+        }
+
+        *ret = makedev(maj, min);
+        return 0;
+}
+
+/* DEVPATH=: like device_set_syspath() of systemd, the path below /sys is simplified, and must not
+ * be empty */
+static int udev_device_set_devpath(struct udev_device *udev_device, const char *devpath)
+{
+        _cleanup_free_ char *syspath = NULL;
+
+        if (devpath[0] != '/')
+                return -EINVAL;
+
+        syspath = strjoin("/sys", devpath, NULL);
+        if (!syspath)
+                return -ENOMEM;
+        devname_simplify(syspath);
+        if (!startswith(syspath, "/sys/"))
+                return -EINVAL;
+
+        return udev_device_set_syspath(udev_device, syspath);
+}
+
+/* DEVLINKS=: split at whitespace, like extract_first_word() with EXTRACT_RETAIN_ESCAPE */
+static int udev_device_add_devlinks_from_string(struct udev_device *udev_device, const char *value)
+{
+        const char *p = value;
+
+        for (;;) {
+                _cleanup_free_ char *word = NULL;
+                size_t n;
+                int r;
+
+                p += strspn(p, WHITESPACE);
+                if (*p == '\0')
+                        return 0;
+
+                n = strcspn(p, WHITESPACE);
+                word = strndup(p, n);
+                if (!word)
+                        return -ENOMEM;
+                p += n;
+
+                r = udev_device_add_devlink(udev_device, word);
+                if (r < 0)
+                        return r;
+        }
+}
+
+/* TAGS= and CURRENT_TAGS=: split at ':', like extract_first_word() with
+ * EXTRACT_DONT_COALESCE_SEPARATORS, i.e. a backslash takes the next character literally, and
+ * empty words are skipped */
+static int udev_device_add_tags_from_string(struct udev_device *udev_device, const char *value, bool both)
+{
+        _cleanup_free_ char *word = NULL;
+        const char *p = value;
+
+        word = malloc(strlen(value) + 1);
+        if (!word)
+                return -ENOMEM;
+
+        for (;;) {
+                size_t n = 0;
+                bool end;
+                int r;
+
+                while (*p != '\0' && *p != ':') {
+                        if (*p == '\\') {
+                                p++;
+                                if (*p == '\0')
+                                        return -EINVAL;
+                        }
+                        word[n++] = *(p++);
+                }
+                word[n] = '\0';
+
+                end = *p == '\0';
+                if (!end)
+                        p++;
+
+                if (n > 0) {
+                        r = udev_device_add_tag(udev_device, word, both);
+                        if (r < 0)
+                                return r;
+                }
+
+                if (end)
+                        return 0;
+        }
+}
+
+static bool action_is_valid(const char *action)
+{
+        return STR_IN_SET(action, "add", "remove", "change", "move", "online", "offline", "bind", "unbind");
+}
+
 /*
- * parse property string, and if needed, update internal values accordingly
+ * Parses one "KEY=VALUE" of a netlink message or of the environment, and updates the internal
+ * values of the properties libudev interprets, like device_amend() of systemd's sd-device.
+ *
+ * Returns a negative error when the device must be refused: the entry is not a key-value pair, or
+ * the value of one of the interpreted properties is invalid. Other invalid properties are ignored,
+ * see systemd commit 354b51ddbfa3c735cccaab455b3f954dab746a43.
  *
  * udev_device_add_property_from_string_parse_finish() needs to be
  * called after adding properties, and its return value checked
@@ -576,100 +750,152 @@ static int udev_device_set_action(struct udev_device *udev_device, const char *a
  * udev_device_set_info_loaded() needs to be set, to avoid trying
  * to use a device without a DEVPATH set
  */
-static void udev_device_add_property_from_string_parse(struct udev_device *udev_device, const char *property)
+static int udev_device_add_property_from_string_parse(struct udev_device *udev_device, const char *property)
 {
-        /* Skip an invalid property, but continue with the others. When DEVPATH or SUBSYSTEM is
-         * invalid, udev_device_add_property_from_string_parse_finish() refuses the device. */
-        if (!property_string_is_valid(udev_device, property))
-                return;
+        _cleanup_free_ char *key = NULL;
+        const char *value, *eq;
+        int r = 0;
 
-        if (startswith(property, "DEVPATH=")) {
-                char path[UTIL_PATH_SIZE];
+        eq = strchr(property, '=');
+        if (!eq) {
+                if (log_get_max_level() >= LOG_DEBUG) {
+                        _cleanup_free_ char *escaped = cescape(property);
 
-                strscpyl(path, sizeof(path), "/sys", &property[8], NULL);
-                udev_device_set_syspath(udev_device, path);
-        } else if (startswith(property, "SUBSYSTEM=")) {
-                udev_device_set_subsystem(udev_device, &property[10]);
-        } else if (startswith(property, "DEVTYPE=")) {
-                udev_device_set_devtype(udev_device, &property[8]);
-        } else if (startswith(property, "DEVNAME=")) {
-                udev_device_set_devnode(udev_device, &property[8]);
-        } else if (startswith(property, "DEVLINKS=")) {
-                char devlinks[UTIL_PATH_SIZE];
-                char *slink;
-                char *next;
-
-                strscpy(devlinks, sizeof(devlinks), &property[9]);
-                slink = devlinks;
-                next = strchr(slink, ' ');
-                while (next != NULL) {
-                        next[0] = '\0';
-                        udev_device_add_devlink(udev_device, slink);
-                        slink = &next[1];
-                        next = strchr(slink, ' ');
+                        log_debug("%s%sNot a key-value pair: '%s'",
+                                  udev_device->sysname ?: "", udev_device->sysname ? ": " : "",
+                                  escaped ?: "(null)");
                 }
-                if (slink[0] != '\0')
-                        udev_device_add_devlink(udev_device, slink);
-        } else if (startswith(property, "TAGS=") || startswith(property, "CURRENT_TAGS=")) {
-                bool current = startswith(property, "CURRENT_TAGS=");
-                char tags[UTIL_PATH_SIZE];
-                char *next;
-
-                strscpy(tags, sizeof(tags), strchr(property, '=') + 1);
-                next = strchr(tags, ':');
-                if (next != NULL) {
-                        next++;
-                        while (next[0] != '\0') {
-                                char *tag;
-
-                                tag = next;
-                                next = strchr(tag, ':');
-                                if (next == NULL)
-                                        break;
-                                next[0] = '\0';
-                                next++;
-                                udev_device_add_tag(udev_device, tag, current);
-                        }
-                }
-        } else if (startswith(property, "UDEV_DATABASE_VERSION=")) {
-                if (safe_atou(property + strlen("UDEV_DATABASE_VERSION="), &udev_device->database_version) < 0)
-                        log_debug("Failed to parse udev database version '%s', ignoring", property);
-        } else if (startswith(property, "USEC_INITIALIZED=")) {
-                udev_device_set_usec_initialized(udev_device, strtoull(&property[17], NULL, 10));
-        } else if (startswith(property, "DRIVER=")) {
-                udev_device_set_driver(udev_device, &property[7]);
-        } else if (startswith(property, "ACTION=")) {
-                udev_device_set_action(udev_device, &property[7]);
-        } else if (startswith(property, "MAJOR=")) {
-                udev_device->maj = strtoull(&property[6], NULL, 10);
-        } else if (startswith(property, "MINOR=")) {
-                udev_device->min = strtoull(&property[6], NULL, 10);
-        } else if (startswith(property, "DEVPATH_OLD=")) {
-                udev_device_set_devpath_old(udev_device, &property[12]);
-        } else if (startswith(property, "SEQNUM=")) {
-                udev_device_set_seqnum(udev_device, strtoull(&property[7], NULL, 10));
-        } else if (startswith(property, "IFINDEX=")) {
-                udev_device_set_ifindex(udev_device, strtoull(&property[8], NULL, 10));
-        } else if (startswith(property, "DEVMODE=")) {
-                udev_device_set_devnode_mode(udev_device, strtoul(&property[8], NULL, 8));
-        } else if (startswith(property, "DEVUID=")) {
-                udev_device_set_devnode_uid(udev_device, strtoul(&property[7], NULL, 10));
-        } else if (startswith(property, "DEVGID=")) {
-                udev_device_set_devnode_gid(udev_device, strtoul(&property[7], NULL, 10));
-        } else {
-                udev_device_add_property_from_string(udev_device, property);
+                return -EINVAL;
         }
+
+        key = strndup(property, eq - property);
+        if (!key)
+                return log_oom();
+        value = eq + 1;
+
+        if (streq(key, "MAJOR"))
+                r = free_and_strdup(&udev_device->parse_major, value);
+        else if (streq(key, "MINOR"))
+                r = free_and_strdup(&udev_device->parse_minor, value);
+        else if (STR_IN_SET(key, "DEVPATH", "SUBSYSTEM", "DEVTYPE", "DRIVER") && !property_is_valid(key, value))
+                r = -EINVAL;
+        else if (streq(key, "DEVPATH"))
+                r = udev_device_set_devpath(udev_device, value);
+        else if (streq(key, "SUBSYSTEM"))
+                r = udev_device_set_subsystem(udev_device, value);
+        else if (streq(key, "DEVTYPE"))
+                r = udev_device_set_devtype(udev_device, value);
+        else if (streq(key, "DRIVER"))
+                r = udev_device_set_driver(udev_device, value);
+        else if (streq(key, "DEVNAME"))
+                r = udev_device_set_devnode(udev_device, value);
+        else if (streq(key, "DEVLINKS"))
+                r = udev_device_add_devlinks_from_string(udev_device, value);
+        else if (STR_IN_SET(key, "TAGS", "CURRENT_TAGS"))
+                r = udev_device_add_tags_from_string(udev_device, value, streq(key, "CURRENT_TAGS"));
+        else if (streq(key, "UDEV_DATABASE_VERSION"))
+                r = safe_atou_full(value, 0, &udev_device->database_version);
+        else if (streq(key, "USEC_INITIALIZED")) {
+                uint64_t t;
+
+                r = safe_atou64_full(value, 0, &t);
+                if (r >= 0)
+                        udev_device_set_usec_initialized(udev_device, t);
+        } else if (streq(key, "ACTION")) {
+                if (!action_is_valid(value))
+                        r = -EINVAL;
+                else
+                        r = udev_device_set_action(udev_device, value);
+        } else if (STR_IN_SET(key, "SEQNUM", "DISKSEQ")) {
+                uint64_t u;
+
+                r = safe_atou64_full(value, 0, &u);
+                if (r >= 0 && u == 0)
+                        r = -EINVAL;
+                else if (r >= 0 && streq(key, "SEQNUM"))
+                        r = udev_device_set_seqnum(udev_device, u);
+                else if (r >= 0)
+                        r = udev_device_add_property_internal_full(udev_device, key, value, NULL);
+        } else if (streq(key, "IFINDEX")) {
+                int ifindex;
+
+                r = parse_ifindex(value, &ifindex);
+                if (r >= 0)
+                        r = udev_device_set_ifindex(udev_device, ifindex);
+        } else if (streq(key, "DEVMODE")) {
+                mode_t mode;
+
+                r = parse_devmode(value, &mode);
+                if (r >= 0)
+                        r = udev_device_set_devnode_mode(udev_device, mode);
+        } else if (STR_IN_SET(key, "DEVUID", "DEVGID")) {
+                uid_t id;
+
+                r = parse_devuid(value, &id);
+                if (r >= 0 && streq(key, "DEVUID"))
+                        r = udev_device_set_devnode_uid(udev_device, id);
+                else if (r >= 0)
+                        r = udev_device_set_devnode_gid(udev_device, id);
+        } else {
+                /* An ordinary property. The kernel may pass invalid characters, e.g. in UNIQ= of USB
+                 * serial devices. Ignore only such key-value pairs. */
+                if (!property_is_valid(key, value)) {
+                        if (log_get_max_level() >= LOG_DEBUG) {
+                                _cleanup_free_ char *escaped = cescape(property);
+
+                                log_debug("%s%sInvalid property '%s', ignoring",
+                                          udev_device->sysname ?: "", udev_device->sysname ? ": " : "",
+                                          escaped ?: "(null)");
+                        }
+                        return 0;
+                }
+
+                if (streq(key, "DEVPATH_OLD")) {
+                        /* an ordinary property for systemd, never refuse the device for it */
+                        r = udev_device_set_devpath_old(udev_device, value);
+                        if (r != -ENOMEM)
+                                r = 0;
+                } else if (!udev_device_add_property_from_string(udev_device, property) && !isempty(value))
+                        r = -ENOMEM;
+        }
+
+        if (r < 0 && log_get_max_level() >= LOG_DEBUG) {
+                _cleanup_free_ char *escaped = cescape(property);
+
+                log_debug_errno(r, "%s%sFailed to set '%s': %m",
+                                udev_device->sysname ?: "", udev_device->sysname ? ": " : "",
+                                escaped ?: "(null)");
+        }
+
+        return r;
 }
 
 static int udev_device_add_property_from_string_parse_finish(struct udev_device *udev_device)
 {
-        if (udev_device->maj > 0)
-                udev_device_set_devnum(udev_device, makedev(udev_device->maj, udev_device->min));
-        udev_device->maj = 0;
-        udev_device->min = 0;
+        int r = 0;
 
-        if (udev_device->devpath == NULL || udev_device->subsystem == NULL)
+        if (udev_device->parse_major) {
+                dev_t devnum;
+
+                r = parse_devnum(udev_device->parse_major, udev_device->parse_minor, &devnum);
+                if (r < 0)
+                        log_debug_errno(r, "Failed to set devnum %s:%s: %m",
+                                        udev_device->parse_major, udev_device->parse_minor ?: "n/a");
+                else if (major(devnum) > 0)
+                        udev_device_set_devnum(udev_device, devnum);
+        }
+        free(udev_device->parse_major);
+        free(udev_device->parse_minor);
+        udev_device->parse_major = udev_device->parse_minor = NULL;
+        if (r < 0)
+                return r;
+
+        /* like device_verify() of systemd */
+        if (udev_device->devpath == NULL || udev_device->subsystem == NULL ||
+            udev_device->action == NULL || udev_device->seqnum == 0) {
+                log_debug("device lacks devpath, subsystem, action or seqnum");
                 return -EINVAL;
+        }
         return 0;
 }
 
@@ -786,61 +1012,135 @@ int udev_device_read_db(struct udev_device *udev_device)
         return 0;
 }
 
+/* Handles one line of the uevent file, like handle_uevent_line() of systemd's sd-device */
+static int udev_device_handle_uevent_line(struct udev_device *udev_device, const char *key, const char *value)
+{
+        int r;
+
+        if (streq(key, "MAJOR"))
+                return free_and_strdup(&udev_device->parse_major, value);
+        if (streq(key, "MINOR"))
+                return free_and_strdup(&udev_device->parse_minor, value);
+
+        /* The kernel may pass invalid characters, e.g. in UNIQ= of USB serial devices. Ignore
+         * only such key-value pairs. */
+        if (!property_is_valid(key, value))
+                return -EINVAL;
+
+        if (streq(key, "DEVTYPE"))
+                return udev_device_set_devtype(udev_device, value);
+        if (streq(key, "DEVNAME"))
+                return udev_device_set_devnode(udev_device, value);
+        if (streq(key, "IFINDEX")) {
+                int ifindex;
+
+                r = parse_ifindex(value, &ifindex);
+                if (r < 0)
+                        return r;
+                return udev_device_set_ifindex(udev_device, ifindex);
+        }
+        if (streq(key, "DEVMODE")) {
+                mode_t mode;
+
+                r = parse_devmode(value, &mode);
+                if (r < 0)
+                        return r;
+                return udev_device_set_devnode_mode(udev_device, mode);
+        }
+        if (STR_IN_SET(key, "DEVUID", "DEVGID")) {
+                uid_t id;
+
+                r = parse_devuid(value, &id);
+                if (r < 0)
+                        return r;
+                if (streq(key, "DEVUID"))
+                        return udev_device_set_devnode_uid(udev_device, id);
+                return udev_device_set_devnode_gid(udev_device, id);
+        }
+        if (streq(key, "DISKSEQ")) {
+                uint64_t u;
+
+                r = safe_atou64_full(value, 0, &u);
+                if (r < 0)
+                        return r;
+                if (u == 0)
+                        return -EINVAL;
+        }
+
+        /* An ordinary property, like device_add_property_internal() in handle_uevent_line() of
+         * systemd's sd-device. */
+        return udev_device_add_property_internal_full(udev_device, key, value, NULL);
+}
+
 static int udev_device_read_uevent_file(struct udev_device *udev_device)
 {
-        char filename[UTIL_PATH_SIZE];
-        FILE *f;
-        char line[UTIL_LINE_SIZE];
-        int maj = 0;
-        int min = 0;
+        _cleanup_free_ char *filename = NULL, *uevent = NULL;
+        char *p;
+        int r;
 
         if (udev_device->uevent_loaded)
                 return 0;
 
-        strscpyl(filename, sizeof(filename), udev_device->syspath, "/uevent", NULL);
-        f = fopen(filename, "re");
-        if (f == NULL)
-                return -errno;
+        filename = strjoin(udev_device->syspath, "/uevent", NULL);
+        if (!filename)
+                return -ENOMEM;
+        r = read_full_file(filename, &uevent, NULL);
+        if (r < 0)
+                return r;
         udev_device->uevent_loaded = true;
 
-        while (fgets(line, sizeof(line), f)) {
-                char *pos;
+        /* Like systemd, split the lines at "\n" and "\r", and skip empty lines. */
+        for (p = uevent;;) {
+                char *line, *eq;
+                size_t n;
 
-                pos = strchr(line, '\n');
-                if (pos == NULL)
-                        continue;
-                pos[0] = '\0';
+                p += strspn(p, NEWLINE);
+                if (*p == '\0')
+                        break;
 
-                /* The kernel may pass invalid characters, e.g. in UNIQ= of USB serial devices. Ignore
-                 * only such key-value pairs. */
-                if (!property_string_is_valid(udev_device, line))
-                        continue;
+                line = p;
+                n = strcspn(p, NEWLINE);
+                p += n;
+                if (*p != '\0')
+                        *(p++) = '\0';
 
-                if (startswith(line, "DEVTYPE=")) {
-                        udev_device_set_devtype(udev_device, &line[8]);
+                eq = strchr(line, '=');
+                if (!eq) {
+                        if (log_get_max_level() >= LOG_DEBUG) {
+                                _cleanup_free_ char *escaped = cescape(line);
+
+                                log_debug("%s: Invalid uevent line, ignoring: %s",
+                                          udev_device->sysname ?: "n/a", escaped ?: "(null)");
+                        }
                         continue;
                 }
-                if (startswith(line, "IFINDEX=")) {
-                        udev_device_set_ifindex(udev_device, strtoull(&line[8], NULL, 10));
-                        continue;
-                }
-                if (startswith(line, "DEVNAME=")) {
-                        udev_device_set_devnode(udev_device, &line[8]);
-                        continue;
-                }
 
-                if (startswith(line, "MAJOR="))
-                        maj = strtoull(&line[6], NULL, 10);
-                else if (startswith(line, "MINOR="))
-                        min = strtoull(&line[6], NULL, 10);
-                else if (startswith(line, "DEVMODE="))
-                        udev_device->devnode_mode = strtoul(&line[8], NULL, 8);
+                *eq = '\0';
+                r = udev_device_handle_uevent_line(udev_device, line, eq + 1);
+                *eq = '=';
+                if (r < 0 && log_get_max_level() >= LOG_DEBUG) {
+                        _cleanup_free_ char *escaped = cescape(line);
 
-                udev_device_add_property_from_string(udev_device, line);
+                        log_debug_errno(r, "%s: Failed to handle uevent entry '%s', ignoring: %m",
+                                        udev_device->sysname ?: "n/a", escaped ?: "(null)");
+                }
         }
 
-        udev_device->devnum = makedev(maj, min);
-        fclose(f);
+        if (udev_device->parse_major) {
+                dev_t devnum;
+
+                r = parse_devnum(udev_device->parse_major, udev_device->parse_minor, &devnum);
+                if (r < 0)
+                        log_debug_errno(r, "%s: Failed to set 'MAJOR=%s' and/or 'MINOR=%s' from uevent, ignoring: %m",
+                                        udev_device->sysname ?: "n/a", udev_device->parse_major,
+                                        udev_device->parse_minor ?: "n/a");
+                else if (major(devnum) > 0)
+                        udev_device_set_devnum(udev_device, devnum);
+        }
+        free(udev_device->parse_major);
+        free(udev_device->parse_minor);
+        udev_device->parse_major = udev_device->parse_minor = NULL;
+
         return 0;
 }
 
@@ -1226,7 +1526,10 @@ _public_ struct udev_device *udev_device_new_from_environment(struct udev *udev)
         udev_device->database_version = 0;
 
         for (i = 0; environ[i] != NULL; i++)
-                udev_device_add_property_from_string_parse(udev_device, environ[i]);
+                if (udev_device_add_property_from_string_parse(udev_device, environ[i]) < 0) {
+                        log_debug("invalid property, invalid device");
+                        return udev_device_unref(udev_device);
+                }
 
         if (udev_device_add_property_from_string_parse_finish(udev_device) < 0) {
                 log_debug("missing values, invalid device");
@@ -1410,6 +1713,8 @@ _public_ struct udev_device *udev_device_unref(struct udev_device *udev_device)
         free(udev_device->action);
         free(udev_device->driver);
         free(udev_device->devpath_old);
+        free(udev_device->parse_major);
+        free(udev_device->parse_minor);
         free(udev_device->id_filename);
         free(udev_device->envp);
         free(udev_device->monitor_buf);
@@ -2513,8 +2818,6 @@ struct udev_device *udev_device_new_from_nulstr(struct udev *udev, char *nulstr,
 
                 key = nulstr + bufpos;
                 keylen = strnlen(key, buflen - bufpos);
-                if (keylen == 0)
-                        break;
                 if ((ssize_t) keylen == buflen - bufpos) {
                         /* the last string is not NUL terminated */
                         log_debug("failed to parse nulstr, invalid device");
@@ -2532,7 +2835,15 @@ struct udev_device *udev_device_new_from_nulstr(struct udev *udev, char *nulstr,
                  * Let's drop the newline and remaining characters after the newline. */
                 key[strcspn(key, NEWLINE)] = '\0';
 
-                udev_device_add_property_from_string_parse(device, key);
+                if (udev_device_add_property_from_string_parse(device, key) < 0) {
+                        log_debug("invalid property, invalid device");
+
+                        udev_device_unref(device);
+
+                        errno = EINVAL;
+
+                        return NULL;
+                }
         }
 
         if (udev_device_add_property_from_string_parse_finish(device) < 0) {
