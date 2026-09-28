@@ -150,16 +150,18 @@ struct udev_list_entry *udev_list_entry_add(struct udev_list *list, const char *
                 /* lookup existing name or insertion-index */
                 i = list_search(list, name);
                 if (i >= 0) {
+                        char *v = NULL;
+
                         entry = list->entries[i];
 
-                        free(entry->value);
-                        if (value == NULL) {
-                                entry->value = NULL;
-                                return entry;
+                        /* on failure, keep the old value */
+                        if (value != NULL) {
+                                v = strdup(value);
+                                if (v == NULL)
+                                        return NULL;
                         }
-                        entry->value = strdup(value);
-                        if (entry->value == NULL)
-                                return NULL;
+                        free(entry->value);
+                        entry->value = v;
                         return entry;
                 }
         }
