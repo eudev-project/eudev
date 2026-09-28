@@ -18,11 +18,13 @@
 
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 #include <unistd.h>
 #include <grp.h>
 #include <pwd.h>
 
 #include "udev.h"
+#include "strv.h"
 #include "terminal-util.h"
 
 static bool use_colors(void) {
@@ -39,6 +41,39 @@ static const char *ansi_highlight(void) {
 
 static const char *ansi_normal(void) {
         return use_colors() ? ANSI_HIGHLIGHT_OFF : "";
+}
+
+static int str_compare(const void *a, const void *b) {
+        return strcmp(*(char * const *) a, *(char * const *) b);
+}
+
+/* Returns the properties as "KEY=VALUE" strings, like systemd's device_get_properties_strv(): the
+ * database version, which udevd passes with the properties, and all properties, sorted as strings,
+ * as systemd's dump does. */
+static char **dump_properties_strv(struct udev_device *dev) {
+        _cleanup_strv_free_ char **l = NULL;
+        struct udev_list_entry *entry;
+        size_t n = 1, i = 0;
+
+        udev_list_entry_foreach(entry, udev_device_get_properties_list_entry(dev))
+                n++;
+
+        l = new0(char *, n + 1);
+        if (!l)
+                return NULL;
+
+        if (asprintf(&l[i++], "UDEV_DATABASE_VERSION=%u", LATEST_UDEV_DATABASE_VERSION) < 0)
+                return NULL;
+
+        udev_list_entry_foreach(entry, udev_device_get_properties_list_entry(dev)) {
+                l[i] = strjoin(udev_list_entry_get_name(entry), "=", udev_list_entry_get_value(entry), NULL);
+                if (!l[i])
+                        return NULL;
+                i++;
+        }
+
+        qsort(l, i, sizeof(char *), str_compare);
+        return TAKE_PTR(l);
 }
 
 /* Returns the owner, group and mode of the device node, and whether they apply. They do not for remove
@@ -71,6 +106,8 @@ static bool event_get_node_perms(struct udev_event *event, uid_t *ret_uid, gid_t
 static int dump_event_json(struct udev_event *event, JsonFormatFlags flags, FILE *f) {
         struct udev_device *dev = event->dev;
         struct udev_list_entry *entry;
+        _cleanup_strv_free_ char **properties = NULL;
+        char **p;
         const char *subsys, *str;
         unsigned sysnum;
         JsonWriter w;
@@ -226,19 +263,14 @@ static int dump_event_json(struct udev_event *event, JsonFormatFlags flags, FILE
                 json_writer_array_end(&w);
         }
 
-        if (udev_device_get_properties_list_entry(dev)) {
-                json_writer_key(&w, "properties");
-                json_writer_array_begin(&w);
-                udev_list_entry_foreach(entry, udev_device_get_properties_list_entry(dev)) {
-                        _cleanup_free_ char *p = NULL;
-
-                        p = strjoin(udev_list_entry_get_name(entry), "=", udev_list_entry_get_value(entry), NULL);
-                        if (!p)
-                                return log_oom();
-                        json_writer_string(&w, p);
-                }
-                json_writer_array_end(&w);
-        }
+        properties = dump_properties_strv(dev);
+        if (!properties)
+                return log_oom();
+        json_writer_key(&w, "properties");
+        json_writer_array_begin(&w);
+        STRV_FOREACH(p, properties)
+                json_writer_string(&w, *p);
+        json_writer_array_end(&w);
 
         if (udev_list_get_entry(&event->run_list)) {
                 json_writer_key(&w, "queuedCommands");
@@ -260,6 +292,8 @@ static int dump_event_json(struct udev_event *event, JsonFormatFlags flags, FILE
 int dump_event(struct udev_event *event, JsonFormatFlags flags, FILE *f) {
         struct udev_device *dev = event->dev;
         struct udev_list_entry *entry;
+        _cleanup_strv_free_ char **properties = NULL;
+        char **p;
         const char *subsys, *str;
         int ifindex;
 
@@ -375,11 +409,12 @@ int dump_event(struct udev_event *event, JsonFormatFlags flags, FILE *f) {
                         fprintf(f, "  %s\n", udev_list_entry_get_name(entry));
         }
 
-        if (udev_device_get_properties_list_entry(dev)) {
-                fprintf(f, "%sProperties:%s\n", ansi_highlight(), ansi_normal());
-                udev_list_entry_foreach(entry, udev_device_get_properties_list_entry(dev))
-                        fprintf(f, "  %s=%s\n", udev_list_entry_get_name(entry), udev_list_entry_get_value(entry));
-        }
+        properties = dump_properties_strv(dev);
+        if (!properties)
+                return log_oom();
+        fprintf(f, "%sProperties:%s\n", ansi_highlight(), ansi_normal());
+        STRV_FOREACH(p, properties)
+                fprintf(f, "  %s\n", *p);
 
         if (udev_list_get_entry(&event->run_list)) {
                 fprintf(f, "%sQueued commands:%s\n", ansi_highlight(), ansi_normal());
