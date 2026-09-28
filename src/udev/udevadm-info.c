@@ -299,8 +299,42 @@ static void cleanup_dirs_after_db_cleanup(DIR *dir, DIR *datadir) {
         }
 }
 
+/*
+ * Removes the lock files of the stack directories in /run/udev/links.lock. A worker removes the lock
+ * file of a devlink when it is done with it, so they are only left behind when a worker was killed
+ * while it held one. A lock file that is held right now is kept. Removing one while holding it
+ * exclusively is safe: a worker waiting for it notices that it was removed after getting the lock,
+ * and creates a new one, see make_lock_file().
+ */
+static void cleanup_lock_dir(DIR *dir) {
+        struct dirent *dent;
+        int dfd;
+
+        dfd = dirfd(dir);
+        if (dfd < 0)
+                return;
+
+        for (dent = readdir(dir); dent != NULL; dent = readdir(dir)) {
+                _cleanup_close_ int fd = -1;
+
+                if (dent->d_name[0] == '.')
+                        continue;
+
+                fd = openat(dfd, dent->d_name, O_RDONLY|O_CLOEXEC|O_NOFOLLOW|O_NOCTTY|O_NONBLOCK);
+                if (fd < 0)
+                        continue;
+
+                if (flock(fd, LOCK_EX|LOCK_NB) < 0) {
+                        log_debug_errno(errno, "Lock file '%s' is in use, keeping it: %m", dent->d_name);
+                        continue;
+                }
+
+                (void) unlinkat(dfd, dent->d_name, 0);
+        }
+}
+
 static void cleanup_db(struct udev *udev __attribute__((unused))) {
-        _cleanup_closedir_ DIR *dir1 = NULL, *dir2 = NULL, *dir3 = NULL, *dir4 = NULL;
+        _cleanup_closedir_ DIR *dir1 = NULL, *dir2 = NULL, *dir3 = NULL, *dir4 = NULL, *dir5 = NULL;
 
         unlink(UDEV_ROOT_RUN "/udev/queue.bin");
 
@@ -330,6 +364,10 @@ static void cleanup_db(struct udev *udev __attribute__((unused))) {
         dir4 = opendir(UDEV_ROOT_RUN "/udev/static_node-tags");
         if (dir4 != NULL)
                 cleanup_dir(dir4, 0, 2);
+
+        dir5 = opendir(UDEV_ROOT_RUN "/udev/links.lock");
+        if (dir5 != NULL)
+                cleanup_lock_dir(dir5);
 
         /* Do not remove /run/udev/watch. It will be handled by udevd well on restart.
          * And should not be removed by external program when udevd is running. */
