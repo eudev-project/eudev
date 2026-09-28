@@ -598,8 +598,11 @@ int main(int argc, char **argv)
         log_open();
 
         udev = udev_new();
-        if (udev == NULL)
+        if (!udev) {
+                log_oom();
+                retval = 1;
                 goto exit;
+        }
 
         /*
          * Get config file options.
