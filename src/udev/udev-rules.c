@@ -220,6 +220,95 @@ struct token {
         };
 };
 
+/* Rule keys, builtins and OPTIONS values that systemd-udevd supports, but eudev does not. A rule line
+ * using one of them is dropped, like any invalid line, but with a message saying why. */
+enum systemd_only_type {
+        SYSTEMD_ONLY_KEY,               /* e.g. CONST{virt}=="kvm" */
+        SYSTEMD_ONLY_BUILTIN,           /* e.g. IMPORT{builtin}="uaccess" or RUN{builtin}+="uaccess" */
+        SYSTEMD_ONLY_OPTION,            /* e.g. OPTIONS="foo" or OPTIONS="foo=bar", matched without "=bar" */
+};
+
+static const struct systemd_only {
+        enum systemd_only_type type;
+        const char *name;
+} systemd_only_table[] = {
+        /* CONST{arch}, CONST{virt} and CONST{cvm} match the architecture, the virtualization and the
+         * confidential virtualization technology of the system. */
+        { SYSTEMD_ONLY_KEY,     "CONST" },
+        /* dissect_image: probes a disk image; net_setup_link: applies systemd.link(5) files; uaccess:
+         * gives the logged in user access to the device node, with ACLs managed by systemd-logind. */
+        { SYSTEMD_ONLY_BUILTIN, "dissect_image" },
+        { SYSTEMD_ONLY_BUILTIN, "net_setup_link" },
+        { SYSTEMD_ONLY_BUILTIN, "uaccess" },
+        /* eudev supports all OPTIONS values of systemd. */
+};
+
+static const char *const systemd_only_type_table[] = {
+        [SYSTEMD_ONLY_KEY]     = "key",
+        [SYSTEMD_ONLY_BUILTIN] = "builtin",
+        [SYSTEMD_ONLY_OPTION]  = "OPTIONS value",
+};
+
+/* Checks whether the first len characters of name are a systemd-only key, builtin or option. */
+static bool is_systemd_only(enum systemd_only_type type, const char *name, size_t len) {
+        unsigned int i;
+
+        for (i = 0; i < ELEMENTSOF(systemd_only_table); i++)
+                if (systemd_only_table[i].type == type &&
+                    strlen(systemd_only_table[i].name) == len &&
+                    strneq(systemd_only_table[i].name, name, len))
+                        return true;
+
+        return false;
+}
+
+/* Logs that the rule line uses a systemd-only feature, the caller drops the line. */
+static void log_systemd_only(enum systemd_only_type type, const char *what, const char *filename, unsigned int lineno) {
+        log_error("%s is a systemd-only %s, not supported by eudev, ignoring rule %s:%u",
+                  what, systemd_only_type_table[type], filename, lineno);
+}
+
+/* Checks whether the command of IMPORT{builtin}, IMPORT{program} or RUN{builtin} is a systemd-only
+ * builtin, and logs it. */
+static bool check_systemd_only_builtin(const char *key, const char *cmd, const char *filename, unsigned int lineno) {
+        _cleanup_free_ char *what = NULL;
+        size_t len = strcspn(cmd, " ");
+
+        if (!is_systemd_only(SYSTEMD_ONLY_BUILTIN, cmd, len))
+                return false;
+
+        if (asprintf(&what, "%s=\"%.*s\"", key, (int) len, cmd) < 0)
+                what = NULL;
+        log_systemd_only(SYSTEMD_ONLY_BUILTIN, what ?: cmd, filename, lineno);
+        return true;
+}
+
+/* Checks the comma separated OPTIONS values for a systemd-only one, and logs it. */
+static bool check_systemd_only_options(const char *value, const char *filename, unsigned int lineno) {
+        const char *p = value;
+
+        for (;;) {
+                size_t len, n;
+
+                p += strspn(p, ", ");
+                len = strcspn(p, ", ");
+                if (len == 0)
+                        return false;
+
+                n = strcspn(p, "=");
+                if (is_systemd_only(SYSTEMD_ONLY_OPTION, p, MIN(len, n))) {
+                        _cleanup_free_ char *what = NULL;
+
+                        if (asprintf(&what, "OPTIONS=\"%.*s\"", (int) len, p) < 0)
+                                what = NULL;
+                        log_systemd_only(SYSTEMD_ONLY_OPTION, what ?: value, filename, lineno);
+                        return true;
+                }
+
+                p += len;
+        }
+}
+
 #define MAX_TK                64
 struct rule_tmp {
         struct udev_rules *rules;
@@ -1567,6 +1656,9 @@ static int add_rule(struct udev_rules *rules, char *line,
                                                 rule_add_key(&rule_tmp, TK_M_IMPORT_BUILTIN, op, value, &cmd);
                                                 continue;
                                         }
+                                        /* systemd takes the command for its builtin */
+                                        if (check_systemd_only_builtin("IMPORT{program}", value, filename, lineno))
+                                                goto ignore;
                                 }
                                 rule_add_key(&rule_tmp, TK_M_IMPORT_PROG, op, value, NULL);
                         } else if (streq(attr, "builtin")) {
@@ -1574,6 +1666,8 @@ static int add_rule(struct udev_rules *rules, char *line,
 
                                 if (cmd < UDEV_BUILTIN_MAX)
                                         rule_add_key(&rule_tmp, TK_M_IMPORT_BUILTIN, op, value, &cmd);
+                                else if (check_systemd_only_builtin("IMPORT{builtin}", value, filename, lineno))
+                                        goto ignore;
                                 else
                                         log_error("IMPORT{builtin}: '%s' unknown %s:%u", value, filename, lineno);
                         } else if (streq(attr, "file")) {
@@ -1624,6 +1718,8 @@ static int add_rule(struct udev_rules *rules, char *line,
 
                                 if (cmd < UDEV_BUILTIN_MAX)
                                         rule_add_key(&rule_tmp, TK_A_RUN_BUILTIN, op, value, &cmd);
+                                else if (check_systemd_only_builtin("RUN{builtin}", value, filename, lineno))
+                                        goto ignore;
                                 else
                                         log_error("RUN{builtin}: '%s' unknown %s:%u", value, filename, lineno);
                         } else if (streq(attr, "program")) {
@@ -1767,6 +1863,9 @@ static int add_rule(struct udev_rules *rules, char *line,
                                 goto invalid;
                         }
 
+                        if (check_systemd_only_options(value, filename, lineno))
+                                goto ignore;
+
                         pos = strstr(value, "link_priority=");
                         if (pos != NULL) {
                                 int prio = atoi(&pos[strlen("link_priority=")]);
@@ -1810,6 +1909,11 @@ static int add_rule(struct udev_rules *rules, char *line,
                         continue;
                 }
 
+                if (is_systemd_only(SYSTEMD_ONLY_KEY, key, strcspn(key, "{"))) {
+                        log_systemd_only(SYSTEMD_ONLY_KEY, key, filename, lineno);
+                        goto ignore;
+                }
+
                 log_error("unknown key '%s' in %s:%u", key, filename, lineno);
                 goto invalid;
         }
@@ -1826,6 +1930,7 @@ static int add_rule(struct udev_rules *rules, char *line,
         return 0;
 invalid:
         log_error("invalid rule '%s:%u'", filename, lineno);
+ignore:
         return -1;
 }
 
