@@ -43,6 +43,19 @@ bool paths_check_timestamp(const char* const* paths, usec_t *paths_ts_usec, bool
 char *prefix_root(const char *root, const char *path);
 
 char* path_extend_internal(char **x, ...);
+
+int path_find_first_component(const char **p, bool accept_dot_dot, const char **ret);
+char* path_simplify(char *path);
+int path_simplify_alloc(const char *path, char **ret);
+bool path_is_valid_full(const char *p, bool accept_dot_dot) _pure_;
+static inline bool path_is_valid(const char *p) {
+        return path_is_valid_full(p, /* accept_dot_dot= */ true);
+}
+static inline bool path_is_safe(const char *p) {
+        return path_is_valid_full(p, /* accept_dot_dot= */ false);
+}
+bool path_is_normalized(const char *p) _pure_;
+bool empty_or_root(const char *path) _pure_;
 #define path_extend(x, ...) path_extend_internal(x, __VA_ARGS__, POINTER_MAX)
 #define path_join(...) path_extend_internal(NULL, __VA_ARGS__, POINTER_MAX)
 
