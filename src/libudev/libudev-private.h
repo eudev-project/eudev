@@ -158,6 +158,7 @@ int udev_queue_export_device_finished(struct udev_queue_export *udev_queue_expor
 
 /* libudev-hwdb.c */
 bool udev_hwdb_validate(struct udev_hwdb *hwdb);
+struct udev_hwdb *udev_hwdb_new_from_path(struct udev *udev, const char *path);
 
 /* libudev-util.c */
 #define UTIL_PATH_SIZE                      1024

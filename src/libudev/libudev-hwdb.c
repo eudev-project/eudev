@@ -449,32 +449,26 @@ static char *get_hwdb_bin_paths (void) {
         return path;
 }
 
-/**
- * udev_hwdb_new:
- * @udev: udev library context
- *
- * Create a hardware database context to query properties for devices.
- *
- * Returns: a hwdb context.
- **/
-_public_ struct udev_hwdb *udev_hwdb_new(struct udev *udev) {
+/* Opens the first hwdb.bin of bin_paths, a nulstr, which is freed with the context. */
+static struct udev_hwdb *hwdb_new(struct udev *udev, char *bin_paths) {
         struct udev_hwdb *hwdb;
         const char *hwdb_bin_path;
         const char sig[] = HWDB_SIG;
 
-        hwdb = new0(struct udev_hwdb, 1);
-        if (!hwdb)
+        if (bin_paths == NULL)
                 return NULL;
+
+        hwdb = new0(struct udev_hwdb, 1);
+        if (!hwdb) {
+                free(bin_paths);
+                return NULL;
+        }
 
         hwdb->refcount = 1;
         udev_list_init(udev, &hwdb->properties_list, true);
 
         /* find hwdb.bin in hwdb_bin_paths */
-        hwdb->bin_paths = get_hwdb_bin_paths();
-        if (hwdb->bin_paths == NULL) {
-                udev_hwdb_unref(hwdb);
-                return NULL;
-        }
+        hwdb->bin_paths = bin_paths;
         NULSTR_FOREACH(hwdb_bin_path, hwdb->bin_paths) {
                 hwdb->f = fopen(hwdb_bin_path, "re");
                 if (hwdb->f)
@@ -522,6 +516,33 @@ _public_ struct udev_hwdb *udev_hwdb_new(struct udev *udev) {
         log_debug("strings           %8"PRIu64" bytes", le64toh(hwdb->head->strings_len));
         log_debug("nodes             %8"PRIu64" bytes", le64toh(hwdb->head->nodes_len));
         return hwdb;
+}
+
+/**
+ * udev_hwdb_new:
+ * @udev: udev library context
+ *
+ * Create a hardware database context to query properties for devices.
+ *
+ * Returns: a hwdb context.
+ **/
+_public_ struct udev_hwdb *udev_hwdb_new(struct udev *udev) {
+        return hwdb_new(udev, get_hwdb_bin_paths());
+}
+
+/* Not part of the public API: opens the hwdb.bin at path, for 'systemd-hwdb --root= query'. */
+struct udev_hwdb *udev_hwdb_new_from_path(struct udev *udev, const char *path) {
+        size_t l = strlen(path);
+        char *bin_paths;
+
+        /* a nulstr with only this path */
+        bin_paths = malloc(l + 2);
+        if (bin_paths == NULL)
+                return NULL;
+        memcpy(bin_paths, path, l + 1);
+        bin_paths[l + 1] = '\0';
+
+        return hwdb_new(udev, bin_paths);
 }
 
 /**
