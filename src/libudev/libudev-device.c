@@ -1582,7 +1582,8 @@ _public_ struct udev_list_entry *udev_device_get_properties_list_entry(struct ud
                         udev_list_entry_foreach(list_entry, udev_list_entry_get_next(list_entry))
                                 l = strpcpyl(&s, l, " ", udev_list_entry_get_name(list_entry), NULL);
                         udev_device_add_property_internal(udev_device, "DEVLINKS", symlinks);
-                }
+                } else
+                        udev_device_add_property_internal(udev_device, "DEVLINKS", NULL);
         }
         if (!udev_device->tags_uptodate) {
                 udev_device->tags_uptodate = true;
