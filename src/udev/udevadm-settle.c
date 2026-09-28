@@ -51,6 +51,7 @@ static int adm_settle(struct udev *udev, int argc, char *argv[]) {
                 { "timeout",        required_argument, NULL, 't' },
                 { "exit-if-exists", required_argument, NULL, 'E' },
                 { "help",           no_argument,       NULL, 'h' },
+                { "version",        no_argument,       NULL, 'V' },
                 { "seq-start",      required_argument, NULL, 's' }, /* removed */
                 { "seq-end",        required_argument, NULL, 'e' }, /* removed */
                 { "quiet",          no_argument,       NULL, 'q' }, /* removed */
@@ -85,6 +86,9 @@ static int adm_settle(struct udev *udev, int argc, char *argv[]) {
 
                 case 'h':
                         help();
+                        return EXIT_SUCCESS;
+                case 'V':
+                        printf("%s\n", UDEV_VERSION);
                         return EXIT_SUCCESS;
 
                 case 's':

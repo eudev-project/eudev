@@ -64,6 +64,7 @@ static int adm_test(struct udev *udev, int argc, char *argv[]) {
                 { "action", required_argument, NULL, 'a' },
                 { "resolve-names", required_argument, NULL, 'N' },
                 { "help", no_argument, NULL, 'h' },
+                { "version", no_argument, NULL, 'V' },
                 {}
         };
 
@@ -89,6 +90,9 @@ static int adm_test(struct udev *udev, int argc, char *argv[]) {
                         break;
                 case 'h':
                         help();
+                        exit(EXIT_SUCCESS);
+                case 'V':
+                        printf("%s\n", UDEV_VERSION);
                         exit(EXIT_SUCCESS);
                 case '?':
                         exit(EXIT_FAILURE);

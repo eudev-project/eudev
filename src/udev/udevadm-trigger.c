@@ -116,6 +116,7 @@ static int adm_trigger(struct udev *udev, int argc, char *argv[]) {
                 { "name-match",        required_argument, NULL, ARG_NAME },
                 { "parent-match",      required_argument, NULL, 'b'      },
                 { "help",              no_argument,       NULL, 'h'      },
+                { "version",           no_argument,       NULL, 'V'      },
                 {}
         };
         enum {
@@ -215,6 +216,9 @@ static int adm_trigger(struct udev *udev, int argc, char *argv[]) {
 
                 case 'h':
                         help();
+                        return 0;
+                case 'V':
+                        printf("%s\n", UDEV_VERSION);
                         return 0;
                 case '?':
                         return 1;

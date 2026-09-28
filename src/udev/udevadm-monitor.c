@@ -99,6 +99,7 @@ static int adm_monitor(struct udev *udev, int argc, char *argv[]) {
                 { "subsystem-match", required_argument, NULL, 's' },
                 { "tag-match",       required_argument, NULL, 't' },
                 { "help",            no_argument,       NULL, 'h' },
+                { "version",         no_argument,       NULL, 'V' },
                 {}
         };
 
@@ -136,6 +137,9 @@ static int adm_monitor(struct udev *udev, int argc, char *argv[]) {
                         break;
                 case 'h':
                         help();
+                        return 0;
+                case 'V':
+                        printf("%s\n", UDEV_VERSION);
                         return 0;
                 default:
                         return 1;

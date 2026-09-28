@@ -61,6 +61,7 @@ static int adm_control(struct udev *udev, int argc, char *argv[]) {
                 { "children-max",     required_argument, NULL, 'm' },
                 { "timeout",          required_argument, NULL, 't' },
                 { "help",             no_argument,       NULL, 'h' },
+                { "version",          no_argument,       NULL, 'V' },
                 {}
         };
 
@@ -150,6 +151,10 @@ static int adm_control(struct udev *udev, int argc, char *argv[]) {
                 }
                 case 'h':
                         print_help();
+                        rc = 0;
+                        break;
+                case 'V':
+                        printf("%s\n", UDEV_VERSION);
                         rc = 0;
                         break;
                 }
