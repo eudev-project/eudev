@@ -1690,8 +1690,8 @@ static int add_rule(struct udev_rules *rules, char *line,
                 if (startswith(key, "IMPORT")) {
                         attr = get_key_attribute(rules->udev, key + strlen("IMPORT"));
                         if (attr == NULL) {
-                                log_error("IMPORT{} type missing, ignoring IMPORT %s:%u", filename, lineno);
-                                continue;
+                                log_error("IMPORT{} type missing %s:%u", filename, lineno);
+                                goto invalid;
                         }
                         if (op == OP_REMOVE) {
                                 log_error("invalid IMPORT operation");
@@ -1725,8 +1725,10 @@ static int add_rule(struct udev_rules *rules, char *line,
                                         rule_add_key(&rule_tmp, TK_M_IMPORT_BUILTIN, op, value, &cmd);
                                 else if (check_systemd_only_builtin("IMPORT{builtin}", value, filename, lineno))
                                         goto ignore;
-                                else
+                                else {
                                         log_error("IMPORT{builtin}: '%s' unknown %s:%u", value, filename, lineno);
+                                        goto invalid;
+                                }
                         } else if (streq(attr, "file")) {
                                 rule_add_key(&rule_tmp, TK_M_IMPORT_FILE, op, value, NULL);
                         } else if (streq(attr, "db")) {
@@ -1735,8 +1737,10 @@ static int add_rule(struct udev_rules *rules, char *line,
                                 rule_add_key(&rule_tmp, TK_M_IMPORT_CMDLINE, op, value, NULL);
                         } else if (streq(attr, "parent")) {
                                 rule_add_key(&rule_tmp, TK_M_IMPORT_PARENT, op, value, NULL);
-                        } else
-                                log_error("IMPORT{} unknown type, ignoring IMPORT %s:%u", filename, lineno);
+                        } else {
+                                log_error("IMPORT{%s} unknown type %s:%u", attr, filename, lineno);
+                                goto invalid;
+                        }
                         continue;
                 }
 
@@ -1777,14 +1781,17 @@ static int add_rule(struct udev_rules *rules, char *line,
                                         rule_add_key(&rule_tmp, TK_A_RUN_BUILTIN, op, value, &cmd);
                                 else if (check_systemd_only_builtin("RUN{builtin}", value, filename, lineno))
                                         goto ignore;
-                                else
+                                else {
                                         log_error("RUN{builtin}: '%s' unknown %s:%u", value, filename, lineno);
+                                        goto invalid;
+                                }
                         } else if (streq(attr, "program")) {
                                 enum udev_builtin_cmd cmd = UDEV_BUILTIN_MAX;
 
                                 rule_add_key(&rule_tmp, TK_A_RUN_PROGRAM, op, value, &cmd);
                         } else {
-                                log_error("RUN{} unknown type, ignoring RUN %s:%u", filename, lineno);
+                                log_error("RUN{%s} unknown type %s:%u", attr, filename, lineno);
+                                goto invalid;
                         }
 
                         continue;

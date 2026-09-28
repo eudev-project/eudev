@@ -1579,6 +1579,20 @@ KERNEL=="sda", SYMLINK+="bad", NAME="unterminated
 , KERNEL=="sda", SYMLINK+="found", ,
 EOF
         },
+        {
+                desc            => "an unknown builtin, IMPORT or RUN type drops the whole line",
+                devpath         => "/devices/pci0000:00/0000:00:1f.2/host0/target0:0:0/0:0:0:0/block/sda",
+                exp_name        => "found",
+                not_exp_name    => "bad",
+                rules           => <<EOF
+KERNEL=="sda", SYMLINK+="bad", IMPORT{builtin}="no_such_builtin"
+KERNEL=="sda", SYMLINK+="bad", RUN{builtin}+="no_such_builtin"
+KERNEL=="sda", SYMLINK+="bad", IMPORT{nosuchtype}="foo"
+KERNEL=="sda", SYMLINK+="bad", IMPORT="foo"
+KERNEL=="sda", SYMLINK+="bad", RUN{nosuchtype}+="foo"
+KERNEL=="sda", SYMLINK+="found", IMPORT{builtin}="path_id"
+EOF
+        },
 );
 
 sub udev {
