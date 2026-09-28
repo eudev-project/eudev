@@ -64,7 +64,7 @@ libudev_core_la_SOURCES = \
 	udev-builtin-path_id.c \
 	udev-builtin-usb_id.c
 
-include_HEADERS = \
+noinst_HEADERS = \
 	udev.h
 
 libudev_core_la_CFLAGS = \
