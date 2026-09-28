@@ -1611,6 +1611,23 @@ KERNEL=="sda1", IMPORT{cmdline}!="no_such_kernel_option_x", ENV{P5}="1"
 KERNEL=="sda1", ENV{P1}=="1", ENV{P2}=="1", ENV{P3}=="1", ENV{P4}=="1", ENV{P5}=="1", ENV{FOO}=="1", SYMLINK+="found"
 EOF
         },
+        {
+                desc            => "OPTIONS values are exact and comma separated",
+                devpath         => "/devices/pci0000:00/0000:00:1f.2/host0/target0:0:0/0:0:0:0/block/sda",
+                exp_name        => "found",
+                not_exp_name    => "bad",
+                exp_rem_error   => "yes",
+                option          => "clean",
+                rules           => <<EOF
+KERNEL=="sda", OPTIONS="string_escape=replacefoo", SYMLINK+="esc1 esc2"
+KERNEL=="sda", OPTIONS="link_priority=x", SYMLINK+="bad"
+KERNEL=="sda", OPTIONS=="watch", SYMLINK+="bad"
+KERNEL=="sda", OPTIONS-="watch", SYMLINK+="bad"
+KERNEL=="sda", OPTIONS="db_persist,string_escape=replace,no_such_option", SYMLINK+="esc3 esc4"
+KERNEL=="sda", OPTIONS+="link_priority=-5,nowatch", SYMLINK+="prio"
+KERNEL=="sda", RUN+="/bin/sh -c 'test -L /dev/esc1 && test -L /dev/esc2 && test -L /dev/esc3_esc4 && ! test -e /dev/esc1_esc2 && test -L /dev/prio && ln -s sda /dev/found'"
+EOF
+        },
 );
 
 sub udev {

@@ -287,32 +287,6 @@ static bool check_systemd_only_builtin(const char *key, const char *cmd, const c
         return true;
 }
 
-/* Checks the comma separated OPTIONS values for a systemd-only one, and logs it. */
-static bool check_systemd_only_options(const char *value, const char *filename, unsigned int lineno) {
-        const char *p = value;
-
-        for (;;) {
-                size_t len, n;
-
-                p += strspn(p, ", ");
-                len = strcspn(p, ", ");
-                if (len == 0)
-                        return false;
-
-                n = strcspn(p, "=");
-                if (is_systemd_only(SYSTEMD_ONLY_OPTION, p, MIN(len, n))) {
-                        _cleanup_free_ char *what = NULL;
-
-                        if (asprintf(&what, "OPTIONS=\"%.*s\"", (int) len, p) < 0)
-                                what = NULL;
-                        log_systemd_only(SYSTEMD_ONLY_OPTION, what ?: value, filename, lineno);
-                        return true;
-                }
-
-                p += len;
-        }
-}
-
 /* Logs the lines of OPTIONS="dump", each with the device name prefixed, so that they can be found in
  * the logs. The lines may be longer than the log buffer. */
 static void log_dump(struct udev_device *dev, const char *buf) {
@@ -335,21 +309,61 @@ static void log_dump(struct udev_device *dev, const char *buf) {
         }
 }
 
-/* Checks whether the comma separated OPTIONS values contain exactly the given one. */
-static bool options_has_word(const char *value, const char *word) {
-        const char *p = value;
+/* The values of OPTIONS=, like parse_token() of systemd-udevd takes them. A value must be one of the
+ * names exactly, or, for a name ending in '=', start with it and give the argument after it.
+ * Unlike systemd-udevd, several values may be given, separated by commas. To add a value, add an
+ * OPTION_ id, a row to option_table[] and a case to parse_options(). */
+enum option_id {
+        OPTION_DUMP,
+        OPTION_DUMP_JSON,
+        OPTION_STRING_ESCAPE_NONE,
+        OPTION_STRING_ESCAPE_REPLACE,
+        OPTION_DB_PERSIST,
+        OPTION_WATCH,
+        OPTION_NOWATCH,
+        OPTION_STATIC_NODE,
+        OPTION_LINK_PRIORITY,
+        OPTION_LOG_LEVEL,
+};
 
-        for (;;) {
-                size_t len;
+static const struct option_def {
+        const char *name;
+        enum option_id id;
+} option_table[] = {
+        { "dump",                       OPTION_DUMP },
+        { "dump-json",                  OPTION_DUMP_JSON },
+        { "string_escape=none",         OPTION_STRING_ESCAPE_NONE },
+        { "string_escape=replace",      OPTION_STRING_ESCAPE_REPLACE },
+        { "db_persist",                 OPTION_DB_PERSIST },
+        { "watch",                      OPTION_WATCH },
+        { "nowatch",                    OPTION_NOWATCH },
+        { "static_node=",               OPTION_STATIC_NODE },
+        { "link_priority=",             OPTION_LINK_PRIORITY },
+        { "log_level=",                 OPTION_LOG_LEVEL },
+};
 
-                p += strspn(p, ", ");
-                len = strcspn(p, ", ");
-                if (len == 0)
-                        return false;
-                if (len == strlen(word) && strneq(p, word, len))
-                        return true;
-                p += len;
+/* Looks up one value of OPTIONS=, and returns the argument of an option that takes one. */
+static const struct option_def *option_lookup(const char *value, const char **ret_arg) {
+        unsigned int i;
+
+        for (i = 0; i < ELEMENTSOF(option_table); i++) {
+                const char *name = option_table[i].name;
+                const char *arg;
+
+                if (endswith(name, "=")) {
+                        arg = startswith(value, name);
+                        if (!arg)
+                                continue;
+                } else if (streq(value, name))
+                        arg = NULL;
+                else
+                        continue;
+
+                *ret_arg = arg;
+                return &option_table[i];
         }
+
+        return NULL;
 }
 
 #define MAX_TK                64
@@ -1405,6 +1419,107 @@ static int sort_token(struct udev_rules *rules, struct rule_tmp *rule_tmp) {
         return 0;
 }
 
+/* Parses the comma separated values of OPTIONS=. An unknown value is ignored with a warning, like
+ * systemd-udevd does. Returns -EINVAL when the line is invalid, and -EOPNOTSUPP when it uses a
+ * systemd-only value and is ignored. */
+static int parse_options(struct rule_tmp *rule_tmp, enum operation_type op, const char *value,
+                         const char *filename, unsigned int lineno) {
+        const char *p = value;
+
+        for (;;) {
+                _cleanup_free_ char *word = NULL;
+                const struct option_def *o;
+                const char *arg = NULL;
+                size_t n = strcspn(p, ",");
+                bool last = p[n] == '\0';
+
+                word = strndup(p, n);
+                if (!word)
+                        return log_oom();
+                p += last ? n : n + 1;
+
+                o = option_lookup(word, &arg);
+                if (!o) {
+                        _cleanup_free_ char *escaped = NULL;
+
+                        if (is_systemd_only(SYSTEMD_ONLY_OPTION, word, strcspn(word, "="))) {
+                                _cleanup_free_ char *what = NULL;
+
+                                if (asprintf(&what, "OPTIONS=\"%s\"", word) < 0)
+                                        what = NULL;
+                                log_systemd_only(SYSTEMD_ONLY_OPTION, what ?: word, filename, lineno);
+                                return -EOPNOTSUPP;
+                        }
+
+                        escaped = cescape(word);
+                        log_warning("Invalid value for OPTIONS key, ignoring: '%s' %s:%u",
+                                    escaped ?: word, filename, lineno);
+                } else
+                        switch (o->id) {
+                        case OPTION_DUMP: {
+                                const JsonFormatFlags flags = JSON_FORMAT_OFF;
+
+                                rule_add_key(rule_tmp, TK_A_DUMP, op, NULL, &flags);
+                                break;
+                        }
+                        case OPTION_DUMP_JSON: {
+                                const JsonFormatFlags flags = JSON_FORMAT_NEWLINE;
+
+                                rule_add_key(rule_tmp, TK_A_DUMP, op, NULL, &flags);
+                                break;
+                        }
+                        case OPTION_STRING_ESCAPE_NONE:
+                                rule_add_key(rule_tmp, TK_A_STRING_ESCAPE_NONE, op, NULL, NULL);
+                                break;
+                        case OPTION_STRING_ESCAPE_REPLACE:
+                                rule_add_key(rule_tmp, TK_A_STRING_ESCAPE_REPLACE, op, NULL, NULL);
+                                break;
+                        case OPTION_DB_PERSIST:
+                                rule_add_key(rule_tmp, TK_A_DB_PERSIST, op, NULL, NULL);
+                                break;
+                        case OPTION_WATCH:
+                        case OPTION_NOWATCH: {
+                                const int watch = o->id == OPTION_WATCH;
+
+                                rule_add_key(rule_tmp, TK_A_INOTIFY_WATCH, op, NULL, &watch);
+                                break;
+                        }
+                        case OPTION_STATIC_NODE:
+                                rule_add_key(rule_tmp, TK_A_STATIC_NODE, op, arg, NULL);
+                                rule_tmp->rule.rule.has_static_node = true;
+                                break;
+                        case OPTION_LINK_PRIORITY: {
+                                int prio;
+
+                                if (safe_atoi(arg, &prio) < 0) {
+                                        log_error("Failed to parse link priority '%s' %s:%u", arg, filename, lineno);
+                                        return -EINVAL;
+                                }
+                                rule_add_key(rule_tmp, TK_A_DEVLINK_PRIO, op, NULL, &prio);
+                                break;
+                        }
+                        case OPTION_LOG_LEVEL: {
+                                int level;
+
+                                if (streq(arg, "reset"))
+                                        level = -1;
+                                else {
+                                        level = log_level_from_string(arg);
+                                        if (level < 0) {
+                                                log_error("Failed to parse log level '%s' %s:%u", arg, filename, lineno);
+                                                return -EINVAL;
+                                        }
+                                }
+                                rule_add_key(rule_tmp, TK_A_LOG_LEVEL, op, NULL, &level);
+                                break;
+                        }
+                        }
+
+                if (last)
+                        return 0;
+        }
+}
+
 static int add_rule(struct udev_rules *rules, char *line,
                     const char *filename, unsigned int filename_off, unsigned int lineno) {
         char *linepos;
@@ -1924,90 +2039,21 @@ static int add_rule(struct udev_rules *rules, char *line,
                 }
 
                 if (streq(key, "OPTIONS")) {
-                        const char *pos;
+                        int r;
 
-                        if (op == OP_REMOVE) {
+                        /* like systemd-udevd, which takes += as = */
+                        if (op < OP_MATCH_MAX || op == OP_REMOVE) {
                                 log_error("invalid OPTIONS operation");
                                 goto invalid;
                         }
+                        if (op == OP_ADD)
+                                op = OP_ASSIGN;
 
-                        if (check_systemd_only_options(value, filename, lineno))
+                        r = parse_options(&rule_tmp, op, value, filename, lineno);
+                        if (r == -EOPNOTSUPP)
                                 goto ignore;
-
-                        if (options_has_word(value, "dump")) {
-                                const JsonFormatFlags flags = JSON_FORMAT_OFF;
-
-                                rule_add_key(&rule_tmp, TK_A_DUMP, op, NULL, &flags);
-                        }
-                        if (options_has_word(value, "dump-json")) {
-                                const JsonFormatFlags flags = JSON_FORMAT_NEWLINE;
-
-                                rule_add_key(&rule_tmp, TK_A_DUMP, op, NULL, &flags);
-                        }
-
-                        pos = strstr(value, "link_priority=");
-                        if (pos != NULL) {
-                                int prio = atoi(&pos[strlen("link_priority=")]);
-
-                                rule_add_key(&rule_tmp, TK_A_DEVLINK_PRIO, op, NULL, &prio);
-                        }
-
-                        pos = strstr(value, "log_level=");
-                        if (pos != NULL) {
-                                _cleanup_free_ char *level_str = NULL;
-                                int level;
-
-                                pos = &pos[strlen("log_level=")];
-                                level_str = strndup(pos, strcspn(pos, ", "));
-                                if (!level_str) {
-                                        log_oom();
-                                        goto invalid;
-                                }
-                                if (streq(level_str, "reset"))
-                                        level = -1;
-                                else {
-                                        level = log_level_from_string(level_str);
-                                        if (level < 0) {
-                                                log_error("Failed to parse log level '%s' %s:%u", level_str, filename, lineno);
-                                                goto invalid;
-                                        }
-                                }
-                                rule_add_key(&rule_tmp, TK_A_LOG_LEVEL, op, NULL, &level);
-                        }
-
-                        pos = strstr(value, "string_escape=");
-                        if (pos != NULL) {
-                                pos = &pos[strlen("string_escape=")];
-                                if (startswith(pos, "none"))
-                                        rule_add_key(&rule_tmp, TK_A_STRING_ESCAPE_NONE, op, NULL, NULL);
-                                else if (startswith(pos, "replace"))
-                                        rule_add_key(&rule_tmp, TK_A_STRING_ESCAPE_REPLACE, op, NULL, NULL);
-                        }
-
-                        pos = strstr(value, "db_persist");
-                        if (pos != NULL)
-                                rule_add_key(&rule_tmp, TK_A_DB_PERSIST, op, NULL, NULL);
-
-                        pos = strstr(value, "nowatch");
-                        if (pos != NULL) {
-                                const int off = 0;
-
-                                rule_add_key(&rule_tmp, TK_A_INOTIFY_WATCH, op, NULL, &off);
-                        } else {
-                                pos = strstr(value, "watch");
-                                if (pos != NULL) {
-                                        const int on = 1;
-
-                                        rule_add_key(&rule_tmp, TK_A_INOTIFY_WATCH, op, NULL, &on);
-                                }
-                        }
-
-                        pos = strstr(value, "static_node=");
-                        if (pos != NULL) {
-                                rule_add_key(&rule_tmp, TK_A_STATIC_NODE, op, &pos[strlen("static_node=")], NULL);
-                                rule_tmp.rule.rule.has_static_node = true;
-                        }
-
+                        if (r < 0)
+                                goto invalid;
                         continue;
                 }
 
