@@ -343,7 +343,7 @@ static int builtin_blkid(struct udev_device *dev, int argc, char *argv[], enum u
 
                         /* lo_file_name is an arbitrary string picked by userspace, do not store it
                          * unencoded if it contains control characters or invalid UTF-8 */
-                        if (utf8_is_printable_newline(backing_fname, strlen(backing_fname), false))
+                        if (utf8_is_valid(backing_fname) && !string_has_cc(backing_fname, /* ok= */ NULL))
                                 udev_builtin_add_property(dev, mode, "ID_LOOP_BACKING_FILENAME", backing_fname);
                         udev_builtin_add_property(dev, mode, "ID_LOOP_BACKING_FILENAME_ENC", encoded);
                 }
