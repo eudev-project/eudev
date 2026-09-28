@@ -111,6 +111,7 @@ int parse_uid(const char *s, uid_t* ret_uid);
 int safe_atou(const char *s, unsigned *ret_u);
 int safe_atoi(const char *s, int *ret_i);
 int parse_boolean(const char *v) _pure_;
+int strverscmp_improved(const char *a, const char *b);
 /* Returns -ENXIO if the variable is not set */
 int secure_getenv_bool(const char *name);
 

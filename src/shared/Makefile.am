@@ -48,6 +48,7 @@ noinst_HEADERS = \
 	factory-reset.h \
 	fileio.h \
 	formats-util.h \
+	gpt.h \
 	hashmap.h \
 	id128-util.h \
 	ioprio.h \

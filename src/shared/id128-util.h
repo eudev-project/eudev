@@ -12,6 +12,11 @@ typedef union id128 {
 
 #define ID128_NULL ((const id128_t) {})
 
+#define ID128_MAKE(v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12, v13, v14, v15) \
+        ((const id128_t) { .bytes = {                                   \
+                        0x##v0, 0x##v1, 0x##v2, 0x##v3, 0x##v4, 0x##v5, 0x##v6, 0x##v7, \
+                        0x##v8, 0x##v9, 0x##v10, 0x##v11, 0x##v12, 0x##v13, 0x##v14, 0x##v15 }})
+
 /* "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" plus the terminating NUL */
 #define ID128_UUID_STRING_MAX 37
 
