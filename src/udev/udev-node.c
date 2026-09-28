@@ -45,6 +45,9 @@
 /* Device is absent or "empty". We get -ENOMEDIUM from CD/DVD devices, also in VMs. */
 #define ERRNO_IS_DEVICE_ABSENT_OR_EMPTY(r) (ERRNO_IS_DEVICE_ABSENT(r) || abs(r) == ENOMEDIUM)
 
+/* How often creating a devlink is tried when its parent directory vanishes concurrently */
+#define NODE_CREATE_SYMLINK_MAX_RETRIES 128
+
 #define UDEV_NODE_HASH_KEY ((const uint8_t[16]) { 0xb9, 0x6a, 0xf1, 0xce, 0x40, 0x31, 0x44, 0x1a, \
                                                    0x9e, 0x19, 0xec, 0x8b, 0xae, 0xf3, 0xe3, 0x2f })
 
@@ -80,14 +83,26 @@ static int node_create_symlink(struct udev_device *dev, const char *devnode, con
         } else if (errno != ENOENT)
                 return log_debug_errno(errno, "Failed to lstat() '%s': %m", slink);
 
-        r = mkdir_parents_label(slink, 0755);
-        if (r < 0)
-                return log_debug_errno(r, "Failed to create parent directory of '%s': %m", slink);
+        for (unsigned i = 0;; i++) {
+                bool retry = i < NODE_CREATE_SYMLINK_MAX_RETRIES;
 
-        /* use relative link */
-        r = symlink_atomic_full_label(devnode, slink, /* make_relative = */ true);
-        if (r < 0)
-                return log_debug_errno(r, "Failed to create symlink '%s' to '%s': %m", slink, devnode);
+                r = mkdir_parents_label(slink, 0755);
+                if (r < 0 && (r != -ENOENT || !retry))
+                        return log_debug_errno(r, "Failed to create parent directory of '%s': %m", slink);
+                if (r >= 0) {
+                        /* use relative link */
+                        r = symlink_atomic_full_label(devnode, slink, /* make_relative = */ true);
+                        if (r >= 0)
+                                break;
+                        if (r != -ENOENT || !retry)
+                                return log_debug_errno(r, "Failed to create symlink '%s' to '%s': %m", slink, devnode);
+                }
+
+                /* Another worker removed the last devlink in a parent directory, and then the directory
+                 * itself, after we created it. The lock of the other devlink does not protect ours.
+                 * Let's try again. */
+                log_debug("A parent directory of '%s' vanished, retrying.", slink);
+        }
 
         log_debug("Successfully created symlink '%s' to '%s'", slink, devnode);
         return 0;
