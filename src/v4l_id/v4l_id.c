@@ -65,9 +65,12 @@ int main(int argc, char *argv[]) {
                         assert_not_reached("Unhandled option");
                 }
 
+        if (argc - optind != 1) {
+                log_error("Need exactly one DEVICE argument.");
+                return EXIT_FAILURE;
+        }
+
         device = argv[optind];
-        if (device == NULL)
-                return 2;
 
         fd = open(device, O_RDONLY|O_CLOEXEC|O_NOCTTY);
         if (fd < 0) {
@@ -75,7 +78,7 @@ int main(int argc, char *argv[]) {
                 log_full_errno(ignore ? LOG_DEBUG : LOG_WARNING, errno,
                                "Failed to open device node '%s'%s: %m",
                                device, ignore ? ", ignoring" : "");
-                return ignore ? 0 : 3;
+                return ignore ? EXIT_SUCCESS : EXIT_FAILURE;
         }
 
         if (ioctl(fd, VIDIOC_QUERYCAP, &v2cap) == 0) {
