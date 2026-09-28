@@ -277,6 +277,23 @@ The following keys can get values assigned:
 \fINAME\fR
 .RS 4
 The name to use for a network interface\&. The name of a device node cannot be changed by udev, only additional symlinks can be created\&.
+.sp
+As in systemd, a network interface name is valid if it has 1 to 15 printable ASCII characters other than space,
+:,
+/
+and
+%, is not only digits, and is not
+\&.,
+\&.\&.,
+all
+or
+default\&. With the naming schemes
+v249
+and later (see
+the section called \(lqNETWORK INTERFACE NAMING\(rq), all other characters are replaced by
+_, and a name that is still not valid is ignored with a warning\&. With the older schemes, only the characters that are not allowed in symlink names (see
+\fISYMLINK\fR) are replaced, and renaming the interface to an invalid name fails\&. No characters are replaced with
+\fIOPTIONS+="string_escape=none"\fR\&.
 .RE
 .PP
 \fISYMLINK\fR

@@ -36,6 +36,24 @@
 
 #include "util.h"
 
+#ifndef ALTIFNAMSIZ
+#define ALTIFNAMSIZ 128
+#endif
+
+typedef enum {
+        IFNAME_VALID_ALTERNATIVE = 1 << 0, /* Allow "altnames" too */
+        IFNAME_VALID_NUMERIC     = 1 << 1, /* Allow decimal formatted ifindexes too */
+        IFNAME_VALID_SPECIAL     = 1 << 2, /* Allow the special names "all" and "default" */
+        _IFNAME_VALID_ALL        = IFNAME_VALID_ALTERNATIVE | IFNAME_VALID_NUMERIC | IFNAME_VALID_SPECIAL,
+} IfnameValidFlags;
+
+int parse_ifindex(const char *s);
+bool ifname_valid_char(char a);
+bool ifname_valid_full(const char *p, IfnameValidFlags flags);
+static inline bool ifname_valid(const char *p) {
+        return ifname_valid_full(p, 0);
+}
+
 union sockaddr_union {
         /* The minimal, abstract version */
         struct sockaddr sa;

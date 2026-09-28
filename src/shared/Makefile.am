@@ -28,6 +28,7 @@ libudev_shared_la_SOURCES=\
 	selinux-util.c \
 	siphash24.c \
 	smack-util.c \
+	socket-util.c \
 	strbuf.c \
 	strv.c \
 	strxcpyx.c  \

@@ -36,6 +36,8 @@
 #include <sys/sysmacros.h>
 
 #include "udev.h"
+#include "netif-naming-scheme.h"
+#include "socket-util.h"
 
 struct udev_event *udev_event_new(struct udev_device *dev, enum udev_event_mode mode) {
         struct udev *udev = udev_device_get_udev(dev);
@@ -943,10 +945,15 @@ static int rename_netif_dev_fromname_toname(struct udev_device *dev __attribute_
         if (ret_name && ret_name != oldname)
                 strscpy(ret_name, IFNAMSIZ, oldname);
 
-        /* do not let strscpy() below silently truncate the requested name */
-        if (strlen(name) >= IFNAMSIZ)
-                return log_error_errno(EINVAL, "Error changing net interface name %s to %s, the name is longer than %i characters: %m",
-                                       oldname, name, IFNAMSIZ - 1);
+        /* Like rtnl_set_link_name() of systemd, refuse invalid names, also so that strscpy() below does not
+         * silently truncate the requested name. */
+        if (!ifname_valid(name)) {
+                if (strlen(name) >= IFNAMSIZ)
+                        return log_error_errno(EINVAL, "Error changing net interface name %s to %s, the name is longer than %i characters: %m",
+                                               oldname, name, IFNAMSIZ - 1);
+                return log_error_errno(EINVAL, "Error changing net interface name %s to %s, the name is not a valid interface name: %m",
+                                       oldname, name);
+        }
 
         sk = socket(PF_INET, SOCK_DGRAM, 0);
         if (sk < 0)
@@ -1021,6 +1028,22 @@ out:
 
         close(sk);
         return r;
+}
+
+/* Returns the name the network interface is to be renamed to, NULL if none. Like rename_netif() of systemd, with the
+ * naming schemes that have NAMING_REPLACE_STRICTLY, an invalid name is ignored with a warning, otherwise renaming
+ * the interface to it fails. */
+static const char *netif_new_name(struct udev_event *event) {
+        if (event->name == NULL)
+                return NULL;
+
+        if (FLAGS_SET(naming_scheme_init(event->udev)->flags, NAMING_REPLACE_STRICTLY) &&
+            !ifname_valid(event->name)) {
+                log_warning("Invalid network interface name, ignoring: %s", event->name);
+                return NULL;
+        }
+
+        return event->name;
 }
 
 /* After the network interface was renamed, updates the device and the event to the new name. */
@@ -1160,53 +1183,59 @@ void udev_event_execute_rules(struct udev_event *event,
                  */
 
 #ifdef ENABLE_RULE_GENERATOR
-                int r = 0;
                 if (EVENT_MODE_DESTRUCTIVE(event) &&
-                    udev_device_get_ifindex(dev) > 0 && streq(udev_device_get_action(dev), "add") &&
-                    ((event->name == NULL && (r=udev_rules_assigning_name_to(rules,udev_device_get_sysname(dev))) > 0) ||
-                     (event->name != NULL && !streq(event->name, udev_device_get_sysname(dev))))) {
-                        /* the name of the interface, as renamed so far */
-                        char curname[IFNAMSIZ];
-                        char newifname[IFNAMSIZ];
+                    udev_device_get_ifindex(dev) > 0 && streq(udev_device_get_action(dev), "add")) {
+                        const char *name = netif_new_name(event);
+                        int r = 0;
 
-                        strscpy(curname, sizeof(curname), udev_device_get_sysname(dev));
+                        if ((name == NULL && (r=udev_rules_assigning_name_to(rules,udev_device_get_sysname(dev))) > 0) ||
+                            (name != NULL && !streq(name, udev_device_get_sysname(dev)))) {
+                                /* the name of the interface, as renamed so far */
+                                char curname[IFNAMSIZ];
+                                char newifname[IFNAMSIZ];
 
-                        /* r is the number of rules that assign a device with NAME= this sysname */
-                        if (r > 0 || udev_rules_assigning_name_to(rules, curname) > 0) {
-                                /* have a conflict, rename to a temp name */
-                                netif_tmp_name(dev, newifname);
+                                strscpy(curname, sizeof(curname), udev_device_get_sysname(dev));
 
-                                /* if sysname isn't already the tmpname (ie there is no numeric component), do the rename */
-                                if (!streq(newifname, curname)) {
-                                        r = rename_netif_dev_fromname_toname(dev, curname, newifname, curname);
-                                        if (r == 0)
-                                                log_debug("renamed netif to '%s' for collision avoidance\n", newifname);
-                                        else if (r != -EBUSY)
-                                                log_error("could not rename netif to '%s' for collision avoidance\n", newifname);
+                                /* r is the number of rules that assign a device with NAME= this sysname */
+                                if (r > 0 || udev_rules_assigning_name_to(rules, curname) > 0) {
+                                        /* have a conflict, rename to a temp name */
+                                        netif_tmp_name(dev, newifname);
+
+                                        /* if sysname isn't already the tmpname (ie there is no numeric component), do the rename */
+                                        if (!streq(newifname, curname)) {
+                                                r = rename_netif_dev_fromname_toname(dev, curname, newifname, curname);
+                                                if (r == 0)
+                                                        log_debug("renamed netif to '%s' for collision avoidance\n", newifname);
+                                                else if (r != -EBUSY)
+                                                        log_error("could not rename netif to '%s' for collision avoidance\n", newifname);
+                                        }
                                 }
+
+                                /* rename it now to its final target if it is not already there, from the name it has
+                                 * now, also when it could not be renamed to the temporary name */
+                                if (name != NULL && !streq(name, curname))
+                                        (void) rename_netif_dev_fromname_toname(dev, curname, name, curname);
+
+                                /* also when only the temporary renaming succeeded, the device has to follow the interface */
+                                if (!streq(curname, udev_device_get_sysname(dev)))
+                                        netif_update_device(dev, curname);
                         }
-
-                        /* rename it now to its final target if it is not already there, from the name it has now, also
-                         * when it could not be renamed to the temporary name */
-                        if (event->name != NULL && !streq(event->name, curname))
-                                (void) rename_netif_dev_fromname_toname(dev, curname, event->name, curname);
-
-                        /* also when only the temporary renaming succeeded, the device has to follow the interface */
-                        if (!streq(curname, udev_device_get_sysname(dev)))
-                                netif_update_device(dev, curname);
                 }
 #else
                 if (EVENT_MODE_DESTRUCTIVE(event) &&
                     udev_device_get_ifindex(dev) > 0 && streq(udev_device_get_action(dev), "add") &&
                     event->name != NULL && !streq(event->name, udev_device_get_sysname(dev))) {
+                        const char *name = netif_new_name(event);
                         int r;
 
-                        r = rename_netif_dev_fromname_toname(dev, udev_device_get_sysname(dev), event->name, NULL);
-                        if (r >= 0)
-                                netif_update_device(dev, event->name);
-                        else if (r != -EBUSY)
-                                log_warning_errno(r, "could not rename interface '%d' from '%s' to '%s': %m", udev_device_get_ifindex(dev),
-                                                  udev_device_get_sysname(dev), event->name);
+                        if (name != NULL) {
+                                r = rename_netif_dev_fromname_toname(dev, udev_device_get_sysname(dev), name, NULL);
+                                if (r >= 0)
+                                        netif_update_device(dev, name);
+                                else if (r != -EBUSY)
+                                        log_warning_errno(r, "could not rename interface '%d' from '%s' to '%s': %m", udev_device_get_ifindex(dev),
+                                                          udev_device_get_sysname(dev), name);
+                        }
                 }
 #endif
 

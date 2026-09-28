@@ -36,11 +36,8 @@
 #include "def.h"
 #include "netif-naming-scheme.h"
 #include "path-util.h"
+#include "socket-util.h"
 #include "udev-util.h"
-
-#ifndef ALTIFNAMSIZ
-#define ALTIFNAMSIZ 128
-#endif
 
 #ifndef ARPHRD_MCTP
 #define ARPHRD_MCTP 290

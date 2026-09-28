@@ -34,6 +34,8 @@
 #include "path-util.h"
 #include "conf-files.h"
 #include "fileio.h"
+#include "netif-naming-scheme.h"
+#include "socket-util.h"
 #include "strbuf.h"
 #include "strv.h"
 #include "util.h"
@@ -2382,6 +2384,28 @@ static void apply_devlink(struct udev_device *dev, enum operation_type op, const
         log_error("invalid SYMLINK '%s', ignoring %s:%u", escaped ?: link, filename, lineno);
 }
 
+/* Like udev_replace_ifname() of systemd: with the naming schemes that have NAMING_REPLACE_STRICTLY, i.e.
+ * v249 and later, every character that is not valid in a network interface name (see ifname_valid()) is
+ * replaced with '_', otherwise the characters that are not valid in a device node name except '/'. Returns
+ * the number of replaced characters. */
+static int udev_replace_ifname(struct udev *udev, char *str) {
+        int replaced = 0;
+        char *p;
+
+        /* naming_scheme_init() and not naming_scheme(), so that net_naming_scheme= of udev.conf is used
+         * also when the net_id builtin did not run before */
+        if (!FLAGS_SET(naming_scheme_init(udev)->flags, NAMING_REPLACE_STRICTLY))
+                return util_replace_chars(str, "/");
+
+        for (p = str; *p != '\0'; p++)
+                if (!ifname_valid_char(*p)) {
+                        *p = '_';
+                        replaced++;
+                }
+
+        return replaced;
+}
+
 int udev_rules_apply_to_event(struct udev_rules *rules,
                               struct udev_event *event,
                               usec_t timeout_usec,
@@ -3034,9 +3058,16 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                                 event->name_final = true;
                         udev_event_apply_format(event, name, name_str, sizeof(name_str), false, properties_list);
                         if (esc == ESCAPE_UNSET || esc == ESCAPE_REPLACE) {
-                                count = util_replace_chars(name_str, "/");
-                                if (count > 0)
-                                        log_debug("%i character(s) replaced", count);
+                                if (udev_device_get_ifindex(event->dev) > 0) {
+                                        count = udev_replace_ifname(event->udev, name_str);
+                                        if (count > 0)
+                                                log_debug("Replaced %i character(s) from network interface name, results to \"%s\"",
+                                                          count, name_str);
+                                } else {
+                                        count = util_replace_chars(name_str, "/");
+                                        if (count > 0)
+                                                log_debug("%i character(s) replaced", count);
+                                }
                         }
                         if (major(udev_device_get_devnum(event->dev)) &&
                             (!streq(name_str, udev_device_get_devnode(event->dev) + strlen("/dev/")))) {
@@ -3371,9 +3402,9 @@ int udev_rules_assigning_name_to(struct udev_rules *rules, const char *match_nam
                         int count;
 
                         strscpy(name_str,UTIL_PATH_SIZE,name);
-                        count = util_replace_chars(name_str, "/");
+                        count = udev_replace_ifname(rules->udev, name_str);
                         if (count > 0)
-                                log_debug("%i character(s) replaced\n", count); 
+                                log_debug("%i character(s) replaced\n", count);
                         if (streq(name_str,match_name)) {
                                 log_debug("found a match! NAME assigns %s in: %s:%u\n",
                                           name,
