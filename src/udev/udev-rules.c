@@ -789,7 +789,10 @@ static int import_property_from_string(struct udev_device *dev, char *line,
         /* unquote */
         if (val[0] == '"' || val[0] == '\'') {
                 if (len == 1 || val[len-1] != val[0]) {
-                        log_debug("inconsistent quoting: '%s', skip", line);
+                        _cleanup_free_ char *escaped = cescape(val);
+
+                        /* the line is split into the key and the value by now */
+                        log_debug("inconsistent quoting: '%s=%s', skip %s:%u", key, escaped ?: val, filename, lineno);
                         return -1;
                 }
                 val[len-1] = '\0';
