@@ -1526,6 +1526,46 @@ KERNEL=="sda", OPTIONS="log_level=foo", SYMLINK+="bad"
 KERNEL=="sda", ENV{L1}=="1", ENV{L2}=="1", ENV{L3}=="1", SYMLINK+="found"
 EOF
         },
+        {
+                desc            => "sticky tags 1/2 (keep)",
+                devpath         => "/devices/pci0000:00/0000:00:1f.2/host0/target0:0:0/0:0:0:0/block/sda",
+                exp_name        => "first",
+                not_exp_name    => "bad",
+                option          => "keep",
+                rules           => <<EOF
+KERNEL=="sda", TAG+="sticky", TAG+="gone", SYMLINK+="first"
+KERNEL=="sda", TAG-="gone"
+KERNEL=="sda", TAG=="gone", SYMLINK+="bad"
+EOF
+        },
+        {
+                desc            => "sticky tags 2/2 (keep)",
+                devpath         => "/devices/pci0000:00/0000:00:1f.2/host0/target0:0:0/0:0:0:0/block/sda",
+                exp_name        => "found",
+                not_exp_name    => "bad",
+                exp_rem_error   => "yes",
+                option          => "clean",
+                rules           => <<EOF
+KERNEL=="sda", TAG=="sticky", SYMLINK+="bad"
+KERNEL=="sda", TAG+="new"
+KERNEL=="sda", TAG=="new", ENV{NEW_MATCHED}="1"
+KERNEL=="sda", RUN+="/bin/sh -c 'test \\"\$\$TAGS\\" = :gone:new:sticky: && test \\"\$\$CURRENT_TAGS\\" = :new: && test \\"\$\$UDEV_DATABASE_VERSION\\" = 1 && test \\"\$\$NEW_MATCHED\\" = 1 && test -e /run/udev/tags/sticky/b8:0 && grep -qx G:sticky /run/udev/data/b8:0 && grep -qx Q:new /run/udev/data/b8:0 && ! grep -qx Q:sticky /run/udev/data/b8:0 && ln -s sda /dev/found'"
+EOF
+        },
+        {
+                desc            => "TAGS matches the current tags, and all tags of an old database",
+                devpath         => "/devices/pci0000:00/0000:00:1f.2/host0/target0:0:0/0:0:0:0/block/sda/sda1",
+                exp_name        => "found",
+                not_exp_name    => "bad",
+                option          => "clean",
+                rules           => <<EOF
+KERNEL=="sda1", PROGRAM="/bin/sh -c 'mkdir -p /run/udev/data && printf \\"G:old\\\\n\\" >/run/udev/data/b8:0 && printf \\"G:sticky\\\\nQ:cur\\\\nV:1\\\\n\\" >/run/udev/data/+scsi:0:0:0:0'"
+KERNEL=="sda1", TAGS=="old", ENV{OLD}="1"
+KERNEL=="sda1", TAGS=="cur", ENV{CUR}="1"
+KERNEL=="sda1", TAGS=="sticky", SYMLINK+="bad"
+KERNEL=="sda1", ENV{OLD}=="1", ENV{CUR}=="1", SYMLINK+="found"
+EOF
+        },
 );
 
 sub udev {
