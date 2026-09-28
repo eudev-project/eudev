@@ -85,7 +85,28 @@ Specify when udevd should resolve names of users and groups\&. When set to
 .PP
 Parameters starting with "rd\&." will be read when
 \fBudevd\fR
-is used in an initrd\&.
+is used in an initrd, and are ignored otherwise, also by
+\fIIMPORT{cmdline}\fR
+in the rules\&. As in systemd,
+\fBudevd\fR
+considers itself running in an initrd when
+/etc/initrd\-release
+exists\&. As initrds that are not made for systemd do not provide
+/etc/initrd\-release, unlike systemd it also does so when the root file system is a memory file system (the rootfs of an initramfs, i\&.e\&. ramfs or tmpfs),
+/init
+exists, and one of the files that such initrd generators put into the initrd exists:
+/conf/initramfs\&.conf
+(initramfs\-tools),
+/lib/dracut\-lib\&.sh
+(dracut before version 019),
+/init_functions
+(old versions of mkinitcpio),
+/etc/initrd\&.defaults
+(genkernel before version 4\&.2) or
+/\&.modloop
+(mkinitfs of Alpine Linux)\&. The detection can be overridden with the
+\fI$SYSTEMD_IN_INITRD\fR
+environment variable, set to a boolean value\&.
 .PP
 \fIudev\&.log\-priority=\fR, \fIrd\&.udev\&.log\-priority=\fR
 .RS 4
@@ -166,7 +187,7 @@ and
 option used by
 80\-net\-name\-slot\&.rules, and to
 \fIIMPORT{cmdline}\fR
-in the rules in general, e\&.g\&.:
+in the rules in general, and it is handled like the kernel command line, e\&.g\&. options starting with "rd\&." are ignored outside of an initrd:
 .sp
 .if n \{\
 .RS 4

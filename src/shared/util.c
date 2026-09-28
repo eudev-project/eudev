@@ -2221,26 +2221,58 @@ int fd_inc_sndbuf(int fd, size_t n) {
         return 1;
 }
 
+/* Files that initrd generators that do not create /etc/initrd-release put into the initrd. */
+static const char * const initrd_markers[] = {
+        "/conf/initramfs.conf", /* initramfs-tools */
+        "/lib/dracut-lib.sh",   /* dracut before version 019 */
+        "/init_functions",      /* old versions of mkinitcpio (version 18 and later create it) */
+        "/etc/initrd.defaults", /* genkernel before version 4.2, e.g. 4.1 with eudev in the initrd */
+        "/.modloop",            /* Alpine's mkinitfs */
+};
+
 bool in_initrd(void) {
         static int saved = -1;
         struct statfs s;
+        const char *e;
+        size_t i;
+        int r;
 
         if (saved >= 0)
                 return saved;
 
-        /* We make two checks here:
-         *
-         * 1. the flag file /etc/initrd-release must exist
-         * 2. the root file system must be a memory file system
-         *
-         * The second check is extra paranoia, since misdetecting an
-         * initrd can have bad bad consequences due the initrd
-         * emptying when transitioning to the main systemd.
-         */
+        /* As systemd does, this can be overridden by setting $SYSTEMD_IN_INITRD=0|1. */
+        e = secure_getenv("SYSTEMD_IN_INITRD");
+        if (e) {
+                r = parse_boolean(e);
+                if (r >= 0) {
+                        saved = r > 0;
+                        return saved;
+                }
+                log_debug_errno(r, "Failed to parse $SYSTEMD_IN_INITRD, ignoring: %m");
+        }
 
-        saved = access("/etc/initrd-release", F_OK) >= 0 &&
-                statfs("/", &s) >= 0 &&
-                is_temporary_fs(&s);
+        /* As systemd (since v252) does, we are in an initrd if /etc/initrd-release exists. */
+        if (access("/etc/initrd-release", F_OK) >= 0) {
+                saved = true;
+                return saved;
+        }
+
+        /* eudev: initrds that are not made for systemd, e.g. those of initramfs-tools, lack
+         * /etc/initrd-release. Also consider an initramfs an initrd, i.e. when the root file system is a
+         * memory file system (rootfs, which is ramfs or tmpfs, as older versions of systemd also required),
+         * /init, which the kernel runs from an initramfs, exists, and so does a file that is specific to the
+         * initrds of one of the generators that do not create /etc/initrd-release. */
+        saved = false;
+        if (statfs("/", &s) < 0 || !is_temporary_fs(&s) || access("/init", F_OK) < 0)
+                return saved;
+
+        for (i = 0; i < ELEMENTSOF(initrd_markers); i++)
+                if (access(initrd_markers[i], F_OK) >= 0) {
+                        log_debug("Found %s in a memory file system with /init, assuming to run in an initrd.",
+                                  initrd_markers[i]);
+                        saved = true;
+                        break;
+                }
 
         return saved;
 }
@@ -2388,10 +2420,11 @@ int proc_cmdline_get_key(const char *key, char **value) {
                 if (r == 0)
                         break;
 
-                /* Note: unlike upstream, arguments starting with "rd." are not filtered out when not
-                 * running in the initrd, as in_initrd() requires /etc/initrd-release, which the
-                 * initrds used with eudev usually do not provide. A key never matches a word with
-                 * the "rd." prefix, unless the key itself is specified with it. */
+                /* Automatically filter out arguments that are intended only for the initrd, if we are not in the
+                 * initrd. */
+                if (!in_initrd() && startswith(word, "rd."))
+                        continue;
+
                 e = proc_cmdline_key_startswith(word, key);
                 if (!e)
                         continue;

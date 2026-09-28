@@ -134,7 +134,22 @@
   <refsect1><title>Kernel command line</title>
     <variablelist class='kernel-commandline-options'>
       <para>Parameters starting with "rd." will be read when
-      <command>udevd</command> is used in an initrd.</para>
+      <command>udevd</command> is used in an initrd, and are ignored
+      otherwise, also by <varname>IMPORT{cmdline}</varname> in the rules. As
+      in systemd, <command>udevd</command> considers itself running in an
+      initrd when <filename>/etc/initrd-release</filename> exists. As initrds
+      that are not made for systemd do not provide
+      <filename>/etc/initrd-release</filename>, unlike systemd it also does so
+      when the root file system is a memory file system (the rootfs of an
+      initramfs, i.e. ramfs or tmpfs), <filename>/init</filename> exists, and
+      one of the files that such initrd generators put into the initrd exists:
+      <filename>/conf/initramfs.conf</filename> (initramfs-tools),
+      <filename>/lib/dracut-lib.sh</filename> (dracut before version 019),
+      <filename>/init_functions</filename> (old versions of mkinitcpio),
+      <filename>/etc/initrd.defaults</filename> (genkernel before version 4.2) or
+      <filename>/.modloop</filename> (mkinitfs of Alpine Linux). The detection
+      can be overridden with the <varname>$SYSTEMD_IN_INITRD</varname>
+      environment variable, set to a boolean value.</para>
       <varlistentry>
         <term><varname>udev.log-priority=</varname></term>
         <term><varname>rd.udev.log-priority=</varname></term>
@@ -209,7 +224,9 @@
     an empty string. It applies to the options described here, to the
     <varname>net.ifnames=</varname> option used by
     <filename>80-net-name-slot.rules</filename>, and to
-    <varname>IMPORT{cmdline}</varname> in the rules in general, e.g.:</para>
+    <varname>IMPORT{cmdline}</varname> in the rules in general, and it is handled like
+    the kernel command line, e.g. options starting with "rd." are ignored outside of an
+    initrd:</para>
     <programlisting>UDEV_PROC_CMDLINE="net.naming_scheme=v250" udevadm test-builtin net_id /sys/class/net/eth0
 UDEV_PROC_CMDLINE="net.ifnames=0" udevadm test /sys/class/net/eth0</programlisting>
     <para>For compatibility with systemd, <varname>$SYSTEMD_PROC_CMDLINE</varname>
