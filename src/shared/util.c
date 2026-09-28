@@ -399,6 +399,18 @@ int safe_atoi(const char *s, int *ret_i) {
         return 0;
 }
 
+int secure_getenv_bool(const char *name) {
+        const char *e;
+
+        assert(name);
+
+        e = secure_getenv(name);
+        if (!e)
+                return -ENXIO;
+
+        return parse_boolean(e);
+}
+
 int parse_boolean(const char *v) {
         assert(v);
 
@@ -2147,6 +2159,105 @@ int proc_cmdline(char **ret) {
                 return get_process_cmdline(1, 0, false, ret);
         else
                 return read_full_file("/proc/cmdline", ret, NULL);
+}
+
+static bool relaxed_equal_char(char a, char b) {
+        return a == b ||
+                (a == '_' && b == '-') ||
+                (a == '-' && b == '_');
+}
+
+static const char *proc_cmdline_key_startswith(const char *s, const char *prefix) {
+        /* Much like startswith(), but considers "-" and "_" the same */
+
+        for (; *prefix != 0; s++, prefix++)
+                if (!relaxed_equal_char(*s, *prefix))
+                        return NULL;
+
+        return s;
+}
+
+/* Looks for a specific key on the kernel command line. A parameter beginning with the "key" string
+ * followed by "=" is searched, and the value following this is returned in "value". If the key is
+ * found as a separate word (i.e. not followed by "="), this is also accepted, and "value" is
+ * returned as NULL. When comparing the key, "-" and "_" are considered equivalent. Returns > 0 if
+ * the key is found, 0 if not. */
+int proc_cmdline_get_key(const char *key, char **value) {
+        _cleanup_free_ char *line = NULL, *ret = NULL;
+        bool found = false;
+        const char *p;
+        int r;
+
+        assert(value);
+
+        if (isempty(key))
+                return -EINVAL;
+
+        r = proc_cmdline(&line);
+        if (r < 0)
+                return r;
+
+        p = line;
+        for (;;) {
+                _cleanup_free_ char *word = NULL;
+                const char *e;
+
+                r = unquote_first_word(&p, &word, UNQUOTE_RELAX);
+                if (r < 0)
+                        return r;
+                if (r == 0)
+                        break;
+
+                /* Note: unlike upstream, arguments starting with "rd." are not filtered out when not
+                 * running in the initrd, as in_initrd() requires /etc/initrd-release, which the
+                 * initrds used with eudev usually do not provide. A key never matches a word with
+                 * the "rd." prefix, unless the key itself is specified with it. */
+                e = proc_cmdline_key_startswith(word, key);
+                if (!e)
+                        continue;
+
+                if (*e == '=') {
+                        free(ret);
+                        ret = strdup(e+1);
+                        if (!ret)
+                                return -ENOMEM;
+
+                        found = true;
+                } else if (*e == 0)
+                        found = true;
+        }
+
+        *value = ret;
+        ret = NULL;
+
+        return found;
+}
+
+/* Like proc_cmdline_get_key(), but parses the value as a boolean; the key without a value means
+ * true. Returns > 0 if the key is found, 0 (and false) if not. */
+int proc_cmdline_get_bool(const char *key, bool *ret) {
+        _cleanup_free_ char *v = NULL;
+        int r;
+
+        assert(ret);
+
+        r = proc_cmdline_get_key(key, &v);
+        if (r < 0)
+                return r;
+        if (r == 0) {
+                *ret = false;
+                return 0;
+        }
+
+        if (v) {
+                r = parse_boolean(v);
+                if (r < 0)
+                        return r;
+                *ret = r;
+        } else
+                *ret = true;
+
+        return 1;
 }
 
 int parse_proc_cmdline(int (*parse_item)(const char *key, const char *value)) {

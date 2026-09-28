@@ -12,6 +12,7 @@ libudev_shared_la_SOURCES=\
 	fileio.c \
 	hashmap.c \
 	id128-util.c \
+	json-util.c \
 	json-writer.c \
 	label.c \
 	log.c \
@@ -19,6 +20,7 @@ libudev_shared_la_SOURCES=\
 	mkdir.c \
 	mkdir-label.c \
 	MurmurHash2.c \
+	os-util.c \
 	path-util.c \
 	process-util.c \
 	random-util.c \
@@ -47,6 +49,7 @@ noinst_HEADERS = \
 	hashmap.h \
 	id128-util.h \
 	ioprio.h \
+	json-util.h \
 	json-writer.h \
 	label.h \
 	list.h \
@@ -57,6 +60,7 @@ noinst_HEADERS = \
 	missing.h \
 	mkdir.h \
 	MurmurHash2.h \
+	os-util.h \
 	path-util.h \
 	process-util.h \
 	random-util.h \

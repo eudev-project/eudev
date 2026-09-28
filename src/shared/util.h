@@ -111,6 +111,8 @@ int parse_uid(const char *s, uid_t* ret_uid);
 int safe_atou(const char *s, unsigned *ret_u);
 int safe_atoi(const char *s, int *ret_i);
 int parse_boolean(const char *v) _pure_;
+/* Returns -ENXIO if the variable is not set */
+int secure_getenv_bool(const char *name);
 
 #define SAFE_ATO_REFUSE_PLUS_MINUS (1U << 30)
 #define SAFE_ATO_REFUSE_LEADING_ZERO (1U << 29)
@@ -575,6 +577,8 @@ static inline void qsort_safe(void *base, size_t nmemb, size_t size,
 }
 
 int proc_cmdline(char **ret);
+int proc_cmdline_get_key(const char *key, char **value);
+int proc_cmdline_get_bool(const char *key, bool *ret);
 int parse_proc_cmdline(int (*parse_word)(const char *key, const char *value));
 int getpeercred(int fd, struct ucred *ucred);
 
