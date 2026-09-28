@@ -59,6 +59,8 @@ libudev_core_la_SOURCES = \
 	udev-rules.c \
 	udev-rules-check.c \
 	udev-rules-check.h \
+	hwdb-util.c \
+	hwdb-util.h \
 	udev-ctrl.c \
 	udev-builtin.c \
 	udev-builtin-btrfs.c \
