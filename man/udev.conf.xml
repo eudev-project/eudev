@@ -150,7 +150,8 @@
           <para>Takes a boolean argument. Defaults to <option>yes</option>.
           When set to <option>no</option>, <varname>OPTIONS+="net_altnames"</varname>
           is ignored, i.e. no alternative names are assigned to network
-          interfaces (see
+          interfaces, which <filename>80-net-altnames.rules</filename> requests
+          by default (see
           <citerefentry><refentrytitle>udev</refentrytitle><manvolnum>7</manvolnum></citerefentry>).
           An invalid or empty value is ignored, with a warning when
           <command>udevd</command> starts. The file is only read when

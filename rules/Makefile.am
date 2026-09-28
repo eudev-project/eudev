@@ -36,6 +36,7 @@ dist_udevrules_DATA = \
 	70-touchpad.rules \
 	75-net-description.rules \
 	78-sound-card.rules \
+	80-net-altnames.rules \
 	81-net-dhcp.rules \
 	90-image-dissect.rules
 
