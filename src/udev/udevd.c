@@ -242,6 +242,8 @@ static void worker_spawn(struct event *event) {
         case 0: {
                 struct udev_device *dev = NULL;
                 int fd_monitor;
+                /* the netlink socket to rename network interfaces and assign alternative names, see udev_event */
+                int rtnl_fd = -1;
                 struct epoll_event ep_signal, ep_monitor;
                 sigset_t mask;
                 int r = 0;
@@ -306,6 +308,9 @@ static void worker_spawn(struct event *event) {
                         /* needed for SIGCHLD/SIGTERM in spawn() */
                         udev_event->fd_signal = fd_signal;
 
+                        /* reuse the netlink socket for all events */
+                        udev_event->rtnl_fd = rtnl_fd;
+
                         if (arg_exec_delay > 0)
                                 udev_event->exec_delay = arg_exec_delay;
 
@@ -363,6 +368,10 @@ static void worker_spawn(struct event *event) {
                         udev_monitor_send_device(worker_monitor, NULL, dev);
 
 skip:
+                        /* take the netlink socket back, in case the event opened it */
+                        rtnl_fd = udev_event->rtnl_fd;
+                        udev_event->rtnl_fd = -1;
+
                         log_debug("seq %llu processed", udev_device_get_seqnum(dev));
 
                         /* Reset the log level, as it might be changed by "OPTIONS=log_level=". */
@@ -419,6 +428,7 @@ skip:
                 }
 out:
                 udev_device_unref(dev);
+                safe_close(rtnl_fd);
                 safe_close(fd_signal);
                 safe_close(fd_ep);
                 close(fd_inotify);

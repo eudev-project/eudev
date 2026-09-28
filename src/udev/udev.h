@@ -57,6 +57,12 @@ struct udev_event {
         int exec_delay;
         usec_t birth_usec;
         int fd_signal;
+        /* the netlink socket of udev-netlink.h, opened when needed; a udevd worker passes its own socket to
+         * each event and takes it back, so that it is reused, like the rtnl of systemd's udev workers */
+        int rtnl_fd;
+        /* the alternative names the network interface has, read once, see event_get_ifaltnames() */
+        char **ifaltnames;
+        bool ifaltnames_read;
         unsigned int builtin_run;
         unsigned int builtin_ret;
         bool sigterm;

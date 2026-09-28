@@ -38,6 +38,7 @@
 #include "udev.h"
 #include "netif-naming-scheme.h"
 #include "socket-util.h"
+#include "udev-netlink.h"
 
 struct udev_event *udev_event_new(struct udev_device *dev, enum udev_event_mode mode) {
         struct udev *udev = udev_device_get_udev(dev);
@@ -53,6 +54,7 @@ struct udev_event *udev_event_new(struct udev_device *dev, enum udev_event_mode 
         udev_list_init(udev, &event->written_sysattr_list, true);
         udev_list_init(udev, &event->written_sysctl_list, true);
         event->fd_signal = -1;
+        event->rtnl_fd = -1;
         event->birth_usec = now(CLOCK_MONOTONIC);
         event->event_mode = mode;
         /* OPTIONS="log_level=reset" goes back to this */
@@ -68,6 +70,8 @@ void udev_event_unref(struct udev_event *event) {
         udev_list_cleanup(&event->seclabel_list);
         udev_list_cleanup(&event->written_sysattr_list);
         udev_list_cleanup(&event->written_sysctl_list);
+        safe_close(event->rtnl_fd);
+        strv_free(event->ifaltnames);
         free(event->program_result);
         free(event->name);
         free(event);
@@ -931,13 +935,66 @@ out:
 int udev_rules_assigning_name_to(struct udev_rules *rules,const char *match_name);
 #endif
 
+/* Returns the alternative names the network interface has. Like rtnl_set_link_name() of systemd, they are read
+ * once, before renaming the interface, and used both to drop the new name from them and to leave out the names
+ * the interface has already when assigning alternative names, see event_assign_altnames(). NULL, if there are
+ * none or they could not be read. */
+static char **event_get_ifaltnames(struct udev_event *event) {
+        int ifindex = udev_device_get_ifindex(event->dev);
+        int r;
+
+        if (event->ifaltnames_read || ifindex <= 0)
+                return event->ifaltnames;
+
+        event->ifaltnames_read = true;
+        r = rtnl_get_link_alternative_names(&event->rtnl_fd, ifindex, &event->ifaltnames);
+        if (r < 0)
+                log_debug_errno(r, "Failed to get alternative names on network interface %i, ignoring: %m", ifindex);
+
+        return event->ifaltnames;
+}
+
+/* Like rtnl_set_link_name() of systemd: if the requested name is already assigned as an alternative name of the
+ * interface, then first drop it, as the kernel refuses to rename an interface to a name that is in use. Returns 1
+ * if it was dropped, 0 if not, or a negative errno if it could not be dropped. */
+static int netif_drop_altname(struct udev_event *event, const char *name) {
+        int ifindex = udev_device_get_ifindex(event->dev);
+        char *drop[2] = { (char *) name, NULL };
+        int r;
+
+        if (!strv_contains(event_get_ifaltnames(event), name))
+                return 0;
+
+        r = rtnl_delete_link_alternative_names(&event->rtnl_fd, ifindex, drop);
+        if (r < 0)
+                return log_debug_errno(r, "Failed to remove '%s' from alternative names on network interface %i: %m",
+                                       name, ifindex);
+
+        strv_remove(event->ifaltnames, name);
+        return 1;
+}
+
+static void netif_restore_altname(struct udev_event *event, const char *name) {
+        int ifindex = udev_device_get_ifindex(event->dev);
+        char *restore[2] = { (char *) name, NULL };
+        int r;
+
+        r = rtnl_set_link_alternative_names(&event->rtnl_fd, ifindex, restore);
+        if (r < 0)
+                log_debug_errno(r, "Failed to restore '%s' as an alternative name on network interface %i, ignoring: %m",
+                                name, ifindex);
+        else if (strv_extend(&event->ifaltnames, name) < 0)
+                log_oom();
+}
+
 /* Renames the network interface oldname to name. If ret_name is not NULL, it is set to the name the interface
  * has afterwards: name on success, otherwise oldname, or the temporary name of the rule generator, when the
  * interface was renamed to it, but not to name. ret_name may point to oldname. */
-static int rename_netif_dev_fromname_toname(struct udev_device *dev __attribute__((unused)), const char *oldname, const char *name,
+static int rename_netif_dev_fromname_toname(struct udev_event *event, const char *oldname, const char *name,
                                             char ret_name[IFNAMSIZ]) {
         int r;
         int sk;
+        int altname_dropped;
         struct ifreq ifr;
 
         log_debug("changing net interface name from '%s' to '%s'\n",oldname,name);
@@ -958,6 +1015,12 @@ static int rename_netif_dev_fromname_toname(struct udev_device *dev __attribute_
         sk = socket(PF_INET, SOCK_DGRAM, 0);
         if (sk < 0)
                 return log_error_errno(-errno, "error opening socket: %m");
+
+        altname_dropped = netif_drop_altname(event, name);
+        if (altname_dropped < 0) {
+                close(sk);
+                return log_error_errno(altname_dropped, "Error changing net interface name %s to %s: %m\n", oldname, name);
+        }
 
         memzero(&ifr, sizeof(struct ifreq));
         strscpy(ifr.ifr_name, IFNAMSIZ, oldname);
@@ -1014,6 +1077,9 @@ static int rename_netif_dev_fromname_toname(struct udev_device *dev __attribute_
 
 out:
 #endif
+        if (r < 0 && altname_dropped > 0)
+                netif_restore_altname(event, name);
+
         if (r == -EBUSY)
                 /* like systemd, this is not an error */
                 log_info("Network interface '%s' is already up, cannot rename to '%s'.", ifr.ifr_name, ifr.ifr_newname);
@@ -1203,7 +1269,7 @@ void udev_event_execute_rules(struct udev_event *event,
 
                                         /* if sysname isn't already the tmpname (ie there is no numeric component), do the rename */
                                         if (!streq(newifname, curname)) {
-                                                r = rename_netif_dev_fromname_toname(dev, curname, newifname, curname);
+                                                r = rename_netif_dev_fromname_toname(event, curname, newifname, curname);
                                                 if (r == 0)
                                                         log_debug("renamed netif to '%s' for collision avoidance\n", newifname);
                                                 else if (r != -EBUSY)
@@ -1214,7 +1280,7 @@ void udev_event_execute_rules(struct udev_event *event,
                                 /* rename it now to its final target if it is not already there, from the name it has
                                  * now, also when it could not be renamed to the temporary name */
                                 if (name != NULL && !streq(name, curname))
-                                        (void) rename_netif_dev_fromname_toname(dev, curname, name, curname);
+                                        (void) rename_netif_dev_fromname_toname(event, curname, name, curname);
 
                                 /* also when only the temporary renaming succeeded, the device has to follow the interface */
                                 if (!streq(curname, udev_device_get_sysname(dev)))
@@ -1229,7 +1295,7 @@ void udev_event_execute_rules(struct udev_event *event,
                         int r;
 
                         if (name != NULL) {
-                                r = rename_netif_dev_fromname_toname(dev, udev_device_get_sysname(dev), name, NULL);
+                                r = rename_netif_dev_fromname_toname(event, udev_device_get_sysname(dev), name, NULL);
                                 if (r >= 0)
                                         netif_update_device(dev, name);
                                 else if (r != -EBUSY)
