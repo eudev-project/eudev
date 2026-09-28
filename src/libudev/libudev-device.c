@@ -2440,6 +2440,12 @@ int udev_device_copy_properties(struct udev_device *dst, struct udev_device *src
         for ((entry = udev_device_get_properties_list_entry(src)); entry; entry = udev_list_entry_get_next(entry)) {
                 const char *key, *value;
 
+                /* Only the properties stored in the database, like the properties_db of systemd's
+                 * sd-device. The others, like DEVPATH, DEVLINKS or TAGS, are set by libudev from the
+                 * device itself, and must not become properties of the database. */
+                if (!udev_list_entry_get_num(entry))
+                        continue;
+
                 key = udev_list_entry_get_name(entry);
                 value = udev_list_entry_get_value(entry);
 

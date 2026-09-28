@@ -90,7 +90,6 @@ struct event {
         struct udev_list_node node;
         struct udev *udev;
         struct udev_device *dev;
-        struct udev_device *dev_kernel;
         struct worker *worker;
         enum event_state state;
         unsigned long long int delaying_seqnum;
@@ -139,7 +138,6 @@ static void event_free(struct event *event) {
 
         udev_list_node_remove(&event->node);
         udev_device_unref(event->dev);
-        udev_device_unref(event->dev_kernel);
 
         if (event->worker)
                 event->worker->event = NULL;
@@ -493,8 +491,6 @@ static int event_queue_insert(struct udev_device *dev) {
 
         event->udev = udev_device_get_udev(dev);
         event->dev = dev;
-        event->dev_kernel = udev_device_shallow_clone(dev);
-        udev_device_copy_properties(event->dev_kernel, dev);
         event->seqnum = udev_device_get_seqnum(dev);
         event->devpath = udev_device_get_devpath(dev);
         event->devpath_old = udev_device_get_devpath_old(dev);
@@ -984,8 +980,9 @@ static void handle_signal(struct udev *udev __attribute__((unused)), int signo) 
                                         /* delete state from disk */
                                         udev_device_delete_db(worker->event->dev);
                                         udev_device_tag_index(worker->event->dev, NULL, false);
-                                        /* forward kernel event without amending it */
-                                        udev_monitor_send_device(monitor, NULL, worker->event->dev_kernel);
+                                        /* forward kernel event without amending it, the manager does not
+                                         * change the device of the event */
+                                        udev_monitor_send_device(monitor, NULL, worker->event->dev);
                                 }
                         }
 
