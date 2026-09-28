@@ -6,10 +6,18 @@
 
 [ -n "$builddir" ] || builddir=`dirname $0`/..
 
-# skip if we don't have python
-type python >/dev/null 2>&1 || {
-        echo "$0: No python installed, skipping udev rule syntax check"
-        exit 0
-}
+# skip if we don't have python 3; 77 tells automake that the test was skipped
+python=
+for p in python3 python; do
+        if command -v "$p" >/dev/null 2>&1 &&
+           "$p" -c 'import sys; sys.exit(sys.version_info[0] < 3)' >/dev/null 2>&1; then
+                python=$p
+                break
+        fi
+done
+if [ -z "$python" ]; then
+        echo "$0: No python 3 installed, skipping udev rule syntax check"
+        exit 77
+fi
 
-$builddir/test/rule-syntax-check.py `find $builddir/rules -name '*.rules'`
+"$python" `dirname $0`/rule-syntax-check.py `find $builddir/rules -name '*.rules'`
