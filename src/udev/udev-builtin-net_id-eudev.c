@@ -171,7 +171,7 @@ static int dev_pci_onboard(struct udev_device *dev, struct netnames *names) {
                 names->pci_onboard[0] = '\0';
 
         attr = udev_device_get_sysattr_value(names->pcidev, "label");
-        if (attr && utf8_is_printable_newline(attr, strlen(attr), false))
+        if (attr && utf8_is_valid(attr) && !string_has_cc(attr, /* ok= */ NULL))
                 names->pci_onboard_label = attr;
 
         return 0;

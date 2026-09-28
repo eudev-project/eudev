@@ -503,7 +503,7 @@ static int set_inq_values(struct udev *udev, struct scsi_id_device *dev_scsi, co
 }
 
 static bool scsi_string_is_valid(const char *s) {
-        return !isempty(s) && utf8_is_printable_newline(s, strlen(s), false);
+        return !isempty(s) && utf8_is_valid(s) && !string_has_cc(s, /* ok= */ NULL);
 }
 
 /*

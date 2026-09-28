@@ -81,7 +81,7 @@ int main(int argc, char *argv[]) {
         if (ioctl(fd, VIDIOC_QUERYCAP, &v2cap) == 0) {
                 int capabilities;
                 printf("ID_V4L_VERSION=2\n");
-                if (utf8_is_printable_newline((char *)v2cap.card, strlen((char *)v2cap.card), false))
+                if (utf8_is_valid((char *)v2cap.card) && !string_has_cc((char *)v2cap.card, /* ok= */ NULL))
                         printf("ID_V4L_PRODUCT=%s\n", v2cap.card);
                 printf("ID_V4L_CAPABILITIES=:");
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3,4,0)
