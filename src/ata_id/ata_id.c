@@ -319,8 +319,8 @@ static void disk_identify_fixup_uint16 (uint8_t identify[512], unsigned int offs
  * This routine is based on code from libatasmart, Copyright 2008
  * Lennart Poettering, LGPL v2.1.
  *
- * Returns: 0 if the data was successfully obtained, otherwise
- * non-zero with errno set.
+ * Returns: 0 if the data was successfully obtained, otherwise a
+ * negative errno-style error code.
  */
 static int disk_identify(struct udev *udev __attribute__((unused)),
                          int fd,
@@ -446,8 +446,10 @@ int main(int argc, char *argv[])
         log_open();
 
         udev = udev_new();
-        if (udev == NULL)
-                return 0;
+        if (!udev) {
+                log_oom();
+                return 1;
+        }
 
         r = parse_argv(argc, argv);
         if (r <= 0)
