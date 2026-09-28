@@ -33,6 +33,7 @@
 #include <stdlib.h>
 #include "build.h"
 #include "mtd_probe.h"
+#include "util.h"
 
 static const char *arg_device = NULL;
 
@@ -71,7 +72,7 @@ static int parse_argv(int argc, char *argv[]) {
 }
 
 int main(int argc, char** argv) {
-        int mtd_fd = -1;
+        _cleanup_close_ int mtd_fd = -EBADF;
         mtd_info_t mtd_info;
         int r;
 
