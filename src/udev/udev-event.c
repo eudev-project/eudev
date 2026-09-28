@@ -756,14 +756,36 @@ out:
         return 0;
 }
 
-static bool program_runs_in_test_mode(const char *cmd) {
-        const char *p;
+/* the directories udev_event_spawn() runs a program given without a path from */
+static const char test_mode_helper_dirs[] =
+        UDEV_LIBEXEC_DIR "/\0"
+#ifdef HAVE_SPLIT_USR
+        "/usr/lib/udev/\0"
+        "/lib/udev/\0"
+#endif
+        ;
 
-        NULSTR_FOREACH(p, "ata_id\0" "cdrom_id\0" "dmi_memory_id\0" "fido_id\0" "mtd_probe\0" "scsi_id\0")
-                if (startswith(cmd, p))
-                        return true;
+/* Return the name of the udev helper that "udevadm test" runs, or NULL if the program must not be run
+ * in test mode. The program must be the helper's name, or its absolute path in one of the directories
+ * above: a prefix match would also let e.g. "cdrom_idX" or "scsi_id_wrapper" run. */
+static const char *test_mode_helper(const char *program) {
+        const char *h, *d, *s;
 
-        return false;
+        if (isempty(program))
+                return NULL;
+
+        NULSTR_FOREACH(h, "ata_id\0" "cdrom_id\0" "dmi_memory_id\0" "fido_id\0" "mtd_probe\0" "scsi_id\0") {
+                if (streq(program, h))
+                        return h;
+
+                NULSTR_FOREACH(d, test_mode_helper_dirs) {
+                        s = startswith(program, d);
+                        if (s && streq(s, h))
+                                return h;
+                }
+        }
+
+        return NULL;
 }
 
 int udev_event_spawn(struct udev_event *event,
@@ -783,7 +805,10 @@ int udev_event_spawn(struct udev_event *event,
         assert(cmd);
         assert(result || ressize == 0);
 
-        if (event->event_mode == EVENT_UDEVADM_TEST && !program_runs_in_test_mode(cmd)) {
+        strscpy(arg, sizeof(arg), cmd);
+        udev_build_argv(event->udev, arg, NULL, argv);
+
+        if (event->event_mode == EVENT_UDEVADM_TEST && !test_mode_helper(argv[0])) {
                 log_debug("Running in test mode, skipping execution of '%s'.", cmd);
                 if (ressize > 0)
                         result[0] = '\0';
@@ -791,9 +816,6 @@ int udev_event_spawn(struct udev_event *event,
                         *ret_truncated = false;
                 return 0;
         }
-
-        strscpy(arg, sizeof(arg), cmd);
-        udev_build_argv(event->udev, arg, NULL, argv);
 
         if (isempty(argv[0])) {
                 log_error("Invalid command '%s'", cmd);

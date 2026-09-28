@@ -596,7 +596,8 @@
       <varname>IMPORT{program}</varname> are not executed either, except for the
       udev helpers <command>ata_id</command>, <command>cdrom_id</command>,
       <command>dmi_memory_id</command>, <command>fido_id</command>,
-      <command>mtd_probe</command> and <command>scsi_id</command>; any other
+      <command>mtd_probe</command> and <command>scsi_id</command>, given by
+      their name or by their absolute path in the udev helper directory; any other
       program is treated as successful with empty output, so the properties it
       would set are not shown. The built-in commands act as described for
       <command>udevadm test-builtin</command>. What would be done, i.e. the

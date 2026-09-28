@@ -416,7 +416,7 @@ are not executed either, except for the udev helpers
 \fBfido_id\fR,
 \fBmtd_probe\fR
 and
-\fBscsi_id\fR; any other program is treated as successful with empty output, so the properties it would set are not shown\&. The built\-in commands act as described for
+\fBscsi_id\fR, given by their name or by their absolute path in the udev helper directory; any other program is treated as successful with empty output, so the properties it would set are not shown\&. The built\-in commands act as described for
 \fBudevadm test\-builtin\fR\&. What would be done, i\&.e\&. the network interface name, the owner, group, permission and symlinks of the device node, the sysfs attributes and sysctls to write, the tags, the properties and the queued
 \fIRUN\fR
 commands, is printed on standard output, and the debug messages on standard error\&.
