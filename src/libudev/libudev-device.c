@@ -925,8 +925,6 @@ _public_ const char *udev_device_get_property_value(struct udev_device *udev_dev
 int udev_device_read_db(struct udev_device *udev_device)
 {
         char filename[UTIL_PATH_SIZE];
-        char path[UTIL_PATH_SIZE];
-        char line[UTIL_LINE_SIZE];
         const char *id;
         FILE *f;
 
@@ -953,32 +951,37 @@ int udev_device_read_db(struct udev_device *udev_device)
         /* a database without the V: line has version 0 */
         udev_device->database_version = 0;
 
-        while (fgets(line, sizeof(line), f)) {
-                size_t len;
+        for (;;) {
+                _cleanup_free_ char *line = NULL, *path = NULL;
                 const char *val;
                 struct udev_list_entry *entry;
+                int r;
 
-                len = strlen(line);
-                if (len > 0 && line[len-1] == '\n')
-                        line[--len] = '\0';
-                else if (!feof(f)) {
-                        int c;
-
-                        /* The line does not fit into the buffer. Ignore it as a whole, its remainder
-                         * must not be parsed as a line of its own. */
+                /* The lines of the entries are not limited in systemd, but take a limit of 1 MiB, like
+                 * IMPORT{file} has. */
+                r = read_line(f, LONG_LINE_MAX, &line);
+                if (r == -ENOBUFS) {
+                        /* Ignore the line as a whole, its remainder must not be parsed as a line of
+                         * its own. */
                         log_debug("overlong line in db file %s, ignoring", filename);
-                        while ((c = fgetc(f)) != EOF && c != '\n')
-                                ;
+                        (void) read_line(f, SIZE_MAX, NULL);
                         continue;
                 }
+                if (r < 0) {
+                        log_debug_errno(r, "failed to read db file %s: %m", filename);
+                        break;
+                }
+                if (r == 0)
+                        break;
 
-                if (len < 2 || line[1] != ':')
+                if (strlen(line) < 2 || line[1] != ':')
                         continue;
                 val = &line[2];
                 switch(line[0]) {
                 case 'S':
-                        strscpyl(path, sizeof(path), "/dev/", val, NULL);
-                        udev_device_add_devlink(udev_device, path);
+                        path = strjoin("/dev/", val, NULL);
+                        if (path)
+                                udev_device_add_devlink(udev_device, path);
                         break;
                 case 'L':
                         udev_device_set_devlink_priority(udev_device, atoi(val));

@@ -29,6 +29,7 @@
 
 #include "libudev.h"
 #include "libudev-private.h"
+#include "fileio.h"
 
 static void udev_device_tag(struct udev_device *dev, const char *tag, bool add)
 {
@@ -80,20 +81,21 @@ static bool device_has_info(struct udev_device *udev_device)
         return false;
 }
 
-/* Each entry of the database is a "<key>:<value>" line, and the database is read with a buffer of
- * UTIL_LINE_SIZE. libudev already refuses devlinks, properties and tags containing control
- * characters, but make sure that no entry can ever break the database, e.g. with a line break. */
+/* Each entry of the database is a "<key>:<value>" line, and the database is read with lines of at
+ * most LONG_LINE_MAX characters. libudev already refuses devlinks, properties and tags containing
+ * control characters, but make sure that no entry can ever break the database, e.g. with a line
+ * break. */
 static bool db_entry_is_safe(struct udev_device *udev_device, const char *key, const char *name, const char *value)
 {
         _cleanup_free_ char *escaped = NULL;
         size_t len;
 
-        /* "<key>:<name>\n" or "<key>:<name>=<value>\n" must fit, see udev_device_read_db() */
-        len = strlen(key) + 1 + strlen(name) + 1;
+        /* "<key>:<name>" or "<key>:<name>=<value>" must fit, see udev_device_read_db() */
+        len = strlen(key) + 1 + strlen(name);
         if (value)
                 len += 1 + strlen(value);
 
-        if (!string_has_cc(name, NULL) && (!value || !string_has_cc(value, NULL)) && len < UTIL_LINE_SIZE)
+        if (!string_has_cc(name, NULL) && (!value || !string_has_cc(value, NULL)) && len < LONG_LINE_MAX)
                 return true;
 
         escaped = cescape(name);
