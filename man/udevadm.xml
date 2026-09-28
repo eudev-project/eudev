@@ -599,7 +599,11 @@
       <command>mtd_probe</command> and <command>scsi_id</command>, given by
       their name or by their absolute path in the udev helper directory; any other
       program is treated as successful with empty output, so the properties it
-      would set are not shown. The built-in commands act as described for
+      would set are not shown. The helpers only read from the device:
+      <command>cdrom_id</command> is started with <option>--dry-run</option>, so
+      that it does not lock, unlock or eject the media, as it would for
+      <option>--lock-media</option>, <option>--unlock-media</option> and
+      <option>--eject-media</option>. The built-in commands act as described for
       <command>udevadm test-builtin</command>. What would be done, i.e. the
       network interface name, the owner, group, permission and symlinks of the
       device node, the sysfs attributes and sysctls to write, the tags, the

@@ -26,6 +26,7 @@
 static bool arg_eject = false;
 static bool arg_lock = false;
 static bool arg_unlock = false;
+static bool arg_dry_run = false;
 static const char *arg_node = NULL;
 
 typedef enum Feature {
@@ -904,6 +905,8 @@ static int help(void) {
                "  -l --lock-media    Lock the media (to enable eject request events)\n"
                "  -u --unlock-media  Unlock the media\n"
                "  -e --eject-media   Eject the media\n"
+               "     --dry-run       Do not lock, unlock or eject the media, only print the\n"
+               "                     properties (used by udevadm test)\n"
                "  -d --debug         Print debug messages to stderr\n"
                "  -h --help          Show this help text\n"
                "     --version       Show package version\n",
@@ -913,10 +916,14 @@ static int help(void) {
 }
 
 static int parse_argv(int argc, char *argv[]) {
+        enum {
+                ARG_DRY_RUN = 0x100,
+        };
         static const struct option options[] = {
                 { "lock-media",   no_argument, NULL, 'l' },
                 { "unlock-media", no_argument, NULL, 'u' },
                 { "eject-media",  no_argument, NULL, 'e' },
+                { "dry-run",      no_argument, NULL, ARG_DRY_RUN },
                 { "debug",        no_argument, NULL, 'd' },
                 { "help",         no_argument, NULL, 'h' },
                 { "version",      no_argument, NULL, 'v' },
@@ -934,6 +941,9 @@ static int parse_argv(int argc, char *argv[]) {
                         break;
                 case 'e':
                         arg_eject = true;
+                        break;
+                case ARG_DRY_RUN:
+                        arg_dry_run = true;
                         break;
                 case 'd':
                         log_set_target(LOG_TARGET_CONSOLE);
@@ -953,6 +963,12 @@ static int parse_argv(int argc, char *argv[]) {
         arg_node = argv[optind];
         if (!arg_node)
                 return log_error_errno(SYNTHETIC_ERRNO(EINVAL), "No device specified.");
+
+        /* eudev: "udevadm test" runs cdrom_id with --dry-run, so that it does not lock the tray */
+        if (arg_dry_run && (arg_lock || arg_unlock || arg_eject)) {
+                log_debug("Dry run, not locking, unlocking or ejecting the media.");
+                arg_lock = arg_unlock = arg_eject = false;
+        }
 
         return 1;
 }

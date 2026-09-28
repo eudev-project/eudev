@@ -799,22 +799,41 @@ int udev_event_spawn(struct udev_event *event,
         char arg[UTIL_LINE_SIZE];
         char *argv[UDEV_ARGV_MAX];
         char program[UTIL_PATH_SIZE];
-        int err = 0;
+        const char *helper = NULL;
+        int argc, err = 0;
 
         assert(event);
         assert(cmd);
         assert(result || ressize == 0);
 
         strscpy(arg, sizeof(arg), cmd);
-        udev_build_argv(event->udev, arg, NULL, argv);
+        udev_build_argv(event->udev, arg, &argc, argv);
 
-        if (event->event_mode == EVENT_UDEVADM_TEST && !test_mode_helper(argv[0])) {
+        if (event->event_mode == EVENT_UDEVADM_TEST)
+                helper = test_mode_helper(argv[0]);
+
+        if (event->event_mode == EVENT_UDEVADM_TEST && !helper) {
                 log_debug("Running in test mode, skipping execution of '%s'.", cmd);
                 if (ressize > 0)
                         result[0] = '\0';
                 if (ret_truncated)
                         *ret_truncated = false;
                 return 0;
+        }
+
+        /* The helpers run in test mode must not change the device either: tell cdrom_id not to
+         * lock, unlock or eject the media, which the rules ask for with --lock-media. */
+        if (helper && streq(helper, "cdrom_id")) {
+                if (argc + 1 >= UDEV_ARGV_MAX) {
+                        log_error("Too many arguments, not running '%s' in test mode.", cmd);
+                        return -E2BIG;
+                }
+
+                /* insert --dry-run right after the program name, so that it is not taken for an
+                 * argument after "--"; also move the terminating NULL */
+                memmove(argv + 2, argv + 1, argc * sizeof(char *));
+                argv[1] = (char *) "--dry-run";
+                argc++;
         }
 
         if (isempty(argv[0])) {
