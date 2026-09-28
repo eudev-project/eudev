@@ -276,6 +276,8 @@ int touch(const char *path);
 int readlinkat_malloc(int fd, const char *p, char **ret);
 int readlink_malloc(const char *p, char **ret);
 
+int open_mkdir_at(int dirfd, const char *path, int flags, mode_t mode);
+
 int free_and_strdup(char **p, const char *s);
 
 bool null_or_empty(struct stat *st) _pure_;
