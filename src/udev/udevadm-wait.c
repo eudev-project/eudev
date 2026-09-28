@@ -286,7 +286,7 @@ static int wait_main(struct udev *udev) {
                 return 0;
 
         if (arg_timeout_usec != USEC_INFINITY)
-                deadline = now(CLOCK_BOOTTIME) + arg_timeout_usec;
+                deadline = usec_add(now(CLOCK_BOOTTIME), arg_timeout_usec);
 
         if (arg_settle) {
                 inotify_fd = inotify_init1(IN_CLOEXEC|IN_NONBLOCK);

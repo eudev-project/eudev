@@ -102,7 +102,7 @@ int device_wait_for_initialization(struct udev_device *device, usec_t timeout_us
                 return 0;
         }
 
-        deadline = timeout_usec == USEC_INFINITY ? USEC_INFINITY : now(CLOCK_MONOTONIC) + timeout_usec;
+        deadline = usec_add(now(CLOCK_MONOTONIC), timeout_usec);
 
         for (;;) {
                 _cleanup_udev_device_unref_ struct udev_device *d = NULL;

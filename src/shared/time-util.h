@@ -60,6 +60,12 @@ typedef struct dual_timestamp {
 
 usec_t now(clockid_t clock);
 
+static inline usec_t usec_add(usec_t a, usec_t b) {
+        /* Adds two time values, and makes sure USEC_INFINITY as input results as USEC_INFINITY in output,
+         * and doesn't overflow. */
+        return a > USEC_INFINITY - b ? USEC_INFINITY : a + b;
+}
+
 usec_t timespec_load(const struct timespec *ts) _pure_;
 struct timespec *timespec_store(struct timespec *ts, usec_t u);
 

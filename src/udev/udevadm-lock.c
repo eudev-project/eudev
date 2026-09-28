@@ -483,7 +483,7 @@ static int lock_main(struct udev *udev) {
         if (arg_timeout_usec == 0 || arg_timeout_usec == USEC_INFINITY)
                 deadline = arg_timeout_usec;
         else
-                deadline = now(CLOCK_MONOTONIC) + arg_timeout_usec;
+                deadline = usec_add(now(CLOCK_MONOTONIC), arg_timeout_usec);
 
         for (i = 0; i < n_devnos; i++) {
                 _cleanup_free_ char *node = NULL;
