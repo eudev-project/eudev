@@ -107,6 +107,18 @@ Please note that
 \fBNUL\fR
 is not allowed in either string variant\&.
 .PP
+Rules written for systemd\-udevd may use features which udev does not provide: the
+\fICONST{arch}\fR,
+\fICONST{virt}\fR
+and
+\fICONST{cvm}\fR
+match keys, and the
+dissect_image,
+net_setup_link
+and
+uaccess
+built\-in commands\&. A rule line using one of them is ignored as a whole, with an error message saying so\&.
+.PP
 The following key names can be used to match against device properties\&. Some of the keys also match against properties of the parent devices in sysfs, not only the device that has generated the event\&. If multiple keys that match a parent device are specified in a single rule, all these keys must match at one and the same parent device\&.
 .PP
 \fIACTION\fR
@@ -176,18 +188,22 @@ matches are specified, all of them must match on the same device\&. Trailing whi
 \fITAGS\fR
 .RS 4
 Search the devpath upwards for a device with matching tag\&. If the operator is
-!=, the token returns true only if there is no tag matched\&.
+!=, the token returns true only if there is no tag matched\&. The current tags of the devices are matched, see
+\fITAG\fR
+below; for a device whose database entry was written by an older version of udev, which did not keep the tags of earlier events, all its tags\&.
 .RE
 .PP
 \fIENV{\fR\fI\fIkey\fR\fR\fI}\fR
 .RS 4
-Match against a device property value\&.
+Match against a device property value\&. When the device does not have the property, the global property set with
+\fBudevadm control \-\-property\fR
+is matched, if there is one\&.
 .RE
 .PP
 \fITAG\fR
 .RS 4
 Match against one of device tags\&. It can be used once a TAG key has been set in one of the preceding rules\&. There may be multiple tags; only one needs to match\&. If the operator is
-!=, the token returns true only if there is no tag matched\&.
+!=, the token returns true only if there is no tag matched\&. Only the current tags, those assigned while processing this event, are matched, not the tags which remain from earlier events\&.
 .RE
 .PP
 \fITEST{\fR\fI\fIoctal mode mask\fR\fR\fI}\fR
@@ -305,11 +321,67 @@ Set a device property value\&. Property names with a leading
 are neither stored in the database nor exported to events or external tools (run by, for example, the
 \fIPROGRAM\fR
 match key)\&.
+.sp
+A property name may only contain ASCII letters, digits,
+_
+and
+\&., and a value must be valid UTF\-8 without control characters, like newlines or tabs\&. Other properties are refused: an assignment or an
+\fIIMPORT\fR
+logs a warning and the rest of the rule is still applied, and invalid properties set by built\-in commands or received with the kernel event are ignored\&. Assigning an empty value, also as the result of substitutions, removes the property\&.
+.sp
+The properties that udev sets itself cannot be assigned:
+ACTION,
+SEQNUM,
+SYNTH_UUID,
+DEVPATH,
+DEVPATH_OLD,
+SUBSYSTEM,
+DEVTYPE,
+DRIVER,
+MODALIAS,
+DEVNAME,
+DEVMODE,
+DEVUID,
+DEVGID,
+MAJOR,
+MINOR,
+DISKSEQ,
+PARTN,
+IFINDEX,
+INTERFACE,
+INTERFACE_OLD,
+DEVLINKS,
+TAGS,
+CURRENT_TAGS,
+USEC_INITIALIZED,
+UDEV_DATABASE_VERSION, and names starting with
+SYNTH_ARG_\&. A rule line assigning one of them is invalid, and is ignored as a whole\&.
 .RE
 .PP
 \fITAG\fR
 .RS 4
 Attach a tag to a device\&. This is used to filter events for users of libudev\*(Aqs monitor functionality, or to enumerate a group of tagged devices\&. The implementation can only work efficiently if only a few tags are attached to a device\&. It is only meant to be used in contexts with specific device filter requirements, and not as a general\-purpose flag\&. Excessive use might result in inefficient event handling\&.
+.sp
+Tags are "sticky": a tag attached by one event stays attached to the device, in the
+\fITAGS\fR
+property and in the index of tagged devices, until the device is removed, so that programs filtering events by tag also see the events of the device after the tag is no longer assigned\&. The tags assigned while processing the most recent event are the current tags, in the
+\fICURRENT_TAGS\fR
+property\&.
+.sp
+A tag name may only contain ASCII letters, digits,
+\-
+and
+_; other names are ignored with an error\&.
++=
+attaches the tag\&.
+\-=
+removes it from the current tags only\&.
+=
+and
+:=
+first clear the current tags, and drop the tags attached earlier while processing this event, and then attach the tag;
+\fITAG\fR=""
+only clears them\&.
 .RE
 .PP
 \fIRUN{\fR\fI\fItype\fR\fR\fI}\fR
@@ -549,7 +621,8 @@ If the attribute is a symlink, the last element of the symlink target is returne
 .PP
 \fB$env{\fR\fB\fIkey\fR\fR\fB}\fR, \fB%E{\fR\fB\fIkey\fR\fR\fB}\fR
 .RS 4
-A device property value\&.
+A device property value\&. When the device does not have the property, the value of the global property set with
+\fBudevadm control \-\-property\fR, if there is one\&.
 .RE
 .PP
 \fB$major\fR, \fB%M\fR
