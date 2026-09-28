@@ -669,8 +669,13 @@ static int link_update(struct udev_device *dev, const char *slink, bool add) {
 
         if (add && !taken_over) {
                 r = node_get_current(udev_device_get_udev(dev), slink, dirfd, &current_id, &current_prio);
+                if (r == -ENOMEM)
+                        return log_oom();
                 if (r < 0 && !ERRNO_IS_DEVICE_ABSENT_OR_EMPTY(r))
-                        return log_debug_errno(r, "Failed to get the current device node priority for '%s': %m", slink);
+                        /* E.g. the devlink points outside of /dev/ or to something that is not a device
+                         * node, or the entry of its owner cannot be read. Then the devlink is repaired
+                         * by searching the device with the highest priority below. */
+                        log_debug_errno(r, "Failed to get the current device node priority for '%s', ignoring: %m", slink);
         }
 
         r = stack_directory_update(dev, dirfd, add);
