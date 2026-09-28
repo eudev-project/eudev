@@ -40,7 +40,7 @@ static void help(void) {
         printf("%s settle OPTIONS\n\n"
                "Wait for pending udev events.\n\n"
                "  -h --help                 Show this help\n"
-               "     --version              Show package version\n"
+               "  -V --version              Show package version\n"
                "  -t --timeout=SECONDS      Maximum time to wait for events\n"
                "  -E --exit-if-exists=FILE  Stop waiting if file exists\n"
                , program_invocation_short_name);
@@ -65,7 +65,7 @@ static int adm_settle(struct udev *udev, int argc, char *argv[]) {
         struct udev_queue *queue;
         int rc = EXIT_FAILURE;
 
-        while ((c = getopt_long(argc, argv, "t:E:hs:e:q", options, NULL)) >= 0) {
+        while ((c = getopt_long(argc, argv, "t:E:hs:e:qV", options, NULL)) >= 0) {
                 switch (c) {
 
                 case 't': {

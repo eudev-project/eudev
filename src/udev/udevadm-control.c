@@ -32,7 +32,7 @@ static void print_help(void) {
         printf("%s control COMMAND\n\n"
                "Control the udev daemon.\n\n"
                "  -h --help                Show this help\n"
-               "     --version             Show package version\n"
+               "  -V --version             Show package version\n"
                "  -e --exit                Instruct the daemon to cleanup and exit\n"
                "  -l --log-level=LEVEL     Set the udev log level for the daemon\n"
                "  -s --stop-exec-queue     Do not execute events, queue only\n"
@@ -81,7 +81,7 @@ static int adm_control(struct udev *udev, int argc, char *argv[]) {
         if (uctrl == NULL)
                 return 2;
 
-        while ((c = getopt_long(argc, argv, "el:sSRp:m:h", options, NULL)) >= 0)
+        while ((c = getopt_long(argc, argv, "el:sSRp:m:hV", options, NULL)) >= 0)
                 switch (c) {
                 case 'e':
                         if (udev_ctrl_send_exit(uctrl, timeout) < 0)

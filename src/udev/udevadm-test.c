@@ -44,7 +44,7 @@ static void help(void) {
         printf("%s test OPTIONS <syspath>\n\n"
                "Test an event run.\n"
                "  -h --help                            Show this help\n"
-               "     --version                         Show package version\n"
+               "  -V --version                         Show package version\n"
                "  -a --action=ACTION                   Set action string\n"
                "  -N --resolve-names=early|late|never  When to resolve names\n"
                "     --json=pretty|short|off           Generate JSON output\n"
@@ -78,7 +78,7 @@ static int adm_test(struct udev *udev, int argc, char *argv[]) {
 
         log_debug("version %s", VERSION);
 
-        while((c = getopt_long(argc, argv, "a:N:h", options, NULL)) >= 0)
+        while((c = getopt_long(argc, argv, "a:N:hV", options, NULL)) >= 0)
                 switch (c) {
                 case 'a':
                         action = optarg;

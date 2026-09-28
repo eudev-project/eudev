@@ -67,7 +67,7 @@ static void help(void) {
         printf("%s monitor [--property] [--kernel] [--udev] [--help]\n\n"
                "Listen to kernel and udev events.\n\n"
                "  -h --help                                Show this help\n"
-               "     --version                             Show package version\n"
+               "  -V --version                             Show package version\n"
                "  -p --property                            Print the event properties\n"
                "  -k --kernel                              Print kernel uevents\n"
                "  -u --udev                                Print udev events\n"
@@ -106,7 +106,7 @@ static int adm_monitor(struct udev *udev, int argc, char *argv[]) {
         udev_list_init(udev, &subsystem_match_list, true);
         udev_list_init(udev, &tag_match_list, true);
 
-        while((c = getopt_long(argc, argv, "pekus:t:h", options, NULL)) >= 0)
+        while((c = getopt_long(argc, argv, "pekus:t:hV", options, NULL)) >= 0)
                 switch (c) {
                 case 'p':
                 case 'e':

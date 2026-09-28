@@ -37,7 +37,7 @@ static void help(struct udev *udev) {
         printf("%s builtin [--help] COMMAND SYSPATH\n\n"
                "Test a built-in command.\n\n"
                "  -h --help     Print this message\n"
-               "     --version  Print version of the program\n\n"
+               "  -V --version  Print version of the program\n\n"
                "Commands:\n"
                , program_invocation_short_name);
 
@@ -57,7 +57,7 @@ static int adm_builtin(struct udev *udev, int argc, char *argv[]) {
         enum udev_builtin_cmd cmd;
         int rc = EXIT_SUCCESS, c;
 
-        while ((c = getopt_long(argc, argv, "h", options, NULL)) >= 0)
+        while ((c = getopt_long(argc, argv, "hV", options, NULL)) >= 0)
                 switch (c) {
                 case 'h':
                         help(udev);

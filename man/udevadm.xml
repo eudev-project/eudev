@@ -257,6 +257,7 @@
           </listitem>
         </varlistentry>
         <varlistentry>
+          <term><option>-V</option></term>
           <term><option>--version</option></term>
           <listitem>
             <para>Print version.</para>
@@ -558,6 +559,13 @@
           </listitem>
         </varlistentry>
         <varlistentry>
+          <term><option>-V</option></term>
+          <term><option>--version</option></term>
+          <listitem>
+            <para>Print version.</para>
+          </listitem>
+        </varlistentry>
+        <varlistentry>
           <term><option>-h</option></term>
           <term><option>--help</option></term>
           <listitem>
@@ -592,6 +600,13 @@
           <term><option>--exit-if-exists=<replaceable>FILE</replaceable></option></term>
           <listitem>
             <para>Stop waiting if file exists.</para>
+          </listitem>
+        </varlistentry>
+        <varlistentry>
+          <term><option>-V</option></term>
+          <term><option>--version</option></term>
+          <listitem>
+            <para>Print version.</para>
           </listitem>
         </varlistentry>
         <varlistentry>
@@ -682,6 +697,13 @@
           </listitem>
         </varlistentry>
         <varlistentry>
+          <term><option>-V</option></term>
+          <term><option>--version</option></term>
+          <listitem>
+            <para>Print version.</para>
+          </listitem>
+        </varlistentry>
+        <varlistentry>
           <term><option>-h</option></term>
           <term><option>--help</option></term>
           <listitem>
@@ -732,6 +754,13 @@
           <term><option>--tag-match=<replaceable>string</replaceable></option></term>
           <listitem>
             <para>Filter events by property. Only udev events with a given tag attached will pass.</para>
+          </listitem>
+        </varlistentry>
+        <varlistentry>
+          <term><option>-V</option></term>
+          <term><option>--version</option></term>
+          <listitem>
+            <para>Print version.</para>
           </listitem>
         </varlistentry>
         <varlistentry>
@@ -871,6 +900,13 @@
           </listitem>
         </varlistentry>
         <varlistentry>
+          <term><option>-V</option></term>
+          <term><option>--version</option></term>
+          <listitem>
+            <para>Print version.</para>
+          </listitem>
+        </varlistentry>
+        <varlistentry>
           <term><option>-h</option></term>
           <term><option>--help</option></term>
           <listitem>
@@ -893,6 +929,13 @@
       built-in does not change key mappings, and the <command>btrfs</command>
       built-in only checks its arguments.</para>
       <variablelist>
+        <varlistentry>
+          <term><option>-V</option></term>
+          <term><option>--version</option></term>
+          <listitem>
+            <para>Print version.</para>
+          </listitem>
+        </varlistentry>
         <varlistentry>
           <term><option>-h</option></term>
           <term><option>--help</option></term>

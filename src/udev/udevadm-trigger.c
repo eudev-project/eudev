@@ -520,7 +520,7 @@ static void help(void) {
         printf("%s trigger OPTIONS\n\n"
                "Request events from the kernel.\n\n"
                "  -h --help                         Show this help\n"
-               "     --version                      Show package version\n"
+               "  -V --version                      Show package version\n"
                "  -v --verbose                      Print the list of devices while running\n"
                "  -n --dry-run                      Do not actually trigger the events\n"
                "  -q --quiet                        Suppress error logging in triggering events\n"
@@ -608,7 +608,7 @@ static int adm_trigger(struct udev *udev, int argc, char *argv[]) {
         if (udev_enumerate == NULL)
                 return 1;
 
-        while ((c = getopt_long(argc, argv, "vnqt:c:s:S:a:A:p:g:y:b:wh", options, NULL)) >= 0) {
+        while ((c = getopt_long(argc, argv, "vnqt:c:s:S:a:A:p:g:y:b:whV", options, NULL)) >= 0) {
                 const char *key;
                 const char *val;
                 char buf[UTIL_PATH_SIZE];
