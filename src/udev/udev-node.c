@@ -162,9 +162,16 @@ static int stack_directory_read_one(struct udev *udev, int dirfd, const char *id
 
                 /* Old format. The devnode and priority must be obtained from uevent and udev database. */
 
+                errno = 0;
                 dev = udev_device_new_from_device_id(udev, id);
-                if (!dev)
-                        return errno > 0 ? -errno : -ENODEV;
+                if (!dev) {
+                        if (errno <= 0)
+                                return -EINVAL; /* not a device ID */
+
+                        /* Like systemd's sd_device_new_from_device_id(), which says -ENODEV when the
+                         * device does not exist anymore, which the callers ignore quietly. */
+                        return ERRNO_IS_DEVICE_ABSENT(errno) ? -ENODEV : -errno;
+                }
 
                 tmp_prio = udev_device_get_devlink_priority(dev);
 
