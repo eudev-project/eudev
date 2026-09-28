@@ -10,6 +10,7 @@ libudev_shared_la_SOURCES=\
 	dev-setup.c \
 	fileio.c \
 	hashmap.c \
+	json-writer.c \
 	label.c \
 	log.c \
 	mempool.c \
@@ -41,6 +42,7 @@ noinst_HEADERS = \
 	formats-util.h \
 	hashmap.h \
 	ioprio.h \
+	json-writer.h \
 	label.h \
 	list.h \
 	log.h \

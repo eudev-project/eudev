@@ -44,12 +44,15 @@ src/udev/keyboard-keys-from-name.h
 src/udev/keyboard-keys-to-name.h
 src/udev/keyboard-keys.txt
 
+test/test-json-writer
 test/test-libudev
 test/test-udev
 test/test
 
 test/rules-test.sh.log
 test/rules-test.sh.trs
+test/test-json-writer.log
+test/test-json-writer.trs
 test/test-suite.log
 test/udev-test.pl.log
 test/udev-test.pl.trs

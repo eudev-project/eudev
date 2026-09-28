@@ -12,6 +12,15 @@ noinst_PROGRAMS = \
 	test-libudev \
 	test-udev
 
+check_PROGRAMS = \
+	test-json-writer
+
+test_json_writer_SOURCES = \
+	test-json-writer.c
+
+test_json_writer_LDADD = \
+	$(top_builddir)/src/shared/libudev_shared.la
+
 test_libudev_SOURCES = \
 	test-libudev.c
 
@@ -43,6 +52,7 @@ test_udev_CPPFLAGS = \
 
 
 TESTS = \
+	test-json-writer \
 	udev-test.pl \
 	rules-test.sh
 
