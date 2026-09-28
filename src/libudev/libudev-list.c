@@ -300,7 +300,7 @@ _public_ struct udev_list_entry *udev_list_entry_get_by_name(struct udev_list_en
 {
         int i;
 
-        if (list_entry == NULL)
+        if (list_entry == NULL || name == NULL)
                 return NULL;
 
         if (!list_entry->list->unique)
