@@ -43,6 +43,10 @@ char **strv_uniq(char **l);
 char *strv_find(char * const *l, const char *name) _pure_;
 #define strv_contains(l, s) (!!strv_find((l), (s)))
 
+#define STRV_MAKE(...) ((char**) ((const char*[]) { __VA_ARGS__, NULL }))
+
+#define STR_IN_SET(x, ...) strv_contains(STRV_MAKE(__VA_ARGS__), x)
+
 char **strv_sort(char **l);
 
 int strv_split_and_extend(char ***l, const char *s, const char *separators, bool filter_duplicates);
