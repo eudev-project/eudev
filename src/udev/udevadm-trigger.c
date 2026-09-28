@@ -132,7 +132,7 @@ static int adm_trigger(struct udev *udev, int argc, char *argv[]) {
         if (udev_enumerate == NULL)
                 return 1;
 
-        while ((c = getopt_long(argc, argv, "vno:t:c:s:S:a:A:p:g:y:b:h", options, NULL)) >= 0) {
+        while ((c = getopt_long(argc, argv, "vnt:c:s:S:a:A:p:g:y:b:h", options, NULL)) >= 0) {
                 const char *key;
                 const char *val;
                 char buf[UTIL_PATH_SIZE];
