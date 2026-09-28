@@ -47,6 +47,7 @@ src/udev/keyboard-keys.txt
 test/test-json-writer
 test/test-libudev
 test/test-udev
+test/test-udev-devlink
 test/test
 
 test/rules-test.sh.log
@@ -56,6 +57,8 @@ test/test-json-writer.trs
 test/test-suite.log
 test/udev-test.pl.log
 test/udev-test.pl.trs
+test/udev-devlink-test.sh.log
+test/udev-devlink-test.sh.trs
 
 eudev-*.tar.gz
 eudev-*.tar.gz.asc

@@ -10,7 +10,8 @@ AM_CPPFLAGS = \
 
 noinst_PROGRAMS = \
 	test-libudev \
-	test-udev
+	test-udev \
+	test-udev-devlink
 
 check_PROGRAMS = \
 	test-json-writer
@@ -50,11 +51,20 @@ test_udev_CPPFLAGS = \
 	-I $(top_srcdir)/src/udev \
 	$(AM_CPPFLAGS)
 
+test_udev_devlink_SOURCES = \
+	test-udev-devlink.c
+
+test_udev_devlink_LDADD = \
+	$(test_udev_LDADD)
+
+test_udev_devlink_CPPFLAGS = \
+	$(test_udev_CPPFLAGS)
 
 TESTS = \
 	test-json-writer \
 	udev-test.pl \
-	rules-test.sh
+	rules-test.sh \
+	udev-devlink-test.sh
 
 check_DATA = \
 	test/sys
@@ -73,4 +83,5 @@ EXTRA_DIST = \
 	sys.tar.xz \
 	udev-test.pl \
 	rules-test.sh \
+	udev-devlink-test.sh \
 	rule-syntax-check.py
