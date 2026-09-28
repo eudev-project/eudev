@@ -24,14 +24,15 @@
 #include "libudev.h"
 #include "log.h"
 #include "macro.h"
+#include "main-func.h"
 #include "path-util.h"
 #include "udev-util.h"
 #include "udev.h"
 
 
-int main(int argc, char **argv) {
+static int run(int argc, char **argv) {
         _cleanup_(udev_device_unrefp) struct udev_device *device = NULL;
-        _cleanup_udev_unref_ struct udev *udev;
+        _cleanup_udev_unref_ struct udev *udev = NULL;
         _cleanup_free_ char *desc_path = NULL;
         _cleanup_close_ int fd = -1;
 
@@ -49,28 +50,33 @@ int main(int argc, char **argv) {
 
         udev = udev_new();
         if (udev == NULL)
-                return 1;
+                return log_oom();
 
         if (argc > 2)
-                return log_error_errno(/*SYNTHETIC_ERRNO*/(EINVAL), "Usage: %s [SYSFS_PATH]", program_invocation_short_name);
+                return log_error_errno(SYNTHETIC_ERRNO(EINVAL), "Usage: %s [SYSFS_PATH]", program_invocation_short_name);
 
+        /* libudev does not set errno on all failures */
+        errno = 0;
         if (argc == 1) {
                 device = udev_device_new_from_environment(udev);
                 if (device == NULL)
-                        return log_error_errno(errno, "Failed to get current device from environment: %m");
+                        return log_error_errno(errno > 0 ? errno : EINVAL,
+                                               "Failed to get current device from environment: %m");
         } else {
                 device = udev_device_new_from_syspath(udev, argv[1]);
                 if (device == NULL)
-                        return log_error_errno(errno, "Failed to get device from syspath: %m");
+                        return log_error_errno(errno > 0 ? errno : ENODEV,
+                                               "Failed to get device from syspath: %m");
         }
 
+        errno = 0;
         hid_device = udev_device_get_parent(device);
         if (hid_device == NULL)
-                return log_error_errno(errno, "Failed to get parent HID device: %m");
+                return log_error_errno(errno > 0 ? errno : ENODEV, "Failed to get parent HID device: %m");
 
         sys_path = udev_device_get_syspath(hid_device);
         if (sys_path == NULL)
-                return log_error_errno(errno, "Failed to get syspath for HID device: %m");
+                return log_error_errno(SYNTHETIC_ERRNO(ENODEV), "Failed to get syspath for HID device.");
 
         desc_path = path_join(sys_path, "report_descriptor");
         if (desc_path == NULL)
@@ -86,12 +92,12 @@ int main(int argc, char **argv) {
                 return log_error_errno(errno,
                                               "Failed to read report descriptor at '%s': %m", desc_path);
         if (desc_len == 0)
-                return log_debug_errno(/*SYNTHETIC_ERRNO*/(EINVAL),
+                return log_debug_errno(SYNTHETIC_ERRNO(EINVAL),
                                               "Empty report descriptor at '%s'.", desc_path);
 
         r = is_fido_security_token_desc(desc, desc_len);
         if (r < 0)
-                return log_debug_errno(errno,
+                return log_debug_errno(r,
                                               "Failed to parse report descriptor at '%s'.", desc_path);
         if (r > 0) {
                 printf("ID_FIDO_TOKEN=1\n");
@@ -100,4 +106,6 @@ int main(int argc, char **argv) {
 
         return 0;
 }
+
+DEFINE_MAIN_FUNCTION(run);
 
