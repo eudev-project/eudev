@@ -341,10 +341,9 @@ toolong:
         return size - 1;
 }
 
-static int stack_directory_get_name(const char *slink, char **ret) {
-        _cleanup_free_ char *s = NULL;
+static int stack_directory_get_name(const char *slink, char **ret, char **ret_old) {
+        _cleanup_free_ char *s = NULL, *t = NULL, *old = NULL;
         char name_enc[NAME_MAX+1];
-        char *t;
         const char *name;
 
         assert(slink);
@@ -363,16 +362,83 @@ static int stack_directory_get_name(const char *slink, char **ret) {
         if (empty_or_root(name))
                 return -EINVAL;
 
-        /* The name of the stack directory is the escaped path below /dev including its leading
-         * slash, e.g. \x2fdisk\x2fby-id\x2f..., as eudev has always named it. */
-        udev_node_escape_path(strjoina("/", name), name_enc, sizeof(name_enc));
+        udev_node_escape_path(name, name_enc, sizeof(name_enc));
 
         t = strdup(name_enc);
         if (!t)
                 return -ENOMEM;
 
-        *ret = t;
+        if (ret_old) {
+                char old_enc[UTIL_PATH_SIZE];
+
+                /* eudev 3.2.15 and older named the stack directory after the path below /dev including
+                 * its leading slash, e.g. \x2fdisk\x2fby-id\x2f..., and did not hash long names, so it
+                 * failed for names longer than NAME_MAX. */
+                if (udev_node_escape_path(strjoina("/", name), old_enc, sizeof(old_enc)) <= NAME_MAX) {
+                        old = strdup(old_enc);
+                        if (!old)
+                                return -ENOMEM;
+                }
+
+                *ret_old = TAKE_PTR(old);
+        }
+
+        *ret = TAKE_PTR(t);
         return 0;
+}
+
+/* Moves the entries of the stack directory that eudev 3.2.15 and older used for the devlink, see
+ * stack_directory_get_name(), into the current one, and removes the old directory. Must be called with
+ * the lock of the devlink held. An older eudev may still be running until udevd is restarted after an
+ * upgrade; the entries it adds to its directory later are moved on the next update of the devlink. An
+ * entry that exists in both directories was written by this version, which is kept. Returns the number
+ * of entries found in the old directory. */
+static int stack_directory_migrate_old(int fd, const char *old_name) {
+        _cleanup_closedir_ DIR *dir = NULL;
+        _cleanup_free_ char *old_path = NULL;
+        struct dirent *de;
+        int n = 0;
+
+        assert(fd >= 0);
+
+        if (!old_name)
+                return 0;
+
+        old_path = path_join(UDEV_ROOT_RUN "/udev/links/", old_name);
+        if (!old_path)
+                return -ENOMEM;
+
+        dir = xopendirat(AT_FDCWD, old_path, O_NOFOLLOW);
+        if (!dir)
+                return errno == ENOENT ? 0 : -errno;
+
+        for (de = readdir(dir); de; de = readdir(dir)) {
+                struct stat st;
+
+                if (hidden_file(de->d_name))
+                        continue;
+
+                n++;
+
+                if (fstatat(fd, de->d_name, &st, AT_SYMLINK_NOFOLLOW) >= 0) {
+                        if (unlinkat(dirfd(dir), de->d_name, 0) < 0 && errno != ENOENT)
+                                log_debug_errno(errno, "Failed to remove '%s/%s', ignoring: %m", old_path, de->d_name);
+                        continue;
+                }
+
+                if (renameat(dirfd(dir), de->d_name, fd, de->d_name) < 0) {
+                        if (errno != ENOENT)
+                                log_debug_errno(errno, "Failed to move '%s/%s', ignoring: %m", old_path, de->d_name);
+                        continue;
+                }
+
+                log_debug("Moved '%s' from the old stack directory '%s'.", de->d_name, old_path);
+        }
+
+        if (rmdir(old_path) < 0 && !IN_SET(errno, ENOENT, ENOTEMPTY))
+                log_debug_errno(errno, "Failed to remove the old stack directory '%s', ignoring: %m", old_path);
+
+        return n;
 }
 
 static int stack_directory_open_and_lock(
@@ -387,7 +453,7 @@ static int stack_directory_open_and_lock(
         };
         _cleanup_(release_lock_file) LockFile lockfile = LOCK_FILE_INIT;
         _cleanup_close_ int dirfd = -1;
-        _cleanup_free_ char *name = NULL, *dirpath = NULL, *lockname = NULL;
+        _cleanup_free_ char *name = NULL, *old_name = NULL, *dirpath = NULL, *lockname = NULL;
         int r;
 
         assert(slink);
@@ -395,7 +461,7 @@ static int stack_directory_open_and_lock(
         assert(ret_dirfd);
         assert(ret_lockfile);
 
-        r = stack_directory_get_name(slink, &name);
+        r = stack_directory_get_name(slink, &name, &old_name);
         if (r < 0)
                 return log_debug_errno(r, "Failed to build stack directory name for '%s': %m", slink);
 
@@ -424,11 +490,16 @@ static int stack_directory_open_and_lock(
         if (dirfd < 0)
                 return log_debug_errno(dirfd, "Failed to open stack directory '%s': %m", dirpath);
 
+        /* 3. Take over the entries of the stack directory of an older eudev, if any. */
+        r = stack_directory_migrate_old(dirfd, old_name);
+        if (r < 0)
+                log_debug_errno(r, "Failed to take over the old stack directory of '%s', ignoring: %m", slink);
+
         *ret_dirpath = TAKE_PTR(dirpath);
         *ret_dirfd = TAKE_FD(dirfd);
         *ret_lockfile = lockfile;
         lockfile = LOCK_FILE_INIT;
-        return 0;
+        return r != 0; /* 1 if an older eudev handled the devlink since the last update */
 }
 
 /* Like systemd's sd_device_new_from_devname(): finds the device whose device node the specified
@@ -519,6 +590,7 @@ static int link_update(struct udev_device *dev, const char *slink, bool add) {
         _cleanup_close_ int dirfd = -1; /* #1 */
         _cleanup_free_ char *current_id = NULL;
         int r, current_prio;
+        bool taken_over;
 
         assert(dev);
         assert(slink);
@@ -526,8 +598,9 @@ static int link_update(struct udev_device *dev, const char *slink, bool add) {
         r = stack_directory_open_and_lock(slink, &dirpath, &dirfd, &lockfile);
         if (r < 0)
                 return r;
+        taken_over = r > 0;
 
-        if (add) {
+        if (add && !taken_over) {
                 r = node_get_current(udev_device_get_udev(dev), slink, dirfd, &current_id, &current_prio);
                 if (r < 0 && !ERRNO_IS_DEVICE_ABSENT_OR_EMPTY(r))
                         return log_debug_errno(r, "Failed to get the current device node priority for '%s': %m", slink);
@@ -536,6 +609,13 @@ static int link_update(struct udev_device *dev, const char *slink, bool add) {
         r = stack_directory_update(dev, dirfd, add);
         if (r < 0)
                 return log_debug_errno(r, "Failed to update stack directory for '%s': %m", slink);
+
+        if (taken_over)
+                /* An older eudev, which is still running during an upgrade, handled the devlink since its
+                 * last update. It chose the device with the highest priority among its own entries only,
+                 * hence the current devlink cannot be trusted. Let's search the device that has the
+                 * highest priority among all entries, and update the devlink. */
+                return link_search_and_update(dev, slink, dirfd, add);
 
         if (!add) {
                 _cleanup_free_ char *target = NULL;
