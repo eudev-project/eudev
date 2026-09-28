@@ -858,7 +858,8 @@ static void print_properties(const Context *c) {
             drive_has_feature(c, FEATURE_DVD_R_DL_JR))
                 printf("ID_CDROM_DVD_R_DL=1\n");
 
-        if (drive_has_feature(c, FEATURE_DVD_R_DDR))
+        /* eudev: ID_CDROM_DVD_R=1 was already printed above if the drive also has the DVD-R profile */
+        if (drive_has_feature(c, FEATURE_DVD_R_DDR) && !drive_has_feature(c, FEATURE_DVD_R))
                 printf("ID_CDROM_DVD_R=1\n");
 
         if (drive_has_feature(c, FEATURE_BD_R_SRM) ||
