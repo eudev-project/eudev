@@ -35,6 +35,10 @@ typedef enum {
         READ_FULL_FILE_FAIL_WHEN_LARGER    = 1 << 5, /* fail loading if file is larger than specified size */
 } ReadFullFileFlags;
 
+#define LONG_LINE_MAX (1U*1024U*1024U)
+
+int read_line(FILE *f, size_t limit, char **ret);
+
 int write_string_stream(FILE *f, const char *line);
 int write_string_file(const char *fn, const char *line);
 int read_one_line_file(const char *fn, char **line);

@@ -57,6 +57,77 @@ int write_string_file(const char *fn, const char *line) {
 
         return write_string_stream(f, line);
 }
+/* Like read_line() of systemd: a bounded version of getline(). "\n", "\r", "\0" and combinations of
+ * different ones, like "\r\n", end a line, and are not included in the returned string. Returns the
+ * number of bytes read, including the end of line, 0 at the end of the file, and -ENOBUFS when the
+ * line is longer than limit characters. When ret is NULL, the line is skipped. */
+int read_line(FILE *f, size_t limit, char **ret) {
+        _cleanup_free_ char *buffer = NULL;
+        size_t n = 0, allocated = 0, count = 0;
+        unsigned previous_eol = 0;
+
+        assert(f);
+
+        for (;;) {
+                unsigned eol;
+                int c;
+
+                if (n >= limit)
+                        return -ENOBUFS;
+
+                if (count >= INT_MAX) /* the counter could not be returned as "int" anymore */
+                        return -ENOBUFS;
+
+                errno = 0;
+                c = fgetc(f);
+                if (c == EOF) {
+                        if (ferror(f))
+                                return errno > 0 ? -errno : -EIO;
+                        break;
+                }
+
+                eol = c == '\n' ? 1 : c == '\r' ? 2 : c == '\0' ? 4 : 0;
+
+                /* After a NUL, before the next line, or at a repeated end of line marker, the line is
+                 * complete; put the character back. */
+                if ((previous_eol & 4) ||
+                    (eol == 0 && previous_eol != 0) ||
+                    (eol != 0 && (previous_eol & eol) != 0)) {
+                        assert_se(ungetc(c, f) != EOF);
+                        break;
+                }
+
+                count++;
+
+                if (eol != 0) {
+                        previous_eol |= eol;
+                        continue;
+                }
+
+                if (ret) {
+                        if (!GREEDY_REALLOC(buffer, allocated, n + 2))
+                                return -ENOMEM;
+
+                        buffer[n] = (char) c;
+                }
+
+                n++;
+        }
+
+        if (ret) {
+                if (!buffer) {
+                        buffer = malloc(1);
+                        if (!buffer)
+                                return -ENOMEM;
+                }
+                buffer[n] = '\0';
+
+                *ret = TAKE_PTR(buffer);
+        }
+
+        return (int) count;
+}
+
 int read_one_line_file(const char *fn, char **line) {
         _cleanup_fclose_ FILE *f = NULL;
         char t[LINE_MAX], *c;
