@@ -384,6 +384,19 @@
             characters are <literal>0-9A-Za-z#+-.:=@_/</literal>, valid UTF-8 character
             sequences, and <literal>\x00</literal> hex encoding. All other
             characters are replaced by a <literal>_</literal> character.</para>
+            <para>The name is taken relative to <filename>/dev/</filename>, and may also
+            be given as an absolute path below <filename>/dev/</filename>. It is normalized:
+            redundant slashes, <literal>.</literal> components and trailing slashes are
+            removed, e.g. <literal>disk//by-foo/./bar/</literal> results in
+            <filename>/dev/disk/by-foo/bar</filename>. A name with a <literal>..</literal>
+            component or with a component longer than 255 bytes, a name with control
+            characters, which are only kept with
+            <varname>OPTIONS+="string_escape=none"</varname>, an absolute path outside of
+            <filename>/dev/</filename>, and a name that refers to <filename>/dev/</filename>
+            itself are refused with an error message. The symlinks recorded in the udev
+            database of a device are normalized and checked in the same way. A symlink is not
+            created, and a warning is logged, where a file or directory that is not a symlink
+            exists.</para>
             <para>Multiple symlinks may be specified by separating the names by the
             space character. In case multiple devices claim the same name, the link
             always points to the device with the highest link_priority. If the current

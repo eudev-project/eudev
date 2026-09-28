@@ -292,6 +292,21 @@ hex encoding\&. All other characters are replaced by a
 _
 character\&.
 .sp
+The name is taken relative to
+/dev/, and may also be given as an absolute path below
+/dev/\&. It is normalized: redundant slashes,
+\&.
+components and trailing slashes are removed, e\&.g\&.
+disk//by\-foo/\&./bar/
+results in
+/dev/disk/by\-foo/bar\&. A name with a
+\&.\&.
+component or with a component longer than 255 bytes, a name with control characters, which are only kept with
+\fIOPTIONS+="string_escape=none"\fR, an absolute path outside of
+/dev/, and a name that refers to
+/dev/
+itself are refused with an error message\&. The symlinks recorded in the udev database of a device are normalized and checked in the same way\&. A symlink is not created, and a warning is logged, where a file or directory that is not a symlink exists\&.
+.sp
 Multiple symlinks may be specified by separating the names by the space character\&. In case multiple devices claim the same name, the link always points to the device with the highest link_priority\&. If the current device goes away, the links are re\-evaluated and the device with the next highest link_priority becomes the owner of the link\&. If no link_priority is specified, the order of the devices (and which one of them owns the link) is undefined\&.
 .sp
 Symlink names must never conflict with the kernel\*(Aqs default device node names, as that would result in unpredictable behavior\&.
