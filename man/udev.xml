@@ -1160,9 +1160,12 @@ SUBSYSTEM=="net", OPTIONS="log_level=debug"</programlisting></para>
         <varlistentry>
           <term><varname>ID_NET_NAME_MAC=</varname><replaceable>prefix</replaceable><literal>x</literal><replaceable>AABBCCDDEEFF</replaceable></term>
           <listitem>
-            <para>The permanent MAC address of the device. It is not set for
-            an address of all zeros, unlike in systemd since version 250,
-            because the rules may use it as the name of the interface.</para>
+            <para>The permanent MAC address of the device. As in systemd since
+            version 250, it is also set for an address of all zeros, except in
+            the <literal>eudev</literal> scheme, but such a name, e.g.
+            <literal>enx000000000000</literal>, is not unique, and
+            <filename>80-net-name-slot.rules</filename> never renames an
+            interface to it.</para>
           </listitem>
         </varlistentry>
       </variablelist>

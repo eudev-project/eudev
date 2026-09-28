@@ -1354,13 +1354,6 @@ static int names_mac(struct udev_device *dev, const char *prefix, enum udev_even
         if (r < 0)
                 return log_device_debug_errno(dev, EOPNOTSUPP, "Not generating MAC name for device with MAC address '%s'.", s);
 
-        /* Skip empty MAC addresses. eudev: systemd generates e.g. enx000000000000 since v250, as a side
-         * effect of taking the address from the netlink information (eaba9bb3e6), and does not use MAC
-         * based names unless configured to. Keep skipping them, as 80-net-name-slot.rules uses
-         * ID_NET_NAME_MAC as the interface name when no other name is available. */
-        if (mac[0] == 0 && mac[1] == 0 && mac[2] == 0 && mac[3] == 0 && mac[4] == 0 && mac[5] == 0)
-                return log_device_debug_errno(dev, EINVAL, "Not generating MAC name for empty MAC address.");
-
         xsprintf(str, "%sx%02x%02x%02x%02x%02x%02x", prefix,
                  mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
         udev_builtin_add_property(dev, mode, "ID_NET_NAME_MAC", str);

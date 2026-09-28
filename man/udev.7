@@ -945,7 +945,12 @@ The location of the device: the PCI bus, slot and function numbers; the bus ID o
 .PP
 \fIID_NET_NAME_MAC=\fR\fIprefix\fRx\fIAABBCCDDEEFF\fR
 .RS 4
-The permanent MAC address of the device\&. It is not set for an address of all zeros, unlike in systemd since version 250, because the rules may use it as the name of the interface\&.
+The permanent MAC address of the device\&. As in systemd since version 250, it is also set for an address of all zeros, except in the
+eudev
+scheme, but such a name, e\&.g\&.
+enx000000000000, is not unique, and
+80\-net\-name\-slot\&.rules
+never renames an interface to it\&.
 .RE
 .PP
 The parts of the PCI based names are:
