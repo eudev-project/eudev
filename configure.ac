@@ -284,6 +284,28 @@ AC_ARG_ENABLE([systemd-hwdb],
 AM_CONDITIONAL([ENABLE_SYSTEMD_HWDB], [test "x$enable_systemd_hwdb" = xyes])
 
 # ------------------------------------------------------------------------------
+# shell completion of udevadm, installed like systemd's meson options do it
+# ------------------------------------------------------------------------------
+AC_ARG_WITH([bashcompletiondir],
+	AS_HELP_STRING([--with-bashcompletiondir=DIR],
+		[bash completion directory, "no" to not install the bash completion @<:@default: completionsdir of bash-completion.pc, or DATADIR/bash-completion/completions@:>@]),
+	[],
+	[PKG_CHECK_VAR([with_bashcompletiondir], [bash-completion], [completionsdir], [],
+		[with_bashcompletiondir='${datadir}/bash-completion/completions'])])
+AS_IF([test -z "$with_bashcompletiondir"],
+	[with_bashcompletiondir='${datadir}/bash-completion/completions'])
+AC_SUBST([bashcompletiondir], [$with_bashcompletiondir])
+AM_CONDITIONAL([ENABLE_BASH_COMPLETION], [test "x$with_bashcompletiondir" != xno])
+
+AC_ARG_WITH([zshcompletiondir],
+	AS_HELP_STRING([--with-zshcompletiondir=DIR],
+		[zsh completion directory, "no" to not install the zsh completion @<:@default: DATADIR/zsh/site-functions@:>@]),
+	[],
+	[with_zshcompletiondir='${datadir}/zsh/site-functions'])
+AC_SUBST([zshcompletiondir], [$with_zshcompletiondir])
+AM_CONDITIONAL([ENABLE_ZSH_COMPLETION], [test "x$with_zshcompletiondir" != xno])
+
+# ------------------------------------------------------------------------------
 # rule-generator - persistent network and optical device rule generator
 # ------------------------------------------------------------------------------
 AC_ARG_ENABLE([rule-generator],
@@ -373,6 +395,8 @@ AC_MSG_RESULT([
 	sharepkgconfigdir        ${datadir}/pkgconfig
 
 	systemd-hwdb:            ${enable_systemd_hwdb}
+	bashcompletiondir:       ${with_bashcompletiondir}
+	zshcompletiondir:        ${with_zshcompletiondir}
 ])
 
 # ------------------------------------------------------------------------------
