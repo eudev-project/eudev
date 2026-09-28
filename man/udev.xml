@@ -1104,8 +1104,9 @@ SUBSYSTEM=="net", OPTIONS="log_level=debug"</programlisting></para>
       first one of <varname>ID_NET_NAME_FROM_DATABASE</varname>,
       <varname>ID_NET_NAME_ONBOARD</varname>,
       <varname>ID_NET_NAME_SLOT</varname>, <varname>ID_NET_NAME_PATH</varname> and
-      <varname>ID_NET_NAME_MAC</varname> that is set and fits into the 15
-      characters of an interface name, unless an earlier rule assigned
+      <varname>ID_NET_NAME_MAC</varname> that is a valid interface name (see
+      <varname>NAME</varname>), e.g. not longer than 15 characters, as systemd
+      does, unless an earlier rule assigned
       <varname>NAME=</varname>. This is the order of the default
       <varname>NamePolicy=</varname> of systemd, which however does not use
       <varname>ID_NET_NAME_MAC</varname>. Like its <literal>keep</literal> and

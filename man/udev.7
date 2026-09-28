@@ -917,7 +917,8 @@ renames the interface to the first one of
 \fIID_NET_NAME_PATH\fR
 and
 \fIID_NET_NAME_MAC\fR
-that is set and fits into the 15 characters of an interface name, unless an earlier rule assigned
+that is a valid interface name (see
+\fINAME\fR), e\&.g\&. not longer than 15 characters, as systemd does, unless an earlier rule assigned
 \fINAME=\fR\&. This is the order of the default
 \fINamePolicy=\fR
 of systemd, which however does not use

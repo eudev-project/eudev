@@ -11,10 +11,13 @@ ENV{net.ifnames}=="0", GOTO="net_name_slot_end"
 # (name_assign_type NET_NAME_USER or NET_NAME_RENAMED), or predictably by the kernel (NET_NAME_PREDICTABLE)
 ATTR{name_assign_type}=="2|3|4", GOTO="net_name_slot_end"
 
-NAME=="", ENV{ID_NET_NAME_FROM_DATABASE}!="", ENV{ID_NET_NAME_FROM_DATABASE}!="????????????????*", NAME="$env{ID_NET_NAME_FROM_DATABASE}"
-NAME=="", ENV{ID_NET_NAME_ONBOARD}!="", ENV{ID_NET_NAME_ONBOARD}!="????????????????*", NAME="$env{ID_NET_NAME_ONBOARD}"
-NAME=="", ENV{ID_NET_NAME_SLOT}!="", ENV{ID_NET_NAME_SLOT}!="????????????????*", NAME="$env{ID_NET_NAME_SLOT}"
-NAME=="", ENV{ID_NET_NAME_PATH}!="", ENV{ID_NET_NAME_PATH}!="????????????????*", NAME="$env{ID_NET_NAME_PATH}"
-NAME=="", ENV{ID_NET_NAME_MAC}!="", ENV{ID_NET_NAME_MAC}!="??x000000000000", NAME="$env{ID_NET_NAME_MAC}"
+# rename the interface to the first valid interface name of these, like ifname_valid() of systemd:
+# 1 to 15 characters, not only digits, not ".", "..", "all" or "default", and only printable ASCII
+# characters other than space, ':', '/' and '%'
+NAME=="", ENV{ID_NET_NAME_FROM_DATABASE}=="*[!0-9]*", ENV{ID_NET_NAME_FROM_DATABASE}!="????????????????*|.|..|all|default|*[!!-~]*|*[:/%]*", NAME="$env{ID_NET_NAME_FROM_DATABASE}"
+NAME=="", ENV{ID_NET_NAME_ONBOARD}=="*[!0-9]*", ENV{ID_NET_NAME_ONBOARD}!="????????????????*|.|..|all|default|*[!!-~]*|*[:/%]*", NAME="$env{ID_NET_NAME_ONBOARD}"
+NAME=="", ENV{ID_NET_NAME_SLOT}=="*[!0-9]*", ENV{ID_NET_NAME_SLOT}!="????????????????*|.|..|all|default|*[!!-~]*|*[:/%]*", NAME="$env{ID_NET_NAME_SLOT}"
+NAME=="", ENV{ID_NET_NAME_PATH}=="*[!0-9]*", ENV{ID_NET_NAME_PATH}!="????????????????*|.|..|all|default|*[!!-~]*|*[:/%]*", NAME="$env{ID_NET_NAME_PATH}"
+NAME=="", ENV{ID_NET_NAME_MAC}=="*[!0-9]*", ENV{ID_NET_NAME_MAC}!="????????????????*|.|..|all|default|*[!!-~]*|*[:/%]*", ENV{ID_NET_NAME_MAC}!="??x000000000000", NAME="$env{ID_NET_NAME_MAC}"
 
 LABEL="net_name_slot_end"
