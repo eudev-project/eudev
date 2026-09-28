@@ -53,6 +53,7 @@
 #include "libudev.h"
 #include "libudev-private.h"
 #include "fileio.h"
+#include "main-func.h"
 #include "udev-util.h"
 #include "unaligned.h"
 #include "utf8.h"
@@ -682,12 +683,12 @@ static int parse_argv(int argc, char * const *argv) {
         return 1;
 }
 
-int main(int argc, char* const* argv) {
-        _cleanup_udev_unref_ struct udev *udev;
+static int run(int argc, char* const* argv) {
+        _cleanup_udev_unref_ struct udev *udev = NULL;
         _cleanup_free_ uint8_t *buf = NULL;
         bool no_file_offset = false;
         size_t size;
-        int r = 1;
+        int r;
 
         log_set_target(LOG_TARGET_AUTO);
         //udev_parse_config();
@@ -696,7 +697,7 @@ int main(int argc, char* const* argv) {
 
         udev = udev_new();
         if (udev == NULL)
-                goto exit;
+                return log_oom();
 
         /*
         r = get_file_options(udev, NULL, NULL, &newargc, &newargv);
@@ -740,7 +741,7 @@ int main(int argc, char* const* argv) {
                 return legacy_decode(buf, arg_source_file, no_file_offset);
 
         return -EINVAL;
-exit:
-        return r;
 }
+
+DEFINE_MAIN_FUNCTION(run);
 

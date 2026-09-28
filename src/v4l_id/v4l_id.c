@@ -59,7 +59,7 @@ int main(int argc, char *argv[]) {
                 case 'v':
                         return version();
                 case '?':
-                        return -EINVAL;
+                        return EXIT_FAILURE;
 
                 default:
                         assert_not_reached("Unhandled option");
