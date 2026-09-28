@@ -423,7 +423,7 @@ As
 \fIprogram\fR, but use one of the built\-in programs rather than an external one\&.
 .RE
 .sp
-The program name and following arguments are separated by spaces\&. Single quotes can be used to specify arguments with spaces\&.
+The program name and following arguments are separated by spaces\&. Single quotes can be used to specify arguments with spaces\&. The name of a builtin and its arguments are separated by any whitespace; single and double quotes, also in the middle of an argument, group characters including whitespace and are removed\&.
 .sp
 This can only be used for very short\-running foreground tasks\&. Running an event process for a long period of time may block all further events for this or a dependent device\&.
 .sp
@@ -724,6 +724,165 @@ The
 $
 character itself\&.
 .RE
+.SH "BUILT\-IN COMMANDS"
+.PP
+Built\-in commands are run with
+\fIIMPORT{builtin}\fR
+and
+\fIRUN{builtin}\fR\&.
+\fBudevadm test\-builtin \-\-help\fR
+lists the available builtins, and
+\fBudevadm test\-builtin\fR
+runs one on a device and prints the properties it sets\&. The builtins and properties described here are compatible with systemd\-udevd\&.
+.SS "blkid"
+.PP
+\fBblkid\fR
+[\fB\-\-offset=\fR\fIbytes\fR] [\fB\-\-hint=\fR\fIname\fR=\fIvalue\fR] [\fB\-\-noraid\fR] probes a block device for file systems and partition tables with libblkid and sets
+\fIID_FS_*\fR
+and
+\fIID_PART_*\fR
+properties\&. Among them:
+.PP
+\fIID_FS_VOLUME_ID=\fR, \fIID_FS_LOGICAL_VOLUME_ID=\fR, \fIID_FS_VOLUME_SET_ID=\fR, \fIID_FS_DATA_PREPARER_ID=\fR
+.RS 4
+The volume, logical volume, volume set and data preparer identifiers, which libblkid 2\&.37 and newer reports for e\&.g\&. ISO 9660 and UDF file systems\&. Like in
+\fIID_FS_LABEL_ENC=\fR, characters that are not safe are encoded as
+\ex\fInn\fR\&.
+.RE
+.PP
+\fIID_PART_GPT_AUTO_ROOT_DISK=1\fR, \fIID_PART_GPT_AUTO_ROOT_UUID=\fR
+.RS 4
+Set on the whole disk with a GPT partition table that the root file system is expected on, together with the partition UUID of its root partition, if it has one\&. In the initrd, this is the disk that carries the EFI System Partition or the XBOOTLDR partition whose partition UUID the boot loader reports in the
+\fILoaderDevicePartUUID\-4a67b082\-0a4c\-41cf\-b6c7\-440b29bb8c4f\fR
+EFI variable (systemd\-boot and GRUB with the
+bli
+module set it), or, without that variable, a loop device whose backing file name is
+rootdisk
+or
+rootdisk\&.raw\&. The root partition is the partition with the root partition type of the native architecture (e\&.g\&.
+4f68bce3\-e8cd\-4db1\-96e7\-fbcaf984b709
+on x86\-64) that has the newest version in its label; partitions with the
+no\-auto
+flag (bit 63) and partitions labelled
+_empty
+are skipped\&. After the initrd, it is the disk that the root file system is on (also through dm\-crypt, dm\-verity or a single\-device btrfs), and the partition that holds it, if it has the root partition type\&. The initrd is recognized by
+/etc/initrd\-release
+and a tmpfs or ramfs root file system\&. Only whole disks with partition scanning enabled are considered\&.
+.RE
+.PP
+\fIID_PART_GPT_AUTO_ROOT=1\fR
+.RS 4
+Set on the partition whose partition UUID matches
+\fIID_PART_GPT_AUTO_ROOT_UUID=\fR
+of its disk\&.
+90\-image\-dissect\&.rules
+creates the symlink
+/dev/gpt\-auto\-root
+for it, or
+/dev/gpt\-auto\-root\-luks
+if it is a LUKS volume\&. While a factory reset is in progress (\fIID_FACTORY_RESET=on\fR, see below), it gets
+/dev/gpt\-auto\-root\-ignore\-factory\-reset
+or
+/dev/gpt\-auto\-root\-luks\-ignore\-factory\-reset
+instead, and once the factory reset is complete, both\&. When the LUKS volume is unlocked as a device mapper device named
+root, that device gets
+/dev/gpt\-auto\-root, and also
+/dev/gpt\-auto\-root\-ignore\-factory\-reset
+while a factory reset is in progress or complete\&.
+.RE
+.SS "factory_reset"
+.PP
+\fBfactory_reset status\fR
+sets
+\fIID_FACTORY_RESET=\fR
+to the factory reset state, as systemd determines it, so that rules can e\&.g\&. ignore devices while a factory reset is in progress:
+.PP
+unsupported
+.RS 4
+The environment variable
+\fI$SYSTEMD_FACTORY_RESET_SUPPORTED\fR
+of the udev daemon is set to false\&.
+.RE
+.PP
+complete
+.RS 4
+/run/systemd/factory\-reset\-complete
+exists\&.
+.RE
+.PP
+on, off
+.RS 4
+The kernel command line option
+\fIsystemd\&.factory_reset=\fR
+(or
+\fIsystemd\&.factory\-reset=\fR) is set to true or false; the option without a value means true\&. If it is not set, the state is
+on
+if the
+\fIFactoryResetRequest\-8cf2644b\-4b0b\-428f\-9387\-6d876050dc67\fR
+EFI variable requests a factory reset for this boot: it holds a JSON object whose
+\fIosReleaseId\fR
+and
+\fIosReleaseImageId\fR
+members match
+\fIID=\fR
+and
+\fIIMAGE_ID=\fR
+of
+/etc/os\-release
+(or
+/usr/lib/os\-release, or the file that
+\fI$SYSTEMD_OS_RELEASE\fR
+names), and whose
+\fIbootId\fR
+member differs from the current boot ID (/proc/sys/kernel/random/boot_id)\&.
+.RE
+.PP
+pending
+.RS 4
+The EFI variable requests a factory reset for the next boot: its
+\fIbootId\fR
+is the current boot ID\&.
+.RE
+.PP
+unspecified
+.RS 4
+None of the above: the system was not booted with EFI, or the EFI variable is not set, not valid, or meant for another operating system\&.
+.RE
+.PP
+The checks are done in the order listed\&. If the state cannot be determined, e\&.g\&. because
+\fIsystemd\&.factory_reset=\fR
+has a value that is not a boolean or os\-release cannot be read, the property is not set\&.
+.SS "tpm2_id"
+.PP
+\fBtpm2_id identify\fR, which
+60\-tpm2\-id\&.rules
+runs on
+/dev/tpmrm\fIN\fR, identifies TPM 2\&.0 chips\&. Like systemd, it starts up the TPM if the firmware has not done so, and only identifies TPMs that support AES\-128 in CFB mode, which systemd requires for session encryption; other TPMs are skipped without an error\&. It talks to the TPM through the kernel\*(Aqs device node and needs no TPM libraries\&. It sets:
+.PP
+\fIID_TPM2_MANUFACTURER=\fR, \fIID_TPM2_VENDOR_STRING=\fR
+.RS 4
+The manufacturer code and the vendor string that the TPM reports, with whitespace, control characters and non\-ASCII bytes replaced by
+_\&.
+.RE
+.PP
+\fIID_TPM2_MODALIAS=\fR
+.RS 4
+A string that describes the TPM for hwdb lookups\&. It lists the family indicator (fi), level (lv), revision (rv), year (sy) and day of year (sd) of the specification, the manufacturer (mf), the vendor string (vs), the vendor TPM type in hexadecimal (ty) and the firmware version (fw), each after its two letter code and followed by a colon, e\&.g\&.
+fi2\&.0:lv0:rv1\&.16:sy2019:sd346:mfSTM:vsST33HTPHAHD8:ty1:fw73\&.4\&.65536:\&.
+60\-tpm2\-id\&.rules
+looks up
+tpm2:
+followed by it in the hwdb;
+60\-tpm2\&.hwdb
+sets
+\fITPM2_BROKEN_NVPCR=1\fR
+on TPMs on which the NV index based PCRs of systemd do not work\&.
+.RE
+.PP
+This builtin and
+60\-tpm2\-id\&.rules
+are left out when eudev is configured with
+\fB\-\-disable\-tpm2\fR\&.
 .SH "NETWORK INTERFACE NAMING"
 .PP
 For network interfaces, the

@@ -521,7 +521,10 @@
               </varlistentry>
             </variablelist>
             <para>The program name and following arguments are separated by spaces.
-            Single quotes can be used to specify arguments with spaces.</para>
+            Single quotes can be used to specify arguments with spaces. The name
+            of a builtin and its arguments are separated by any whitespace; single
+            and double quotes, also in the middle of an argument, group characters
+            including whitespace and are removed.</para>
             <para>This can only be used for very short-running foreground tasks. Running an
             event process for a long period of time may block all further events for
             this or a dependent device.</para>
@@ -877,6 +880,204 @@ SUBSYSTEM=="net", OPTIONS="log_level=debug"</programlisting></para>
           </listitem>
         </varlistentry>
       </variablelist>
+  </refsect1>
+
+  <refsect1><title>Built-in Commands</title>
+      <para>Built-in commands are run with <varname>IMPORT{builtin}</varname> and
+      <varname>RUN{builtin}</varname>. <command>udevadm test-builtin --help</command>
+      lists the available builtins, and <command>udevadm test-builtin</command>
+      runs one on a device and prints the properties it sets. The builtins and
+      properties described here are compatible with systemd-udevd.</para>
+
+      <refsect2><title>blkid</title>
+        <para><command>blkid</command> [<option>--offset=</option><replaceable>bytes</replaceable>]
+        [<option>--hint=</option><replaceable>name</replaceable><literal>=</literal><replaceable>value</replaceable>]
+        [<option>--noraid</option>] probes a block device for file systems and
+        partition tables with libblkid and sets <varname>ID_FS_*</varname> and
+        <varname>ID_PART_*</varname> properties. Among them:</para>
+
+        <variablelist>
+          <varlistentry>
+            <term><varname>ID_FS_VOLUME_ID=</varname></term>
+            <term><varname>ID_FS_LOGICAL_VOLUME_ID=</varname></term>
+            <term><varname>ID_FS_VOLUME_SET_ID=</varname></term>
+            <term><varname>ID_FS_DATA_PREPARER_ID=</varname></term>
+            <listitem>
+              <para>The volume, logical volume, volume set and data preparer
+              identifiers, which libblkid 2.37 and newer reports for e.g. ISO 9660
+              and UDF file systems. Like in <varname>ID_FS_LABEL_ENC=</varname>,
+              characters that are not safe are encoded as
+              <literal>\x</literal><replaceable>nn</replaceable>.</para>
+            </listitem>
+          </varlistentry>
+
+          <varlistentry>
+            <term><varname>ID_PART_GPT_AUTO_ROOT_DISK=1</varname></term>
+            <term><varname>ID_PART_GPT_AUTO_ROOT_UUID=</varname></term>
+            <listitem>
+              <para>Set on the whole disk with a GPT partition table that the root
+              file system is expected on, together with the partition UUID of its
+              root partition, if it has one. In the initrd, this is the disk that
+              carries the EFI System Partition or the XBOOTLDR partition whose
+              partition UUID the boot loader reports in the
+              <varname>LoaderDevicePartUUID-4a67b082-0a4c-41cf-b6c7-440b29bb8c4f</varname>
+              EFI variable (systemd-boot and GRUB with the <literal>bli</literal>
+              module set it), or, without that variable, a loop device whose
+              backing file name is <literal>rootdisk</literal> or
+              <literal>rootdisk.raw</literal>. The root partition is the partition
+              with the root partition type of the native architecture (e.g.
+              <literal>4f68bce3-e8cd-4db1-96e7-fbcaf984b709</literal> on x86-64) that
+              has the newest version in its label; partitions with the
+              <literal>no-auto</literal> flag (bit 63) and partitions labelled
+              <literal>_empty</literal> are skipped. After the initrd, it is the
+              disk that the root file system is on (also through dm-crypt,
+              dm-verity or a single-device btrfs), and the partition that holds
+              it, if it has the root partition type. The initrd is recognized by
+              <filename>/etc/initrd-release</filename> and a tmpfs or ramfs root
+              file system. Only whole disks with partition scanning enabled are
+              considered.</para>
+            </listitem>
+          </varlistentry>
+
+          <varlistentry>
+            <term><varname>ID_PART_GPT_AUTO_ROOT=1</varname></term>
+            <listitem>
+              <para>Set on the partition whose partition UUID matches
+              <varname>ID_PART_GPT_AUTO_ROOT_UUID=</varname> of its disk.
+              <filename>90-image-dissect.rules</filename> creates the symlink
+              <filename>/dev/gpt-auto-root</filename> for it, or
+              <filename>/dev/gpt-auto-root-luks</filename> if it is a LUKS
+              volume. While a factory reset is in progress
+              (<varname>ID_FACTORY_RESET=on</varname>, see below), it gets
+              <filename>/dev/gpt-auto-root-ignore-factory-reset</filename> or
+              <filename>/dev/gpt-auto-root-luks-ignore-factory-reset</filename>
+              instead, and once the factory reset is complete, both. When the
+              LUKS volume is unlocked as a device mapper device named
+              <literal>root</literal>, that device gets
+              <filename>/dev/gpt-auto-root</filename>, and also
+              <filename>/dev/gpt-auto-root-ignore-factory-reset</filename> while
+              a factory reset is in progress or complete.</para>
+            </listitem>
+          </varlistentry>
+        </variablelist>
+      </refsect2>
+
+      <refsect2><title>factory_reset</title>
+        <para><command>factory_reset status</command> sets
+        <varname>ID_FACTORY_RESET=</varname> to the factory reset state, as systemd
+        determines it, so that rules can e.g. ignore devices while a factory reset
+        is in progress:</para>
+
+        <variablelist>
+          <varlistentry>
+            <term><literal>unsupported</literal></term>
+            <listitem>
+              <para>The environment variable
+              <varname>$SYSTEMD_FACTORY_RESET_SUPPORTED</varname> of the udev daemon
+              is set to false.</para>
+            </listitem>
+          </varlistentry>
+
+          <varlistentry>
+            <term><literal>complete</literal></term>
+            <listitem>
+              <para><filename>/run/systemd/factory-reset-complete</filename>
+              exists.</para>
+            </listitem>
+          </varlistentry>
+
+          <varlistentry>
+            <term><literal>on</literal></term>
+            <term><literal>off</literal></term>
+            <listitem>
+              <para>The kernel command line option
+              <varname>systemd.factory_reset=</varname> (or
+              <varname>systemd.factory-reset=</varname>) is set to true or false;
+              the option without a value means true. If it is not set, the
+              state is <literal>on</literal> if the
+              <varname>FactoryResetRequest-8cf2644b-4b0b-428f-9387-6d876050dc67</varname>
+              EFI variable requests a factory reset for this boot: it holds a
+              JSON object whose <varname>osReleaseId</varname> and
+              <varname>osReleaseImageId</varname> members match
+              <varname>ID=</varname> and <varname>IMAGE_ID=</varname> of
+              <filename>/etc/os-release</filename> (or
+              <filename>/usr/lib/os-release</filename>, or the file that
+              <varname>$SYSTEMD_OS_RELEASE</varname> names), and whose
+              <varname>bootId</varname> member differs from the current boot ID
+              (<filename>/proc/sys/kernel/random/boot_id</filename>).</para>
+            </listitem>
+          </varlistentry>
+
+          <varlistentry>
+            <term><literal>pending</literal></term>
+            <listitem>
+              <para>The EFI variable requests a factory reset for the next boot:
+              its <varname>bootId</varname> is the current boot ID.</para>
+            </listitem>
+          </varlistentry>
+
+          <varlistentry>
+            <term><literal>unspecified</literal></term>
+            <listitem>
+              <para>None of the above: the system was not booted with EFI, or the
+              EFI variable is not set, not valid, or meant for another operating
+              system.</para>
+            </listitem>
+          </varlistentry>
+        </variablelist>
+
+        <para>The checks are done in the order listed. If the state cannot be
+        determined, e.g. because <varname>systemd.factory_reset=</varname> has a
+        value that is not a boolean or os-release cannot be read, the property is
+        not set.</para>
+      </refsect2>
+
+      <refsect2><title>tpm2_id</title>
+        <para><command>tpm2_id identify</command>, which
+        <filename>60-tpm2-id.rules</filename> runs on
+        <filename>/dev/tpmrm</filename><replaceable>N</replaceable>, identifies
+        TPM 2.0 chips. Like systemd, it starts up the TPM if the firmware has not
+        done so, and only identifies TPMs that support AES-128 in CFB mode,
+        which systemd requires for session encryption; other TPMs are skipped
+        without an error. It talks to the TPM through the kernel's device node
+        and needs no TPM libraries. It sets:</para>
+
+        <variablelist>
+          <varlistentry>
+            <term><varname>ID_TPM2_MANUFACTURER=</varname></term>
+            <term><varname>ID_TPM2_VENDOR_STRING=</varname></term>
+            <listitem>
+              <para>The manufacturer code and the vendor string that the TPM
+              reports, with whitespace, control characters and non-ASCII bytes
+              replaced by <literal>_</literal>.</para>
+            </listitem>
+          </varlistentry>
+
+          <varlistentry>
+            <term><varname>ID_TPM2_MODALIAS=</varname></term>
+            <listitem>
+              <para>A string that describes the TPM for hwdb lookups. It lists the
+              family indicator (<literal>fi</literal>), level
+              (<literal>lv</literal>), revision (<literal>rv</literal>), year
+              (<literal>sy</literal>) and day of year (<literal>sd</literal>) of the
+              specification, the manufacturer (<literal>mf</literal>), the vendor
+              string (<literal>vs</literal>), the vendor TPM type in hexadecimal
+              (<literal>ty</literal>) and the firmware version
+              (<literal>fw</literal>), each after its two letter code and followed by
+              a colon, e.g.
+              <literal>fi2.0:lv0:rv1.16:sy2019:sd346:mfSTM:vsST33HTPHAHD8:ty1:fw73.4.65536:</literal>.
+              <filename>60-tpm2-id.rules</filename> looks up
+              <literal>tpm2:</literal> followed by it in the hwdb;
+              <filename>60-tpm2.hwdb</filename> sets
+              <varname>TPM2_BROKEN_NVPCR=1</varname> on TPMs on which the NV index
+              based PCRs of systemd do not work.</para>
+            </listitem>
+          </varlistentry>
+        </variablelist>
+
+        <para>This builtin and <filename>60-tpm2-id.rules</filename> are left out
+        when eudev is configured with <option>--disable-tpm2</option>.</para>
+      </refsect2>
   </refsect1>
 
   <refsect1><title>Network Interface Naming</title>
