@@ -126,8 +126,10 @@ static int parse_string(const char **p, char **ret) {
                                         u = utf16_surrogate_pair_to_unichar(x, y);
                                 }
 
-                                /* Embedded NUL bytes cannot be represented in a C string, refuse them. */
-                                if (u == 0)
+                                /* Like sd-json, refuse embedded NUL bytes, which cannot be represented in a
+                                 * C string, and characters that are not valid in UTF-8 strings, i.e. the
+                                 * noncharacters U+FDD0..U+FDEF and U+xFFFE/U+xFFFF. */
+                                if (u == 0 || !unichar_is_valid(u))
                                         return -EBADMSG;
 
                                 /* "\uXXXX" takes 6 bytes, and is encoded in at most 3; a surrogate pair
