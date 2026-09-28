@@ -113,6 +113,8 @@ static int adm_test(struct udev *udev, int argc, char *argv[]) {
 
         sigprocmask(SIG_SETMASK, NULL, &sigmask_orig);
 
+        udev_event_check_config(udev);
+
         udev_builtin_init(udev);
 
         rules = udev_rules_new(udev, resolve_names);

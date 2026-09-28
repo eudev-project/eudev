@@ -220,6 +220,14 @@ static int dump_event_json(struct udev_event *event, JsonFormatFlags flags, FILE
                 json_writer_field_integer(&w, "index", ifindex);
                 if (!isempty(event->name))
                         json_writer_field_string(&w, "name", event->name);
+                /* like systemd, all requested names, sorted, also the name of the interface */
+                if (!strv_isempty(event->altnames)) {
+                        json_writer_key(&w, "alternativeNames");
+                        json_writer_array_begin(&w);
+                        STRV_FOREACH(p, strv_sort(event->altnames))
+                                json_writer_string(&w, *p);
+                        json_writer_array_end(&w);
+                }
                 json_writer_object_end(&w);
         }
 
@@ -383,6 +391,13 @@ int dump_event(struct udev_event *event, JsonFormatFlags flags, FILE *f) {
 
                 if (!isempty(event->name))
                         fprintf(f, "%sNetwork interface name:%s\n  %s\n", ansi_highlight(), ansi_normal(), event->name);
+
+                /* like systemd, all requested names, sorted, also the name of the interface */
+                if (!strv_isempty(event->altnames)) {
+                        fprintf(f, "%sAlternative interface names:%s\n", ansi_highlight(), ansi_normal());
+                        STRV_FOREACH(p, strv_sort(event->altnames))
+                                fprintf(f, "  %s\n", *p);
+                }
         }
 
         if (udev_list_get_entry(&event->written_sysattr_list)) {

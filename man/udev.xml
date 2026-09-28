@@ -683,6 +683,33 @@
                 </listitem>
               </varlistentry>
               <varlistentry>
+                <term><option>net_altnames</option></term>
+                <listitem>
+                  <para>Assign alternative names to a network interface when it is
+                  added. After the <literal>add</literal> event is processed and the
+                  interface is renamed, if requested, the values of the
+                  <varname>ID_NET_NAME_FROM_DATABASE</varname>,
+                  <varname>ID_NET_NAME_ONBOARD</varname>,
+                  <varname>ID_NET_NAME_SLOT</varname>,
+                  <varname>ID_NET_NAME_PATH</varname> and
+                  <varname>ID_NET_NAME_MAC</varname> properties that are valid
+                  alternative names, i.e. valid interface names (see
+                  <varname>NAME</varname>) with up to 127 characters, and differ from
+                  the name of the interface, are assigned to it as alternative
+                  names, like the default <varname>AlternativeNamesPolicy=</varname>
+                  of systemd does. Names that the interface already has are not
+                  assigned again, names used by other interfaces are skipped. As in
+                  systemd, they are not assigned when renaming the interface fails,
+                  unless it is up. Alternative names require Linux 5.5 or later,
+                  older kernels are silently ignored. <command>udevadm test</command>
+                  does not assign them, but shows them, like systemd, also the name
+                  the interface would get. Nothing is done when
+                  <varname>net_altnames=no</varname> is set in
+                  <citerefentry><refentrytitle>udev.conf</refentrytitle><manvolnum>5</manvolnum></citerefentry>.
+                  </para>
+                </listitem>
+              </varlistentry>
+              <varlistentry>
                 <term><option>watch</option></term>
                 <listitem>
                   <para>Watch the device node with inotify; when the node is

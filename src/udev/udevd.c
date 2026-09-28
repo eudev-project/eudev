@@ -1288,6 +1288,8 @@ int main(int argc, char *argv[]) {
 
         log_info("starting version " VERSION);
 
+        udev_event_check_config(udev);
+
         udev_builtin_init(udev);
 
         rules = udev_rules_new(udev, arg_resolve_names);

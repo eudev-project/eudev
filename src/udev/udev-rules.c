@@ -165,6 +165,7 @@ enum token_type {
         TK_A_STRING_ESCAPE_NONE,
         TK_A_STRING_ESCAPE_REPLACE,
         TK_A_DB_PERSIST,
+        TK_A_NET_ALTNAMES,
         TK_A_INOTIFY_WATCH,             /* int */
         TK_A_DEVLINK_PRIO,              /* int */
         TK_A_LOG_LEVEL,                 /* int, -1 for "reset" */
@@ -330,6 +331,7 @@ enum option_id {
         OPTION_STRING_ESCAPE_NONE,
         OPTION_STRING_ESCAPE_REPLACE,
         OPTION_DB_PERSIST,
+        OPTION_NET_ALTNAMES,
         OPTION_WATCH,
         OPTION_NOWATCH,
         OPTION_STATIC_NODE,
@@ -346,6 +348,7 @@ static const struct option_def {
         { "string_escape=none",         OPTION_STRING_ESCAPE_NONE },
         { "string_escape=replace",      OPTION_STRING_ESCAPE_REPLACE },
         { "db_persist",                 OPTION_DB_PERSIST },
+        { "net_altnames",               OPTION_NET_ALTNAMES },
         { "watch",                      OPTION_WATCH },
         { "nowatch",                    OPTION_NOWATCH },
         { "static_node=",               OPTION_STATIC_NODE },
@@ -458,6 +461,7 @@ static const char *token_str(enum token_type type) {
                 [TK_A_STRING_ESCAPE_NONE] =     "A STRING_ESCAPE_NONE",
                 [TK_A_STRING_ESCAPE_REPLACE] =  "A STRING_ESCAPE_REPLACE",
                 [TK_A_DB_PERSIST] =             "A DB_PERSIST",
+                [TK_A_NET_ALTNAMES] =           "A NET_ALTNAMES",
                 [TK_A_INOTIFY_WATCH] =          "A INOTIFY_WATCH",
                 [TK_A_DEVLINK_PRIO] =           "A DEVLINK_PRIO",
                 [TK_A_LOG_LEVEL] =              "A LOG_LEVEL",
@@ -557,6 +561,7 @@ static void dump_token(struct udev_rules *rules, struct token *token) {
         case TK_A_STRING_ESCAPE_NONE:
         case TK_A_STRING_ESCAPE_REPLACE:
         case TK_A_DB_PERSIST:
+        case TK_A_NET_ALTNAMES:
                 log_debug("%s", token_str(type));
                 break;
         case TK_M_TEST:
@@ -1254,6 +1259,7 @@ static int rule_add_key(struct rule_tmp *rule_tmp, enum token_type type,
         case TK_A_STRING_ESCAPE_NONE:
         case TK_A_STRING_ESCAPE_REPLACE:
         case TK_A_DB_PERSIST:
+        case TK_A_NET_ALTNAMES:
                 break;
         case TK_A_RUN_BUILTIN:
         case TK_A_RUN_PROGRAM:
@@ -1430,6 +1436,9 @@ static int parse_options(struct rule_tmp *rule_tmp, enum operation_type op, cons
                                 break;
                         case OPTION_DB_PERSIST:
                                 rule_add_key(rule_tmp, TK_A_DB_PERSIST, op, NULL, NULL);
+                                break;
+                        case OPTION_NET_ALTNAMES:
+                                rule_add_key(rule_tmp, TK_A_NET_ALTNAMES, op, NULL, NULL);
                                 break;
                         case OPTION_WATCH:
                         case OPTION_NOWATCH: {
@@ -2812,6 +2821,12 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                         break;
                 case TK_A_DB_PERSIST:
                         udev_device_set_db_persist(event->dev);
+                        break;
+                case TK_A_NET_ALTNAMES:
+                        event->net_altnames = true;
+                        log_debug("OPTIONS net_altnames %s:%u",
+                                  rules_str(rules, rule->rule.filename_off),
+                                  rule->rule.filename_line);
                         break;
                 case TK_A_INOTIFY_WATCH:
                         if (event->inotify_watch_final)

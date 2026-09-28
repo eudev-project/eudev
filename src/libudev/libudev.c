@@ -54,6 +54,7 @@ struct udev {
         void *userdata;
         bool sas_legacy_path;
         char *net_naming_scheme;
+        int net_altnames;
 };
 
 /**
@@ -139,8 +140,14 @@ static void udev_read_conf(struct udev *udev, const char *filename) {
 
                         /* terminate value */
                         len = strlen(val);
-                        if (len == 0)
+                        if (len == 0) {
+                                /* an empty value is invalid, which udevd warns about, see below */
+                                if (streq(key, "net_altnames")) {
+                                        log_debug("%s:%u: empty net_altnames=, ignoring.", filename, line_nr);
+                                        udev->net_altnames = -EINVAL;
+                                }
                                 continue;
+                        }
                         while (isspace(val[len-1]))
                                 len--;
                         val[len] = '\0';
@@ -187,6 +194,17 @@ static void udev_read_conf(struct udev *udev, const char *filename) {
                                 continue;
                         }
 
+                        if (streq(key, "net_altnames")) {
+                                int b;
+
+                                /* an invalid value is kept as -EINVAL, which udevd warns about */
+                                b = parse_boolean(val);
+                                if (b < 0)
+                                        log_debug("%s:%u: invalid boolean '%s' for net_altnames, ignoring.", filename, line_nr, val);
+                                udev->net_altnames = b < 0 ? -EINVAL : b;
+                                continue;
+                        }
+
                         if (streq(key, "net_naming_scheme")) {
                                 /* validated by the net_id builtin, which knows the schemes; an
                                  * empty value, e.g. "", resets it */
@@ -217,6 +235,7 @@ _public_ struct udev *udev_new(void) {
                 return NULL;
         udev->refcount = 1;
         udev->hwdb_format = 1;
+        udev->net_altnames = 1;
 
         udev_read_conf(udev, UDEV_CONF_FILE);
 
@@ -267,6 +286,14 @@ const char *udev_get_net_naming_scheme(struct udev *udev) {
         if (udev == NULL)
                 return NULL;
         return udev->net_naming_scheme;
+}
+
+/* Not part of the public API, used by udevd. Returns the value of net_altnames= in udev.conf: 1 if it is not
+ * set, or -EINVAL if it is invalid or empty, which is to be treated like 1. */
+int udev_get_net_altnames(struct udev *udev) {
+        if (udev == NULL)
+                return 1;
+        return udev->net_altnames;
 }
 
 /**

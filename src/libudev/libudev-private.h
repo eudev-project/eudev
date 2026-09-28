@@ -47,6 +47,7 @@ int udev_get_hwdb_format(struct udev *udev);
 int udev_read_hwdb_format(const char *root);
 bool udev_get_sas_legacy_path(struct udev *udev);
 const char *udev_get_net_naming_scheme(struct udev *udev);
+int udev_get_net_altnames(struct udev *udev);
 
 /* libudev-device.c */
 struct udev_device *udev_device_new_from_nulstr(struct udev *udev, char *nulstr, ssize_t buflen);

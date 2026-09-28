@@ -570,6 +570,28 @@ none, no replacement is performed\&. When unset, the replacement is performed fo
 Apply the permissions specified in this rule to the static device node with the specified name\&. Static device node creation can be requested by kernel modules\&. These nodes might not have a corresponding kernel device at the time udevd is started; they can trigger automatic kernel module loading\&.
 .RE
 .PP
+\fBnet_altnames\fR
+.RS 4
+Assign alternative names to a network interface when it is added\&. After the
+add
+event is processed and the interface is renamed, if requested, the values of the
+\fIID_NET_NAME_FROM_DATABASE\fR,
+\fIID_NET_NAME_ONBOARD\fR,
+\fIID_NET_NAME_SLOT\fR,
+\fIID_NET_NAME_PATH\fR
+and
+\fIID_NET_NAME_MAC\fR
+properties that are valid alternative names, i\&.e\&. valid interface names (see
+\fINAME\fR) with up to 127 characters, and differ from the name of the interface, are assigned to it as alternative names, like the default
+\fIAlternativeNamesPolicy=\fR
+of systemd does\&. Names that the interface already has are not assigned again, names used by other interfaces are skipped\&. As in systemd, they are not assigned when renaming the interface fails, unless it is up\&. Alternative names require Linux 5\&.5 or later, older kernels are silently ignored\&.
+\fBudevadm test\fR
+does not assign them, but shows them, like systemd, also the name the interface would get\&. Nothing is done when
+\fInet_altnames=no\fR
+is set in
+\fBudev.conf\fR(5)\&.
+.RE
+.PP
 \fBwatch\fR
 .RS 4
 Watch the device node with inotify; when the node is closed after being opened for writing, a change uevent is synthesized\&.

@@ -144,6 +144,22 @@
       </varlistentry>
 
       <varlistentry>
+        <term><varname>net_altnames</varname></term>
+
+        <listitem>
+          <para>Takes a boolean argument. Defaults to <option>yes</option>.
+          When set to <option>no</option>, <varname>OPTIONS+="net_altnames"</varname>
+          is ignored, i.e. no alternative names are assigned to network
+          interfaces (see
+          <citerefentry><refentrytitle>udev</refentrytitle><manvolnum>7</manvolnum></citerefentry>).
+          An invalid or empty value is ignored, with a warning when
+          <command>udevd</command> starts. The file is only read when
+          <command>udevd</command> starts, and alternative names are only
+          assigned when an interface is added.</para>
+        </listitem>
+      </varlistentry>
+
+      <varlistentry>
         <term><varname>net_naming_scheme</varname></term>
 
         <listitem>

@@ -72,6 +72,7 @@ void udev_event_unref(struct udev_event *event) {
         udev_list_cleanup(&event->written_sysctl_list);
         safe_close(event->rtnl_fd);
         strv_free(event->ifaltnames);
+        strv_free(event->altnames);
         free(event->program_result);
         free(event->name);
         free(event);
@@ -1161,6 +1162,96 @@ static int copy_all_tags(struct udev_device *d, struct udev_device *s) {
         return 0;
 }
 
+/* Warns about an invalid net_altnames= in udev.conf, when udevd or udevadm test start. */
+void udev_event_check_config(struct udev *udev) {
+        if (udev_get_net_altnames(udev) < 0)
+                log_warning("Invalid or empty net_altnames= in udev.conf, using the default: yes.");
+}
+
+/* The ID_NET_NAME_* properties that are assigned as alternative names with OPTIONS+="net_altnames", in
+ * this order, like AlternativeNamesPolicy=database onboard slot path mac of 99-default.link of systemd. */
+static const char * const net_altnames_properties[] = {
+        "ID_NET_NAME_FROM_DATABASE",
+        "ID_NET_NAME_ONBOARD",
+        "ID_NET_NAME_SLOT",
+        "ID_NET_NAME_PATH",
+        "ID_NET_NAME_MAC",
+};
+
+/* Like link_generate_alternative_names() of systemd: collects the alternative names requested with
+ * OPTIONS+="net_altnames" in event->altnames, in the order of the properties, unfiltered, as systemd does. */
+static void event_generate_altnames(struct udev_event *event) {
+        struct udev_device *dev = event->dev;
+        const char *action = udev_device_get_action(dev);
+        size_t i;
+
+        if (!event->net_altnames)
+                return;
+
+        if (udev_device_get_ifindex(dev) <= 0)
+                return;
+
+        if (!streq_ptr(action, "add")) {
+                log_debug("Not applying alternative names on '%s' uevent.", action ?: "n/a");
+                return;
+        }
+
+        if (udev_get_net_altnames(event->udev) == 0) {
+                log_debug("Not applying alternative names, disabled by net_altnames= in udev.conf.");
+                return;
+        }
+
+        for (i = 0; i < ELEMENTSOF(net_altnames_properties); i++) {
+                const char *n;
+
+                n = udev_device_get_property_value(dev, net_altnames_properties[i]);
+                if (!ifname_valid_full(n, IFNAME_VALID_ALTERNATIVE))
+                        continue;
+
+                if (strv_extend(&event->altnames, n) < 0) {
+                        log_oom();
+                        return;
+                }
+        }
+}
+
+/* Like assign_altnames() of systemd: assigns the alternative names, after the interface was renamed, except
+ * its name and the names it has already. */
+static void event_assign_altnames(struct udev_event *event) {
+        struct udev_device *dev = event->dev;
+        const char *ifname = udev_device_get_sysname(dev);
+        int r;
+
+        if (strv_isempty(event->altnames))
+                return;
+
+        if (!EVENT_MODE_DESTRUCTIVE(event)) {
+                /* systemd shows the names unfiltered, see udevadm test; here the ones that would be requested */
+                const char *newname = event->name ?: ifname;
+                char names[UTIL_LINE_SIZE] = "";
+                char **a;
+
+                STRV_FOREACH(a, event->altnames)
+                        if (!streq(*a, newname))
+                                strscpyl(names + strlen(names), sizeof(names) - strlen(names),
+                                         names[0] ? " " : "", *a, NULL);
+
+                if (names[0])
+                        log_debug("Running in test mode, skipping assigning alternative names '%s' to network interface '%s'.",
+                                  names, newname);
+                return;
+        }
+
+        /* Filter out the current interface name. */
+        strv_remove(event->altnames, ifname);
+
+        r = rtnl_append_link_alternative_names(&event->rtnl_fd, udev_device_get_ifindex(dev),
+                                               event_get_ifaltnames(event), event->altnames);
+        if (r < 0)
+                log_full_errno(r == -EOPNOTSUPP ? LOG_DEBUG : LOG_WARNING, r,
+                               "Could not assign alternative names to network interface '%s', ignoring: %m", ifname);
+}
+
 void udev_event_execute_rules(struct udev_event *event,
                               usec_t timeout_usec, usec_t timeout_warn_usec,
                               struct udev_list *properties_list,
@@ -1211,7 +1302,11 @@ void udev_event_execute_rules(struct udev_event *event,
                                           properties_list,
                                           sigmask);
 
-                /* rename a new network interface, if needed */
+                event_generate_altnames(event);
+
+                /* rename a new network interface, if needed; like systemd, assign the alternative names unless
+                 * that failed, but also when the interface is up (EBUSY) or the name is ignored */
+                int rename_r = 0;
                 if (!EVENT_MODE_DESTRUCTIVE(event) &&
                     udev_device_get_ifindex(dev) > 0 && streq(udev_device_get_action(dev), "add")) {
                         const char *sysname = udev_device_get_sysname(dev);
@@ -1270,6 +1365,7 @@ void udev_event_execute_rules(struct udev_event *event,
                                         /* if sysname isn't already the tmpname (ie there is no numeric component), do the rename */
                                         if (!streq(newifname, curname)) {
                                                 r = rename_netif_dev_fromname_toname(event, curname, newifname, curname);
+                                                rename_r = r;
                                                 if (r == 0)
                                                         log_debug("renamed netif to '%s' for collision avoidance\n", newifname);
                                                 else if (r != -EBUSY)
@@ -1280,7 +1376,7 @@ void udev_event_execute_rules(struct udev_event *event,
                                 /* rename it now to its final target if it is not already there, from the name it has
                                  * now, also when it could not be renamed to the temporary name */
                                 if (name != NULL && !streq(name, curname))
-                                        (void) rename_netif_dev_fromname_toname(event, curname, name, curname);
+                                        rename_r = rename_netif_dev_fromname_toname(event, curname, name, curname);
 
                                 /* also when only the temporary renaming succeeded, the device has to follow the interface */
                                 if (!streq(curname, udev_device_get_sysname(dev)))
@@ -1296,6 +1392,7 @@ void udev_event_execute_rules(struct udev_event *event,
 
                         if (name != NULL) {
                                 r = rename_netif_dev_fromname_toname(event, udev_device_get_sysname(dev), name, NULL);
+                                rename_r = r;
                                 if (r >= 0)
                                         netif_update_device(dev, name);
                                 else if (r != -EBUSY)
@@ -1304,6 +1401,16 @@ void udev_event_execute_rules(struct udev_event *event,
                         }
                 }
 #endif
+
+                /* assign alternative names to a new network interface, after renaming it */
+                if (udev_device_get_ifindex(dev) > 0 && streq(udev_device_get_action(dev), "add")) {
+                        if (rename_r < 0 && rename_r != -EBUSY) {
+                                if (!strv_isempty(event->altnames))
+                                        log_debug("Not assigning alternative names, as network interface '%s' could not be renamed.",
+                                                  udev_device_get_sysname(dev));
+                        } else
+                                event_assign_altnames(event);
+                }
 
                 if (major(udev_device_get_devnum(dev)) > 0) {
                         bool apply;

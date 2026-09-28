@@ -54,6 +54,8 @@ struct udev_event {
         struct udev_list run_list;
         struct udev_list written_sysattr_list;
         struct udev_list written_sysctl_list;
+        /* the alternative names requested with OPTIONS+="net_altnames", see event_generate_altnames() */
+        char **altnames;
         int exec_delay;
         usec_t birth_usec;
         int fd_signal;
@@ -79,8 +81,11 @@ struct udev_event {
         bool run_final;
         bool log_level_was_debug;
         int default_log_level;
+        bool net_altnames;
         enum udev_event_mode event_mode;
 };
+
+void udev_event_check_config(struct udev *udev);
 
 static inline bool EVENT_MODE_DESTRUCTIVE(struct udev_event *event) {
         assert(event);
