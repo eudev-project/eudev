@@ -44,7 +44,9 @@ static const struct udev_builtin *builtins[] = {
         [UDEV_BUILTIN_NET_DRIVER] = &udev_builtin_net_driver,
         [UDEV_BUILTIN_NET_ID] = &udev_builtin_net_id,
         [UDEV_BUILTIN_PATH_ID] = &udev_builtin_path_id,
+#ifdef ENABLE_TPM2
         [UDEV_BUILTIN_TPM2_ID] = &udev_builtin_tpm2_id,
+#endif
         [UDEV_BUILTIN_USB_ID] = &udev_builtin_usb_id,
 };
 

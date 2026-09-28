@@ -65,7 +65,6 @@ libudev_core_la_SOURCES = \
 	netif-naming-scheme.c \
 	netif-naming-scheme.h \
 	udev-builtin-path_id.c \
-	udev-builtin-tpm2_id.c \
 	udev-builtin-usb_id.c
 
 noinst_HEADERS = \
@@ -84,6 +83,11 @@ libudev_core_la_LIBADD = \
 if HAVE_BLKID
 libudev_core_la_SOURCES += \
 	udev-builtin-blkid.c
+endif
+
+if ENABLE_TPM2
+libudev_core_la_SOURCES += \
+	udev-builtin-tpm2_id.c
 endif
 
 if HAVE_KMOD

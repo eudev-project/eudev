@@ -296,6 +296,19 @@ AC_ARG_ENABLE([mtd_probe],
 AM_CONDITIONAL([ENABLE_MTD_PROBE], [test "x$enable_mtd_probe" = xyes])
 
 # ------------------------------------------------------------------------------
+# tpm2 - identification of TPM2 chips (tpm2_id builtin and 60-tpm2-id.rules)
+# ------------------------------------------------------------------------------
+AC_ARG_ENABLE([tpm2],
+	AS_HELP_STRING([--disable-tpm2], [disable the tpm2_id builtin and its rules]),
+	[], [enable_tpm2=yes])
+
+if test "x${enable_tpm2}" != xno; then
+	AC_DEFINE([ENABLE_TPM2], [1], [Define if the tpm2_id builtin is enabled])
+fi
+
+AM_CONDITIONAL([ENABLE_TPM2], [test "x$enable_tpm2" != xno])
+
+# ------------------------------------------------------------------------------
 
 AC_CONFIG_FILES([Makefile
 	hwdb/Makefile
