@@ -46,6 +46,50 @@ static inline int unshare (int x) { return syscall(SYS_unshare, x); }
 #include <linux/sched.h>
 #endif
 
+/* The device nodes and symlinks the programs of PROGRAM, IMPORT{program} and RUN may need, e.g.
+ * spawned programs get /dev/null as stdin. The device nodes of the host are bind mounted onto empty
+ * files in the fake /dev, which also works in a user namespace, where mknod() is not permitted. */
+static int fake_dev(const char *dir) {
+        static const char *const nodes[] = { "null", "zero", "full", "random", "urandom" };
+        static const char *const links[][2] = {
+                { "fd",     "/proc/self/fd" },
+                { "stdin",  "/proc/self/fd/0" },
+                { "stdout", "/proc/self/fd/1" },
+                { "stderr", "/proc/self/fd/2" },
+        };
+        char path[UTIL_PATH_SIZE], node[UTIL_PATH_SIZE];
+        unsigned int i;
+
+        for (i = 0; i < ELEMENTSOF(nodes); i++) {
+                int fd;
+
+                strscpyl(path, sizeof(path), dir, "/", nodes[i], NULL);
+                strscpyl(node, sizeof(node), "/dev/", nodes[i], NULL);
+
+                fd = open(path, O_WRONLY|O_CREAT|O_CLOEXEC|O_NOFOLLOW|O_NOCTTY, 0666);
+                if (fd < 0) {
+                        fprintf(stderr, "failed to create %s: %m\n", path);
+                        return -errno;
+                }
+                close(fd);
+
+                if (mount(node, path, "none", MS_BIND, NULL) < 0) {
+                        fprintf(stderr, "failed to bind mount %s to %s: %m\n", node, path);
+                        return -errno;
+                }
+        }
+
+        for (i = 0; i < ELEMENTSOF(links); i++) {
+                strscpyl(path, sizeof(path), dir, "/", links[i][0], NULL);
+                if (symlink(links[i][1], path) < 0 && errno != EEXIST) {
+                        fprintf(stderr, "failed to create symlink %s: %m\n", path);
+                        return -errno;
+                }
+        }
+
+        return 0;
+}
+
 static int fake_filesystems(void) {
         static const struct fakefs {
                 const char *src;
@@ -76,8 +120,13 @@ static int fake_filesystems(void) {
                 goto out;
         }
 
+        err = fake_dev("test/dev");
+        if (err < 0)
+                return err;
+
+        /* recursively, to take the device nodes of the fake /dev along */
         for (i = 0; i < ELEMENTSOF(fakefss); i++) {
-                err = mount(fakefss[i].src, fakefss[i].target, "none", MS_BIND, NULL);
+                err = mount(fakefss[i].src, fakefss[i].target, "none", MS_BIND|MS_REC, NULL);
                 if (err < 0) {
                         err = -errno;
                         fprintf(stderr, "%s %m", fakefss[i].error);
