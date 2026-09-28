@@ -552,6 +552,9 @@ union file_handle_union {
 #define FILE_HANDLE_INIT { .handle.handle_bytes = MAX_HANDLE_SZ }
 
 int tempfn_xxxxxx(const char *p, char **ret);
+int tempfn_random(const char *p, const char *extra, char **ret);
+
+int symlinkat_atomic_full(const char *from, int atfd, const char *to, bool make_relative);
 
 int is_dir(const char *path, bool follow);
 

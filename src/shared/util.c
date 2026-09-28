@@ -52,6 +52,7 @@
 #include <limits.h>
 #include <locale.h>
 #include <libgen.h>
+#include <inttypes.h>
 
 #include "macro.h"
 #include "util.h"
@@ -2169,6 +2170,82 @@ int tempfn_xxxxxx(const char *p, char **ret) {
         strcpy(stpcpy(stpcpy(mempcpy(t, p, fn - p), ".#"), fn), "XXXXXX");
 
         *ret = path_kill_slashes(t);
+        return 0;
+}
+
+int tempfn_random(const char *p, const char *extra, char **ret) {
+        _cleanup_free_ char *d = NULL, *fn = NULL;
+        char suffix[16 + 1];
+        size_t len_add;
+        char *t;
+
+        assert(p);
+        assert(ret);
+
+        /*
+         * Turns this:
+         *         /foo/bar/waldo
+         *
+         * Into this:
+         *         /foo/bar/.#<extra>waldobaa2a261115984a9
+         */
+
+        xsprintf(suffix, "%016" PRIx64, random_u64());
+
+        fn = strdup(eudev_basename(p));
+        if (!fn)
+                return -ENOMEM;
+        if (!filename_is_valid(fn))
+                return -EINVAL;
+
+        len_add = 2 + strlen_ptr(extra) + strlen(suffix);
+        if (len_add >= NAME_MAX)
+                return -EINVAL;
+
+        if (strlen(fn) > NAME_MAX - len_add)
+                /* We cannot simply prepend and append strings to the filename. Let's truncate the filename. */
+                fn[NAME_MAX - len_add] = '\0';
+
+        d = strndup(p, eudev_basename(p) - p);
+        if (!d)
+                return -ENOMEM;
+
+        t = strjoin(d, ".#", extra ?: "", fn, suffix, NULL);
+        if (!t)
+                return -ENOMEM;
+
+        *ret = path_kill_slashes(t);
+        return 0;
+}
+
+int symlinkat_atomic_full(const char *from, int atfd, const char *to, bool make_relative) {
+        _cleanup_free_ char *relpath = NULL, *t = NULL;
+        int r;
+
+        assert(from);
+        assert(to);
+
+        if (make_relative) {
+                r = path_make_relative_parent(to, from, &relpath);
+                if (r < 0)
+                        return r;
+
+                from = relpath;
+        }
+
+        r = tempfn_random(to, NULL, &t);
+        if (r < 0)
+                return r;
+
+        if (symlinkat(from, atfd, t) < 0)
+                return -errno;
+
+        r = RET_NERRNO(renameat(atfd, t, atfd, to));
+        if (r < 0) {
+                (void) unlinkat(atfd, t, 0);
+                return r;
+        }
+
         return 0;
 }
 
