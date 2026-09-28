@@ -1364,6 +1364,23 @@ int readlink_malloc(const char *p, char **ret) {
         return readlinkat_malloc(AT_FDCWD, p, ret);
 }
 
+DIR *xopendirat(int fd, const char *name, int flags) {
+        int nfd;
+        DIR *d;
+
+        nfd = openat(fd, name, O_RDONLY|O_NONBLOCK|O_DIRECTORY|O_CLOEXEC|flags);
+        if (nfd < 0)
+                return NULL;
+
+        d = fdopendir(nfd);
+        if (!d) {
+                safe_close(nfd);
+                return NULL;
+        }
+
+        return d;
+}
+
 int open_mkdir_at(int dirfd, const char *path, int flags, mode_t mode) {
         _cleanup_close_ int fd = -1, parent_fd = -1;
         _cleanup_free_ char *fname = NULL;

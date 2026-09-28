@@ -276,6 +276,7 @@ int touch(const char *path);
 int readlinkat_malloc(int fd, const char *p, char **ret);
 int readlink_malloc(const char *p, char **ret);
 
+DIR *xopendirat(int fd, const char *name, int flags);
 int open_mkdir_at(int dirfd, const char *path, int flags, mode_t mode);
 
 int free_and_strdup(char **p, const char *s);

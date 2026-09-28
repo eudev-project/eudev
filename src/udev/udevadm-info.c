@@ -193,23 +193,6 @@ static int export_devices(struct udev *udev) {
         return 0;
 }
 
-static DIR *xopendirat(int fd, const char *name, int flags) {
-        int nfd;
-        DIR *d;
-
-        nfd = openat(fd, name, O_RDONLY|O_NONBLOCK|O_DIRECTORY|O_CLOEXEC|flags);
-        if (nfd < 0)
-                return NULL;
-
-        d = fdopendir(nfd);
-        if (!d) {
-                safe_close(nfd);
-                return NULL;
-        }
-
-        return d;
-}
-
 static void cleanup_dir(DIR *dir, mode_t mask, int depth) {
         struct dirent *dent;
         int dfd;
