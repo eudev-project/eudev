@@ -1007,7 +1007,10 @@ static int rename_netif_dev_fromname_toname(struct udev_device *dev __attribute_
 
 out:
 #endif
-        if (r < 0)
+        if (r == -EBUSY)
+                /* like systemd, this is not an error */
+                log_info("Network interface '%s' is already up, cannot rename to '%s'.", ifr.ifr_name, ifr.ifr_newname);
+        else if (r < 0)
                 log_error_errno(r, "Error changing net interface name %s to %s: %m\n", ifr.ifr_name, ifr.ifr_newname);
         else
                 log_debug("renamed network interface '%s' to '%s'", oldname, name);
@@ -1175,9 +1178,10 @@ void udev_event_execute_rules(struct udev_event *event,
 
                                 /* if sysname isn't already the tmpname (ie there is no numeric component), do the rename */
                                 if (!streq(newifname, curname)) {
-                                        if (rename_netif_dev_fromname_toname(dev, curname, newifname, curname) == 0)
+                                        r = rename_netif_dev_fromname_toname(dev, curname, newifname, curname);
+                                        if (r == 0)
                                                 log_debug("renamed netif to '%s' for collision avoidance\n", newifname);
-                                        else
+                                        else if (r != -EBUSY)
                                                 log_error("could not rename netif to '%s' for collision avoidance\n", newifname);
                                 }
                         }
@@ -1198,11 +1202,11 @@ void udev_event_execute_rules(struct udev_event *event,
                         int r;
 
                         r = rename_netif_dev_fromname_toname(dev, udev_device_get_sysname(dev), event->name, NULL);
-                        if (r < 0)
+                        if (r >= 0)
+                                netif_update_device(dev, event->name);
+                        else if (r != -EBUSY)
                                 log_warning_errno(r, "could not rename interface '%d' from '%s' to '%s': %m", udev_device_get_ifindex(dev),
                                                   udev_device_get_sysname(dev), event->name);
-                        else
-                                netif_update_device(dev, event->name);
                 }
 #endif
 
