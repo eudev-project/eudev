@@ -415,6 +415,44 @@ int safe_atollu(const char *s, long long unsigned *ret_llu) {
         return 0;
 }
 
+int safe_atollu_full(const char *s, unsigned base, unsigned long long *ret_llu) {
+        char *x = NULL;
+        unsigned long long l;
+
+        assert(s);
+        assert(SAFE_ATO_MASK_FLAGS(base) <= 16);
+
+        if (FLAGS_SET(base, SAFE_ATO_REFUSE_LEADING_WHITESPACE) &&
+            strchr(WHITESPACE, s[0]))
+                return -EINVAL;
+
+        s += strspn(s, WHITESPACE);
+
+        if (FLAGS_SET(base, SAFE_ATO_REFUSE_PLUS_MINUS) &&
+            (s[0] == '+' || s[0] == '-'))
+                return -EINVAL;
+
+        if (FLAGS_SET(base, SAFE_ATO_REFUSE_LEADING_ZERO) &&
+            s[0] == '0' && s[1] != 0)
+                return -EINVAL;
+
+        s = mangle_base(s, &base);
+
+        errno = 0;
+        l = strtoull(s, &x, SAFE_ATO_MASK_FLAGS(base));
+        if (errno > 0)
+                return -errno;
+        if (!x || x == s || *x != 0)
+                return -EINVAL;
+        if (l != 0 && s[0] == '-')
+                return -ERANGE;
+
+        if (ret_llu)
+                *ret_llu = l;
+
+        return 0;
+}
+
 int safe_atolli(const char *s, long long int *ret_lli) {
         char *x = NULL;
         long long l;

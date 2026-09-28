@@ -115,6 +115,7 @@ int safe_atoi(const char *s, int *ret_i);
 int safe_atou_full(const char *s, unsigned base, unsigned *ret_u);
 
 int safe_atollu(const char *s, unsigned long long *ret_u);
+int safe_atollu_full(const char *s, unsigned base, unsigned long long *ret_llu);
 int safe_atolli(const char *s, long long int *ret_i);
 
 
@@ -141,6 +142,11 @@ static inline int safe_atoli(const char *s, long int *ret_u) {
 static inline int safe_atou64(const char *s, uint64_t *ret_u) {
         assert_cc(sizeof(uint64_t) == sizeof(unsigned long long));
         return safe_atollu(s, (unsigned long long*) ret_u);
+}
+
+static inline int safe_atou64_full(const char *s, unsigned base, uint64_t *ret_u) {
+        assert_cc(sizeof(uint64_t) == sizeof(unsigned long long));
+        return safe_atollu_full(s, base, (unsigned long long*) ret_u);
 }
 const char* split(const char **state, size_t *l, const char *separator, bool quoted);
 
