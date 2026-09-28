@@ -1832,23 +1832,53 @@ void udev_device_cleanup_devlinks_list(struct udev_device *udev_device)
         udev_list_cleanup(&udev_device->devlinks_list);
 }
 
+/* Joins the names of the list entries, with the separator between them, and optionally also before the
+ * first and after the last one, like systemd's set_strjoin(). */
+static char *list_strjoin(struct udev_list_entry *first, const char *separator, bool wrap)
+{
+        struct udev_list_entry *list_entry;
+        size_t len = 0, sep = strlen(separator);
+        char *buf, *s;
+
+        udev_list_entry_foreach(list_entry, first)
+                len += strlen(udev_list_entry_get_name(list_entry)) + sep;
+        if (wrap)
+                len += sep;
+
+        buf = malloc(len + 1);
+        if (!buf)
+                return NULL;
+
+        s = buf;
+        if (wrap)
+                s = stpcpy(s, separator);
+        udev_list_entry_foreach(list_entry, first) {
+                if (list_entry != first)
+                        s = stpcpy(s, separator);
+                s = stpcpy(s, udev_list_entry_get_name(list_entry));
+        }
+        if (wrap && first)
+                s = stpcpy(s, separator);
+        *s = '\0';
+
+        return buf;
+}
+
 /* Sets TAGS= or CURRENT_TAGS= to ":tag1:tag2:", or unsets it when there are no tags. */
 static void udev_device_set_tags_property(struct udev_device *udev_device, const char *key, struct udev_list_entry *first)
 {
-        struct udev_list_entry *list_entry;
-        char tags[UTIL_PATH_SIZE];
-        char *s;
-        size_t l;
+        _cleanup_free_ char *tags = NULL;
 
         if (!first) {
                 udev_device_add_property_internal(udev_device, key, NULL);
                 return;
         }
 
-        s = tags;
-        l = strpcpyl(&s, sizeof(tags), ":", NULL);
-        udev_list_entry_foreach(list_entry, first)
-                l = strpcpyl(&s, l, udev_list_entry_get_name(list_entry), ":", NULL);
+        tags = list_strjoin(first, ":", true);
+        if (!tags) {
+                log_oom();
+                return;
+        }
         udev_device_add_property_internal(udev_device, key, tags);
 }
 
@@ -1873,20 +1903,18 @@ _public_ struct udev_list_entry *udev_device_get_properties_list_entry(struct ud
                 udev_device_read_db(udev_device);
         }
         if (!udev_device->devlinks_uptodate) {
-                char symlinks[UTIL_PATH_SIZE];
                 struct udev_list_entry *list_entry;
 
                 udev_device->devlinks_uptodate = true;
                 list_entry = udev_device_get_devlinks_list_entry(udev_device);
                 if (list_entry != NULL) {
-                        char *s;
-                        size_t l;
+                        _cleanup_free_ char *symlinks = NULL;
 
-                        s = symlinks;
-                        l = strpcpyl(&s, sizeof(symlinks), udev_list_entry_get_name(list_entry), NULL);
-                        udev_list_entry_foreach(list_entry, udev_list_entry_get_next(list_entry))
-                                l = strpcpyl(&s, l, " ", udev_list_entry_get_name(list_entry), NULL);
-                        udev_device_add_property_internal(udev_device, "DEVLINKS", symlinks);
+                        symlinks = list_strjoin(list_entry, " ", false);
+                        if (symlinks)
+                                udev_device_add_property_internal(udev_device, "DEVLINKS", symlinks);
+                        else
+                                log_oom();
                 } else
                         udev_device_add_property_internal(udev_device, "DEVLINKS", NULL);
         }
