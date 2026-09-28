@@ -2362,21 +2362,24 @@ int udev_device_add_devlink(struct udev_device *udev_device, const char *devlink
         return 0;
 }
 
-void udev_device_remove_devlink(struct udev_device *udev_device, const char *devlink)
+int udev_device_remove_devlink(struct udev_device *udev_device, const char *devlink)
 {
         _cleanup_free_ char *p = NULL;
         struct udev_list_entry *list_entry;
+        int r;
 
-        if (mangle_devname(devlink, &p) < 0)
-                return;
+        r = mangle_devname(devlink, &p);
+        if (r < 0)
+                return r;
 
         list_entry = udev_list_get_entry(&udev_device->devlinks_list);
         list_entry = udev_list_entry_get_by_name(list_entry, p);
         if (list_entry == NULL)
-                return;
+                return 0;
 
         udev_device->devlinks_uptodate = false;
         udev_list_entry_delete(list_entry);
+        return 1;
 }
 
 const char *udev_device_get_id_filename(struct udev_device *udev_device)

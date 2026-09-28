@@ -2419,80 +2419,27 @@ enum escape_type {
         ESCAPE_REPLACE,
 };
 
-/* Checks if a path is safe to be used as a device node symlink, i.e. it does not contain "." or
- * ".." components or duplicated slashes. */
-static bool devlink_is_safe(const char *p) {
-        if (isempty(p))
-                return false;
-
-        if (streq(p, ".") || streq(p, ".."))
-                return false;
-
-        if (startswith(p, "../") || endswith(p, "/..") || strstr(p, "/../"))
-                return false;
-
-        if (strlen(p)+1 > PATH_MAX)
-                return false;
-
-        /* The following two checks are not really dangerous, but hey, they still are confusing */
-        if (startswith(p, "./") || endswith(p, "/.") || strstr(p, "/./"))
-                return false;
-
-        if (strstr(p, "//"))
-                return false;
-
-        return true;
-}
-
-/* Converts the value of SYMLINK= to an absolute path of the symlink below /dev/. The value may
- * already be prefixed with "/dev/". */
-static int devlink_to_path(const char *devlink, char *path, size_t size) {
-        const char *p;
-        size_t l;
-
-        if (!devlink_is_safe(devlink))
-                return -EINVAL;
-
-        p = path_startswith(devlink, "/dev/");
-        if (!p)
-                p = devlink;
-        if (isempty(p) || p[0] == '/')
-                return -EINVAL;
-
-        if (strscpyl(path, size, "/dev/", p, NULL) == 0)
-                return -ENAMETOOLONG;
-
-        /* drop trailing slashes */
-        l = strlen(path);
-        while (l > 0 && path[l-1] == '/')
-                path[--l] = '\0';
-
-        return 0;
-}
-
-/* Adds or removes one symlink of SYMLINK=. libudev refuses symlinks containing control characters. */
+/* Adds or removes one symlink of SYMLINK=. libudev refuses unsafe symlinks and symlinks containing
+ * control characters, and normalizes the others. */
 static void apply_devlink(struct udev_device *dev, enum operation_type op, const char *link,
                           const char *filename, unsigned int lineno) {
         _cleanup_free_ char *escaped = NULL;
-        char path[UTIL_PATH_SIZE];
         int r;
 
-        r = devlink_to_path(link, path, sizeof(path));
-        if (r >= 0 && op == OP_REMOVE) {
-                log_debug("Dropped SYMLINK '%s' %s:%u", link, filename, lineno);
-                udev_device_remove_devlink(dev, path);
+        if (op == OP_REMOVE)
+                r = udev_device_remove_devlink(dev, link);
+        else
+                r = udev_device_add_devlink(dev, link);
+        if (r >= 0) {
+                if (op == OP_REMOVE)
+                        log_debug("Dropped SYMLINK '%s' %s:%u", link, filename, lineno);
+                else
+                        log_debug("LINK '%s' %s:%u", link, filename, lineno);
                 return;
         }
-        if (r >= 0) {
-                r = udev_device_add_devlink(dev, path);
-                if (r >= 0) {
-                        log_debug("LINK '%s' %s:%u", link, filename, lineno);
-                        return;
-                }
-                if (r == -ENOMEM) {
-                        log_oom();
-                        return;
-                }
+        if (r == -ENOMEM) {
+                log_oom();
+                return;
         }
 
         escaped = cescape(link);
