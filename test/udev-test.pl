@@ -1628,6 +1628,21 @@ KERNEL=="sda", OPTIONS+="link_priority=-5,nowatch", SYMLINK+="prio"
 KERNEL=="sda", RUN+="/bin/sh -c 'test -L /dev/esc1 && test -L /dev/esc2 && test -L /dev/esc3_esc4 && ! test -e /dev/esc1_esc2 && test -L /dev/prio && ln -s sda /dev/found'"
 EOF
         },
+        {
+                desc            => "IMPORT{file} reads long lines whole",
+                devpath         => "/devices/pci0000:00/0000:00:1f.2/host0/target0:0:0/0:0:0:0/block/sda",
+                exp_name        => "found",
+                not_exp_name    => "bad",
+                option          => "clean",
+                rules           => <<EOF
+KERNEL=="sda", PROGRAM="/bin/sh -c 'mkdir -p /run/imp && { printf LONG=; printf %%16378s | tr \\" \\" x; echo EVIL=1; echo GOOD=1; } >/run/imp/file'"
+KERNEL=="sda", PROGRAM="/bin/sh -c '{ echo BEFORE=1; printf HUGE=; printf %%1048576s | tr \\" \\" x; echo; echo AFTER=1; } >/run/imp/big'"
+KERNEL=="sda", IMPORT{file}="/run/imp/file"
+KERNEL=="sda", IMPORT{file}!="/run/imp/big", ENV{BIGFAIL}="1"
+KERNEL=="sda", ENV{EVIL}=="1", SYMLINK+="bad"
+KERNEL=="sda", ENV{GOOD}=="1", ENV{LONG}=="*xEVIL=1", ENV{BEFORE}=="1", ENV{AFTER}!="1", ENV{BIGFAIL}=="1", SYMLINK+="found"
+EOF
+        },
 );
 
 sub udev {

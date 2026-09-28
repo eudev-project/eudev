@@ -33,6 +33,7 @@
 #include "udev.h"
 #include "path-util.h"
 #include "conf-files.h"
+#include "fileio.h"
 #include "strbuf.h"
 #include "strv.h"
 #include "util.h"
@@ -802,16 +803,28 @@ static int import_property_from_string(struct udev_device *dev, char *line,
 
 static int import_file_into_properties(struct udev_device *dev, const char *import,
                                        const char *filename, unsigned int lineno) {
-        FILE *f;
-        char line[UTIL_LINE_SIZE];
+        _cleanup_fclose_ FILE *f = NULL;
 
         f = fopen(import, "re");
         if (f == NULL)
                 return -1;
-        while (fgets(line, sizeof(line), f) != NULL)
+
+        /* Like systemd-udevd: lines of up to 1 MiB. A longer line, or a read error, stops the import,
+         * and the key does not match; the properties imported before stay. */
+        for (;;) {
+                _cleanup_free_ char *line = NULL;
+                int r;
+
+                r = read_line(f, LONG_LINE_MAX, &line);
+                if (r < 0) {
+                        log_debug_errno(r, "Failed to read '%s', ignoring %s:%u: %m", import, filename, lineno);
+                        return -1;
+                }
+                if (r == 0)
+                        return 0;
+
                 import_property_from_string(dev, line, filename, lineno);
-        fclose(f);
-        return 0;
+        }
 }
 
 static int import_program_into_properties(struct udev_event *event,
