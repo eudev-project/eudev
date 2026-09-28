@@ -26,6 +26,7 @@
 #include <dirent.h>
 #include <poll.h>
 #include <sys/stat.h>
+#include <sys/ioctl.h>
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <arpa/inet.h>
@@ -646,6 +647,33 @@ tag:
  *
  * Returns: a new udev device, or #NULL, in case of an error
  **/
+/* Returns the size of the next datagram of the socket, like next_datagram_size_fd() of systemd. */
+static ssize_t next_datagram_size_fd(int fd)
+{
+        ssize_t l;
+        int k;
+
+        l = recv(fd, NULL, 0, MSG_PEEK|MSG_TRUNC);
+        if (l < 0) {
+                if (errno == EOPNOTSUPP || errno == EFAULT)
+                        goto fallback;
+
+                return -errno;
+        }
+        if (l == 0)
+                goto fallback;
+
+        return l;
+
+fallback:
+        k = 0;
+
+        if (ioctl(fd, FIONREAD, &k) < 0)
+                return -errno;
+
+        return (ssize_t) k;
+}
+
 _public_ struct udev_device *udev_monitor_receive_device(struct udev_monitor *udev_monitor)
 {
         struct udev_device *udev_device;
@@ -655,10 +683,10 @@ _public_ struct udev_device *udev_monitor_receive_device(struct udev_monitor *ud
         struct cmsghdr *cmsg;
         union sockaddr_union snl;
         struct ucred *cred;
-        union {
-                struct udev_monitor_netlink_header nlh;
-                char raw[8192];
-        } buf;
+        /* the message is as large as the sender made it, like in systemd */
+        _cleanup_free_ char *raw = NULL;
+        const struct udev_monitor_netlink_header *nlh;
+        ssize_t size;
         ssize_t buflen;
         ssize_t bufpos;
         bool is_initialized = false;
@@ -668,8 +696,26 @@ retry:
                 errno = EINVAL;
                 return NULL;
         }
-        iov.iov_base = &buf;
-        iov.iov_len = sizeof(buf);
+
+        size = next_datagram_size_fd(udev_monitor->sock);
+        if (size < 0) {
+                if (size != -EINTR && size != -EAGAIN)
+                        log_debug_errno(size, "unable to get the size of the message: %m");
+                errno = -size;
+                return NULL;
+        }
+
+        free(raw);
+        /* at least a header, and NUL terminated after the message */
+        raw = malloc0(MAX((size_t) size, sizeof(struct udev_monitor_netlink_header)) + 1);
+        if (!raw) {
+                errno = ENOMEM;
+                return NULL;
+        }
+        nlh = (const struct udev_monitor_netlink_header *) raw;
+
+        iov.iov_base = raw;
+        iov.iov_len = size;
         memzero(&smsg, sizeof(struct msghdr));
         smsg.msg_iov = &iov;
         smsg.msg_iovlen = 1;
@@ -722,29 +768,29 @@ retry:
                 return NULL;
         }
 
-        if (memcmp(buf.raw, "libudev", 8) == 0) {
+        if (memcmp(raw, "libudev", 8) == 0) {
                 /* udev message needs proper version magic */
-                if (buf.nlh.magic != htonl(UDEV_MONITOR_MAGIC)) {
+                if (nlh->magic != htonl(UDEV_MONITOR_MAGIC)) {
                         log_debug("unrecognized message signature (%x != %x)",
-                                 buf.nlh.magic, htonl(UDEV_MONITOR_MAGIC));
+                                 nlh->magic, htonl(UDEV_MONITOR_MAGIC));
                         errno = EAGAIN;
                         return NULL;
                 }
                 /* avoid 32-bit overflow of properties_off + 32 */
-                if ((uint64_t) buf.nlh.properties_off + 32 > (uint64_t) buflen) {
+                if ((uint64_t) nlh->properties_off + 32 > (uint64_t) buflen) {
                         log_debug("message smaller than expected (%u > %zd)",
-                                  buf.nlh.properties_off+32, buflen);
+                                  nlh->properties_off+32, buflen);
                         errno = EAGAIN;
                         return NULL;
                 }
 
-                bufpos = buf.nlh.properties_off;
+                bufpos = nlh->properties_off;
 
                 /* devices received from udev are always initialized */
                 is_initialized = true;
         } else {
                 /* kernel message with header */
-                bufpos = strnlen(buf.raw, buflen) + 1;
+                bufpos = strnlen(raw, buflen) + 1;
                 if ((size_t)bufpos < sizeof("a@/d") || bufpos >= buflen) {
                         log_debug("invalid message length");
                         errno = EAGAIN;
@@ -752,14 +798,14 @@ retry:
                 }
 
                 /* check message header */
-                if (strstr(buf.raw, "@/") == NULL) {
+                if (strstr(raw, "@/") == NULL) {
                         log_debug("unrecognized message header");
                         errno = EAGAIN;
                         return NULL;
                 }
         }
 
-        udev_device = udev_device_new_from_nulstr(udev_monitor->udev, &buf.raw[bufpos], buflen - bufpos);
+        udev_device = udev_device_new_from_nulstr(udev_monitor->udev, &raw[bufpos], buflen - bufpos);
         if (!udev_device) {
                 log_debug("could not create device: %m");
                 return NULL;

@@ -2611,63 +2611,62 @@ _public_ int udev_device_has_current_tag(struct udev_device *udev_device, const 
         return false;
 }
 
-#define ENVP_SIZE                        128
-#define MONITOR_BUF_SIZE                4096
+/* Builds the buffer of "KEY=VALUE" strings of the properties, which is sent to udevd workers and
+ * libudev monitors, and the environment of the programs udevd runs, which points into the buffer.
+ * Like systemd's device_update_properties_bufs(), without a fixed limit of their size. Private
+ * properties, with a leading ".", are neither sent nor exported. */
 static int update_envp_monitor_buf(struct udev_device *udev_device)
 {
+        char version[STRLEN("UDEV_DATABASE_VERSION=") + DECIMAL_STR_MAX(unsigned) + 1];
         struct udev_list_entry *list_entry;
-        char *s;
-        size_t l;
-        unsigned int i;
+        size_t len, n = 1, i = 0;
+        char **envp;
+        char *buf, *s;
 
-        /* monitor buffer of property strings */
-        free(udev_device->monitor_buf);
-        udev_device->monitor_buf_len = 0;
-        udev_device->monitor_buf = malloc(MONITOR_BUF_SIZE);
-        if (udev_device->monitor_buf == NULL)
-                return -ENOMEM;
-
-        /* envp array, strings will point into monitor buffer */
-        if (udev_device->envp == NULL)
-                udev_device->envp = malloc(sizeof(char *) * ENVP_SIZE);
-        if (udev_device->envp == NULL)
-                return -ENOMEM;
-
-        i = 0;
-        s = udev_device->monitor_buf;
-        l = MONITOR_BUF_SIZE;
-
-        /* append udev database version */
-        udev_device->envp[i++] = s;
-        l = strpcpyf(&s, l, "UDEV_DATABASE_VERSION=%u", LATEST_UDEV_DATABASE_VERSION);
-        if (l == 0)
-                return -EINVAL;
-        s++;
-        l--;
+        snprintf(version, sizeof(version), "UDEV_DATABASE_VERSION=%u", LATEST_UDEV_DATABASE_VERSION);
+        len = strlen(version) + 1;
 
         udev_list_entry_foreach(list_entry, udev_device_get_properties_list_entry(udev_device)) {
-                const char *key;
+                const char *key = udev_list_entry_get_name(list_entry);
 
-                key = udev_list_entry_get_name(list_entry);
                 /* skip private variables */
                 if (key[0] == '.')
                         continue;
 
-                /* add string to envp array */
-                udev_device->envp[i++] = s;
-                if (i+1 >= ENVP_SIZE)
-                        return -EINVAL;
-
-                /* add property string to monitor buffer */
-                l = strpcpyl(&s, l, key, "=", udev_list_entry_get_value(list_entry), NULL);
-                if (l == 0)
-                        return -EINVAL;
-                /* advance past the trailing '\0' that strpcpyl() guarantees */
-                s++;
-                l--;
+                len += strlen(key) + 1 + strlen(udev_list_entry_get_value(list_entry)) + 1;
+                n++;
         }
-        udev_device->envp[i] = NULL;
-        udev_device->monitor_buf_len = s - udev_device->monitor_buf;
+
+        buf = malloc(len);
+        envp = new(char *, n + 1);
+        if (!buf || !envp) {
+                free(buf);
+                free(envp);
+                return -ENOMEM;
+        }
+
+        /* append udev database version */
+        s = buf;
+        envp[i++] = s;
+        s = stpcpy(s, version) + 1;
+
+        udev_list_entry_foreach(list_entry, udev_device_get_properties_list_entry(udev_device)) {
+                const char *key = udev_list_entry_get_name(list_entry);
+
+                if (key[0] == '.')
+                        continue;
+
+                envp[i++] = s;
+                s = stpcpy(stpcpy(stpcpy(s, key), "="), udev_list_entry_get_value(list_entry)) + 1;
+        }
+        envp[i] = NULL;
+        assert((size_t) (s - buf) == len);
+
+        free(udev_device->monitor_buf);
+        free(udev_device->envp);
+        udev_device->monitor_buf = buf;
+        udev_device->monitor_buf_len = len;
+        udev_device->envp = envp;
         udev_device->envp_uptodate = true;
         return 0;
 }
