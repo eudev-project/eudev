@@ -27,6 +27,7 @@
 #include <sched.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/file.h>
 #include <dirent.h>
 #include <stddef.h>
 #include <unistd.h>
@@ -281,6 +282,18 @@ int open_mkdir_at(int dirfd, const char *path, int flags, mode_t mode);
 
 int free_and_strdup(char **p, const char *s);
 
+typedef struct LockFile {
+        char *path;
+        int fd;
+        int operation;
+} LockFile;
+
+#define LOCK_FILE_INIT (LockFile) { .fd = -1 }
+
+int make_lock_file(const char *p, int operation, LockFile *ret);
+void release_lock_file(LockFile *f);
+
+
 bool null_or_empty(struct stat *st) _pure_;
 int null_or_empty_path(const char *fn);
 int null_or_empty_fd(int fd);
@@ -480,6 +493,18 @@ static inline void _reset_errno_(int *saved_errno) {
 }
 
 #define PROTECT_ERRNO _cleanup_(_reset_errno_) __attribute__((unused)) int _saved_errno_ = errno
+
+static inline char *rmdir_and_free(char *p) {
+        PROTECT_ERRNO;
+
+        if (!p)
+                return NULL;
+
+        (void) rmdir(p);
+        free(p);
+        return NULL;
+}
+DEFINE_TRIVIAL_CLEANUP_FUNC(char*, rmdir_and_free);
 
 static inline unsigned log2u(unsigned x) {
         assert(x > 0);

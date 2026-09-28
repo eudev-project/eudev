@@ -1460,6 +1460,78 @@ int open_mkdir_at(int dirfd, const char *path, int flags, mode_t mode) {
         return TAKE_FD(fd);
 }
 
+int make_lock_file(const char *p, int operation, LockFile *ret) {
+        _cleanup_close_ int fd = -1;
+        _cleanup_free_ char *t = NULL;
+
+        assert(p);
+        assert(IN_SET(operation & ~LOCK_NB, LOCK_EX, LOCK_SH));
+        assert(ret);
+
+        if (isempty(p))
+                return -EINVAL;
+
+        t = strdup(p);
+        if (!t)
+                return -ENOMEM;
+
+        for (;;) {
+                struct stat st;
+
+                fd = open(p, O_CREAT|O_RDWR|O_NOFOLLOW|O_CLOEXEC|O_NOCTTY, 0600);
+                if (fd < 0)
+                        return -errno;
+
+                if (flock(fd, operation) < 0)
+                        return errno == EWOULDBLOCK ? -EBUSY : -errno;
+
+                /* If we acquired the lock, let's check if the file still exists in the file system. If not,
+                 * then the previous exclusive owner removed it and then closed it. In such a case our
+                 * acquired lock is worthless, hence try again. */
+
+                if (fstat(fd, &st) < 0)
+                        return -errno;
+                if (st.st_nlink > 0)
+                        break;
+
+                fd = safe_close(fd);
+        }
+
+        *ret = (LockFile) {
+                .path = TAKE_PTR(t),
+                .fd = TAKE_FD(fd),
+                .operation = operation,
+        };
+
+        return 0;
+}
+
+void release_lock_file(LockFile *f) {
+        if (!f)
+                return;
+
+        if (f->path) {
+
+                /* If we are the exclusive owner we can safely delete
+                 * the lock file itself. If we are not the exclusive
+                 * owner, we can try becoming it. */
+
+                if (f->fd >= 0 &&
+                    (f->operation & ~LOCK_NB) == LOCK_SH &&
+                    flock(f->fd, LOCK_EX|LOCK_NB) >= 0)
+                        f->operation = LOCK_EX|LOCK_NB;
+
+                if ((f->operation & ~LOCK_NB) == LOCK_EX)
+                        (void) unlink(f->path);
+
+                free(f->path);
+                f->path = NULL;
+        }
+
+        f->fd = safe_close(f->fd);
+        f->operation = 0;
+}
+
 int free_and_strdup(char **p, const char *s) {
         char *t;
 
