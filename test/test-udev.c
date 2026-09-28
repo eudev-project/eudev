@@ -131,6 +131,9 @@ int main(int argc __attribute__((unused)), char *argv[]) {
                 goto out;
         }
 
+        /* Like the devices a udevd worker receives, do not read info from the db */
+        udev_device_set_info_loaded(dev);
+
         event = udev_event_new(dev, EVENT_TEST_RULE_RUNNER);
 
         sigfillset(&mask);
