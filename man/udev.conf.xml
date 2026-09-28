@@ -157,7 +157,8 @@
           Setting it keeps these names stable when a new version adds a new
           scheme. It does not select the rules that choose the name an
           interface is renamed to, which are the same with all schemes, e.g.
-          the name from the hwdb is preferred also with
+          the name from the hwdb is preferred, and interfaces named by
+          userspace or predictably by the kernel are not renamed, also with
           <literal>eudev</literal>. <varname>net.naming_scheme=</varname>
           on the kernel command line and the
           <varname>$NET_NAMING_SCHEME</varname> environment variable of

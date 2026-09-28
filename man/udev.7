@@ -904,7 +904,13 @@ that is set and fits into the 15 characters of an interface name, unless an earl
 \fINAME=\fR\&. This is the order of the default
 \fINamePolicy=\fR
 of systemd, which however does not use
-\fIID_NET_NAME_MAC\fR\&.
+\fIID_NET_NAME_MAC\fR\&. Like its
+keep
+and
+kernel
+policies, the interface is not renamed when its name was given by userspace, i\&.e\&. when it was created with a name or was already renamed, or when the kernel says it named it predictably, i\&.e\&. when the
+name_assign_type
+attribute of the interface is 3 (\fBNET_NAME_USER\fR), 4 (\fBNET_NAME_RENAMED\fR) or 2 (\fBNET_NAME_PREDICTABLE\fR)\&.
 \fIID_NET_NAME_FROM_DATABASE\fR
 is not set by
 \fBnet_id\fR, but by the hwdb, e\&.g\&. to
@@ -1040,7 +1046,7 @@ properties\&. Which one of them an interface is renamed to is decided by
 80\-net\-name\-slot\&.rules
 as described above, the same way with all schemes, e\&.g\&.
 \fIID_NET_NAME_FROM_DATABASE\fR
-is preferred also with the
+is preferred, and interfaces named by userspace or predictably by the kernel are not renamed, also with the
 eudev
 scheme, which eudev 3\&.2\&.15 did not do\&. The following schemes are defined:
 .PP

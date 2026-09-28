@@ -7,6 +7,10 @@ NAME!="", GOTO="net_name_slot_end"
 IMPORT{cmdline}="net.ifnames"
 ENV{net.ifnames}=="0", GOTO="net_name_slot_end"
 
+# like the "keep" and "kernel" policies of systemd, do not rename interfaces named by userspace
+# (name_assign_type NET_NAME_USER or NET_NAME_RENAMED), or predictably by the kernel (NET_NAME_PREDICTABLE)
+ATTR{name_assign_type}=="2|3|4", GOTO="net_name_slot_end"
+
 NAME=="", ENV{ID_NET_NAME_FROM_DATABASE}!="", ENV{ID_NET_NAME_FROM_DATABASE}!="????????????????*", NAME="$env{ID_NET_NAME_FROM_DATABASE}"
 NAME=="", ENV{ID_NET_NAME_ONBOARD}!="", ENV{ID_NET_NAME_ONBOARD}!="????????????????*", NAME="$env{ID_NET_NAME_ONBOARD}"
 NAME=="", ENV{ID_NET_NAME_SLOT}!="", ENV{ID_NET_NAME_SLOT}!="????????????????*", NAME="$env{ID_NET_NAME_SLOT}"
