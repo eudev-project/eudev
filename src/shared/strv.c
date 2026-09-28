@@ -206,6 +206,30 @@ char **strv_uniq(char **l) {
         return l;
 }
 
+char *strv_find(char * const *l, const char *name) {
+        char * const *i;
+
+        assert(name);
+
+        STRV_FOREACH(i, l)
+                if (streq(*i, name))
+                        return *i;
+
+        return NULL;
+}
+
+static int str_compare(const void *a, const void *b) {
+        return strcmp(*(char * const *) a, *(char * const *) b);
+}
+
+char **strv_sort(char **l) {
+        if (strv_isempty(l))
+                return l;
+
+        qsort(l, strv_length(l), sizeof(char *), str_compare);
+        return l;
+}
+
 char **strv_remove(char **l, const char *s) {
         char **f, **t;
 

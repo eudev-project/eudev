@@ -40,6 +40,11 @@ int strv_consume(char ***l, char *value);
 char **strv_remove(char **l, const char *s);
 char **strv_uniq(char **l);
 
+char *strv_find(char * const *l, const char *name) _pure_;
+#define strv_contains(l, s) (!!strv_find((l), (s)))
+
+char **strv_sort(char **l);
+
 char **strv_new(const char *x, ...) _sentinel_;
 char **strv_new_ap(const char *x, va_list ap);
 
