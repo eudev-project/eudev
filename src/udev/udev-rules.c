@@ -1423,25 +1423,25 @@ static int add_rule(struct udev_rules *rules, char *line,
                 bool is_case_insensitive;
 
                 if (get_key(rules->udev, &linepos, &key, &op, &value, &is_case_insensitive) != 0) {
-                        /* Avoid erroring on trailing whitespace. This is probably rare
-                         * so save the work for the error case instead of always trying
-                         * to strip the trailing whitespace with strstrip(). */
-                        while (isblank(*linepos))
-                                linepos++;
+                        char buf[2] = {};
+                        _cleanup_free_ char *tmp = NULL;
 
-                        /* If we aren't at the end of the line, this is a parsing error.
-                         * Make a best effort to describe where the problem is. */
-                        if (!strchr(NEWLINE, *linepos)) {
-                                char buf[2] = {*linepos};
-                                _cleanup_free_ char *tmp;
+                        /* The end of the line, possibly after whitespace and stray commas, which
+                         * systemd-udevd accepts as well. */
+                        linepos += strspn(linepos, WHITESPACE ",");
+                        if (*linepos == '\0')
+                                break;
 
-                                tmp = cescape(buf);
-                                log_error("invalid key/value pair in file %s on line %u, starting at character %tu ('%s')",
-                                          filename, lineno, linepos - line + 1, tmp);
-                                if (*linepos == '#')
-                                        log_error("hint: comments can only start at beginning of line");
-                        }
-                        break;
+                        /* Otherwise, this is a parsing error. Make a best effort to describe where
+                         * the problem is, and drop the whole line, like systemd-udevd does, instead
+                         * of applying only the keys before the error. */
+                        buf[0] = *linepos;
+                        tmp = cescape(buf);
+                        log_error("invalid key/value pair in file %s on line %u, starting at character %tu ('%s')",
+                                  filename, lineno, linepos - line + 1, tmp ?: "");
+                        if (*linepos == '#')
+                                log_error("hint: comments can only start at beginning of line");
+                        goto invalid;
                 }
 
                 if (is_case_insensitive && op > OP_MATCH_MAX) {

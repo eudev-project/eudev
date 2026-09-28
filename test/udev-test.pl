@@ -1566,6 +1566,19 @@ KERNEL=="sda1", TAGS=="sticky", SYMLINK+="bad"
 KERNEL=="sda1", ENV{OLD}=="1", ENV{CUR}=="1", SYMLINK+="found"
 EOF
         },
+        {
+                desc            => "a key/value syntax error drops the whole line",
+                devpath         => "/devices/pci0000:00/0000:00:1f.2/host0/target0:0:0/0:0:0:0/block/sda",
+                exp_name        => "found",
+                not_exp_name    => "bad",
+                rules           => <<EOF
+KERNEL=="sda", SYMLINK+="bad", ENV{X}="1" ENV{Y}
+KERNEL=="sda", SYMLINK+="bad", SYMLINK+=no-quotes
+KERNEL=="sda", SYMLINK+="bad", # comment
+KERNEL=="sda", SYMLINK+="bad", NAME="unterminated
+, KERNEL=="sda", SYMLINK+="found", ,
+EOF
+        },
 );
 
 sub udev {
