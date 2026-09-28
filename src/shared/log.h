@@ -61,6 +61,16 @@ int log_internal(
                 const char *func,
                 const char *format, ...) _printf_(6,7);
 
+/* Logs a message that is not a format string, and may be longer than LINE_MAX, which limits the
+ * formatted messages of log_internal(). Each line of it is logged as a message of its own. */
+int log_internal_long(
+                int level,
+                int error,
+                const char *file,
+                int line,
+                const char *func,
+                const char *message);
+
 int log_internalv(
                 int level,
                 int error,
@@ -99,6 +109,14 @@ noreturn void log_assert_failed_unreachable(
         })
 
 #define log_full(level, ...) log_full_errno(level, 0, __VA_ARGS__)
+
+#define log_full_long(level, message)                                             \
+        ({                                                                        \
+                int _l = (level);                                                 \
+                (log_get_max_level() >= LOG_PRI(_l))                              \
+                ? log_internal_long(_l, 0, __FILE__, __LINE__, __func__, (message)) \
+                : 0;                                                              \
+        })
 
 /* Normal logging */
 #define log_debug(...)     log_full(LOG_DEBUG,   __VA_ARGS__)

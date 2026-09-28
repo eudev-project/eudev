@@ -493,6 +493,31 @@ int log_internalv(
         return log_dispatch(level, error, file, line, func, NULL, NULL, buffer);
 }
 
+int log_internal_long(
+        int level,
+        int error,
+        const char *file,
+        int line,
+        const char *func,
+        const char *message) {
+
+        PROTECT_ERRNO;
+        _cleanup_free_ char *buffer = NULL;
+
+        if (error < 0)
+                error = -error;
+
+        if (_likely_(LOG_PRI(level) > log_max_level))
+                return -error;
+
+        /* log_dispatch() modifies the buffer while splitting the lines */
+        buffer = strdup(message);
+        if (!buffer)
+                return log_internal(level, error, file, line, func, "%.*s", LINE_MAX - 1, message);
+
+        return log_dispatch(level, error, file, line, func, NULL, NULL, buffer);
+}
+
 int log_internal(
                 int level,
                 int error,
