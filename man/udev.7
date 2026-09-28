@@ -59,7 +59,10 @@ Every line in the rules file contains at least one key\-value pair\&. Except for
 .PP
 A matching rule may rename a network interface, add symlinks pointing to the device node, or run a specified program as part of the event handling\&.
 .PP
-A rule consists of a comma\-separated list of one or more key\-value pairs\&. Each key has a distinct operation, depending on the used operator\&. Valid operators are:
+A rule consists of a comma\-separated list of one or more key\-value pairs\&. Each key has a distinct operation, depending on the used operator\&. A rule line with a key\-value pair that cannot be parsed, e\&.g\&. with a value that is not quoted, or with an unknown key, an operator the key does not take, an unknown built\-in command, or an unknown type of
+\fIIMPORT{}\fR
+or
+\fIRUN{}\fR, is ignored as a whole, and an error message says so\&. Valid operators are:
 .PP
 ==
 .RS 4
@@ -445,7 +448,7 @@ program, but use one of the built\-in programs rather than an external one\&.
 .PP
 file
 .RS 4
-Import a text file specified as the assigned value, the content of which must be in environment key format\&.
+Import a text file specified as the assigned value, the content of which must be in environment key format\&. A line may be up to 1 MiB long; a longer line stops the import, and the key is false, while the properties imported before it are kept\&.
 .RE
 .PP
 db
@@ -463,11 +466,22 @@ parent
 .RS 4
 Import the stored keys from the parent device by reading the database entry of the parent device\&. The value assigned to
 \fBIMPORT{parent}\fR
-is used as a filter of key names to import (with the same shell glob pattern matching used for comparisons)\&.
+is used as a filter of key names to import (with the same shell glob pattern matching used for comparisons)\&. The import is successful when at least one property was imported\&.
 .RE
 .sp
 This can only be used for very short\-running foreground tasks\&. For details see
 \fBRUN\fR\&.
+.sp
+Note that multiple
+\fIIMPORT{}\fR
+keys may be specified in one rule, and
+=,
+:=, and
++=
+have the same effect as
+==\&. The key is true if the import is successful, unless
+!=
+is used as the operator which causes the key to be true if the import failed\&.
 .RE
 .PP
 \fIWAIT_FOR\fR
@@ -477,7 +491,19 @@ Wait for a file to become available or until a timeout of 10 seconds expires\&. 
 .PP
 \fIOPTIONS\fR
 .RS 4
-Rule and device options:
+Rule and device options\&. Several options may be given in one value, separated by commas, e\&.g\&.
+OPTIONS+="watch,link_priority=10"; each one must be exactly one of the options below\&. An unknown option is ignored with a warning, and the rest of the rule is applied\&. An invalid value of
+\fBlink_priority=\fR
+or
+\fBlog_level=\fR
+makes the rule line invalid, as do the operators
+==,
+!=
+and
+\-=;
++=
+has the same effect as
+=\&.
 .PP
 \fBlink_priority=\fR\fB\fIvalue\fR\fR
 .RS 4

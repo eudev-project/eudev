@@ -83,8 +83,11 @@
       the event handling.</para>
 
       <para>A rule consists of a comma-separated list of one or more key-value pairs.
-      Each key has a distinct operation, depending on the used operator. Valid
-      operators are:</para>
+      Each key has a distinct operation, depending on the used operator. A rule line
+      with a key-value pair that cannot be parsed, e.g. with a value that is not quoted,
+      or with an unknown key, an operator the key does not take, an unknown built-in
+      command, or an unknown type of <varname>IMPORT{}</varname> or <varname>RUN{}</varname>,
+      is ignored as a whole, and an error message says so. Valid operators are:</para>
       <variablelist>
         <varlistentry>
           <term><literal>==</literal></term>
@@ -555,7 +558,9 @@
                 <term><literal>file</literal></term>
                 <listitem>
                   <para>Import a text file specified as the assigned value, the content
-                  of which must be in environment key format.</para>
+                  of which must be in environment key format. A line may be up to 1 MiB
+                  long; a longer line stops the import, and the key is false, while the
+                  properties imported before it are kept.</para>
                 </listitem>
               </varlistentry>
               <varlistentry>
@@ -580,12 +585,18 @@
                   the database entry of the parent device. The value assigned to
                   <option>IMPORT{parent}</option> is used as a filter of key names
                   to import (with the same shell glob pattern matching used for
-                  comparisons).</para>
+                  comparisons). The import is successful when at least one property was
+                  imported.</para>
                 </listitem>
               </varlistentry>
             </variablelist>
             <para>This can only be used for very short-running foreground tasks. For details
             see <option>RUN</option>.</para>
+
+            <para>Note that multiple <varname>IMPORT{}</varname> keys may be specified in one rule, and
+            <literal>=</literal>, <literal>:=</literal>, and <literal>+=</literal> have the same effect as
+            <literal>==</literal>. The key is true if the import is successful, unless <literal>!=</literal>
+            is used as the operator which causes the key to be true if the import failed.</para>
           </listitem>
         </varlistentry>
 
@@ -601,7 +612,13 @@
         <varlistentry>
           <term><varname>OPTIONS</varname></term>
           <listitem>
-            <para>Rule and device options:</para>
+            <para>Rule and device options. Several options may be given in one value, separated by
+            commas, e.g. <literal>OPTIONS+="watch,link_priority=10"</literal>; each one must be
+            exactly one of the options below. An unknown option is ignored with a warning, and the
+            rest of the rule is applied. An invalid value of <option>link_priority=</option> or
+            <option>log_level=</option> makes the rule line invalid, as do the operators
+            <literal>==</literal>, <literal>!=</literal> and <literal>-=</literal>;
+            <literal>+=</literal> has the same effect as <literal>=</literal>.</para>
             <variablelist class='udev-directives'>
               <varlistentry>
                 <term><option>link_priority=<replaceable>value</replaceable></option></term>
