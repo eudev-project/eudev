@@ -191,6 +191,82 @@ int mac_selinux_fix(const char *path, bool ignore_enoent, bool ignore_erofs) {
         return 0;
 }
 
+int mac_selinux_fix_fd(int fd, const char *path, bool ignore_erofs) {
+
+#ifdef HAVE_SELINUX
+        _cleanup_security_context_free_ char *fcon = NULL;
+        struct stat st;
+        int r;
+
+        assert(fd >= 0);
+        assert(path);
+
+        /* Like mac_selinux_fix(), but for the inode that fd refers to, which may be opened with O_PATH.
+         * The path is only used to look up the label. */
+
+        /* if mac_selinux_init() wasn't called before we are a NOOP */
+        if (!label_hnd)
+                return 0;
+
+        if (fstat(fd, &st) < 0)
+                return -errno;
+
+        if (selabel_lookup_raw(label_hnd, &fcon, path, st.st_mode) < 0) {
+                /* If there's no label to set, then exit without warning */
+                if (errno == ENOENT)
+                        return 0;
+
+                r = -errno;
+                log_enforcing("Unable to lookup intended SELinux security context of %s: %s", path, strerror(-r));
+                return security_getenforce() == 1 ? r : 0;
+        }
+
+        if (setfilecon_raw(FORMAT_PROC_FD_PATH(fd), fcon) < 0) {
+                _cleanup_security_context_free_ char *oldcon = NULL;
+
+                /* If the FS doesn't support labels, then exit without warning */
+                if (errno == EOPNOTSUPP)
+                        return 0;
+
+                /* If the FS is read-only and we were told to ignore failures caused by an ROFS, then don't warn */
+                if (errno == EROFS && ignore_erofs)
+                        return 0;
+
+                r = -errno;
+
+                /* If the old label is identical to the new one, suppress any kind of error */
+                if (getfilecon_raw(FORMAT_PROC_FD_PATH(fd), &oldcon) >= 0 && streq(fcon, oldcon))
+                        return 0;
+
+                log_enforcing("Unable to fix SELinux security context of %s: %s", path, strerror(-r));
+                return security_getenforce() == 1 ? r : 0;
+        }
+#endif
+
+        return 0;
+}
+
+int mac_selinux_apply_fd(int fd, const char *path, const char *label) {
+
+#ifdef HAVE_SELINUX
+        int r;
+
+        assert(fd >= 0);
+        assert(label);
+
+        if (!mac_selinux_use())
+                return 0;
+
+        if (setfilecon(FORMAT_PROC_FD_PATH(fd), label) < 0) {
+                r = -errno;
+                log_enforcing("Failed to set SELinux security context %s on path %s: %s", label, path ?: "n/a", strerror(-r));
+                if (security_getenforce() == 1)
+                        return r;
+        }
+#endif
+        return 0;
+}
+
 int mac_selinux_apply(const char *path, const char *label) {
 
 #ifdef HAVE_SELINUX

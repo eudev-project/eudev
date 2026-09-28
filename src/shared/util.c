@@ -1174,6 +1174,109 @@ int chmod_and_chown(const char *path, mode_t mode, uid_t uid, gid_t gid) {
         return 0;
 }
 
+static int proc_fd_enoent_errno(void) {
+        /* When ENOENT is returned during the use of FORMAT_PROC_FD_PATH, it can mean two things: that the
+         * fd does not exist or that /proc/ is not mounted. Let's make things debuggable and figure out the
+         * most appropriate errno. */
+
+        if (access("/proc/self/fd", F_OK) < 0)
+                return errno == ENOENT ? -ENOSYS : -ENOENT;
+
+        return -EBADF;
+}
+
+int fchmod_opath(int fd, mode_t m) {
+        /* This function operates also on fd that might have been opened with O_PATH. fchmod() only
+         * operates on open files, and fchmodat() has no AT_EMPTY_PATH, hence let's go via /proc/self/fd/. */
+
+        assert(fd >= 0);
+
+        if (chmod(FORMAT_PROC_FD_PATH(fd), m) < 0) {
+                if (errno != ENOENT)
+                        return -errno;
+
+                return proc_fd_enoent_errno();
+        }
+
+        return 0;
+}
+
+int fchmod_and_chown(int fd, mode_t mode, uid_t uid, gid_t gid) {
+        bool do_chown, do_chmod;
+        struct stat st;
+        int r;
+
+        /* Change ownership and access mode of the specified fd. Tries to do so safely, ensuring that at no
+         * point in time the access mode is above the old access mode under the old ownership or the new
+         * access mode under the new ownership. Note: this call tries hard to leave the access mode
+         * unaffected if the uid/gid is changed, i.e. it undoes implicit suid/sgid dropping the kernel does
+         * on chown().
+         *
+         * This call is happy with O_PATH fds. */
+
+        if (fstat(fd, &st) < 0)
+                return -errno;
+
+        do_chown =
+                (uid != UID_INVALID && st.st_uid != uid) ||
+                (gid != GID_INVALID && st.st_gid != gid);
+
+        do_chmod =
+                !S_ISLNK(st.st_mode) && /* chmod is not defined on symlinks */
+                ((mode != MODE_INVALID && ((st.st_mode ^ mode) & 07777) != 0) ||
+                 do_chown); /* If we change ownership, make sure we reset the mode afterwards, since chown()
+                             * modifies the access mode too */
+
+        if (mode == MODE_INVALID)
+                mode = st.st_mode; /* If we only shall do a chown(), save original mode, since chown() might break it. */
+        else if ((mode & S_IFMT) != 0 && ((mode ^ st.st_mode) & S_IFMT) != 0)
+                return -EINVAL; /* insist on the right file type if it was specified */
+
+        if (do_chown && do_chmod) {
+                mode_t minimal = st.st_mode & mode; /* the subset of the old and the new mask */
+
+                if (((minimal ^ st.st_mode) & 07777) != 0) {
+                        r = fchmod_opath(fd, minimal & 07777);
+                        if (r < 0)
+                                return r;
+                }
+        }
+
+        if (do_chown)
+                if (fchownat(fd, "", uid, gid, AT_EMPTY_PATH) < 0)
+                        return -errno;
+
+        if (do_chmod) {
+                r = fchmod_opath(fd, mode & 07777);
+                if (r < 0)
+                        return r;
+        }
+
+        return do_chown || do_chmod;
+}
+
+int futimens_opath(int fd, const struct timespec ts[2]) {
+        /* Similar to fchmod_opath() but for futimens() */
+
+        assert(fd >= 0);
+
+        if (utimensat(fd, "", ts, AT_EMPTY_PATH) >= 0)
+                return 0;
+        if (errno != EINVAL)
+                return -errno;
+
+        /* Support for AT_EMPTY_PATH was added rather late (kernel 5.8), so fall back to going through
+         * /proc/ if unavailable. */
+        if (utimensat(AT_FDCWD, FORMAT_PROC_FD_PATH(fd), ts, 0) < 0) {
+                if (errno != ENOENT)
+                        return -errno;
+
+                return proc_fd_enoent_errno();
+        }
+
+        return 0;
+}
+
 int touch_file(const char *path, bool parents, usec_t stamp, uid_t uid, gid_t gid, mode_t mode) {
         _cleanup_close_ int fd;
         int r;

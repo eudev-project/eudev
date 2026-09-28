@@ -74,10 +74,12 @@ int mac_smack_apply_fd(int fd, const char *label __attribute__((unused))) {
         if (!mac_smack_use())
                 return 0;
 
+        /* Go via /proc/self/fd/, so that this works for fds opened with O_PATH too, for which
+         * fsetxattr() fails. */
         if (label)
-                r = fsetxattr(fd, "security.SMACK64", label, strlen(label), 0);
+                r = setxattr(FORMAT_PROC_FD_PATH(fd), "security.SMACK64", label, strlen(label), 0);
         else
-                r = fremovexattr(fd, "security.SMACK64");
+                r = removexattr(FORMAT_PROC_FD_PATH(fd), "security.SMACK64");
         if (r < 0)
                 return -errno;
 #endif
