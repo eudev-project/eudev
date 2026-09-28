@@ -68,14 +68,16 @@ static int fake_filesystems(void) {
                 goto out;
         }
 
-        if (mount(NULL, "/", NULL, MS_PRIVATE|MS_REC, NULL) < 0) {
+        /* The source and the type are ignored when changing the propagation and for bind mounts,
+         * but pass strings instead of NULL, which valgrind reports as invalid. */
+        if (mount("none", "/", "none", MS_PRIVATE|MS_REC, NULL) < 0) {
                 err = -errno;
                 fprintf(stderr, "failed to mount / as private: %m\n");
                 goto out;
         }
 
         for (i = 0; i < ELEMENTSOF(fakefss); i++) {
-                err = mount(fakefss[i].src, fakefss[i].target, NULL, MS_BIND, NULL);
+                err = mount(fakefss[i].src, fakefss[i].target, "none", MS_BIND, NULL);
                 if (err < 0) {
                         err = -errno;
                         fprintf(stderr, "%s %m", fakefss[i].error);
