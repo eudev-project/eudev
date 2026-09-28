@@ -848,3 +848,124 @@ bool empty_or_root(const char *path) {
 
         return path_equal(path, "/");
 }
+
+int path_make_relative(const char *from, const char *to, char **ret) {
+        _cleanup_free_ char *result = NULL;
+        unsigned n_parents;
+        const char *f, *t;
+        int r, k;
+        char *p;
+
+        assert(from);
+        assert(to);
+        assert(ret);
+
+        /* Strips the common part, and adds ".." elements as necessary. */
+
+        if (!path_is_absolute(from) || !path_is_absolute(to))
+                return -EINVAL;
+
+        for (;;) {
+                r = path_find_first_component(&from, true, &f);
+                if (r < 0)
+                        return r;
+
+                k = path_find_first_component(&to, true, &t);
+                if (k < 0)
+                        return k;
+
+                if (r == 0) {
+                        /* end of 'from' */
+                        if (k == 0) {
+                                /* from and to are equivalent. */
+                                result = strdup(".");
+                                if (!result)
+                                        return -ENOMEM;
+                        } else {
+                                /* 'to' is inside of 'from'. */
+                                r = path_simplify_alloc(t, &result);
+                                if (r < 0)
+                                        return r;
+
+                                if (!path_is_valid(result))
+                                        return -EINVAL;
+                        }
+
+                        *ret = TAKE_PTR(result);
+                        return 0;
+                }
+
+                if (r != k || !strneq(f, t, r))
+                        break;
+        }
+
+        /* If we're here, then "from_dir" has one or more elements that need to
+         * be replaced with "..". */
+
+        for (n_parents = 1;; n_parents++) {
+                /* If this includes ".." we can't do a simple series of "..". */
+                r = path_find_first_component(&from, false, &f);
+                if (r < 0)
+                        return r;
+                if (r == 0)
+                        break;
+        }
+
+        if (isempty(t) && n_parents * 3 > PATH_MAX)
+                /* PATH_MAX is counted *with* the trailing NUL byte */
+                return -EINVAL;
+
+        result = new(char, n_parents * 3 + !isempty(t) + strlen_ptr(t));
+        if (!result)
+                return -ENOMEM;
+
+        for (p = result; n_parents > 0; n_parents--)
+                p = mempcpy(p, "../", 3);
+
+        if (isempty(t)) {
+                /* Remove trailing slash and terminate string. */
+                *(--p) = '\0';
+                *ret = TAKE_PTR(result);
+                return 0;
+        }
+
+        strcpy(p, t);
+
+        path_simplify(result);
+
+        if (!path_is_valid(result))
+                return -EINVAL;
+
+        *ret = TAKE_PTR(result);
+        return 0;
+}
+
+int path_make_relative_parent(const char *from_child, const char *to, char **ret) {
+        _cleanup_free_ char *from = NULL;
+
+        assert(from_child);
+        assert(to);
+        assert(ret);
+
+        /* Similar to path_make_relative(), but provides the relative path from the parent directory of
+         * 'from_child'. This may be useful when creating relative symlink.
+         *
+         * E.g.
+         * - from = "/path/to/aaa", to = "/path/to/bbb"
+         *      path_make_relative(from, to) = "../bbb"
+         *      path_make_relative_parent(from, to) = "bbb"
+         *
+         * - from = "/path/to/aaa/bbb", to = "/path/to/ccc/ddd"
+         *      path_make_relative(from, to) = "../../ccc/ddd"
+         *      path_make_relative_parent(from, to) = "../ccc/ddd"
+         */
+
+        if (!path_is_absolute(from_child))
+                return -EINVAL;
+
+        from = dirname_malloc(from_child);
+        if (!from)
+                return -ENOMEM;
+
+        return path_make_relative(from, to, ret);
+}

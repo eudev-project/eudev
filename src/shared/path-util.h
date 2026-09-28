@@ -56,6 +56,8 @@ static inline bool path_is_safe(const char *p) {
 }
 bool path_is_normalized(const char *p) _pure_;
 bool empty_or_root(const char *path) _pure_;
+int path_make_relative(const char *from, const char *to, char **ret);
+int path_make_relative_parent(const char *from_child, const char *to, char **ret);
 #define path_extend(x, ...) path_extend_internal(x, __VA_ARGS__, POINTER_MAX)
 #define path_join(...) path_extend_internal(NULL, __VA_ARGS__, POINTER_MAX)
 
