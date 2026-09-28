@@ -1320,6 +1320,72 @@ int touch(const char *path) {
         return touch_file(path, false, USEC_INFINITY, UID_INVALID, GID_INVALID, 0);
 }
 
+int readlinkat_malloc(int fd, const char *p, char **ret) {
+        size_t l = PATH_MAX;
+
+        assert(fd >= 0 || fd == AT_FDCWD);
+
+        if (fd < 0 && isempty(p))
+                return -EISDIR; /* In this case, the fd points to the current working directory, and is
+                                 * definitely not a symlink. Let's return earlier. */
+
+        for (;;) {
+                _cleanup_free_ char *c = NULL;
+                ssize_t n;
+
+                c = new(char, l+1);
+                if (!c)
+                        return -ENOMEM;
+
+                n = readlinkat(fd, p ?: "", c, l);
+                if (n < 0)
+                        return -errno;
+
+                if ((size_t) n < l) {
+                        c[n] = 0;
+
+                        if (ret)
+                                *ret = TAKE_PTR(c);
+
+                        return 0;
+                }
+
+                if (l > (SSIZE_MAX-1)/2) /* readlinkat() returns an ssize_t, and we want an extra byte for a
+                                          * trailing NUL, hence do an overflow check relative to SSIZE_MAX-1
+                                          * here */
+                        return -EFBIG;
+
+                l *= 2;
+        }
+}
+
+int readlink_malloc(const char *p, char **ret) {
+        return readlinkat_malloc(AT_FDCWD, p, ret);
+}
+
+int free_and_strdup(char **p, const char *s) {
+        char *t;
+
+        assert(p);
+
+        /* Replaces a string pointer with a strdup()ed new string, possibly freeing the old one. */
+
+        if (streq_ptr(*p, s))
+                return 0;
+
+        if (s) {
+                t = strdup(s);
+                if (!t)
+                        return -ENOMEM;
+        } else
+                t = NULL;
+
+        free(*p);
+        *p = t;
+
+        return 1;
+}
+
 bool null_or_empty(struct stat *st) {
         assert(st);
 

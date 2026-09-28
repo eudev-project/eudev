@@ -273,6 +273,11 @@ int futimens_opath(int fd, const struct timespec ts[2]);
 int touch_file(const char *path, bool parents, usec_t stamp, uid_t uid, gid_t gid, mode_t mode);
 int touch(const char *path);
 
+int readlinkat_malloc(int fd, const char *p, char **ret);
+int readlink_malloc(const char *p, char **ret);
+
+int free_and_strdup(char **p, const char *s);
+
 bool null_or_empty(struct stat *st) _pure_;
 int null_or_empty_path(const char *fn);
 int null_or_empty_fd(int fd);

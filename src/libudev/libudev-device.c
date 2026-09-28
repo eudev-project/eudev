@@ -554,18 +554,6 @@ static bool str_in_set(const char *s, const char *const *set)
 }
 #define STR_IN_SET(s, ...) str_in_set((s), (const char *const[]) { __VA_ARGS__, NULL })
 
-static int free_and_strdup(char **p, const char *s)
-{
-        char *t;
-
-        t = strdup(s);
-        if (!t)
-                return -ENOMEM;
-        free(*p);
-        *p = t;
-        return 0;
-}
-
 /* Parses the numbers of the properties libudev interprets, like systemd's sd-device does. */
 
 /* DEVMODE=, like safe_atou() of systemd: e.g. "0660" is octal */
