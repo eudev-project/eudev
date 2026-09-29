@@ -37,6 +37,7 @@
 
 #include "udev.h"
 #include "netif-naming-scheme.h"
+#include "path-util.h"
 #include "socket-util.h"
 #include "udev-netlink.h"
 
@@ -780,29 +781,44 @@ int udev_build_argv(struct udev *udev __attribute__((unused)), char *cmd, int *r
 
 /* the directories udev_event_spawn() runs a program given without a path from */
 static const char test_mode_helper_dirs[] =
-        UDEV_LIBEXEC_DIR "/\0"
+        UDEV_LIBEXEC_DIR "\0"
 #ifdef HAVE_SPLIT_USR
-        "/usr/lib/udev/\0"
-        "/lib/udev/\0"
+        "/usr/lib/udev\0"
+        "/lib/udev\0"
 #endif
         ;
 
 /* Return the name of the udev helper that "udevadm test" runs, or NULL if the program must not be run
  * in test mode. The program must be the helper's name, or its absolute path in one of the directories
- * above: a prefix match would also let e.g. "cdrom_idX" or "scsi_id_wrapper" run. */
+ * above: a prefix match would also let e.g. "cdrom_idX" or "scsi_id_wrapper" run. The paths are
+ * compared simplified, i.e. "/usr/lib/udev//ata_id" and "/usr/lib/udev/./ata_id" are the helper too. */
 static const char *test_mode_helper(const char *program) {
-        const char *h, *d, *s;
+        _cleanup_free_ char *p = NULL;
+        const char *h, *d;
 
         if (isempty(program))
                 return NULL;
 
+        p = strdup(program);
+        if (!p) {
+                log_oom();
+                return NULL;
+        }
+        path_simplify(p);
+
         NULSTR_FOREACH(h, "ata_id\0" "cdrom_id\0" "dmi_memory_id\0" "fido_id\0" "mtd_probe\0" "scsi_id\0") {
-                if (streq(program, h))
+                if (streq(p, h))
                         return h;
 
                 NULSTR_FOREACH(d, test_mode_helper_dirs) {
-                        s = startswith(program, d);
-                        if (s && streq(s, h))
+                        _cleanup_free_ char *path = NULL;
+
+                        path = strjoin(d, "/", h, NULL);
+                        if (!path) {
+                                log_oom();
+                                return NULL;
+                        }
+                        if (streq(p, path_simplify(path)))
                                 return h;
                 }
         }
