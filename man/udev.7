@@ -545,6 +545,13 @@ have the same effect as
 ==\&. The key is true if the import is successful, unless
 !=
 is used as the operator which causes the key to be true if the import failed\&.
+.sp
+Some errors are not a failed import, but stop the processing of the event: when the file of
+IMPORT{file}
+exists but cannot be opened, when the kernel command line cannot be read for
+IMPORT{cmdline}, or when the memory runs out\&. Then no further rules are applied, the device node and its symlinks are not handled, the database is not updated, and the programs of
+\fIRUN\fR
+are not run; the event is still sent to the event listeners\&.
 .RE
 .PP
 \fIWAIT_FOR\fR

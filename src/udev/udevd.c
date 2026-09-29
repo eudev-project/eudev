@@ -342,24 +342,31 @@ static void worker_spawn(struct event *event) {
                         }
 
                         /* apply rules, create node, symlinks */
-                        udev_event_execute_rules(udev_event,
-                                                 arg_event_timeout_usec, arg_event_timeout_warn_usec,
-                                                 &properties_list,
-                                                 rules,
-                                                 &sigmask_orig);
+                        r = udev_event_execute_rules(udev_event,
+                                                     arg_event_timeout_usec, arg_event_timeout_warn_usec,
+                                                     &properties_list,
+                                                     rules,
+                                                     &sigmask_orig);
+                        if (r < 0)
+                                /* Like systemd a446e8ff2c, when the rules fail, e.g. on an error of
+                                 * IMPORT{}, do not run RUN and do not restore the inotify watch, but
+                                 * still send the (partially processed) event to the listeners. */
+                                log_warning_errno(r, "%s: Failed to process device, ignoring: %m",
+                                                  udev_device_get_sysname(dev));
+                        else {
+                                udev_event_execute_run(udev_event,
+                                                       arg_event_timeout_usec, arg_event_timeout_warn_usec,
+                                                       &sigmask_orig);
 
-                        udev_event_execute_run(udev_event,
-                                               arg_event_timeout_usec, arg_event_timeout_warn_usec,
-                                               &sigmask_orig);
-
-                        /* apply/restore inotify watch; some udev rule may erroneously set
-                         * inotify watch on remove event, silently ignore it for safety */
-                        if (!streq_ptr(udev_device_get_action(dev), "remove") &&
-                            udev_device_get_devnode(dev) != NULL) {
-                                if (udev_event->inotify_watch)
-                                        udev_watch_begin(udev, dev);
-                                else
-                                        udev_watch_end(udev, dev);
+                                /* apply/restore inotify watch; some udev rule may erroneously set
+                                 * inotify watch on remove event, silently ignore it for safety */
+                                if (!streq_ptr(udev_device_get_action(dev), "remove") &&
+                                    udev_device_get_devnode(dev) != NULL) {
+                                        if (udev_event->inotify_watch)
+                                                udev_watch_begin(udev, dev);
+                                        else
+                                                udev_watch_end(udev, dev);
+                                }
                         }
 
                         safe_close(fd_lock);

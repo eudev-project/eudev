@@ -1782,6 +1782,17 @@ KERNEL=="sda", GROUP="65535", SYMLINK+="bad"
 KERNEL=="sda", OWNER="4294967296", SYMLINK+="bad"
 EOF
         },
+        {
+                desc            => "an IMPORT{file} error stops the processing of the event",
+                devpath         => "/devices/pci0000:00/0000:00:1f.2/host0/target0:0:0/0:0:0:0/block/sda",
+                exp_name        => "sda",
+                not_exp_name    => "bad",
+                rules           => <<EOF
+KERNEL=="sda", SYMLINK+="bad"
+KERNEL=="sda", IMPORT{file}="/dev/null/x"
+KERNEL=="sda", SYMLINK+="bad", RUN+="/bin/sh -c 'ln -s sda /dev/bad'"
+EOF
+        },
 );
 
 sub udev {

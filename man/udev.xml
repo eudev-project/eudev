@@ -654,6 +654,13 @@
             <literal>=</literal>, <literal>:=</literal>, and <literal>+=</literal> have the same effect as
             <literal>==</literal>. The key is true if the import is successful, unless <literal>!=</literal>
             is used as the operator which causes the key to be true if the import failed.</para>
+
+            <para>Some errors are not a failed import, but stop the processing of the event: when the
+            file of <literal>IMPORT{file}</literal> exists but cannot be opened, when the kernel command
+            line cannot be read for <literal>IMPORT{cmdline}</literal>, or when the memory runs out.
+            Then no further rules are applied, the device node and its symlinks are not handled, the
+            database is not updated, and the programs of <varname>RUN</varname> are not run; the event
+            is still sent to the event listeners.</para>
           </listitem>
         </varlistentry>
 

@@ -167,11 +167,13 @@ static int adm_test(struct udev *udev, int argc, char *argv[]) {
                 goto out;
         }
 
-        udev_event_execute_rules(event,
-                                 60 * USEC_PER_SEC, 20 * USEC_PER_SEC,
-                                 NULL,
-                                 rules,
-                                 &sigmask_orig);
+        r = udev_event_execute_rules(event,
+                                     60 * USEC_PER_SEC, 20 * USEC_PER_SEC,
+                                     NULL,
+                                     rules,
+                                     &sigmask_orig);
+        if (r < 0)
+                log_warning_errno(r, "Failed to process the rules, udevd would stop processing the event here and not run RUN: %m");
 
         maybe_insert_empty_line();
         r = dump_event(event, json_format_flags, NULL);

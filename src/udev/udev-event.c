@@ -1252,15 +1252,19 @@ static void event_assign_altnames(struct udev_event *event) {
                                "Could not assign alternative names to network interface '%s', ignoring: %m", ifname);
 }
 
-void udev_event_execute_rules(struct udev_event *event,
-                              usec_t timeout_usec, usec_t timeout_warn_usec,
-                              struct udev_list *properties_list,
-                              struct udev_rules *rules,
-                              const sigset_t *sigmask) {
+/* Applies the rules to the event, and creates or removes the device node and its symlinks, renames a
+ * network interface and writes the database. Like systemd, when the rules fail, e.g. on an error of
+ * IMPORT{}, the rest of it is skipped, and the error is returned; the caller does not run RUN either. */
+int udev_event_execute_rules(struct udev_event *event,
+                             usec_t timeout_usec, usec_t timeout_warn_usec,
+                             struct udev_list *properties_list,
+                             struct udev_rules *rules,
+                             const sigset_t *sigmask) {
         struct udev_device *dev = event->dev;
+        int r;
 
         if (udev_device_get_subsystem(dev) == NULL)
-                return;
+                return 0;
 
         if (streq(udev_device_get_action(dev), "remove")) {
                 udev_device_read_db(dev);
@@ -1273,15 +1277,19 @@ void udev_event_execute_rules(struct udev_event *event,
                                 udev_watch_end(event->udev, dev);
                 }
 
-                udev_rules_apply_to_event(rules, event,
-                                          timeout_usec, timeout_warn_usec,
-                                          properties_list,
-                                          sigmask);
+                r = udev_rules_apply_to_event(rules, event,
+                                              timeout_usec, timeout_warn_usec,
+                                              properties_list,
+                                              sigmask);
+                if (r < 0)
+                        log_debug_errno(r, "%s: Failed to apply udev rules: %m", udev_device_get_sysname(dev));
 
                 if (EVENT_MODE_DESTRUCTIVE(event)) {
                         if (major(udev_device_get_devnum(dev)) != 0)
                                 udev_node_remove(dev);
                 }
+
+                return r < 0 ? r : 0;
         } else {
                 /* disable watch during event processing */
                 if (EVENT_MODE_DESTRUCTIVE(event) && major(udev_device_get_devnum(dev)) != 0)
@@ -1297,10 +1305,15 @@ void udev_event_execute_rules(struct udev_event *event,
                     streq(udev_device_get_action(dev), "move"))
                         udev_device_copy_properties(dev, event->dev_db);
 
-                udev_rules_apply_to_event(rules, event,
-                                          timeout_usec, timeout_warn_usec,
-                                          properties_list,
-                                          sigmask);
+                r = udev_rules_apply_to_event(rules, event,
+                                              timeout_usec, timeout_warn_usec,
+                                              properties_list,
+                                              sigmask);
+                if (r < 0) {
+                        log_debug_errno(r, "%s: Failed to apply udev rules: %m", udev_device_get_sysname(dev));
+                        event->dev_db = udev_device_unref(event->dev_db);
+                        return r;
+                }
 
                 event_generate_altnames(event);
 
@@ -1468,6 +1481,8 @@ void udev_event_execute_rules(struct udev_event *event,
 
                 event->dev_db = udev_device_unref(event->dev_db);
         }
+
+        return 0;
 }
 
 void udev_event_execute_run(struct udev_event *event, usec_t timeout_usec, usec_t timeout_warn_usec, const sigset_t *sigmask) {

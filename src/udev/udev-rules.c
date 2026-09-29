@@ -818,7 +818,8 @@ static gid_t add_gid(struct udev_rules *rules, const char *group) {
         return gid;
 }
 
-/* Adds a property imported by a rule. Failures are logged, and are not fatal. */
+/* Adds a property imported by a rule. Failures are logged. Only -ENOMEM is fatal, like in systemd it
+ * stops the processing of the rules for the event, see udev_rules_apply_to_event(). */
 static int import_property(struct udev_device *dev, const char *key, const char *val,
                            const char *filename, unsigned int lineno) {
         int r;
@@ -835,11 +836,14 @@ static int import_property(struct udev_device *dev, const char *key, const char 
         return r;
 }
 
+/* Imports a "KEY=VALUE" line. Lines that are empty, comments or invalid are skipped. Returns -ENOMEM
+ * when out of memory, 0 otherwise. */
 static int import_property_from_string(struct udev_device *dev, char *line,
                                        const char *filename, unsigned int lineno) {
         char *key;
         char *val;
         size_t len;
+        int r;
 
         /* find key */
         key = line;
@@ -848,12 +852,12 @@ static int import_property_from_string(struct udev_device *dev, char *line,
 
         /* comment or empty line */
         if (key[0] == '#' || key[0] == '\0')
-                return -1;
+                return 0;
 
         /* split key/value */
         val = strchr(key, '=');
         if (val == NULL)
-                return -1;
+                return 0;
         val[0] = '\0';
         val++;
 
@@ -864,7 +868,7 @@ static int import_property_from_string(struct udev_device *dev, char *line,
         /* terminate key */
         len = strlen(key);
         if (len == 0)
-                return -1;
+                return 0;
         while (isspace(key[len-1]))
                 len--;
         key[len] = '\0';
@@ -872,13 +876,13 @@ static int import_property_from_string(struct udev_device *dev, char *line,
         /* terminate value */
         len = strlen(val);
         if (len == 0)
-                return -1;
+                return 0;
         while (isspace(val[len-1]))
                 len--;
         val[len] = '\0';
 
         if (len == 0)
-                return -1;
+                return 0;
 
         /* unquote */
         if (val[0] == '"' || val[0] == '\'') {
@@ -887,24 +891,29 @@ static int import_property_from_string(struct udev_device *dev, char *line,
 
                         /* the line is split into the key and the value by now */
                         log_debug("inconsistent quoting: '%s=%s', skip %s:%u", key, escaped ?: val, filename, lineno);
-                        return -1;
+                        return 0;
                 }
                 val[len-1] = '\0';
                 val++;
         }
 
-        import_property(dev, key, val, filename, lineno);
-
-        return 0;
+        r = import_property(dev, key, val, filename, lineno);
+        return r == -ENOMEM ? r : 0;
 }
 
+/* Like IMPORT{file} of systemd-udevd: returns 1 when the file was imported, 0 when it does not exist
+ * or could not be read, and the key does not match, or a negative error when it cannot be opened or
+ * when out of memory, which stops the processing of the rules for the event. */
 static int import_file_into_properties(struct udev_device *dev, const char *import,
                                        const char *filename, unsigned int lineno) {
         _cleanup_fclose_ FILE *f = NULL;
 
         f = fopen(import, "re");
-        if (f == NULL)
-                return -1;
+        if (f == NULL) {
+                if (errno == ENOENT)
+                        return 0;
+                return log_error_errno(errno, "Failed to open \"%s\" %s:%u: %m", import, filename, lineno);
+        }
 
         /* Like systemd-udevd: lines of up to 1 MiB. A longer line, or a read error, stops the import,
          * and the key does not match; the properties imported before stay. */
@@ -915,15 +924,19 @@ static int import_file_into_properties(struct udev_device *dev, const char *impo
                 r = read_line(f, LONG_LINE_MAX, &line);
                 if (r < 0) {
                         log_debug_errno(r, "Failed to read '%s', ignoring %s:%u: %m", import, filename, lineno);
-                        return -1;
+                        return 0;
                 }
                 if (r == 0)
-                        return 0;
+                        return 1;
 
-                import_property_from_string(dev, line, filename, lineno);
+                r = import_property_from_string(dev, line, filename, lineno);
+                if (r < 0)
+                        return r;
         }
 }
 
+/* Returns 1 when the output of the program was imported, 0 when the program failed, and the key does
+ * not match, or -ENOMEM when out of memory, which stops the processing of the rules for the event. */
 static int import_program_into_properties(struct udev_event *event,
                                           usec_t timeout_usec,
                                           usec_t timeout_warn_usec,
@@ -938,12 +951,12 @@ static int import_program_into_properties(struct udev_event *event,
 
         result = malloc(IMPORT_PROGRAM_SIZE);
         if (result == NULL)
-                return -ENOMEM;
+                return log_oom();
 
         envp = udev_device_get_properties_envp(dev);
         err = udev_event_spawn(event, timeout_usec, timeout_warn_usec, program, envp, sigmask, result, IMPORT_PROGRAM_SIZE, &truncated);
         if (err < 0)
-                return err;
+                return 0;
 
         if (truncated) {
                 log_debug("Result of '%s' is too long and truncated, ignoring the last line of the result.", program);
@@ -965,12 +978,16 @@ static int import_program_into_properties(struct udev_event *event,
                         pos[0] = '\0';
                         pos = &pos[1];
                 }
-                import_property_from_string(dev, line, filename, lineno);
+                err = import_property_from_string(dev, line, filename, lineno);
+                if (err < 0)
+                        return err;
                 line = pos;
         }
-        return 0;
+        return 1;
 }
 
+/* Returns the number of imported properties, 0 also when the device has no parent, or -ENOMEM when out
+ * of memory, which stops the processing of the rules for the event. */
 static int import_parent_into_properties(struct udev_device *dev, const char *filter,
                                          const char *filename, unsigned int lineno) {
         struct udev_device *dev_parent;
@@ -979,18 +996,23 @@ static int import_parent_into_properties(struct udev_device *dev, const char *fi
 
         dev_parent = udev_device_get_parent(dev);
         if (dev_parent == NULL)
-                return -1;
+                return 0;
 
         udev_list_entry_foreach(list_entry, udev_device_get_properties_list_entry(dev_parent)) {
                 const char *key = udev_list_entry_get_name(list_entry);
                 const char *val = udev_list_entry_get_value(list_entry);
+                int r;
 
-                if (fnmatch(filter, key, 0) == 0 &&
-                    import_property(dev, key, val, filename, lineno) >= 0)
+                if (fnmatch(filter, key, 0) != 0)
+                        continue;
+
+                r = import_property(dev, key, val, filename, lineno);
+                if (r == -ENOMEM)
+                        return r;
+                if (r >= 0)
                         n++;
         }
 
-        /* the number of imported properties */
         return n;
 }
 
@@ -2583,9 +2605,10 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
         enum escape_type esc = ESCAPE_UNSET;
         bool can_set_name;
         bool ok;
+        int r;
 
         if (rules->tokens == NULL)
-                return -1;
+                return 0;
 
         can_set_name = ((!streq(udev_device_get_action(event->dev), "remove")) &&
                         (major(udev_device_get_devnum(event->dev)) > 0 ||
@@ -2834,9 +2857,12 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                         char import[UTIL_PATH_SIZE];
 
                         udev_event_apply_format(event, rules_str(rules, cur->key.value_off), import, sizeof(import), false, properties_list);
-                        ok = import_file_into_properties(event->dev, import,
-                                                         rules_str(rules, rule->rule.filename_off),
-                                                         rule->rule.filename_line) == 0;
+                        r = import_file_into_properties(event->dev, import,
+                                                        rules_str(rules, rule->rule.filename_off),
+                                                        rule->rule.filename_line);
+                        if (r < 0)
+                                return r;
+                        ok = r > 0;
                         if (ok == (cur->key.op == OP_NOMATCH))
                                 goto nomatch;
                         break;
@@ -2850,9 +2876,12 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                                   rules_str(rules, rule->rule.filename_off),
                                   rule->rule.filename_line);
 
-                        ok = import_program_into_properties(event, timeout_usec, timeout_warn_usec, import, sigmask,
-                                                            rules_str(rules, rule->rule.filename_off),
-                                                            rule->rule.filename_line) == 0;
+                        r = import_program_into_properties(event, timeout_usec, timeout_warn_usec, import, sigmask,
+                                                           rules_str(rules, rule->rule.filename_off),
+                                                           rule->rule.filename_line);
+                        if (r < 0)
+                                return r;
+                        ok = r > 0;
                         if (ok == (cur->key.op == OP_NOMATCH))
                                 goto nomatch;
                         break;
@@ -2899,9 +2928,10 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                         const char *value;
 
                         value = udev_device_get_property_value(event->dev_db, key);
-                        if (value != NULL)
-                                import_property(event->dev, key, value,
-                                                rules_str(rules, rule->rule.filename_off), rule->rule.filename_line);
+                        if (value != NULL &&
+                            import_property(event->dev, key, value,
+                                            rules_str(rules, rule->rule.filename_off), rule->rule.filename_line) == -ENOMEM)
+                                return -ENOMEM;
                         if ((value != NULL) == (cur->key.op == OP_NOMATCH))
                                 goto nomatch;
                         break;
@@ -2910,19 +2940,22 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                         _cleanup_free_ char *value = NULL;
                         bool imported = false;
                         const char *key;
-                        int r;
 
                         key = rules_str(rules, cur->key.value_off);
 
+                        /* Like systemd, an error stops the processing of the rules for the event. */
                         r = proc_cmdline_get_key(key, &value);
                         if (r < 0)
-                                log_debug_errno(r, "Failed to read %s from /proc/cmdline, ignoring: %m", key);
-                        else if (r > 0) {
+                                return log_error_errno(r, "Failed to read \"%s\" option from /proc/cmdline %s:%u: %m", key,
+                                                       rules_str(rules, rule->rule.filename_off), rule->rule.filename_line);
+                        if (r > 0) {
                                 imported = true;
 
                                 /* we import simple flags as 'FLAG=1' */
-                                import_property(event->dev, key, value ?: "1",
-                                                rules_str(rules, rule->rule.filename_off), rule->rule.filename_line);
+                                if (import_property(event->dev, key, value ?: "1",
+                                                    rules_str(rules, rule->rule.filename_off),
+                                                    rule->rule.filename_line) == -ENOMEM)
+                                        return -ENOMEM;
                         }
 
                         if (imported == (cur->key.op == OP_NOMATCH))
@@ -2934,9 +2967,12 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
 
                         udev_event_apply_format(event, rules_str(rules, cur->key.value_off), import, sizeof(import), false, properties_list);
                         /* Like systemd-udevd, match only when at least one property was imported. */
-                        ok = import_parent_into_properties(event->dev, import,
-                                                           rules_str(rules, rule->rule.filename_off),
-                                                           rule->rule.filename_line) > 0;
+                        r = import_parent_into_properties(event->dev, import,
+                                                          rules_str(rules, rule->rule.filename_off),
+                                                          rule->rule.filename_line);
+                        if (r < 0)
+                                return r;
+                        ok = r > 0;
                         if (ok == (cur->key.op == OP_NOMATCH))
                                 goto nomatch;
                         break;

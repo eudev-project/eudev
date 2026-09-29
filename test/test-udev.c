@@ -213,14 +213,15 @@ int main(int argc __attribute__((unused)), char *argv[]) {
                 }
         }
 
-        udev_event_execute_rules(event,
-                                 3 * USEC_PER_SEC, USEC_PER_SEC,
-                                 NULL,
-                                 rules,
-                                 &sigmask_orig);
-        udev_event_execute_run(event,
-                               3 * USEC_PER_SEC, USEC_PER_SEC,
-                               NULL);
+        /* like udevd, which does not run RUN when the rules fail */
+        if (udev_event_execute_rules(event,
+                                     3 * USEC_PER_SEC, USEC_PER_SEC,
+                                     NULL,
+                                     rules,
+                                     &sigmask_orig) >= 0)
+                udev_event_execute_run(event,
+                                       3 * USEC_PER_SEC, USEC_PER_SEC,
+                                       NULL);
 out:
         if (event != NULL && event->fd_signal >= 0)
                 close(event->fd_signal);
