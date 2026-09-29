@@ -1162,9 +1162,6 @@ acpi:AXC*:
  ID_VENDOR_FROM_DATABASE=AXIOMTEK CO., LTD.
 
 acpi:AXE*:
- ID_VENDOR_FROM_DATABASE=Axell Corporation
-
-acpi:AXE*:
  ID_VENDOR_FROM_DATABASE=D-Link Systems Inc
 
 acpi:AXI*:
@@ -4294,9 +4291,6 @@ acpi:LEC*:
  ID_VENDOR_FROM_DATABASE=Lectron Company Ltd
 
 acpi:LED*:
- ID_VENDOR_FROM_DATABASE=Long Engineering Design Inc
-
-acpi:LED*:
  ID_VENDOR_FROM_DATABASE=LeafNet
 
 acpi:LEG*:
@@ -4313,9 +4307,6 @@ acpi:LEX*:
 
 acpi:LGC*:
  ID_VENDOR_FROM_DATABASE=Logic Ltd
-
-acpi:LGD*:
- ID_VENDOR_FROM_DATABASE=LG Display
 
 acpi:LGD*:
  ID_VENDOR_FROM_DATABASE=LG Display

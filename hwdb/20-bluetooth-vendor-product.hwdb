@@ -1753,7 +1753,7 @@ bluetooth:v0244*
  ID_VENDOR_FROM_DATABASE=Iotera Inc
 
 bluetooth:v0245*
- ID_VENDOR_FROM_DATABASE=Endress+Hauser 
+ ID_VENDOR_FROM_DATABASE=Endress+Hauser
 
 bluetooth:v0246*
  ID_VENDOR_FROM_DATABASE=ACKme Networks, Inc.
@@ -5290,7 +5290,7 @@ bluetooth:v06DF*
  ID_VENDOR_FROM_DATABASE=Hubbell Lighting, Inc.
 
 bluetooth:v06E0*
- ID_VENDOR_FROM_DATABASE=Avaya 
+ ID_VENDOR_FROM_DATABASE=Avaya
 
 bluetooth:v06E1*
  ID_VENDOR_FROM_DATABASE=Milestone AV Technologies LLC
