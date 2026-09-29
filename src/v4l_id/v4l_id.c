@@ -108,6 +108,11 @@ int main(int argc, char *argv[]) {
                 if ((capabilities & V4L2_CAP_RADIO) > 0)
                         printf("radio:");
                 printf("\n");
+        } else {
+                /* Unlike systemd, which succeeds without output, fail if the device cannot be
+                 * queried, so that IMPORT{program}="v4l_id ..." does not match then. */
+                log_error_errno(errno, "Failed to query the capabilities of '%s': %m", device);
+                return EXIT_FAILURE;
         }
 
         return 0;
