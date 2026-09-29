@@ -279,6 +279,23 @@ static int ctrl_send(struct udev_ctrl *uctrl, enum udev_ctrl_msg_type type, int 
         else
                 ctrl_msg_wire.intval = intval;
 
+        if (uctrl->connected) {
+                const int on = 1;
+                int fd;
+
+                /* udevd handles one message on a connection and closes it, so connect again for each
+                 * message. */
+                fd = socket(AF_LOCAL, SOCK_SEQPACKET|SOCK_NONBLOCK|SOCK_CLOEXEC, 0);
+                if (fd < 0)
+                        return -errno;
+                if (setsockopt(fd, SOL_SOCKET, SO_PASSCRED, &on, sizeof(on)) < 0)
+                        log_warning_errno(errno, "could not set SO_PASSCRED: %m");
+
+                safe_close(uctrl->sock);
+                uctrl->sock = fd;
+                uctrl->connected = false;
+        }
+
         if (!uctrl->connected) {
                 if (connect(uctrl->sock, &uctrl->saddr.sa, uctrl->addrlen) < 0) {
                         err = -errno;
