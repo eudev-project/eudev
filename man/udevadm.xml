@@ -695,7 +695,9 @@
     </refsect2>
 
     <refsect2><title>udevadm control <replaceable>command</replaceable></title>
-      <para>Modify the internal state of the running udev daemon.</para>
+      <para>Modify the internal state of the running udev daemon. All options are parsed before the
+      commands are sent to the daemon, in the order they are given, and the timeout applies to all of
+      them. Sending commands requires root privileges.</para>
       <variablelist>
         <varlistentry>
           <term><option>-e</option></term>
@@ -780,6 +782,7 @@
           </listitem>
         </varlistentry>
         <varlistentry>
+          <term><option>-t</option></term>
           <term><option>--timeout=</option><replaceable>seconds</replaceable></term>
           <listitem>
             <para>The maximum number of seconds to wait for a reply from udevd.</para>

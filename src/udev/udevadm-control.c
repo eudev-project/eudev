@@ -43,12 +43,21 @@ static void print_help(void) {
                "     --ping                Wait for udev to respond to a ping message\n"
                "     --trace=BOOL          Enable/disable trace logging\n"
                "     --revert              Revert previously set configurations\n"
-               "     --timeout=SECONDS     Maximum time to block for a reply\n"
+               "  -t --timeout=SECONDS     Maximum time to block for a reply\n"
                , program_invocation_short_name);
 }
 
+/* A command option, which is sent to the daemon after all options are parsed. */
+struct control_command {
+        int c;
+        const char *arg;
+        int value;
+};
+
 static int adm_control(struct udev *udev, int argc, char *argv[]) {
         _cleanup_udev_ctrl_unref_ struct udev_ctrl *uctrl = NULL;
+        _cleanup_free_ struct control_command *commands = NULL;
+        size_t n_commands = 0, i;
         int timeout = 60;
         int rc = 1, c, r;
 
@@ -78,22 +87,23 @@ static int adm_control(struct udev *udev, int argc, char *argv[]) {
                 {}
         };
 
-        if (getuid() != 0) {
-                fprintf(stderr, "root privileges required\n");
+        /* Parse all options before anything is sent, so that --help and --version work without root
+         * privileges, and an invalid option does not leave the commands before it done. */
+        commands = new0(struct control_command, argc);
+        if (!commands) {
+                log_oom();
                 return 1;
         }
 
-        uctrl = udev_ctrl_new(udev);
-        if (uctrl == NULL)
-                return 2;
-
-        while ((c = getopt_long(argc, argv, "el:sSRp:m:hV", options, NULL)) >= 0)
+        while ((c = getopt_long(argc, argv, "el:sSRp:m:t:hV", options, NULL)) >= 0)
                 switch (c) {
                 case 'e':
-                        if (udev_ctrl_send_exit(uctrl, timeout) < 0)
-                                rc = 2;
-                        else
-                                rc = 0;
+                case 's':
+                case 'S':
+                case 'R':
+                case ARG_PING:
+                case ARG_REVERT:
+                        commands[n_commands++] = (struct control_command) { .c = c };
                         break;
                 case 'l': {
                         int i;
@@ -103,12 +113,90 @@ static int adm_control(struct udev *udev, int argc, char *argv[]) {
                                 fprintf(stderr, "invalid log level '%s'\n", optarg);
                                 return rc;
                         }
-                        if (udev_ctrl_send_set_log_level(uctrl, i, timeout) < 0)
+                        commands[n_commands++] = (struct control_command) { .c = c, .value = i };
+                        break;
+                }
+                case 'p':
+                        if (strchr(optarg, '=') == NULL) {
+                                fprintf(stderr, "expect <KEY>=<value> instead of '%s'\n", optarg);
+                                return rc;
+                        }
+                        commands[n_commands++] = (struct control_command) { .c = c, .arg = optarg };
+                        break;
+                case 'm': {
+                        char *endp;
+                        int i;
+
+                        i = strtoul(optarg, &endp, 0);
+                        if (endp[0] != '\0' || i < 1) {
+                                fprintf(stderr, "invalid number '%s'\n", optarg);
+                                return rc;
+                        }
+                        commands[n_commands++] = (struct control_command) { .c = c, .value = i };
+                        break;
+                }
+                case ARG_TRACE:
+                        r = parse_boolean(optarg);
+                        if (r < 0) {
+                                log_error_errno(r, "Failed to parse boolean argument to --trace=: %s.", optarg);
+                                return rc;
+                        }
+                        commands[n_commands++] = (struct control_command) { .c = c, .value = r };
+                        break;
+                case 't': {
+                        int seconds;
+
+                        seconds = atoi(optarg);
+                        if (seconds >= 0)
+                                timeout = seconds;
+                        else
+                                fprintf(stderr, "invalid timeout value\n");
+                        break;
+                }
+                case 'h':
+                        print_help();
+                        return 0;
+                case 'V':
+                        printf("%s\n", UDEV_VERSION);
+                        return 0;
+                case '?':
+                        return rc;
+                default:
+                        assert_not_reached("Unknown option");
+                }
+
+        if (optind < argc) {
+                fprintf(stderr, "Extraneous argument: %s\n", argv[optind]);
+                return rc;
+        }
+        if (n_commands == 0) {
+                fprintf(stderr, "Option missing\n");
+                return rc;
+        }
+
+        if (getuid() != 0) {
+                fprintf(stderr, "root privileges required\n");
+                return 1;
+        }
+
+        uctrl = udev_ctrl_new(udev);
+        if (uctrl == NULL)
+                return 2;
+
+        for (i = 0; i < n_commands; i++)
+                switch (commands[i].c) {
+                case 'e':
+                        if (udev_ctrl_send_exit(uctrl, timeout) < 0)
                                 rc = 2;
                         else
                                 rc = 0;
                         break;
-                }
+                case 'l':
+                        if (udev_ctrl_send_set_log_level(uctrl, commands[i].value, timeout) < 0)
+                                rc = 2;
+                        else
+                                rc = 0;
+                        break;
                 case 's':
                         if (udev_ctrl_send_stop_exec_queue(uctrl, timeout) < 0)
                                 rc = 2;
@@ -128,30 +216,17 @@ static int adm_control(struct udev *udev, int argc, char *argv[]) {
                                 rc = 0;
                         break;
                 case 'p':
-                        if (strchr(optarg, '=') == NULL) {
-                                fprintf(stderr, "expect <KEY>=<value> instead of '%s'\n", optarg);
-                                return rc;
-                        }
-                        if (udev_ctrl_send_set_env(uctrl, optarg, timeout) < 0)
+                        if (udev_ctrl_send_set_env(uctrl, commands[i].arg, timeout) < 0)
                                 rc = 2;
                         else
                                 rc = 0;
                         break;
-                case 'm': {
-                        char *endp;
-                        int i;
-
-                        i = strtoul(optarg, &endp, 0);
-                        if (endp[0] != '\0' || i < 1) {
-                                fprintf(stderr, "invalid number '%s'\n", optarg);
-                                return rc;
-                        }
-                        if (udev_ctrl_send_set_children_max(uctrl, i, timeout) < 0)
+                case 'm':
+                        if (udev_ctrl_send_set_children_max(uctrl, commands[i].value, timeout) < 0)
                                 rc = 2;
                         else
                                 rc = 0;
                         break;
-                }
                 case ARG_PING:
                         r = udev_ctrl_send_ping(uctrl, timeout);
                         if (r < 0) {
@@ -161,12 +236,7 @@ static int adm_control(struct udev *udev, int argc, char *argv[]) {
                                 rc = 0;
                         break;
                 case ARG_TRACE:
-                        r = parse_boolean(optarg);
-                        if (r < 0) {
-                                log_error_errno(r, "Failed to parse boolean argument to --trace=: %s.", optarg);
-                                return rc;
-                        }
-                        r = udev_ctrl_send_set_trace(uctrl, r, timeout);
+                        r = udev_ctrl_send_set_trace(uctrl, commands[i].value, timeout);
                         if (r == -EOPNOTSUPP)
                                 log_error("udevd does not support --trace, restart it after upgrading.");
                         if (r < 0)
@@ -183,30 +253,10 @@ static int adm_control(struct udev *udev, int argc, char *argv[]) {
                         else
                                 rc = 0;
                         break;
-                case 't': {
-                        int seconds;
-
-                        seconds = atoi(optarg);
-                        if (seconds >= 0)
-                                timeout = seconds;
-                        else
-                                fprintf(stderr, "invalid timeout value\n");
-                        break;
-                }
-                case 'h':
-                        print_help();
-                        rc = 0;
-                        break;
-                case 'V':
-                        printf("%s\n", UDEV_VERSION);
-                        rc = 0;
-                        break;
+                default:
+                        assert_not_reached("Unknown command");
                 }
 
-        if (optind < argc)
-                fprintf(stderr, "Extraneous argument: %s\n", argv[optind]);
-        else if (optind == 1)
-                fprintf(stderr, "Option missing\n");
         return rc;
 }
 

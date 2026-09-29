@@ -595,7 +595,7 @@ Print help text\&.
 .RE
 .SS "udevadm control \fIcommand\fR"
 .PP
-Modify the internal state of the running udev daemon\&.
+Modify the internal state of the running udev daemon\&. All options are parsed before the commands are sent to the daemon, in the order they are given, and the timeout applies to all of them\&. Sending commands requires root privileges\&.
 .PP
 \fB\-e\fR, \fB\-\-exit\fR
 .RS 4
@@ -666,7 +666,7 @@ command\&. When specified, settings set with
 will be cleared\&.
 .RE
 .PP
-\fB\-\-timeout=\fR\fIseconds\fR
+\fB\-t\fR, \fB\-\-timeout=\fR\fIseconds\fR
 .RS 4
 The maximum number of seconds to wait for a reply from udevd\&.
 .RE
