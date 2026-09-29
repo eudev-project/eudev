@@ -267,7 +267,11 @@ if test -z "$GPERF" ; then
 fi
 
 # ------------------------------------------------------------------------------
-AC_ARG_ENABLE([manpages], AS_HELP_STRING([--disable-manpages],[disable manpages]),[],[enable_manpages=no])
+# The man pages are shipped pre-built (man/make.sh regenerates them), so installing them needs no tools.
+# Like the man option of systemd's meson, they are not installed by default.
+AC_ARG_ENABLE([manpages],
+	AS_HELP_STRING([--enable-manpages], [install the man pages [default=no]]),
+	[], [enable_manpages=no])
 AM_CONDITIONAL(ENABLE_MANPAGES, [test "x$enable_manpages" = "xyes"])
 
 # ------------------------------------------------------------------------------
@@ -288,7 +292,7 @@ AM_CONDITIONAL(HAVE_KMOD, [test "$have_kmod" = "yes"])
 
 # ------------------------------------------------------------------------------
 
-AC_ARG_ENABLE([hwdb], AS_HELP_STRING([--enable-hwdb],[install hwdb.d files]),[],[enable_hwdb=yes])
+AC_ARG_ENABLE([hwdb], AS_HELP_STRING([--disable-hwdb], [do not install the hwdb.d files]), [], [enable_hwdb=yes])
 AM_CONDITIONAL(ENABLE_HWDB, [test "x$enable_hwdb" = "xyes"])
 
 # ------------------------------------------------------------------------------
@@ -527,6 +531,8 @@ AC_MSG_RESULT([
 	nobody group name:       ${with_nobody_group}
 	foreign UID base:        ${foreign_uid_base}
 
+	man pages:               ${enable_manpages}
+	hwdb.d files:            ${enable_hwdb}
 	systemd-hwdb:            ${enable_systemd_hwdb}
 	bashcompletiondir:       ${with_bashcompletiondir}
 	zshcompletiondir:        ${with_zshcompletiondir}
