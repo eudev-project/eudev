@@ -474,6 +474,43 @@ static struct udev_list_entry *udev_device_add_property_from_string(struct udev_
         return udev_device_add_property_internal(udev_device, name, val);
 }
 
+/* Resolves all symlinks, "." and ".." of a path below /sys, like chase() in device_set_syspath() of
+ * systemd, and checks that the result is below /sys too, e.g. not for /sys/../tmp or for a symlink out
+ * of /sys. When /sys is a symlink to the mount point of sysfs, the result is translated back to
+ * /sys. */
+static int sysfs_resolve(const char *path, char **ret)
+{
+        _cleanup_free_ char *resolved = NULL, *real_sys = NULL;
+        const char *p;
+        char *t;
+
+        resolved = realpath(path, NULL);
+        if (!resolved)
+                return -errno;
+
+        if (!isempty(path_startswith(resolved, "/sys/"))) {
+                *ret = TAKE_PTR(resolved);
+                return 0;
+        }
+
+        real_sys = realpath("/sys", NULL);
+        if (!real_sys)
+                return -errno;
+
+        p = path_equal(real_sys, "/sys") ? NULL : path_startswith(resolved, real_sys);
+        if (isempty(p)) {
+                log_debug("%s resolves to %s, which is outside of /sys", path, resolved);
+                return -ENODEV;
+        }
+
+        t = strjoin("/sys/", p, NULL);
+        if (!t)
+                return -ENOMEM;
+
+        *ret = t;
+        return 0;
+}
+
 static int udev_device_set_syspath(struct udev_device *udev_device, const char *syspath)
 {
         const char *pos;
@@ -1187,11 +1224,12 @@ static struct udev_device *udev_device_new(struct udev *udev)
  **/
 _public_ struct udev_device *udev_device_new_from_syspath(struct udev *udev, const char *syspath)
 {
+        _cleanup_free_ char *path = NULL;
         const char *subdir;
-        char path[UTIL_PATH_SIZE];
         const char *pos;
         struct stat statbuf;
         struct udev_device *udev_device;
+        int r;
 
         if (udev == NULL) {
                 errno = EINVAL;
@@ -1203,30 +1241,38 @@ _public_ struct udev_device *udev_device_new_from_syspath(struct udev *udev, con
                 return NULL;
         }
 
-        /* path starts in sys */
-        if (!startswith(syspath, "/sys")) {
+        /* path is below /sys, e.g. not /sysfoo */
+        if (isempty(path_startswith(syspath, "/sys/"))) {
                 log_debug("not in sys :%s", syspath);
                 errno = EINVAL;
                 return NULL;
         }
 
+        /* resolve symlinks, "." and "..", and check that the device is still below /sys */
+        r = sysfs_resolve(syspath, &path);
+        if (r < 0) {
+                log_debug_errno(r, "failed to resolve %s: %m", syspath);
+                errno = -r;
+                return NULL;
+        }
+
         /* path is not a root directory */
-        subdir = syspath + strlen("/sys");
+        subdir = path + strlen("/sys");
         pos = strrchr(subdir, '/');
         if (pos == NULL || pos[1] == '\0' || pos < &subdir[2]) {
                 errno = EINVAL;
                 return NULL;
         }
 
-        /* resolve possible symlink to real path */
-        strscpy(path, sizeof(path), syspath);
-        util_resolve_sys_link(udev, path, sizeof(path));
-
         if (startswith(path + strlen("/sys"), "/devices/")) {
-                char file[UTIL_PATH_SIZE];
+                _cleanup_free_ char *file = NULL;
 
                 /* all "devices" require a "uevent" file */
-                strscpyl(file, sizeof(file), path, "/uevent", NULL);
+                file = strjoin(path, "/uevent", NULL);
+                if (!file) {
+                        errno = ENOMEM;
+                        return NULL;
+                }
                 if (stat(file, &statbuf) != 0)
                         return NULL;
         } else {
@@ -1244,7 +1290,12 @@ _public_ struct udev_device *udev_device_new_from_syspath(struct udev *udev, con
         if (udev_device == NULL)
                 return NULL;
 
-        udev_device_set_syspath(udev_device, path);
+        r = udev_device_set_syspath(udev_device, path);
+        if (r < 0) {
+                udev_device_unref(udev_device);
+                errno = -r;
+                return NULL;
+        }
         log_trace("device %p has devpath '%s'", udev_device, udev_device_get_devpath(udev_device));
 
         return udev_device;

@@ -166,7 +166,6 @@ struct udev_hwdb *udev_hwdb_new_from_path(struct udev *udev, const char *path);
 #define UTIL_LINE_SIZE                     16384
 #define UDEV_ALLOWED_CHARS_INPUT        "/ $%?,"
 ssize_t util_get_sys_core_link_value(struct udev *udev, const char *slink, const char *syspath, char *value, size_t size);
-int util_resolve_sys_link(struct udev *udev, char *syspath, size_t size);
 int util_log_priority(const char *priority);
 void util_remove_trailing_chars(char *path, char c);
 int util_replace_whitespace(const char *str, char *to, size_t len);

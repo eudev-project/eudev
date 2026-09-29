@@ -130,33 +130,6 @@ ssize_t util_get_sys_core_link_value(struct udev *udev __attribute__((unused)), 
         return strscpy(value, size, pos);
 }
 
-int util_resolve_sys_link(struct udev *udev __attribute__((unused)), char *syspath, size_t size)
-{
-        char link_target[UTIL_PATH_SIZE];
-
-        ssize_t len;
-        int i;
-        int back;
-        char *base = NULL;
-
-        len = readlink(syspath, link_target, sizeof(link_target));
-        if (len <= 0 || len == (ssize_t)sizeof(link_target))
-                return -1;
-        link_target[len] = '\0';
-
-        for (back = 0; startswith(&link_target[back * 3], "../"); back++)
-                ;
-        for (i = 0; i <= back; i++) {
-                base = strrchr(syspath, '/');
-                if (base == NULL)
-                        return -EINVAL;
-                base[0] = '\0';
-        }
-
-        strscpyl(base, size - (base - syspath), "/", &link_target[back * 3], NULL);
-        return 0;
-}
-
 int util_log_priority(const char *priority)
 {
         char *endptr;
