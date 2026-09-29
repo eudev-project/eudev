@@ -274,10 +274,18 @@ static void log_systemd_only(enum systemd_only_type type, const char *what, cons
 }
 
 /* Checks whether the command of IMPORT{builtin}, IMPORT{program} or RUN{builtin} is a systemd-only
- * builtin, and logs it. */
+ * builtin, or a builtin of eudev that this build leaves out, and logs it. */
 static bool check_systemd_only_builtin(const char *key, const char *cmd, const char *filename, unsigned int lineno) {
         _cleanup_free_ char *what = NULL;
         size_t len = strcspn(cmd, " ");
+
+#ifndef ENABLE_TPM2
+        if (len == strlen("tpm2_id") && strneq(cmd, "tpm2_id", len)) {
+                log_error("%s=\"tpm2_id\" is not supported by this build of eudev (configured with --disable-tpm2), ignoring rule %s:%u",
+                          key, filename, lineno);
+                return true;
+        }
+#endif
 
         if (!is_systemd_only(SYSTEMD_ONLY_BUILTIN, cmd, len))
                 return false;

@@ -1076,7 +1076,8 @@ SUBSYSTEM=="net", OPTIONS="log_level=debug"</programlisting></para>
         </variablelist>
 
         <para>This builtin and <filename>60-tpm2-id.rules</filename> are left out
-        when eudev is configured with <option>--disable-tpm2</option>.</para>
+        when eudev is configured with <option>--disable-tpm2</option>; a rule line that
+        uses the builtin is then ignored with an error message saying so.</para>
       </refsect2>
   </refsect1>
 

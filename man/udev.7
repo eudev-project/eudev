@@ -882,7 +882,7 @@ on TPMs on which the NV index based PCRs of systemd do not work\&.
 This builtin and
 60\-tpm2\-id\&.rules
 are left out when eudev is configured with
-\fB\-\-disable\-tpm2\fR\&.
+\fB\-\-disable\-tpm2\fR; a rule line that uses the builtin is then ignored with an error message saying so\&.
 .SH "NETWORK INTERFACE NAMING"
 .PP
 For network interfaces, the
