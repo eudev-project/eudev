@@ -430,7 +430,10 @@ static char *get_hwdb_bin_paths (void) {
         static const char default_locations[] =
           "/etc/udev/hwdb.bin\0"
           UDEV_LIBEXEC_DIR "/hwdb.bin\0";
-        const char *by_env = getenv("UDEV_HWDB_BIN");
+        /* Like systemd does for its environment variables, ignore it in set-user-ID and similar
+         * programs, where it could make them read a file they should not read. Where the libc lacks
+         * secure_getenv(), missing.h defines it as getenv(). */
+        const char *by_env = secure_getenv("UDEV_HWDB_BIN");
         if (by_env != NULL) {
                 char *path = malloc(strlen(by_env) + 1
                                     + sizeof (default_locations));
