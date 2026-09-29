@@ -31,6 +31,7 @@
 #include <sys/types.h>
 #include <sys/sysmacros.h>
 
+#include "pager.h"
 #include "path-util.h"
 #include "strv.h"
 #include "udev.h"
@@ -1156,6 +1157,7 @@ static int uinfo(struct udev *udev, int argc, char *argv[]) {
 
         if (strv_isempty(devices)) {
                 if (action == ACTION_TREE) {
+                        pager_open(0);
                         if (print_tree(udev, NULL) < 0)
                                 return 1;
                         return 0;

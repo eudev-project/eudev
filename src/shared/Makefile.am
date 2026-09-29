@@ -22,6 +22,7 @@ libudev_shared_la_SOURCES=\
 	mkdir-label.c \
 	MurmurHash2.c \
 	os-util.c \
+	pager.c \
 	path-util.c \
 	process-util.c \
 	random-util.c \
@@ -65,6 +66,7 @@ noinst_HEADERS = \
 	mkdir.h \
 	MurmurHash2.h \
 	os-util.h \
+	pager.h \
 	path-util.h \
 	process-util.h \
 	random-util.h \

@@ -1055,6 +1055,138 @@ Use the given quantity of colours, subject to
 .RE
 .RE
 .PP
+\fI$SYSTEMD_PAGER\fR, \fI$PAGER\fR
+.RS 4
+Pager to use for the output of
+\fBudevadm info \-\-tree\fR, if standard output and standard error are terminals\&.
+\fI$SYSTEMD_PAGER\fR
+is used if set; otherwise
+\fI$PAGER\fR
+is used\&. If neither
+\fI$SYSTEMD_PAGER\fR
+nor
+\fI$PAGER\fR
+are set, a set of well\-known pager implementations is tried in turn, including
+\fBless\fR(1)
+and
+\fBmore\fR(1), until one is found\&. If no pager implementation is discovered, no pager is invoked\&. Setting those environment variables to an empty string or the value
+cat
+disables the pager\&.
+.sp
+Note: if
+\fI$SYSTEMD_PAGERSECURE\fR
+is not set,
+\fI$SYSTEMD_PAGER\fR
+and
+\fI$PAGER\fR
+can only be used to disable the pager (with
+cat
+or an empty string), and are otherwise ignored\&.
+.RE
+.PP
+\fI$SYSTEMD_LESS\fR
+.RS 4
+Override the options passed to
+\fBless\fR
+(by default
+FRSXMK)\&.
+.sp
+Users might want to change two options in particular:
+.PP
+\fBK\fR
+.RS 4
+This option instructs the pager to exit immediately when
+Ctrl+C
+is pressed\&. To allow
+\fBless\fR
+to handle
+Ctrl+C
+itself to switch back to the pager command prompt, unset this option\&.
+.sp
+If the value of
+\fI$SYSTEMD_LESS\fR
+does not include
+K, and the pager that is invoked is
+\fBless\fR,
+Ctrl+C
+will be ignored by the executable, and needs to be handled by the pager\&.
+.RE
+.PP
+\fBX\fR
+.RS 4
+This option instructs the pager to not send termcap initialization and deinitialization strings to the terminal\&. It is set by default to allow command output to remain visible in the terminal even after the pager exits\&. Nevertheless, this prevents some pager functionality from working, in particular paged output cannot be scrolled with the mouse\&.
+.RE
+.sp
+Note that setting the regular
+\fI$LESS\fR
+environment variable has no effect for
+\fBless\fR
+invocations by
+\fBudevadm\fR\&.
+.sp
+See
+\fBless\fR(1)
+for more discussion\&.
+.RE
+.PP
+\fI$SYSTEMD_LESSCHARSET\fR
+.RS 4
+Override the charset passed to
+\fBless\fR
+(by default
+utf\-8, if the invoking terminal is determined to be UTF\-8 compatible)\&.
+.sp
+Note that setting the regular
+\fI$LESSCHARSET\fR
+environment variable has no effect for
+\fBless\fR
+invocations by
+\fBudevadm\fR\&.
+.RE
+.PP
+\fI$SYSTEMD_PAGERSECURE\fR
+.RS 4
+Common pager commands like
+\fBless\fR(1), in addition to "paging", i\&.e\&. scrolling through the output, support opening of or writing to other files and running arbitrary shell commands\&. When commands are invoked with elevated privileges, for example under
+\fBsudo\fR(8), the pager becomes a security boundary\&. Care must be taken that only programs with strictly limited functionality are used as pagers, and unintended interactive features like opening or creation of new files or starting of subprocesses are not allowed\&. "Secure mode" for the pager may be enabled as described below,
+\fIif the pager supports that\fR
+(most pagers are not written in a way that takes this into consideration)\&. It is recommended to either explicitly enable "secure mode" or to completely disable the pager using
+\fIPAGER=cat\fR
+when allowing untrusted users to execute commands with elevated privileges\&.
+.sp
+This option takes a boolean argument\&. When set to true, the "secure mode" of the pager is enabled\&. In "secure mode",
+\fBLESSSECURE=1\fR
+will be set when invoking the pager, which instructs the pager to disable commands that open or create new files or start new subprocesses\&. Currently only
+\fBless\fR(1)
+is known to understand this variable and implement "secure mode"\&.
+.sp
+When set to false, no limitation is placed on the pager\&. Setting
+\fISYSTEMD_PAGERSECURE=0\fR
+or not removing it from the inherited environment may allow the user to invoke arbitrary commands\&.
+.sp
+When
+\fI$SYSTEMD_PAGERSECURE\fR
+is not set,
+\fBudevadm\fR
+attempts to automatically figure out if "secure mode" should be enabled and whether the pager supports it\&. "Secure mode" is enabled if the effective UID is not the same as the audit login UID, i\&.e\&. the UID of the user who logged in (see
+/proc/self/loginuid), if the audit login UID is not set, or when running under
+\fBsudo\fR(8)
+or similar tools (\fI$SUDO_UID\fR
+is set)\&. In those cases,
+\fILESSSECURE=1\fR
+will be set and pagers which are not known to implement "secure mode" will not be used at all\&. Note that this autodetection only covers the most common mechanisms to elevate privileges and is intended as convenience\&. It is recommended to explicitly set
+\fI$SYSTEMD_PAGERSECURE\fR
+or disable the pager\&.
+.sp
+Note that if the
+\fI$SYSTEMD_PAGER\fR
+or
+\fI$PAGER\fR
+variables are to be honoured, other than to disable the pager,
+\fI$SYSTEMD_PAGERSECURE\fR
+must be set too\&.
+.RE
+.PP
 \fI$SYSTEMD_UTF8\fR
 .RS 4
 Takes a boolean argument\&. Overrides whether non\-ASCII glyphs are used in the output, e\&.g\&. the box drawing characters of
