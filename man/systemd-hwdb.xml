@@ -107,7 +107,8 @@
         <term><varname>$UDEV_HWDB_PATH</varname></term>
         <listitem>
           <para>Additional directories of hwdb files, separated by colons, which are read after
-          the system directories, see
+          the system directories, and like them below the root directory given with
+          <option>--root=</option>, see
           <citerefentry><refentrytitle>hwdb</refentrytitle><manvolnum>7</manvolnum></citerefentry>.</para>
         </listitem>
       </varlistentry>

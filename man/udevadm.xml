@@ -879,7 +879,8 @@
             <filename>/usr/lib/udev/hwdb.d/</filename>, and under the
             <envar>UDEV_HWDB_PATH</envar> path environment variable,
             and store it in
-            <filename>/etc/udev/hwdb.bin</filename>. This should be
+            <filename>/etc/udev/hwdb.bin</filename>, all below the
+            directory given with <option>--root=</option>. This should be
             done after any update to the source files; it will not be
             called automatically. The running udev daemon will detect
             a new database on its own and does not need to be notified
@@ -909,21 +910,28 @@
           <term><option>--test=<replaceable>string</replaceable></option></term>
           <listitem>
             <para>Query the database with a modalias string, and print the
-            retrieved properties.</para>
+            retrieved properties. With <option>--root=</option>, the database below
+            the root directory is queried. Fails if there is no compiled
+            database.</para>
           </listitem>
         </varlistentry>
         <varlistentry>
           <term><option>-r</option></term>
           <term><option>--root=<replaceable>string</replaceable></option></term>
           <listitem>
-            <para>Alternative root path in the file system for reading and writing files.</para>
+            <para>Alternative root path in the file system for reading and writing files. All
+            paths are below it: the directories of the hwdb files, including the ones given in
+            <envar>UDEV_HWDB_PATH</envar>, the compiled database that is written, including the
+            path given with <option>--output=</option>, and the database that
+            <option>--test=</option> queries.</para>
           </listitem>
         </varlistentry>
         <varlistentry>
           <term><option>-o</option></term>
           <term><option>--output=<replaceable>string</replaceable></option></term>
           <listitem>
-            <para>Specify the exact location where to write the compiled database.</para>
+            <para>Specify the exact location where to write the compiled database. With
+            <option>--root=</option>, the path is below the root directory.</para>
           </listitem>
         </varlistentry>
         <varlistentry>
