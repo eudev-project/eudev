@@ -62,6 +62,7 @@ typedef struct CheckLine {
         bool referenced;        /* the label is the target of a GOTO */
         bool has_other;         /* the line does something else than GOTO and LABEL */
         bool dropped;           /* the GOTO has no label, and the line has no effect any more */
+        bool names_ignored;     /* OWNER or GROUP names were ignored with --resolve-names=never */
         CheckToken *tokens;
         size_t n_tokens;
 } CheckLine;
@@ -748,8 +749,10 @@ void udev_rules_check_token(struct udev_rules_check *c, const char *base, const 
                         /* Like the parser: names without substitutions are resolved when the rules are
                          * read, if names are resolved early, other names whenever the rule is applied,
                          * and no names if name resolution is disabled. */
-                        if (c->resolve_names < 0)
+                        if (c->resolve_names < 0) {
+                                c->current.names_ignored = true;
                                 return;
+                        }
                         if (!(c->resolve_names > 0 && get_substitution_type(value) == SUBST_TYPE_PLAIN))
                                 check_value_format(c, base, value, true);
                 }
@@ -924,7 +927,11 @@ void udev_rules_check_line_end(struct udev_rules_check *c, bool valid) {
         }
 
         if (!c->current.has_other && !c->current.label && !c->current.goto_label) {
-                log_line_warning(c, "The line has no effect, ignoring.");
+                /* A line that only sets names that are not resolved has no effect with
+                 * --resolve-names=never, which the user asked for: that is not a problem of the
+                 * rules. */
+                if (!c->current.names_ignored)
+                        log_line_warning(c, "The line has no effect, ignoring.");
                 check_line_done(&c->current);
                 c->n_tokens_allocated = 0;
                 return;
@@ -957,7 +964,8 @@ void udev_rules_check_goto_unresolved(struct udev_rules_check *c, unsigned line_
                         return;
 
                 c->line_nr = line_nr;
-                log_line_warning(c, "The line has no effect any more, dropping.");
+                if (!line->names_ignored)
+                        log_line_warning(c, "The line has no effect any more, dropping.");
 
                 for (k = 0; k < line->n_tokens; k++)
                         check_token_done(&line->tokens[k]);
