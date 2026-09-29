@@ -413,7 +413,12 @@ must be an octal number of at most
 .PP
 \fISECLABEL{\fR\fI\fImodule\fR\fR\fI}\fR
 .RS 4
-Applies the specified Linux Security Module label to the device node\&.
+Applies the specified Linux Security Module label to the device node\&. The modules are
+selinux
+and
+smack\&. SMACK labels are only applied when eudev was built with
+\fB\-\-enable\-smack\fR
+and the kernel uses SMACK\&.
 .RE
 .PP
 \fIATTR{\fR\fI\fIkey\fR\fR\fI}\fR

@@ -19,8 +19,8 @@
   along with systemd; If not, see <http://www.gnu.org/licenses/>.
 ***/
 
-#ifdef HAVE_XATTR
-#include <attr/xattr.h>
+#ifdef HAVE_SMACK
+#include <sys/xattr.h>
 #endif
 
 #include "util.h"

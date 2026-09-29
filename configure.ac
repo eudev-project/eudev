@@ -245,6 +245,20 @@ else
 fi
 AC_SUBST(sushell)
 
+# ------------------------------------------------------------------------------
+# SMACK: label the device nodes with SECLABEL{smack}="...", and the directories and symlinks created in /dev
+# like systemd does, when the kernel has SMACK (/sys/fs/smackfs). Unlike in systemd, off by default.
+AC_ARG_ENABLE([smack],
+	AS_HELP_STRING([--enable-smack], [enable SMACK support [default=no]]),
+	[], [enable_smack=no])
+AS_IF([test "x$enable_smack" = "xyes"], [
+	AC_CHECK_HEADER([sys/xattr.h], [],
+		[AC_MSG_ERROR([*** SMACK support requested but sys/xattr.h not found])])
+	AC_DEFINE(HAVE_SMACK, 1, [Define if SMACK support is enabled])
+], [test "x$enable_smack" != "xno"], [
+	AC_MSG_ERROR([*** invalid value for --enable-smack: $enable_smack])
+])
+
 # selinux-util.c uses struct mallinfo which is not available for all C libraries (musl).
 AC_CHECK_FUNCS([mallinfo])
 # mallinfo is deprecated, prefer to use mallinfo2 when available
@@ -531,6 +545,8 @@ AC_MSG_RESULT([
 	nobody group name:       ${with_nobody_group}
 	foreign UID base:        ${foreign_uid_base}
 
+	SELinux:                 ${have_selinux}
+	SMACK:                   ${enable_smack}
 	man pages:               ${enable_manpages}
 	hwdb.d files:            ${enable_hwdb}
 	systemd-hwdb:            ${enable_systemd_hwdb}

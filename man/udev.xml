@@ -498,7 +498,10 @@
         <varlistentry>
           <term><varname>SECLABEL{<replaceable>module</replaceable>}</varname></term>
           <listitem>
-            <para>Applies the specified Linux Security Module label to the device node.</para>
+            <para>Applies the specified Linux Security Module label to the device node.
+            The modules are <literal>selinux</literal> and <literal>smack</literal>.
+            SMACK labels are only applied when eudev was built with
+            <option>--enable-smack</option> and the kernel uses SMACK.</para>
           </listitem>
         </varlistentry>
 
