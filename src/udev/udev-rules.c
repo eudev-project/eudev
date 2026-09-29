@@ -71,16 +71,18 @@ struct uid_gid {
         };
 };
 
+/* The directories of the rules files, in the order of precedence, like CONF_PATHS("udev/rules.d") of
+ * systemd: a file in an earlier directory overrides the files with the same name in the later ones. */
 static const char* const rules_dirs[] = {
         UDEV_CONF_DIR "/rules.d",
-        UDEV_RULES_DIR,
         UDEV_ROOT_RUN "/udev/rules.d",
+        "/usr/local/lib/udev/rules.d",
+        UDEV_RULES_DIR,
         UDEV_LIBEXEC_DIR "/rules.d",
 #ifdef HAVE_SPLIT_USR
         "/lib/udev/rules.d",
         "/usr/lib/udev/rules.d",
 #endif
-        "/usr/local/lib/udev/rules.d",
         NULL};
 
 const char* const* udev_rules_get_dirs(void) {
