@@ -89,7 +89,7 @@ _udevadm() {
                        --prioritized-subsystem'
         [SETTLE]='-t --timeout -E --exit-if-exists'
         [CONTROL_STANDALONE]='-e --exit -s --stop-exec-queue -S --start-exec-queue -R --reload --ping --revert'
-        [CONTROL_ARG]='-l --log-level --log-priority -p --property -m --children-max --timeout --trace'
+        [CONTROL_ARG]='-l --log-level --log-priority -p --property -m --children-max -t --timeout --trace'
         [MONITOR_STANDALONE]='-k --kernel -u --udev -p --property'
         [MONITOR_ARG]='-s --subsystem-match -t --tag-match'
         [HWDB_STANDALONE]='-u --update -s --strict --usr'
@@ -174,7 +174,7 @@ _udevadm() {
                         comps='all devices subsystems'
                         ;;
                     -c|--action)
-                        comps='add remove change'
+                        comps='add remove change move online offline bind unbind'
                         ;;
                     -y|--sysname-match|-b|--parent-match)
                         comps=$( __get_all_sysdevs )
