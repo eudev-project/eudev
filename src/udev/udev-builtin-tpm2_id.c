@@ -3,6 +3,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <inttypes.h>
+#include <poll.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -13,13 +14,16 @@
 
 /* Instead of going through the TSS2 libraries like systemd, the TPM2 commands are sent directly to the
  * kernel's TPM character device. The builtin sends the same commands as tpm2_context_new() and
- * tpm2_get_vendor_info() of systemd do: TPM2_Startup(), the capability queries of
- * tpm2_cache_capabilities(), the check for AES-128-CFB, which systemd requires for session encryption, and
- * the query of the vendor properties. The constants are from the TCG TPM 2.0 Library specification, part 2
- * (structures), and the TSS2 headers. */
+ * tpm2_get_vendor_info() of systemd do: the TPM2_GetRandom() with which the device TCTI of tpm2-tss probes
+ * the device, TPM2_Startup(), the capability queries of tpm2_cache_capabilities(), the check for
+ * AES-128-CFB, which systemd requires for session encryption, and the query of the vendor properties. The
+ * constants are from the TCG TPM 2.0 Library specification, part 2 (structures), and the TSS2 headers. */
+#define TPM2_ST_RSP_COMMAND             UINT16_C(0x00C4) /* the tag of TPM 1.2 responses */
 #define TPM2_ST_NO_SESSIONS             UINT16_C(0x8001)
+#define TPM2_ST_SESSIONS                UINT16_C(0x8002)
 #define TPM2_CC_STARTUP                 UINT32_C(0x00000144)
 #define TPM2_CC_GET_CAPABILITY          UINT32_C(0x0000017A)
+#define TPM2_CC_GET_RANDOM              UINT32_C(0x0000017B)
 #define TPM2_CC_TEST_PARMS              UINT32_C(0x0000018A)
 #define TPM2_SU_CLEAR                   UINT16_C(0x0000)
 
@@ -69,7 +73,11 @@
 #define TPM2_PT_NV_BUFFER_MAX           UINT32_C(0x12C)
 
 #define TPM2_HEADER_SIZE                10
+/* The size of the response buffer of tpm2-tss (TPM2_MAX_COMMAND_SIZE), the largest response it accepts */
 #define TPM2_RESPONSE_MAX               4096
+
+/* How long the device TCTI of tpm2-tss waits for each of the two parts of the response to its probe */
+#define TPM2_PROBE_TIMEOUT_USEC         (1 * USEC_PER_SEC)
 
 /* Like the ESAPI of tpm2-tss (ESYS_MAX_SUBMISSIONS), a command is sent at most this many times while the
  * TPM asks for it to be sent again. */
@@ -77,6 +85,12 @@
 
 /* The size systemd assumes if the TPM reports no or an implausible TPM_PT_NV_BUFFER_MAX */
 #define FALLBACK_MAX_NV_BUFFER_SIZE     UINT32_C(512)
+
+typedef struct Tpm2Device {
+        const char *path;
+        int fd;
+        bool partial_read;      /* whether a response can be read in pieces */
+} Tpm2Device;
 
 typedef struct Tpm2VendorInfo {
         uint32_t level;
@@ -99,55 +113,227 @@ static bool errno_is_not_supported(int r) {
                       ESOCKTNOSUPPORT, ENOPROTOOPT);
 }
 
+static void tpm2_device_close(Tpm2Device *d) {
+        assert(d);
+
+        d->fd = safe_close(d->fd);
+}
+
+static int tpm2_open(const char *path) {
+        /* Like the device TCTI of tpm2-tss, open the device in non-blocking mode, so that the kernel runs the
+         * commands asynchronously and the probe can time out while waiting for the response. */
+        return open(path, O_RDWR|O_NONBLOCK|O_CLOEXEC|O_NOCTTY);
+}
+
+/* Waits until the device is readable, and returns the poll events, or 0 on timeout. */
+static int tpm2_wait(int fd, usec_t timeout) {
+        int r;
+
+        do
+                r = fd_wait_for_event(fd, POLLIN, timeout);
+        while (r == -EINTR);
+
+        return r;
+}
+
+static ssize_t tpm2_read(int fd, void *buf, size_t size) {
+        ssize_t l;
+
+        do
+                l = read(fd, buf, size);
+        while (l < 0 && errno == EINTR);
+
+        return l < 0 ? -errno : l;
+}
+
+/* Like Tss2_Tcti_Device_Init() of tpm2-tss, which systemd uses: send TPM2_GetRandom() for 8 bytes, and read
+ * the header of the response, which must arrive within a second, and then the rest of it, again within a
+ * second. If the rest does not arrive, the device cannot return a response in pieces (Linux supports this
+ * since 4.20), and it is opened again, which drops the response. The response itself is not checked. As
+ * with tpm2-tss, waiting for the rest costs a second on Linux 4.18 and 4.19, and whenever the TPM answers
+ * with a bare header (an error code).
+ *
+ * Unlike tpm2-tss, which reads only if poll() returns exactly POLLIN, and then at most 20 bytes, the header
+ * is read whenever POLLIN is set, and the rest as long as the size field of the header says, so that no
+ * part of an unexpectedly long response is left for the next command to read. Neither matters with the TPM
+ * devices of Linux, which report only POLLIN and drop an unread rest when the next command is written, but
+ * it does with other devices. A normal response to the probe is 20 bytes long, and is read with the same
+ * system calls as by tpm2-tss. */
+static int tpm2_probe(Tpm2Device *d) {
+        static const uint8_t cmd[] = {
+                0x80, 0x01,                     /* TPM2_ST_NO_SESSIONS */
+                0x00, 0x00, 0x00, 0x0c,         /* commandSize */
+                0x00, 0x00, 0x01, 0x7b,         /* TPM2_CC_GetRandom */
+                0x00, 0x08,                     /* bytesRequested */
+        };
+        uint8_t rsp[TPM2_RESPONSE_MAX];
+        size_t rest = sizeof(rsp) - TPM2_HEADER_SIZE;
+        ssize_t l;
+        int r;
+
+        assert(d);
+        assert(unaligned_read_be32(cmd + 6) == TPM2_CC_GET_RANDOM);
+
+        log_debug("Probing TPM2 device for partial response read support.");
+
+        r = loop_write(d->fd, cmd, sizeof(cmd), false);
+        if (r < 0)
+                return log_debug_errno(r, "Could not probe TPM2 device for partial response read support: %m");
+
+        r = tpm2_wait(d->fd, TPM2_PROBE_TIMEOUT_USEC);
+        if (r < 0)
+                return log_debug_errno(r, "Failed to wait for the response to the TPM2 probe: %m");
+        if (r == 0)
+                return log_debug_errno(ETIMEDOUT, "Timed out waiting for the response to the TPM2 probe.");
+        if (r & POLLIN) {
+                uint32_t size;
+
+                l = tpm2_read(d->fd, rsp, TPM2_HEADER_SIZE);
+                if (l < 0)
+                        return log_debug_errno(l, "Failed to read the response header of the TPM2 probe: %m");
+                if (l != TPM2_HEADER_SIZE)
+                        return log_debug_errno(EIO, "Failed to read the response header of the TPM2 probe.");
+
+                /* Without a plausible size, e.g. of a bare header, read as much as a response can have */
+                size = unaligned_read_be32(rsp + 2);
+                if (size > TPM2_HEADER_SIZE && size <= sizeof(rsp))
+                        rest = size - TPM2_HEADER_SIZE;
+        }
+
+        l = 0;
+        r = tpm2_wait(d->fd, TPM2_PROBE_TIMEOUT_USEC);
+        if (r < 0)
+                return log_debug_errno(r, "Failed to wait for the response to the TPM2 probe: %m");
+        if (r & POLLIN) {
+                l = tpm2_read(d->fd, rsp + TPM2_HEADER_SIZE, rest);
+                if (l < 0)
+                        log_debug_errno(l, "Failed to read the rest of the response to the TPM2 probe: %m");
+        }
+
+        if (l > 0) {
+                log_debug("TPM2 device supports partial response reads.");
+                d->partial_read = true;
+                return 0;
+        }
+
+        log_debug("TPM2 device does not support partial response reads, opening it again.");
+        d->partial_read = false;
+        safe_close(d->fd);
+        d->fd = tpm2_open(d->path);
+        if (d->fd < 0)
+                return log_debug_errno(errno, "Failed to open TPM2 device '%s' again: %m", d->path);
+
+        return 0;
+}
+
 static void tpm2_command_header(uint8_t *cmd, size_t size, uint32_t cc) {
         unaligned_write_be16(cmd + 0, TPM2_ST_NO_SESSIONS);
         unaligned_write_be32(cmd + 2, size);
         unaligned_write_be32(cmd + 6, cc);
 }
 
+/* Reads a response into buf like tcti_device_receive() and Tss2_Sys_ExecuteFinish() of tpm2-tss: the
+ * header first and then the rest if the device supports partial reads, otherwise all at once. As there,
+ * the response must be at least a header and at most TPM2_RESPONSE_MAX bytes long, and have the tag of a
+ * TPM 2.0 response. Unlike there, it is read whenever poll() sets POLLIN, also together with other events
+ * (which the TPM devices of Linux do not report), as by the probe, and a response that is shorter than its
+ * size field says is refused instead of being used with whatever follows it in the buffer. Returns the size
+ * of the response. */
+static int tpm2_receive(Tpm2Device *d, uint8_t buf[static TPM2_RESPONSE_MAX]) {
+        uint32_t size;
+        uint16_t tag;
+        ssize_t l = 0;
+        int r;
+
+        assert(d);
+
+        r = tpm2_wait(d->fd, USEC_INFINITY);
+        if (r < 0)
+                return log_debug_errno(r, "Failed to wait for the TPM2 response: %m");
+
+        if (d->partial_read) {
+                if (!(r & POLLIN))
+                        return log_debug_errno(EIO, "TPM2 response header could not be received.");
+
+                l = tpm2_read(d->fd, buf, TPM2_HEADER_SIZE);
+                if (l < 0)
+                        return log_debug_errno(l, "Failed to read TPM2 response header: %m");
+                if (l != TPM2_HEADER_SIZE)
+                        return log_debug_errno(EIO, "Failed to read TPM2 response header.");
+
+                size = unaligned_read_be32(buf + 2);
+                if (size < TPM2_HEADER_SIZE)
+                        return log_debug_errno(EBADMSG, "TPM2 response size %" PRIu32 " is too small for a response header.", size);
+                if (size > TPM2_RESPONSE_MAX)
+                        return log_debug_errno(EBADMSG, "TPM2 response size %" PRIu32 " is too large.", size);
+
+                if (size > TPM2_HEADER_SIZE) {
+                        r = tpm2_wait(d->fd, USEC_INFINITY);
+                        if (r < 0)
+                                return log_debug_errno(r, "Failed to wait for the TPM2 response: %m");
+                        l = 0;
+                        if (r & POLLIN) {
+                                l = tpm2_read(d->fd, buf + TPM2_HEADER_SIZE, size - TPM2_HEADER_SIZE);
+                                if (l < 0)
+                                        return log_debug_errno(l, "Failed to read TPM2 response: %m");
+                        }
+                        if (l == 0)
+                                return log_debug_errno(EIO, "Got EOF instead of the rest of the TPM2 response.");
+                        l += TPM2_HEADER_SIZE;
+                }
+        } else {
+                if (r & POLLIN) {
+                        l = tpm2_read(d->fd, buf, TPM2_RESPONSE_MAX);
+                        if (l < 0)
+                                return log_debug_errno(l, "Failed to read TPM2 response: %m");
+                }
+                if (l == 0)
+                        return log_debug_errno(EIO, "Got EOF instead of the TPM2 response.");
+                if (l < TPM2_HEADER_SIZE)
+                        return log_debug_errno(EBADMSG, "Received %zi bytes, not enough for a TPM2 response header.", l);
+
+                size = unaligned_read_be32(buf + 2);
+                if (size < TPM2_HEADER_SIZE)
+                        return log_debug_errno(EBADMSG, "TPM2 response size %" PRIu32 " is too small for a response header.", size);
+                if (size > TPM2_RESPONSE_MAX)
+                        return log_debug_errno(EBADMSG, "TPM2 response size %" PRIu32 " is too large.", size);
+        }
+
+        if ((size_t) l != size)
+                return log_debug_errno(EBADMSG, "TPM2 response size %" PRIu32 " does not match the %zi bytes received.", size, l);
+
+        tag = unaligned_read_be16(buf);
+        if (tag == TPM2_ST_RSP_COMMAND)
+                return log_debug_errno(EBADMSG, "Unsupported device, the device is a TPM 1.2.");
+        if (!IN_SET(tag, TPM2_ST_NO_SESSIONS, TPM2_ST_SESSIONS))
+                return log_debug_errno(EBADMSG, "Malformed TPM2 response, invalid tag 0x%04" PRIx16 " in the response header.", tag);
+
+        return (int) size;
+}
+
 /* Sends a command and reads the response into buf. Like the ESAPI of tpm2-tss, which systemd uses, the
  * command is sent again while the TPM responds with TPM_RC_RETRY, TPM_RC_TESTING or TPM_RC_YIELDED, at most
- * TPM2_MAX_SUBMISSIONS times in total. Returns the size of the response, with its response code in
- * *ret_rc, or a negative errno. */
-static int tpm2_transmit(int fd, const uint8_t *cmd, size_t cmd_size, uint8_t buf[static TPM2_RESPONSE_MAX], uint32_t *ret_rc) {
+ * TPM2_MAX_SUBMISSIONS times in total. Returns the size of the response, with its response code in *ret_rc
+ * and the offset of its parameters in *ret_params, or a negative errno. */
+static int tpm2_transmit(Tpm2Device *d, const uint8_t *cmd, size_t cmd_size, uint8_t buf[static TPM2_RESPONSE_MAX], uint32_t *ret_rc, size_t *ret_params) {
         unsigned submission;
 
-        assert(fd >= 0);
+        assert(d);
         assert(cmd);
         assert(ret_rc);
 
         for (submission = 1;; submission++) {
-                size_t n = 0, size = TPM2_RESPONSE_MAX;
+                size_t params = TPM2_HEADER_SIZE;
                 uint32_t rc;
-                ssize_t l;
+                int size, r;
 
-                l = write(fd, cmd, cmd_size);
-                if (l < 0)
-                        return log_debug_errno(errno, "Failed to send TPM2 command: %m");
-                if ((size_t) l != cmd_size)
-                        return log_debug_errno(EIO, "Short write while sending TPM2 command.");
+                r = loop_write(d->fd, cmd, cmd_size, false);
+                if (r < 0)
+                        return log_debug_errno(r, "Failed to send TPM2 command: %m");
 
-                /* The TPM character device returns the whole response with one read(); only read more if
-                 * something else is behind the device node and returns it in pieces. */
-                while (n < size) {
-                        l = read(fd, buf + n, TPM2_RESPONSE_MAX - n);
-                        if (l < 0) {
-                                if (errno == EINTR)
-                                        continue;
-                                return log_debug_errno(errno, "Failed to read TPM2 response: %m");
-                        }
-                        if (l == 0)
-                                return log_debug_errno(EBADMSG, "TPM2 response too short.");
-                        n += l;
-
-                        if (n >= TPM2_HEADER_SIZE) {
-                                size = unaligned_read_be32(buf + 2);
-                                if (size < TPM2_HEADER_SIZE || size > TPM2_RESPONSE_MAX)
-                                        return log_debug_errno(EBADMSG, "TPM2 response has an invalid size.");
-                        }
-                }
-                if (n != size)
-                        return log_debug_errno(EBADMSG, "TPM2 response size field does not match response length.");
+                size = tpm2_receive(d, buf);
+                if (size < 0)
+                        return size;
 
                 rc = unaligned_read_be32(buf + 6);
                 if (IN_SET(rc, TPM2_RC_RETRY, TPM2_RC_TESTING, TPM2_RC_YIELDED) && submission < TPM2_MAX_SUBMISSIONS) {
@@ -155,8 +341,19 @@ static int tpm2_transmit(int fd, const uint8_t *cmd, size_t cmd_size, uint8_t bu
                         continue;
                 }
 
+                /* A response with sessions has the size of its parameters in front of them (none of the
+                 * commands sent here return handles). The commands are sent without sessions, but the SAPI
+                 * of tpm2-tss skips that field anyway if a successful response has sessions. */
+                if (rc == TPM2_RC_SUCCESS && unaligned_read_be16(buf) == TPM2_ST_SESSIONS) {
+                        if ((size_t) size < TPM2_HEADER_SIZE + 4)
+                                return log_debug_errno(EBADMSG, "TPM2 response too short.");
+                        params += 4;
+                }
+
                 *ret_rc = rc;
-                return (int) size;
+                if (ret_params)
+                        *ret_params = params;
+                return size;
         }
 }
 
@@ -164,7 +361,7 @@ static int tpm2_transmit(int fd, const uint8_t *cmd, size_t cmd_size, uint8_t bu
  * the TPM has more data of this capability and 0 if not. *ret_data points to the data following the
  * TPM_CAP field of the response in buf, which is *ret_size bytes long. */
 static int tpm2_get_capability(
-                int fd,
+                Tpm2Device *d,
                 uint32_t capability,
                 uint32_t property,
                 uint32_t count,
@@ -173,6 +370,7 @@ static int tpm2_get_capability(
                 size_t *ret_size) {
 
         uint8_t cmd[TPM2_HEADER_SIZE + 12];
+        size_t params;
         uint32_t rc;
         int size;
 
@@ -187,7 +385,7 @@ static int tpm2_get_capability(
         log_debug("Getting TPM2 capability 0x%04" PRIx32 " property 0x%04" PRIx32 " count %" PRIu32 ".",
                   capability, property, count);
 
-        size = tpm2_transmit(fd, cmd, sizeof(cmd), buf, &rc);
+        size = tpm2_transmit(d, cmd, sizeof(cmd), buf, &rc, &params);
         if (size < 0)
                 return size;
         if (rc == TPM2_RC_VALUE)
@@ -198,16 +396,16 @@ static int tpm2_get_capability(
                                        capability, property, rc);
 
         /* TPMI_YES_NO moreData, TPM_CAP capability */
-        if ((size_t) size < TPM2_HEADER_SIZE + 1 + 4)
+        if ((size_t) size < params + 1 + 4)
                 return log_debug_errno(EBADMSG, "TPM2 response too short.");
 
-        if (unaligned_read_be32(buf + TPM2_HEADER_SIZE + 1) != capability)
+        if (unaligned_read_be32(buf + params + 1) != capability)
                 return log_debug_errno(ENOTRECOVERABLE, "TPM provided wrong capability: 0x%04" PRIx32 " instead of 0x%04" PRIx32 ".",
-                                       unaligned_read_be32(buf + TPM2_HEADER_SIZE + 1), capability);
+                                       unaligned_read_be32(buf + params + 1), capability);
 
-        *ret_data = buf + TPM2_HEADER_SIZE + 5;
-        *ret_size = size - (TPM2_HEADER_SIZE + 5);
-        return buf[TPM2_HEADER_SIZE] == 1; /* TPM_YES */
+        *ret_data = buf + params + 5;
+        *ret_size = size - (params + 5);
+        return buf[params] == 1; /* TPM_YES */
 }
 
 /* Checks a TPML list with entries of entry_size bytes like the TSS2 unmarshaller does, and returns the number
@@ -264,7 +462,7 @@ static int tpm2_check_pcr_selection(const uint8_t *data, size_t size) {
         return 0;
 }
 
-static int tpm2_startup(int fd) {
+static int tpm2_startup(Tpm2Device *d) {
         uint8_t cmd[TPM2_HEADER_SIZE + 2], buf[TPM2_RESPONSE_MAX];
         uint32_t rc;
         int r;
@@ -272,7 +470,7 @@ static int tpm2_startup(int fd) {
         tpm2_command_header(cmd, sizeof(cmd), TPM2_CC_STARTUP);
         unaligned_write_be16(cmd + 10, TPM2_SU_CLEAR);
 
-        r = tpm2_transmit(fd, cmd, sizeof(cmd), buf, &rc);
+        r = tpm2_transmit(d, cmd, sizeof(cmd), buf, &rc, NULL);
         if (r < 0)
                 return r;
         if (rc == TPM2_RC_INITIALIZE)
@@ -289,7 +487,7 @@ static int tpm2_startup(int fd) {
  * answer these queries, and returns whether the TPM supports the AES and CFB algorithms. Where systemd would
  * trip over an assertion or loop forever on a TPM that lists no entries or does not advance through its
  * list, this fails with EBADMSG. */
-static int tpm2_cache_capabilities(int fd, bool *ret_aes, bool *ret_cfb) {
+static int tpm2_cache_capabilities(Tpm2Device *d, bool *ret_aes, bool *ret_cfb) {
         uint8_t buf[TPM2_RESPONSE_MAX];
         const uint8_t *data, *e;
         bool aes = false, cfb = false;
@@ -304,7 +502,7 @@ static int tpm2_cache_capabilities(int fd, bool *ret_aes, bool *ret_cfb) {
         /* Algorithms */
         current_alg = TPM2_ALG_FIRST;
         for (;;) {
-                r = tpm2_get_capability(fd, TPM2_CAP_ALGS, current_alg, TPM2_MAX_CAP_ALGS, buf, &data, &size);
+                r = tpm2_get_capability(d, TPM2_CAP_ALGS, current_alg, TPM2_MAX_CAP_ALGS, buf, &data, &size);
                 if (r < 0)
                         return r;
 
@@ -336,7 +534,7 @@ static int tpm2_cache_capabilities(int fd, bool *ret_aes, bool *ret_cfb) {
         /* Commands */
         current_cc = TPM2_CC_FIRST;
         for (;;) {
-                r = tpm2_get_capability(fd, TPM2_CAP_COMMANDS, current_cc, TPM2_MAX_CAP_CC, buf, &data, &size);
+                r = tpm2_get_capability(d, TPM2_CAP_COMMANDS, current_cc, TPM2_MAX_CAP_CC, buf, &data, &size);
                 if (r < 0)
                         return r;
 
@@ -359,7 +557,7 @@ static int tpm2_cache_capabilities(int fd, bool *ret_aes, bool *ret_cfb) {
         /* ECC curves, which are not required */
         current_ecc_curve = TPM2_ECC_NONE;
         for (;;) {
-                r = tpm2_get_capability(fd, TPM2_CAP_ECC_CURVES, current_ecc_curve, TPM2_MAX_ECC_CURVES, buf, &data, &size);
+                r = tpm2_get_capability(d, TPM2_CAP_ECC_CURVES, current_ecc_curve, TPM2_MAX_ECC_CURVES, buf, &data, &size);
                 if (r == -ENXIO) /* If the TPM doesn't support ECC, it might return TPM2_RC_VALUE rather than no curves */
                         break;
                 if (r < 0)
@@ -382,7 +580,7 @@ static int tpm2_cache_capabilities(int fd, bool *ret_aes, bool *ret_cfb) {
         }
 
         /* PCR banks */
-        r = tpm2_get_capability(fd, TPM2_CAP_PCRS, 0, 1, buf, &data, &size);
+        r = tpm2_get_capability(d, TPM2_CAP_PCRS, 0, 1, buf, &data, &size);
         if (r < 0)
                 return r;
         n = tpm2_check_pcr_selection(data, size);
@@ -392,7 +590,7 @@ static int tpm2_cache_capabilities(int fd, bool *ret_aes, bool *ret_cfb) {
                 log_debug("TPM bug: reported multiple PCR sets; using only first set.");
 
         /* TPM_PT_NV_BUFFER_MAX */
-        r = tpm2_get_capability(fd, TPM2_CAP_TPM_PROPERTIES, TPM2_PT_NV_BUFFER_MAX, 1, buf, &data, &size);
+        r = tpm2_get_capability(d, TPM2_CAP_TPM_PROPERTIES, TPM2_PT_NV_BUFFER_MAX, 1, buf, &data, &size);
         if (r < 0)
                 return r;
 
@@ -415,7 +613,7 @@ static int tpm2_cache_capabilities(int fd, bool *ret_aes, bool *ret_cfb) {
 
 /* Sends TPM2_TestParms() for a symmetric cipher object with AES-128 in CFB mode. Like tpm2_test_parms() of
  * systemd, any failure means that the TPM does not support it. */
-static bool tpm2_supports_aes_128_cfb(int fd) {
+static bool tpm2_supports_aes_128_cfb(Tpm2Device *d) {
         uint8_t cmd[TPM2_HEADER_SIZE + 8], buf[TPM2_RESPONSE_MAX];
         uint32_t rc;
         int r;
@@ -428,7 +626,7 @@ static bool tpm2_supports_aes_128_cfb(int fd) {
         unaligned_write_be16(cmd + 14, 128);
         unaligned_write_be16(cmd + 16, TPM2_ALG_CFB);
 
-        r = tpm2_transmit(fd, cmd, sizeof(cmd), buf, &rc);
+        r = tpm2_transmit(d, cmd, sizeof(cmd), buf, &rc, NULL);
         if (r < 0)
                 return false;
         if (rc != TPM2_RC_SUCCESS) {
@@ -439,17 +637,24 @@ static bool tpm2_supports_aes_128_cfb(int fd) {
         return true;
 }
 
-/* Like tpm2_context_new() of systemd, once the device is open: start up the TPM, query its capabilities
- * and require AES-128-CFB, returning -EOPNOTSUPP if it is missing. */
-static int tpm2_context_new(int fd) {
+/* Like tpm2_context_new() of systemd, once the device is open: probe it like the device TCTI of tpm2-tss,
+ * start up the TPM, query its capabilities and require AES-128-CFB, returning -EOPNOTSUPP if it is
+ * missing. */
+static int tpm2_context_new(Tpm2Device *d) {
         bool aes, cfb;
         int r;
 
-        r = tpm2_startup(fd);
+        assert(d);
+
+        r = tpm2_probe(d);
         if (r < 0)
                 return r;
 
-        r = tpm2_cache_capabilities(fd, &aes, &cfb);
+        r = tpm2_startup(d);
+        if (r < 0)
+                return r;
+
+        r = tpm2_cache_capabilities(d, &aes, &cfb);
         if (r < 0)
                 return log_debug_errno(r, "Failed to cache TPM capabilities: %m");
 
@@ -460,7 +665,7 @@ static int tpm2_context_new(int fd) {
         if (!cfb)
                 return log_debug_errno(EOPNOTSUPP, "TPM does not support CFB.");
 
-        if (!tpm2_supports_aes_128_cfb(fd))
+        if (!tpm2_supports_aes_128_cfb(d))
                 return log_debug_errno(EOPNOTSUPP, "TPM does not support AES-128-CFB.");
 
         return 0;
@@ -523,18 +728,18 @@ static char *mangle_vendor_chars(char *c, size_t n) {
         return c;
 }
 
-static int tpm2_get_vendor_info(int fd, Tpm2VendorInfo *ret) {
+static int tpm2_get_vendor_info(Tpm2Device *d, Tpm2VendorInfo *ret) {
         uint8_t buf[TPM2_RESPONSE_MAX];
         Tpm2VendorInfo info = {};
         const uint8_t *data, *list;
         size_t size;
         int r, n, i;
 
-        assert(fd >= 0);
+        assert(d);
         assert(ret);
 
         r = tpm2_get_capability(
-                        fd,
+                        d,
                         TPM2_CAP_TPM_PROPERTIES,
                         TPM2_PT_FAMILY_INDICATOR,
                         TPM2_PT_FIRMWARE_VERSION_2 - TPM2_PT_FAMILY_INDICATOR + 1, /* get all relevant fields at once */
@@ -619,8 +824,8 @@ static int tpm2_get_vendor_info(int fd, Tpm2VendorInfo *ret) {
 }
 
 static int builtin_tpm2_id(struct udev_device *dev, int argc, char *argv[], enum udev_event_mode mode) {
+        _cleanup_(tpm2_device_close) Tpm2Device d = { .fd = -1 };
         _cleanup_free_ char *m = NULL;
-        _cleanup_close_ int fd = -1;
         Tpm2VendorInfo info;
         const char *dn;
         int r;
@@ -633,11 +838,12 @@ static int builtin_tpm2_id(struct udev_device *dev, int argc, char *argv[], enum
         if (!dn)
                 return log_error_errno(ENOENT, "%s: Failed to get device node for device: %m", udev_device_get_sysname(dev));
 
-        fd = open(dn, O_RDWR|O_CLOEXEC|O_NOCTTY);
-        if (fd < 0)
+        d.path = dn;
+        d.fd = tpm2_open(dn);
+        if (d.fd < 0)
                 return log_error_errno(errno, "Failed to open device node '%s': %m", dn);
 
-        r = tpm2_context_new(fd);
+        r = tpm2_context_new(&d);
         if (errno_is_not_supported(r)) {
                 log_debug_errno(r, "Full TPM2 support is not available, skipping identification of TPM2 device '%s'.", dn);
                 return EXIT_SUCCESS;
@@ -645,7 +851,7 @@ static int builtin_tpm2_id(struct udev_device *dev, int argc, char *argv[], enum
         if (r < 0)
                 return log_error_errno(r, "Failed to open device node '%s': %m", dn);
 
-        r = tpm2_get_vendor_info(fd, &info);
+        r = tpm2_get_vendor_info(&d, &info);
         if (r < 0)
                 return log_error_errno(r, "%s: Failed to acquire TPM2 vendor information: %m", dn);
 
