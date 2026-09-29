@@ -735,6 +735,7 @@ int hwdb_query(struct udev *udev, const char *modalias, const char *root) {
 
         assert(modalias);
 
+        errno = 0;
         if (!isempty(root)) {
                 /* the locations of hwdb.bin that libudev reads, below root */
                 static const char *const bin_paths[] = {
@@ -755,7 +756,7 @@ int hwdb_query(struct udev *udev, const char *modalias, const char *root) {
         } else
                 hwdb = udev_hwdb_new(udev);
         if (!hwdb)
-                return -ENOENT;
+                return log_error_errno(errno > 0 ? errno : ENOENT, "Failed to open the hardware database (hwdb.bin): %m");
 
         udev_list_entry_foreach(entry, udev_hwdb_get_properties_list_entry(hwdb, modalias, 0))
                 printf("%s=%s\n", udev_list_entry_get_name(entry), udev_list_entry_get_value(entry));

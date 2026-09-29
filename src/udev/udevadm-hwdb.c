@@ -126,8 +126,8 @@ static int adm_hwdb(struct udev *udev, int argc, char *argv[]) {
                         rc = EXIT_FAILURE;
         }
 
-        if (test)
-                (void) hwdb_query(udev, test, root);
+        if (test && hwdb_query(udev, test, root) < 0)
+                rc = EXIT_FAILURE;
 out:
         return rc;
 }
