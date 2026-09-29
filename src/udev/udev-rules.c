@@ -459,12 +459,20 @@ bool udev_rules_option_is_known(const char *value) {
         return option_lookup(value, &arg);
 }
 
-#define MAX_TK                64
+/* The rule token and the tokens of the keys of a rule, the most that token_count of the rule token,
+ * an unsigned short, can count. */
+#define RULE_TOKENS_MAX       USHRT_MAX
+
 struct rule_tmp {
         struct udev_rules *rules;
         struct token rule;
-        struct token token[MAX_TK];
-        unsigned int token_cur;
+        /* the tokens of the keys, like systemd without a fixed limit, grown as needed */
+        struct token *token;
+        size_t token_cur;
+        size_t token_allocated;
+        /* a key could not be added, because the rule has too many keys, or out of memory; the rule
+         * is dropped */
+        bool failed;
         /* the value of the currently parsed key has the "i" prefix */
         bool case_insensitive;
 };
@@ -1269,9 +1277,23 @@ static int get_key(char **line, char **ret_key, char **ret_attr, enum operation_
 static int rule_add_key(struct rule_tmp *rule_tmp, enum token_type type,
                         enum operation_type op,
                         const char *value, const void *data) {
-        struct token *token = &rule_tmp->token[rule_tmp->token_cur];
+        struct token *token;
         const char *attr = NULL;
 
+        /* Most callers do not check the result, add_rule() drops the rule then. */
+        if (rule_tmp->failed)
+                return -EINVAL;
+        if (1 + rule_tmp->token_cur + 1 > RULE_TOKENS_MAX) {
+                log_rule_error("The rule has more than %u keys, ignoring.", RULE_TOKENS_MAX - 1);
+                rule_tmp->failed = true;
+                return -E2BIG;
+        }
+        if (!GREEDY_REALLOC(rule_tmp->token, rule_tmp->token_allocated, rule_tmp->token_cur + 1)) {
+                rule_tmp->failed = true;
+                return log_oom();
+        }
+
+        token = &rule_tmp->token[rule_tmp->token_cur];
         memzero(token, sizeof(struct token));
 
         if (type < TK_M_MAX)
@@ -1414,22 +1436,18 @@ static int rule_add_key(struct rule_tmp *rule_tmp, enum token_type type,
         token->key.type = type;
         token->key.op = op;
         rule_tmp->token_cur++;
-        if (rule_tmp->token_cur >= ELEMENTSOF(rule_tmp->token)) {
-                log_rule_error("temporary rule array too small");
-                return -1;
-        }
         return 0;
 }
 
 static int sort_token(struct udev_rules *rules, struct rule_tmp *rule_tmp) {
-        unsigned int i;
-        unsigned int start = 0;
-        unsigned int end = rule_tmp->token_cur;
+        size_t i;
+        size_t start = 0;
+        size_t end = rule_tmp->token_cur;
 
         for (i = 0; i < rule_tmp->token_cur; i++) {
                 enum token_type next_val = TK_UNSET;
-                unsigned int next_idx = 0;
-                unsigned int j;
+                size_t next_idx = 0;
+                size_t j;
 
                 /* find smallest value */
                 for (j = start; j < end; j++) {
@@ -1562,6 +1580,7 @@ static int add_rule(struct udev_rules *rules, char *line,
                     unsigned int filename_off, unsigned int lineno) {
         char *linepos;
         struct rule_tmp rule_tmp;
+        unsigned int first_token;
 
         memzero(&rule_tmp, sizeof(struct rule_tmp));
         rule_tmp.rules = rules;
@@ -2102,20 +2121,30 @@ static int add_rule(struct udev_rules *rules, char *line,
                 goto invalid;
         }
 
+        if (rule_tmp.failed)
+                goto invalid;
+
         /* add rule token */
+        first_token = rules->token_cur;
         rule_tmp.rule.rule.token_count = 1 + rule_tmp.token_cur;
         if (add_token(rules, &rule_tmp.rule) != 0)
-                goto invalid;
+                goto oom;
 
         /* add tokens to list, sorted by type */
         if (sort_token(rules, &rule_tmp) != 0)
-                goto invalid;
+                goto oom;
 
+        free(rule_tmp.token);
         if (checking)
                 udev_rules_check_line_end(checking, true);
         return 0;
+oom:
+        /* do not leave a part of the rule behind */
+        rules->token_cur = first_token;
+        log_oom();
 invalid:
 ignore:
+        free(rule_tmp.token);
         if (checking)
                 udev_rules_check_line_end(checking, false);
         return -1;

@@ -1804,6 +1804,14 @@ KERNEL=="sda", IMPORT{program}="/bin/echo S3='1'"
 KERNEL=="sda", ENV{S1}=="1", ENV{S2}=="1", ENV{S3}=="1", SYMLINK+="found"
 EOF
         },
+        {
+                desc            => "a rule may have any number of keys",
+                devpath         => "/devices/pci0000:00/0000:00:1f.2/host0/target0:0:0/0:0:0:0/block/sda",
+                exp_name        => "found",
+                not_exp_name    => "bad",
+                rules           => "KERNEL==\"sda\", " . join(", ", map { "KERNEL!=\"x$_\"" } (0..299)) . ", SYMLINK+=\"found\"\n" .
+                                   "KERNEL==\"sda\", " . join(", ", map { "KERNEL!=\"x$_\"" } (0..299)) . ", KERNEL==\"x\", SYMLINK+=\"bad\"\n",
+        },
 );
 
 sub udev {
