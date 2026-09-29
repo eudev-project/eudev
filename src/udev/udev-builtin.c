@@ -115,57 +115,6 @@ enum udev_builtin_cmd udev_builtin_lookup(const char *command) {
         return UDEV_BUILTIN_MAX;
 }
 
-/* Splits cmd in place into words, like systemd's strv_split_full() with
- * EXTRACT_UNQUOTE|EXTRACT_RELAX|EXTRACT_RETAIN_ESCAPE: words are separated by any whitespace; single and
- * double quotes, also in the middle of a word, group characters including whitespace and are removed;
- * a missing closing quote is accepted; backslashes have no special meaning. A word is never longer than
- * its source, hence the words can be written over cmd. */
-static void split_command(char *cmd, int *ret_argc, char *argv[]) {
-        char *r = cmd, *w = cmd;
-        int argc = 0;
-
-        for (;;) {
-                char quote = 0;
-                bool end;
-
-                r += strspn(r, WHITESPACE);
-                if (*r == '\0')
-                        break;
-
-                /* callers provide an array of UDEV_ARGV_MAX entries, leave room for the terminating NULL */
-                if (argc >= UDEV_ARGV_MAX - 1) {
-                        log_error("too many arguments in command, ignoring the rest: '%s'", r);
-                        break;
-                }
-
-                argv[argc++] = w;
-                for (; *r != '\0'; r++) {
-                        if (quote != 0) {
-                                if (*r == quote)
-                                        quote = 0;
-                                else
-                                        *w++ = *r;
-                        } else if (IN_SET(*r, '\'', '"'))
-                                quote = *r;
-                        else if (strchr(WHITESPACE, *r))
-                                break;
-                        else
-                                *w++ = *r;
-                }
-
-                /* Skip the separator before terminating the word, which may overwrite it. */
-                end = *r == '\0';
-                if (!end)
-                        r++;
-                *w++ = '\0';
-                if (end)
-                        break;
-        }
-
-        argv[argc] = NULL;
-        *ret_argc = argc;
-}
-
 int udev_builtin_run(struct udev_device *dev, enum udev_builtin_cmd cmd, const char *command, enum udev_event_mode mode) {
         char arg[UTIL_PATH_SIZE];
         int argc;
@@ -174,7 +123,7 @@ int udev_builtin_run(struct udev_device *dev, enum udev_builtin_cmd cmd, const c
         /* we need '0' here to reset the internal state */
         optind = 0;
         strscpy(arg, sizeof(arg), command);
-        split_command(arg, &argc, argv);
+        udev_build_argv(udev_device_get_udev(dev), arg, &argc, argv);
         return builtins[cmd]->cmd(dev, argc, argv, mode);
 }
 

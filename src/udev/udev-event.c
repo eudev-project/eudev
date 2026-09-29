@@ -723,43 +723,58 @@ out:
         return err;
 }
 
-int udev_build_argv(struct udev *udev __attribute__((unused)), char *cmd, int *argc, char *argv[]) {
-        int i = 0;
-        char *pos;
+/* Splits cmd in place into words, like systemd's strv_split_full() with
+ * EXTRACT_UNQUOTE|EXTRACT_RELAX|EXTRACT_RETAIN_ESCAPE, which systemd-udevd uses for the programs of RUN,
+ * PROGRAM and IMPORT{program}, and for the commands of the builtins: words are separated by any
+ * whitespace; single and double quotes, also in the middle of a word, group characters including
+ * whitespace and are removed; a missing closing quote is accepted; backslashes have no special meaning.
+ * A word is never longer than its source, hence the words can be written over cmd. The callers provide
+ * an array of UDEV_ARGV_MAX entries, which is terminated with NULL. */
+int udev_build_argv(struct udev *udev __attribute__((unused)), char *cmd, int *ret_argc, char *argv[]) {
+        char *r = cmd, *w = cmd;
+        int argc = 0;
 
-        if (strchr(cmd, ' ') == NULL) {
-                argv[i++] = cmd;
-                goto out;
-        }
+        for (;;) {
+                char quote = 0;
+                bool end;
 
-        pos = cmd;
-        while (pos != NULL && pos[0] != '\0') {
-               /* callers provide an array of UDEV_ARGV_MAX entries, leave room for the terminating NULL */
-               if (i >= UDEV_ARGV_MAX - 1) {
-                        log_error("too many arguments in command, ignoring the rest: '%s'", pos);
+                r += strspn(r, WHITESPACE);
+                if (*r == '\0')
                         break;
-               }
-               if (IN_SET(pos[0], '\'', '"')) {
-                        /* do not separate quotes or double quotes */
-                        char delim[2] = { pos[0], '\0' };
 
-                        pos++;
-                        argv[i] = strsep(&pos, delim);
-                        if (pos != NULL)
-                                while (pos[0] == ' ')
-                                        pos++;
-                } else {
-                        argv[i] = strsep(&pos, " ");
-                        if (pos != NULL)
-                                while (pos[0] == ' ')
-                                        pos++;
+                /* leave room for the terminating NULL */
+                if (argc >= UDEV_ARGV_MAX - 1) {
+                        log_error("too many arguments in command, ignoring the rest: '%s'", r);
+                        break;
                 }
-                i++;
+
+                argv[argc++] = w;
+                for (; *r != '\0'; r++) {
+                        if (quote != 0) {
+                                if (*r == quote)
+                                        quote = 0;
+                                else
+                                        *w++ = *r;
+                        } else if (IN_SET(*r, '\'', '"'))
+                                quote = *r;
+                        else if (strchr(WHITESPACE, *r))
+                                break;
+                        else
+                                *w++ = *r;
+                }
+
+                /* Skip the separator before terminating the word, which may overwrite it. */
+                end = *r == '\0';
+                if (!end)
+                        r++;
+                *w++ = '\0';
+                if (end)
+                        break;
         }
-out:
-        argv[i] = NULL;
-        if (argc)
-                *argc = i;
+
+        argv[argc] = NULL;
+        if (ret_argc)
+                *ret_argc = argc;
         return 0;
 }
 

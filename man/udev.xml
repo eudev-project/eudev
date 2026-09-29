@@ -554,11 +554,13 @@
                 </listitem>
               </varlistentry>
             </variablelist>
-            <para>The program name and following arguments are separated by spaces.
-            Single quotes can be used to specify arguments with spaces. The name
-            of a builtin and its arguments are separated by any whitespace; single
-            and double quotes, also in the middle of an argument, group characters
-            including whitespace and are removed.</para>
+            <para>The program name or the name of a builtin, and its arguments are
+            separated by any whitespace. Single and double quotes, also in the middle
+            of an argument, group characters including whitespace and are removed, e.g.
+            <literal>a"b c"d</literal> is the single argument <literal>ab cd</literal>;
+            a missing closing quote is accepted. Backslashes have no special meaning.
+            This applies to <varname>PROGRAM</varname> and
+            <varname>IMPORT{program}</varname> as well.</para>
             <para>This can only be used for very short-running foreground tasks. Running an
             event process for a long period of time may block all further events for
             this or a dependent device.</para>

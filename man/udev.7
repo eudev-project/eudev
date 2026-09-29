@@ -462,7 +462,14 @@ As
 \fIprogram\fR, but use one of the built\-in programs rather than an external one\&.
 .RE
 .sp
-The program name and following arguments are separated by spaces\&. Single quotes can be used to specify arguments with spaces\&. The name of a builtin and its arguments are separated by any whitespace; single and double quotes, also in the middle of an argument, group characters including whitespace and are removed\&.
+The program name or the name of a builtin, and its arguments are separated by any whitespace\&. Single and double quotes, also in the middle of an argument, group characters including whitespace and are removed, e\&.g\&.
+a"b c"d
+is the single argument
+ab cd; a missing closing quote is accepted\&. Backslashes have no special meaning\&. This applies to
+\fIPROGRAM\fR
+and
+\fIIMPORT{program}\fR
+as well\&.
 .sp
 This can only be used for very short\-running foreground tasks\&. Running an event process for a long period of time may block all further events for this or a dependent device\&.
 .sp

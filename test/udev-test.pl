@@ -1793,6 +1793,17 @@ KERNEL=="sda", IMPORT{file}="/dev/null/x"
 KERNEL=="sda", SYMLINK+="bad", RUN+="/bin/sh -c 'ln -s sda /dev/bad'"
 EOF
         },
+        {
+                desc            => "program arguments are split like systemd",
+                devpath         => "/devices/pci0000:00/0000:00:1f.2/host0/target0:0:0/0:0:0:0/block/sda",
+                exp_name        => "found",
+                rules           => <<EOF
+KERNEL=="sda", PROGRAM=="/bin/echo -n a\\"b c\\"d 'e f'g '' \\"h", RESULT=="ab cd e fg  h", ENV{S1}="1"
+KERNEL=="sda", PROGRAM=="	/bin/echo	-n	x	y", RESULT=="x y", ENV{S2}="1"
+KERNEL=="sda", IMPORT{program}="/bin/echo S3='1'"
+KERNEL=="sda", ENV{S1}=="1", ENV{S2}=="1", ENV{S3}=="1", SYMLINK+="found"
+EOF
+        },
 );
 
 sub udev {
