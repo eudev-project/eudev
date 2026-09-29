@@ -757,6 +757,265 @@ static inline void dump_token(struct udev_rules *rules __attribute__((unused)), 
 static inline void dump_rules(struct udev_rules *rules __attribute__((unused))) {}
 #endif /* DEBUG */
 
+static const char *operation_key_str(enum operation_type op) {
+        switch (op) {
+        case OP_MATCH:
+                return "==";
+        case OP_NOMATCH:
+                return "!=";
+        case OP_ADD:
+                return "+=";
+        case OP_REMOVE:
+                return "-=";
+        case OP_ASSIGN_FINAL:
+                return ":=";
+        default:
+                return "=";
+        }
+}
+
+/* Formats a token like the key of the rule line it comes from, e.g. KERNEL=="sd*", for the trace
+ * logs. The text of the rules is not kept, so OPTIONS are shown one by one, and RUN with its type. */
+static char *token_to_string(struct udev_rules *rules, struct token *token) {
+        const char *op = operation_key_str(token->key.op);
+        const char *value = rules_str(rules, token->key.value_off);
+        const char *key = NULL, *option = NULL;
+        bool has_attr = false;
+        char *s = NULL;
+        int r;
+
+        switch (token->type) {
+        case TK_M_ACTION:
+                key = "ACTION";
+                break;
+        case TK_M_DEVPATH:
+                key = "DEVPATH";
+                break;
+        case TK_M_KERNEL:
+                key = "KERNEL";
+                break;
+        case TK_M_DEVLINK:
+        case TK_A_DEVLINK:
+                key = "SYMLINK";
+                break;
+        case TK_M_NAME:
+        case TK_A_NAME:
+                key = "NAME";
+                break;
+        case TK_M_ENV:
+        case TK_A_ENV:
+                key = "ENV";
+                has_attr = true;
+                break;
+        case TK_M_TAG:
+        case TK_A_TAG:
+                key = "TAG";
+                break;
+        case TK_M_SUBSYSTEM:
+                key = "SUBSYSTEM";
+                break;
+        case TK_M_DRIVER:
+                key = "DRIVER";
+                break;
+        case TK_M_ATTR:
+        case TK_A_ATTR:
+                key = "ATTR";
+                has_attr = true;
+                break;
+        case TK_M_SYSCTL:
+        case TK_A_SYSCTL:
+                key = "SYSCTL";
+                has_attr = true;
+                break;
+        case TK_M_KERNELS:
+                key = "KERNELS";
+                break;
+        case TK_M_SUBSYSTEMS:
+                key = "SUBSYSTEMS";
+                break;
+        case TK_M_DRIVERS:
+                key = "DRIVERS";
+                break;
+        case TK_M_ATTRS:
+                key = "ATTRS";
+                has_attr = true;
+                break;
+        case TK_M_TAGS:
+                key = "TAGS";
+                break;
+        case TK_M_TEST:
+                if (token->key.mode != 0) {
+                        r = asprintf(&s, "TEST{%#o}%s\"%s\"", (unsigned) token->key.mode, op, value);
+                        return r < 0 ? NULL : s;
+                }
+                key = "TEST";
+                break;
+        case TK_M_PROGRAM:
+                key = "PROGRAM";
+                break;
+        case TK_M_IMPORT_FILE:
+                key = "IMPORT{file}";
+                break;
+        case TK_M_IMPORT_PROG:
+                key = "IMPORT{program}";
+                break;
+        case TK_M_IMPORT_BUILTIN:
+                key = "IMPORT{builtin}";
+                break;
+        case TK_M_IMPORT_DB:
+                key = "IMPORT{db}";
+                break;
+        case TK_M_IMPORT_CMDLINE:
+                key = "IMPORT{cmdline}";
+                break;
+        case TK_M_IMPORT_PARENT:
+                key = "IMPORT{parent}";
+                break;
+        case TK_M_RESULT:
+                key = "RESULT";
+                break;
+        case TK_A_DUMP:
+                option = json_format_enabled(token->key.dump_flags) ? "dump-json" : "dump";
+                break;
+        case TK_A_STRING_ESCAPE_NONE:
+                option = "string_escape=none";
+                break;
+        case TK_A_STRING_ESCAPE_REPLACE:
+                option = "string_escape=replace";
+                break;
+        case TK_A_DB_PERSIST:
+                option = "db_persist";
+                break;
+        case TK_A_NET_ALTNAMES:
+                option = "net_altnames";
+                break;
+        case TK_A_INOTIFY_WATCH:
+                option = token->key.watch ? "watch" : "nowatch";
+                break;
+        case TK_A_DEVLINK_PRIO:
+                r = asprintf(&s, "OPTIONS%s\"link_priority=%i\"", op, token->key.devlink_prio);
+                return r < 0 ? NULL : s;
+        case TK_A_LOG_LEVEL:
+                if (token->key.log_level < 0)
+                        option = "log_level=reset";
+                else {
+                        r = asprintf(&s, "OPTIONS%s\"log_level=%i\"", op, token->key.log_level);
+                        return r < 0 ? NULL : s;
+                }
+                break;
+        case TK_A_STATIC_NODE:
+                r = asprintf(&s, "OPTIONS%s\"static_node=%s\"", op, value);
+                return r < 0 ? NULL : s;
+        case TK_A_OWNER:
+                key = "OWNER";
+                break;
+        case TK_A_GROUP:
+                key = "GROUP";
+                break;
+        case TK_A_MODE:
+                key = "MODE";
+                break;
+        case TK_A_OWNER_ID:
+                r = asprintf(&s, "OWNER%s\"%u\"", op, (unsigned) token->key.uid);
+                return r < 0 ? NULL : s;
+        case TK_A_GROUP_ID:
+                r = asprintf(&s, "GROUP%s\"%u\"", op, (unsigned) token->key.gid);
+                return r < 0 ? NULL : s;
+        case TK_A_MODE_ID:
+                r = asprintf(&s, "MODE%s\"%#o\"", op, (unsigned) token->key.mode);
+                return r < 0 ? NULL : s;
+        case TK_A_SECLABEL:
+                key = "SECLABEL";
+                has_attr = true;
+                break;
+        case TK_A_RUN_BUILTIN:
+                key = "RUN{builtin}";
+                break;
+        case TK_A_RUN_PROGRAM:
+                key = "RUN{program}";
+                break;
+        case TK_A_GOTO:
+                key = "GOTO";
+                op = "=";
+                break;
+        default:
+                return NULL;
+        }
+
+        if (option)
+                r = asprintf(&s, "OPTIONS%s\"%s\"", op, option);
+        else if (has_attr)
+                r = asprintf(&s, "%s{%s}%s%s\"%s\"", key, rules_str(rules, token->key.attr_off), op,
+                             token->key.case_insensitive ? "i" : "", value);
+        else
+                r = asprintf(&s, "%s%s%s\"%s\"", key, op, token->key.case_insensitive ? "i" : "", value);
+
+        return r < 0 ? NULL : s;
+}
+
+/* Like systemd's trace logs of 'udevadm test --verbose' (event->trace): a message about the rule
+ * line of the token, prefixed like the other messages about applying a rule with the device name and
+ * the file name and line number, see log_event_full_errno(). */
+_printf_(4, 5)
+static void trace_line(struct udev_event *event, struct udev_rules *rules, struct token *rule, const char *format, ...) {
+        _cleanup_free_ char *message = NULL;
+        va_list ap;
+        int r;
+
+        if (!event->trace)
+                return;
+
+        va_start(ap, format);
+        r = vasprintf(&message, format, ap);
+        va_end(ap);
+        if (r < 0)
+                return;
+
+        log_event_debug(event, rules, rule, "%s", message);
+}
+
+/* Logs the token, and whether a match passed or failed. */
+static void trace_token(struct udev_event *event, struct udev_rules *rules, struct token *rule,
+                        struct token *token, const char *result) {
+        _cleanup_free_ char *s = NULL;
+
+        if (!event->trace)
+                return;
+
+        s = token_to_string(rules, token);
+        if (!s)
+                return;
+
+        trace_line(event, rules, rule, "%s%s%s", s, result ? ": " : "", result ?: "");
+}
+
+/* Logs the tokens that the parent devices are checked against. */
+static void trace_parent_tokens(struct udev_event *event, struct udev_rules *rules, struct token *rule,
+                                struct token *first, struct token *end) {
+        _cleanup_free_ char *joined = NULL;
+        struct token *token;
+
+        if (!event->trace)
+                return;
+
+        for (token = first; token < end; token++) {
+                _cleanup_free_ char *s = NULL;
+                char *n;
+
+                s = token_to_string(rules, token);
+                if (!s)
+                        continue;
+
+                n = strjoin(joined ?: "", joined ? ", " : "", s, NULL);
+                if (!n)
+                        return;
+                free(joined);
+                joined = n;
+        }
+
+        trace_line(event, rules, rule, "Checking conditions for parent devices: %s", strna(joined));
+}
+
 static int add_token(struct udev_rules *rules, struct token *token) {
         /* grow buffer if needed */
         if (rules->token_cur+1 >= rules->token_max) {
@@ -2990,6 +3249,8 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                         while (next->type > TK_M_PARENTS_MIN && next->type < TK_M_PARENTS_MAX)
                                 next++;
 
+                        trace_parent_tokens(event, rules, rule, cur, next);
+
                         /* loop over parents */
                         event->dev_parent = event->dev;
                         for (;;) {
@@ -3038,9 +3299,13 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
 
                         try_parent:
                                 event->dev_parent = udev_device_get_parent(event->dev_parent);
-                                if (event->dev_parent == NULL)
+                                if (event->dev_parent == NULL) {
+                                        trace_line(event, rules, rule, "No parent device passed parent conditions.");
                                         goto nomatch;
+                                }
                         }
+                        trace_line(event, rules, rule, "Parent device \"%s\" passed all parent conditions.",
+                                   udev_device_get_syspath(event->dev_parent));
                         /* move behind our sequence of parent match keys */
                         cur = next;
                         continue;
@@ -3786,6 +4051,7 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                 case TK_A_GOTO:
                         if (cur->key.rule_goto == 0)
                                 break;
+                        trace_token(event, rules, rule, cur, NULL);
                         cur = &rules->tokens[cur->key.rule_goto];
                         continue;
                 case TK_END:
@@ -3799,9 +4065,14 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                         goto nomatch;
                 }
 
+                if (cur->type != TK_RULE)
+                        trace_token(event, rules, rule, cur, cur->type < TK_M_MAX ? "PASS" : NULL);
                 cur++;
                 continue;
         nomatch:
+                /* the parent conditions are logged above */
+                if (cur->type != TK_RULE && !(cur->type > TK_M_PARENTS_MIN && cur->type < TK_M_PARENTS_MAX))
+                        trace_token(event, rules, rule, cur, "FAIL");
                 /* fast-forward to next rule */
                 cur = rule + rule->rule.token_count;
         }
