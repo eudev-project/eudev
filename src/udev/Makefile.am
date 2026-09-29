@@ -172,11 +172,3 @@ CLEANFILES += \
 	keyboard-keys-from-name.gperf \
 	keyboard-keys.txt \
 	$(BUILT_SOURCES)
-
-# install udevadm symlink in sbindir
-install-exec-hook:
-	test "$(bindir)" = "$(sbindir)" || \
-		$(LN_S) -f $(bindir)/udevadm $(DESTDIR)$(sbindir)/udevadm
-
-uninstall-hook:
-	rm -Rf $(DESTDIR)$(sbindir)/udevadm
