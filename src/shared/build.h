@@ -5,9 +5,10 @@
 
 #include "config.h"
 
-/* Like systemd's version(), but eudev prints just its package version, as scsi_id --version and
- * dmi_memory_id --version always did. */
+/* Like systemd's version(), but eudev prints just the version of udev it corresponds to, like
+ * 'udevadm --version' does it, e.g. "262". UDEV_VERSION is defined by the Makefile.am of each
+ * helper. */
 static inline int version(void) {
-        printf("%s\n", VERSION);
+        printf("%s\n", UDEV_VERSION);
         return 0;
 }

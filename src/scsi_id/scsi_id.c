@@ -33,6 +33,7 @@
 #include <getopt.h>
 #include <sys/stat.h>
 
+#include "build.h"
 #include "libudev.h"
 #include "device-nodes.h"
 #include "libudev-private.h"
@@ -403,7 +404,7 @@ static int set_options(struct udev *udev __attribute__((unused)),
                         break;
 
                 case 'V':
-                        printf("%s\n", VERSION);
+                        (void) version();
                         exit(0);
 
                 case 'x':

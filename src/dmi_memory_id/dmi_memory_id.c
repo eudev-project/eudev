@@ -50,6 +50,7 @@
 #include <sys/socket.h>
 
 #include "util.h"
+#include "build.h"
 #include "libudev.h"
 #include "libudev-private.h"
 #include "fileio.h"
@@ -670,7 +671,7 @@ static int parse_argv(int argc, char * const *argv) {
                         arg_source_file = optarg;
                         break;
                 case 'V':
-                        printf("%s\n", VERSION);
+                        (void) version();
                         return 0;
                 case 'h':
                         return help();
