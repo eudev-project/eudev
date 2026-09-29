@@ -30,6 +30,7 @@
 #include <time.h>
 #include <sys/sysmacros.h>
 
+#include "def.h"
 #include "udev.h"
 #include "udev-rules-check.h"
 #include "path-util.h"
@@ -1955,15 +1956,18 @@ static int add_rule(struct udev_rules *rules, char *line,
 
                 if (streq(key, "OWNER")) {
                         uid_t uid;
-                        char *endptr;
 
                         if (op < OP_MATCH_MAX || op == OP_REMOVE) {
                                 log_rule_invalid_op("OWNER");
                                 goto invalid;
                         }
 
-                        uid = strtoul(value, &endptr, 10);
-                        if (endptr[0] == '\0') {
+                        /* Like systemd, a number must be a valid user ID, and an empty value is refused */
+                        if (in_charset(value, DIGITS)) {
+                                if (parse_uid(value, &uid) < 0) {
+                                        log_rule_error_errno(EINVAL, "Failed to resolve user '%s', ignoring: %m", value);
+                                        goto invalid;
+                                }
                                 rule_add_key(&rule_tmp, TK_A_OWNER_ID, op, NULL, &uid);
                         } else if ((rules->resolve_names > 0) && strchr("$%", value[0]) == NULL) {
                                 uid = add_uid(rules, value);
@@ -1977,15 +1981,18 @@ static int add_rule(struct udev_rules *rules, char *line,
 
                 if (streq(key, "GROUP")) {
                         gid_t gid;
-                        char *endptr;
 
                         if (op < OP_MATCH_MAX || op == OP_REMOVE) {
                                 log_rule_invalid_op("GROUP");
                                 goto invalid;
                         }
 
-                        gid = strtoul(value, &endptr, 10);
-                        if (endptr[0] == '\0') {
+                        /* Like systemd, a number must be a valid group ID, and an empty value is refused */
+                        if (in_charset(value, DIGITS)) {
+                                if (parse_gid(value, &gid) < 0) {
+                                        log_rule_error_errno(EINVAL, "Failed to resolve group '%s', ignoring: %m", value);
+                                        goto invalid;
+                                }
                                 rule_add_key(&rule_tmp, TK_A_GROUP_ID, op, NULL, &gid);
                         } else if ((rules->resolve_names > 0) && strchr("$%", value[0]) == NULL) {
                                 gid = add_gid(rules, value);
@@ -1999,18 +2006,23 @@ static int add_rule(struct udev_rules *rules, char *line,
 
                 if (streq(key, "MODE")) {
                         mode_t mode;
-                        char *endptr;
 
                         if (op < OP_MATCH_MAX || op == OP_REMOVE) {
                                 log_rule_invalid_op("MODE");
                                 goto invalid;
                         }
 
-                        mode = strtol(value, &endptr, 8);
-                        if (endptr[0] == '\0')
+                        /* Like systemd, a value that is not a mode, e.g. one with a substitution, is
+                         * parsed whenever the rule is applied; an empty value is an error, but the key
+                         * is kept, and fails whenever the rule is applied. */
+                        if (parse_mode(value, &mode) >= 0)
                                 rule_add_key(&rule_tmp, TK_A_MODE_ID, op, NULL, &mode);
-                        else
+                        else {
+                                if (isempty(value))
+                                        log_rule_error("Invalid value \"%s\" for %s (char %zu: %s), ignoring.",
+                                                       value, key, (size_t) 0, "empty value");
                                 rule_add_key(&rule_tmp, TK_A_MODE, op, value, NULL);
+                        }
                         rule_tmp.rule.rule.can_set_name = true;
                         continue;
                 }
@@ -3044,18 +3056,20 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                 case TK_A_MODE: {
                         char mode_str[UTIL_NAME_SIZE];
                         mode_t mode;
-                        char *endptr;
+                        int r;
 
                         if (event->mode_final)
                                 break;
-                        udev_event_apply_format(event, rules_str(rules, cur->key.value_off), mode_str, sizeof(mode_str), false, properties_list);
-                        mode = strtol(mode_str, &endptr, 8);
-                        if (endptr[0] != '\0') {
-                                log_error("ignoring invalid mode '%s'", mode_str);
-                                break;
-                        }
+                        /* like systemd, also when the value is not valid */
                         if (cur->key.op == OP_ASSIGN_FINAL)
                                 event->mode_final = true;
+                        udev_event_apply_format(event, rules_str(rules, cur->key.value_off), mode_str, sizeof(mode_str), false, properties_list);
+                        r = parse_mode(mode_str, &mode);
+                        if (r < 0) {
+                                log_error_errno(r, "Failed to parse mode \"%s\", ignoring %s:%u: %m", mode_str,
+                                                rules_str(rules, rule->rule.filename_off), rule->rule.filename_line);
+                                break;
+                        }
                         event->mode_set = true;
                         event->mode = mode;
                         log_debug("MODE %#o %s:%u",

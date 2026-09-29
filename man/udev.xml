@@ -440,6 +440,14 @@
           <listitem>
             <para>The permissions for the device node. Every specified value overrides
             the compiled-in default value.</para>
+            <para>A user or group given as a number must be a valid user or group ID, in
+            decimal without leading zeros; the rule line is ignored otherwise, and also when
+            <varname>OWNER</varname> or <varname>GROUP</varname> is empty. A
+            <varname>MODE</varname> is an octal number of at most <literal>7777</literal>;
+            an empty one is an error. A <varname>MODE</varname> that is not valid, also
+            after substitutions, fails with an error message whenever the rule is applied,
+            and the mode is left as it is; with <literal>:=</literal>, it is still made
+            final.</para>
           </listitem>
         </varlistentry>
 

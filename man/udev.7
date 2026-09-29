@@ -340,6 +340,18 @@ Symlink names must never conflict with the kernel\*(Aqs default device node name
 \fIOWNER\fR, \fIGROUP\fR, \fIMODE\fR
 .RS 4
 The permissions for the device node\&. Every specified value overrides the compiled\-in default value\&.
+.sp
+A user or group given as a number must be a valid user or group ID, in decimal without leading zeros; the rule line is ignored otherwise, and also when
+\fIOWNER\fR
+or
+\fIGROUP\fR
+is empty\&. A
+\fIMODE\fR
+is an octal number of at most
+7777; an empty one is an error\&. A
+\fIMODE\fR
+that is not valid, also after substitutions, fails with an error message whenever the rule is applied, and the mode is left as it is; with
+:=, it is still made final\&.
 .RE
 .PP
 \fISECLABEL{\fR\fI\fImodule\fR\fR\fI}\fR

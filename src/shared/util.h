@@ -107,6 +107,7 @@ void close_many(const int fds[], unsigned n_fd);
 
 int parse_uid(const char *s, uid_t* ret_uid);
 #define parse_gid(s, ret_uid) parse_uid(s, ret_uid)
+int parse_mode(const char *s, mode_t *ret);
 
 int safe_atou(const char *s, unsigned *ret_u);
 int safe_atoi(const char *s, int *ret_i);

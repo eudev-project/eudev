@@ -1764,6 +1764,24 @@ LABEL:="end"
 LABEL="end"
 EOF
         },
+        {
+                desc            => "empty MODE, OWNER and GROUP, and invalid IDs are errors",
+                devpath         => "/devices/pci0000:00/0000:00:1f.2/host0/target0:0:0/0:0:0:0/block/sda",
+                exp_name        => "found",
+                not_exp_name    => "bad",
+                exp_perms       => "0:0:0640",
+                rules           => <<EOF
+KERNEL=="sda", MODE="0640"
+KERNEL=="sda", MODE="", SYMLINK+="found"
+KERNEL=="sda", MODE:=""
+KERNEL=="sda", MODE="0600"
+KERNEL=="sda", OWNER="", SYMLINK+="bad"
+KERNEL=="sda", GROUP="", SYMLINK+="bad"
+KERNEL=="sda", OWNER="01", SYMLINK+="bad"
+KERNEL=="sda", GROUP="65535", SYMLINK+="bad"
+KERNEL=="sda", OWNER="4294967296", SYMLINK+="bad"
+EOF
+        },
 );
 
 sub udev {

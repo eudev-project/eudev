@@ -418,24 +418,6 @@ static SubstType get_substitution_type(const char *str) {
         return SUBST_TYPE_PLAIN;
 }
 
-static int parse_mode(const char *s, mode_t *ret) {
-        char *end;
-        long l;
-
-        if (isempty(s) || !in_charset(s, "01234567"))
-                return -EINVAL;
-
-        errno = 0;
-        l = strtol(s, &end, 8);
-        if (errno > 0)
-                return -errno;
-        if (*end != '\0' || l < 0 || l > 07777)
-                return -ERANGE;
-
-        *ret = (mode_t) l;
-        return 0;
-}
-
 /* Remembers a token of the current line, for the checks of conflicting and duplicate expressions. */
 static void add_token(struct udev_rules_check *c, const char *type, bool is_match, UdevRulesCheckOp op,
                       const char *value, const char *data, bool is_case_insensitive, bool has_alternatives,
@@ -776,12 +758,12 @@ void udev_rules_check_token(struct udev_rules_check *c, const char *base, const 
                         op = CHECK_OP_ASSIGN;
                 }
 
+                /* An empty value and an invalid user or group ID are reported by the parser. An
+                 * empty MODE is kept, and fails whenever the rule is applied. */
                 if (streq(base, "MODE")) {
-                        if (parse_mode(value, &mode) < 0)
+                        if (!isempty(value) && parse_mode(value, &mode) < 0)
                                 check_value_format(c, base, value, true);
-                } else if (isempty(value))
-                        check_value_format(c, base, value, true);
-                else if (!in_charset(value, DIGITS)) {
+                } else if (!in_charset(value, DIGITS)) {
                         /* Like the parser: names are resolved when the rules are read, unless they
                          * start with a substitution, or name resolution is late or disabled. */
                         if (!(c->resolve_names > 0 && !strchr("$%", value[0])) && c->resolve_names >= 0)

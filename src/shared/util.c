@@ -285,6 +285,30 @@ int parse_uid(const char *s, uid_t* ret_uid) {
         return 0;
 }
 
+/* Like parse_mode() of systemd: an octal mode of at most 07777, without a sign; leading whitespace is
+ * fine. */
+int parse_mode(const char *s, mode_t *ret) {
+        unsigned m;
+        int r;
+
+        assert(s);
+
+        r = safe_atou_full(s, 8 |
+                           SAFE_ATO_REFUSE_PLUS_MINUS, /* Leading '+' or even '-' char? that's just weird,
+                                                        * refuse. User might have wanted to add mode flags or
+                                                        * so, but this parser doesn't allow that, so let's
+                                                        * better be safe. */
+                           &m);
+        if (r < 0)
+                return r;
+        if (m > 07777)
+                return -ERANGE;
+
+        if (ret)
+                *ret = m;
+        return 0;
+}
+
 int safe_atou(const char *s, unsigned *ret_u) {
         char *x = NULL;
         unsigned long l;
