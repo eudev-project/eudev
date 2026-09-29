@@ -35,7 +35,7 @@ static void help(void) {
                "  -h --help       Show this help\n"
                "     --version    Show package version\n"
                "  -s --strict     When updating, return non-zero exit value on any parsing error\n"
-               "     --usr        Generate in " UDEV_LIBEXEC_DIR " instead of /etc/udev\n"
+               "     --usr        Generate in " UDEV_LIBEXEC_DIR " instead of " UDEV_CONF_DIR "\n"
                "  -r --root=PATH  Alternative root path in the filesystem\n"
                "\nSee the %s man page for details.\n",
                program_invocation_short_name,
@@ -125,7 +125,7 @@ static int verb_update(struct udev *udev) {
         if (hwdb_bypass())
                 return 0;
 
-        hwdb_bin = strjoin(arg_hwdb_bin_dir ?: "/etc/udev", "/hwdb.bin", NULL);
+        hwdb_bin = arg_hwdb_bin_dir ? strjoin(arg_hwdb_bin_dir, "/hwdb.bin", NULL) : strdup(UDEV_HWDB_BIN);
         if (!hwdb_bin)
                 return log_oom();
 

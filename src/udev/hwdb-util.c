@@ -767,7 +767,7 @@ int hwdb_query(struct udev *udev, const char *modalias, const char *root) {
         if (!isempty(root)) {
                 /* the locations of hwdb.bin that libudev reads, below root */
                 static const char *const bin_paths[] = {
-                        "/etc/udev/hwdb.bin",
+                        UDEV_HWDB_BIN,
                         UDEV_LIBEXEC_DIR "/hwdb.bin",
                 };
                 unsigned i;

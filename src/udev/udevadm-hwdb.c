@@ -36,8 +36,8 @@ static void help(void) {
         printf("Usage: udevadm hwdb OPTIONS\n"
                "  -u,--update          update the hardware database\n"
                "  -s,--strict          when updating, return non-zero exit value on any parsing error\n"
-               "  -o,--output=.../hwdb.bin generate in .../hwdb.bin instead of /etc/udev/hwdb.bin\n"
-               "  --usr                generate in " UDEV_LIBEXEC_DIR " instead of /etc/udev\n"
+               "  -o,--output=.../hwdb.bin generate in .../hwdb.bin instead of " UDEV_HWDB_BIN "\n"
+               "  --usr                generate in " UDEV_LIBEXEC_DIR " instead of " UDEV_CONF_DIR "\n"
                "  -t,--test=MODALIAS   query database and print result\n"
                "  -r,--root=PATH       alternative root path in the filesystem\n"
                "  -h,--help\n"
@@ -73,7 +73,7 @@ static int adm_hwdb(struct udev *udev, int argc, char *argv[]) {
         int c, r;
         int rc = EXIT_SUCCESS;
 
-        _cleanup_free_ char *hwdb_bin = strdup("/etc/udev/hwdb.bin");
+        _cleanup_free_ char *hwdb_bin = strdup(UDEV_HWDB_BIN);
         if (hwdb_bin == NULL) {
                 rc = EXIT_FAILURE;
                 goto out;
