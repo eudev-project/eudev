@@ -59,6 +59,10 @@ with the same name as a rules file in
 Every line in the rules file contains at least one key\-value pair\&. Except for empty lines or lines beginning with
 #, which are ignored\&. There are two kinds of keys: match and assignment\&. If all match keys match against their values, the rule gets applied and the assignment keys get the specified values assigned\&.
 .PP
+A line that ends with a backslash (\e) is continued on the next line: the backslash is removed, and the next line is appended without its leading whitespace\&. Lines beginning with
+#
+are ignored also between the lines of a continued rule\&. A rule that is still continued at the end of the file, or that is longer than 16383 characters, is ignored with an error message; the other rules of the file are still read\&. The messages about a rule name the rules file and the first line of the rule\&.
+.PP
 A matching rule may rename a network interface, add symlinks pointing to the device node, or run a specified program as part of the event handling\&.
 .PP
 A rule consists of a comma\-separated list of one or more key\-value pairs\&. Each key has a distinct operation, depending on the used operator\&. A rule line with a key\-value pair that cannot be parsed, e\&.g\&. with a value that is not quoted, or with an unknown key, an operator the key does not take, an unknown built\-in command, or an unknown type of

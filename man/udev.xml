@@ -80,6 +80,14 @@
       If all match keys match against their values, the rule gets applied and the
       assignment keys get the specified values assigned.</para>
 
+      <para>A line that ends with a backslash (<literal>\</literal>) is continued on the
+      next line: the backslash is removed, and the next line is appended without its
+      leading whitespace. Lines beginning with <literal>#</literal> are ignored also
+      between the lines of a continued rule. A rule that is still continued at the end of
+      the file, or that is longer than 16383 characters, is ignored with an error message;
+      the other rules of the file are still read. The messages about a rule name the rules
+      file and the first line of the rule.</para>
+
       <para>A matching rule may rename a network interface, add symlinks
       pointing to the device node, or run a specified program as part of
       the event handling.</para>

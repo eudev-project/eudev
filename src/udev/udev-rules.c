@@ -2108,10 +2108,11 @@ ignore:
 
 static int parse_file(struct udev_rules *rules, const char *filename) {
         _cleanup_fclose_ FILE *f = NULL;
+        _cleanup_free_ char *continuation = NULL;
         unsigned int first_token;
         unsigned int filename_off;
-        char line[UTIL_LINE_SIZE];
-        unsigned line_nr = 0, first_line_nr;
+        unsigned line_nr = 0, first_line_nr = 0, too_long_line_nr = 0;
+        bool ignore_line = false;
         unsigned int i;
 
         f = fopen(filename, "re");
@@ -2132,44 +2133,99 @@ static int parse_file(struct udev_rules *rules, const char *filename) {
         filename_off = rules_add_string(rules, filename);
         parse_filename = filename;
 
-        for (bool eof = false; !eof && fgets(line, sizeof(line), f) != NULL; ) {
-                char *key;
+        /* Like udev_rules_parse_file() of systemd: a line ending with a backslash is continued on the next
+         * line, without the leading whitespace of that, lines beginning with '#' are ignored also within
+         * a continued rule, and a rule of UTIL_LINE_SIZE characters or more is ignored. Unlike systemd,
+         * which ignores the whole file when a single line is that long, only ignore the rule, and say
+         * which line it is. */
+        for (;;) {
+                _cleanup_free_ char *buf = NULL;
+                bool too_long = false;
+                char *line;
                 size_t len;
+                int r;
 
-                /* skip whitespace */
+                /* Skip the beginning of an extremely long line, until its end, which is still needed to
+                 * find out whether the rule continues on the next line. */
+                while ((r = read_line(f, LONG_LINE_MAX, &buf)) == -ENOBUFS)
+                        too_long = true;
+                if (r < 0) {
+                        log_error_errno(r, "Failed to read rules file %s, ignoring the rest of it: %m", filename);
+                        break;
+                }
+                if (r == 0 && !too_long)
+                        break;
+
                 line_nr++;
-                key = line;
-                while (isspace(key[0]))
-                        key++;
+                if (!continuation)
+                        first_line_nr = line_nr;
 
-                /* comment */
-                if (key[0] == '#')
+                line = buf + strspn(buf, WHITESPACE);
+
+                /* Lines beginning with '#' are ignored regardless of line continuation. */
+                if (!too_long && line[0] == '#')
                         continue;
 
                 len = strlen(line);
-                if (len < 3)
-                        continue;
 
-                first_line_nr = line_nr;
+                /* remember the first line of the rule that is too long by itself */
+                if ((too_long || len >= UTIL_LINE_SIZE) && too_long_line_nr == 0)
+                        too_long_line_nr = line_nr;
 
-                /* continue reading if backslash+newline is found */
-                while (line[len-2] == '\\') {
-                        if (fgets(&line[len-2], (sizeof(line)-len)+2, f) == NULL) {
-                                eof = true;
-                                break;
+                if (too_long)
+                        ignore_line = true;
+                else if (continuation && !ignore_line) {
+                        if (strlen(continuation) + len >= UTIL_LINE_SIZE)
+                                ignore_line = true;
+                        else {
+                                char *joined;
+
+                                joined = strappend(continuation, line);
+                                if (!joined)
+                                        return log_oom();
+                                free_and_replace(continuation, joined);
+
+                                line = continuation;
+                                len = strlen(line);
                         }
-                        if (strlen(&line[len-2]) < 2)
-                                break;
-                        line_nr++;
-                        len = strlen(line);
+                } else if (!continuation && len >= UTIL_LINE_SIZE)
+                        ignore_line = true;
+
+                if (len > 0 && line[len - 1] == '\\') {
+                        if (!ignore_line) {
+                                line[len - 1] = '\0';
+                                if (!continuation) {
+                                        continuation = strdup(line);
+                                        if (!continuation)
+                                                return log_oom();
+                                }
+                        } else if (!continuation) {
+                                /* too long already, only remember that the rule continues */
+                                continuation = strdup("");
+                                if (!continuation)
+                                        return log_oom();
+                        }
+                        continue;
                 }
 
                 parse_line_nr = first_line_nr;
-                if (len+1 >= sizeof(line)) {
+                if (ignore_line && too_long_line_nr > 0)
+                        log_rule_error("Line %u is longer than %u characters, ignoring the rule.",
+                                       too_long_line_nr, UTIL_LINE_SIZE - 1);
+                else if (ignore_line)
                         log_rule_error("Line is too long, ignored.");
-                        continue;
-                }
-                add_rule(rules, key, filename_off, first_line_nr);
+                else if (len > 0)
+                        add_rule(rules, line, filename_off, first_line_nr);
+
+                free(continuation);
+                continuation = NULL;
+                ignore_line = false;
+                too_long_line_nr = 0;
+        }
+
+        if (continuation) {
+                parse_line_nr = first_line_nr;
+                log_rule_error("Unexpected EOF after line continuation, line ignored.");
         }
 
         /* link GOTOs to LABEL rules in this file to be able to fast-forward */

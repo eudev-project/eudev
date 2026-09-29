@@ -1693,6 +1693,23 @@ KERNEL=="sda", PROGRAM=="/usr/bin/printenv .PRIV", RESULT=="secret", ENV{P1}="1"
 ACTION=="add", KERNEL=="sda", ENV{P1}=="1", RUN+="/bin/sh -c 'grep -qx E:P1=1 /run/udev/data/b8:0 && ! grep -q PRIV /run/udev/data/b8:0 && ln -s sda /dev/found'"
 EOF
         },
+        {
+                desc            => "line continuation drops leading whitespace and comment lines",
+                devpath         => "/devices/pci0000:00/0000:00:1f.2/host0/target0:0:0/0:0:0:0/block/sda",
+                exp_name        => "found",
+                not_exp_name    => "bad",
+                rules           => <<EOF
+KERNEL=="sda", \\
+# a comment within a continued rule
+  ENV{CONT}="x\\
+    y"
+KERNEL=="nosuchdevice", \\
+    # a comment within a continued rule does not end it \\
+    SYMLINK+="bad"
+KERNEL=="sda", ENV{CONT}=="xy", SYMLINK+="found"
+KERNEL=="sda", SYMLINK+="bad", \\
+EOF
+        },
 );
 
 sub udev {
