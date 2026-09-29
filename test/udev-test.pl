@@ -1741,6 +1741,29 @@ KERNEL=="sda", ACTION{x}=="add", SYMLINK+="bad"
 KERNEL=="sda", TEST{}=="/sys", SYMLINK+="found"
 EOF
         },
+        {
+                desc            => "assignment keys refuse the match operators",
+                devpath         => "/devices/pci0000:00/0000:00:1f.2/host0/target0:0:0/0:0:0:0/block/sda",
+                exp_name        => "found",
+                not_exp_name    => "bad",
+                rules           => <<EOF
+KERNEL=="sda", RUN=="/bin/true", SYMLINK+="bad"
+KERNEL=="sda", RUN!="/bin/true", SYMLINK+="bad"
+KERNEL=="sda", OWNER=="root", SYMLINK+="bad"
+KERNEL=="sda", GROUP!="root", SYMLINK+="bad"
+KERNEL=="sda", MODE=="0600", SYMLINK+="bad"
+KERNEL=="sda", SECLABEL{selinux}=="x", SYMLINK+="bad"
+KERNEL=="sda", GOTO=="skip"
+KERNEL=="sda", GOTO+="skip"
+KERNEL=="sda", SYMLINK+="found"
+LABEL=="skip"
+KERNEL=="sda", GOTO="end"
+KERNEL=="sda", SYMLINK+="bad"
+LABEL+="end"
+LABEL:="end"
+LABEL="end"
+EOF
+        },
 );
 
 sub udev {

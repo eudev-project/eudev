@@ -1662,7 +1662,7 @@ static int add_rule(struct udev_rules *rules, char *line,
                 }
 
                 if (streq(key, "SECLABEL")) {
-                        if (op == OP_REMOVE) {
+                        if (op < OP_MATCH_MAX || op == OP_REMOVE) {
                                 log_rule_invalid_op("SECLABEL");
                                 goto invalid;
                         }
@@ -1867,7 +1867,7 @@ static int add_rule(struct udev_rules *rules, char *line,
                 if (streq(key, "RUN")) {
                         if (!attr)
                                 attr = (char *) "program";
-                        if (op == OP_REMOVE) {
+                        if (op < OP_MATCH_MAX || op == OP_REMOVE) {
                                 log_rule_invalid_op("RUN");
                                 goto invalid;
                         }
@@ -1905,7 +1905,7 @@ static int add_rule(struct udev_rules *rules, char *line,
                 }
 
                 if (streq(key, "LABEL")) {
-                        if (op == OP_REMOVE) {
+                        if (op != OP_ASSIGN) {
                                 log_rule_invalid_op("LABEL");
                                 goto invalid;
                         }
@@ -1914,7 +1914,7 @@ static int add_rule(struct udev_rules *rules, char *line,
                 }
 
                 if (streq(key, "GOTO")) {
-                        if (op == OP_REMOVE) {
+                        if (op != OP_ASSIGN) {
                                 log_rule_invalid_op("GOTO");
                                 goto invalid;
                         }
@@ -1957,7 +1957,7 @@ static int add_rule(struct udev_rules *rules, char *line,
                         uid_t uid;
                         char *endptr;
 
-                        if (op == OP_REMOVE) {
+                        if (op < OP_MATCH_MAX || op == OP_REMOVE) {
                                 log_rule_invalid_op("OWNER");
                                 goto invalid;
                         }
@@ -1979,7 +1979,7 @@ static int add_rule(struct udev_rules *rules, char *line,
                         gid_t gid;
                         char *endptr;
 
-                        if (op == OP_REMOVE) {
+                        if (op < OP_MATCH_MAX || op == OP_REMOVE) {
                                 log_rule_invalid_op("GROUP");
                                 goto invalid;
                         }
@@ -2001,7 +2001,7 @@ static int add_rule(struct udev_rules *rules, char *line,
                         mode_t mode;
                         char *endptr;
 
-                        if (op == OP_REMOVE) {
+                        if (op < OP_MATCH_MAX || op == OP_REMOVE) {
                                 log_rule_invalid_op("MODE");
                                 goto invalid;
                         }

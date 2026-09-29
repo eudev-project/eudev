@@ -184,8 +184,6 @@ static void log_line_error_fail(struct udev_rules_check *c, const char *format, 
         c->line_failed = true;
 }
 
-#define log_line_invalid_op(c, key)     log_line_error_fail(c, "Invalid operator for %s.", key)
-#define log_line_invalid_attr(c, key)   log_line_error_fail(c, "Invalid attribute for %s.", key)
 
 void udev_rules_check_file_begin(struct udev_rules_check *c, const char *filename) {
         assert(c);
@@ -723,11 +721,8 @@ void udev_rules_check_token(struct udev_rules_check *c, const char *base, const 
         } else if (streq(base, "RUN")) {
                 _cleanup_free_ char *type = NULL;
 
-                if (is_match) {
-                        log_line_invalid_op(c, base);
-                        return;
-                }
-                if (op == CHECK_OP_REMOVE)
+                /* A wrong operator is reported by the parser. */
+                if (is_match || op == CHECK_OP_REMOVE)
                         return;
                 check_value_format(c, base, value, true);
                 if (c->line_failed)
@@ -753,24 +748,18 @@ void udev_rules_check_token(struct udev_rules_check *c, const char *base, const 
                 c->current.has_other = true;
 
         } else if (streq(base, "LABEL")) {
-                if (attr || op == CHECK_OP_REMOVE)
+                /* An attribute or a wrong operator is reported by the parser. */
+                if (attr || op != CHECK_OP_ASSIGN)
                         return;
-                if (op != CHECK_OP_ASSIGN) {
-                        log_line_invalid_op(c, base);
-                        return;
-                }
                 if (c->current.label)
                         log_line_warning(c, "Contains multiple LABEL keys, ignoring LABEL=\"%s\".", c->current.label);
 
                 set_label(c, &c->current.label, value);
 
         } else if (streq(base, "GOTO")) {
-                if (attr || op == CHECK_OP_REMOVE)
+                /* An attribute or a wrong operator is reported by the parser. */
+                if (attr || op != CHECK_OP_ASSIGN)
                         return;
-                if (op != CHECK_OP_ASSIGN) {
-                        log_line_invalid_op(c, base);
-                        return;
-                }
                 if (c->current.goto_label) {
                         log_line_warning(c, "Contains multiple GOTO keys, ignoring GOTO=\"%s\".", value);
                         return;
@@ -779,12 +768,9 @@ void udev_rules_check_token(struct udev_rules_check *c, const char *base, const 
                 set_label(c, &c->current.goto_label, value);
 
         } else if (STR_IN_SET(base, "OWNER", "GROUP", "MODE")) {
-                if (attr || op == CHECK_OP_REMOVE)
+                /* An attribute or a wrong operator is reported by the parser. */
+                if (attr || is_match || op == CHECK_OP_REMOVE)
                         return;
-                if (is_match) {
-                        log_line_invalid_op(c, base);
-                        return;
-                }
                 if (op == CHECK_OP_ADD) {
                         log_line_warning(c, "%s key takes '=' or ':=' operator, assuming '='.", base);
                         op = CHECK_OP_ASSIGN;
@@ -814,12 +800,9 @@ void udev_rules_check_token(struct udev_rules_check *c, const char *base, const 
                 if (isempty(attr))
                         return;
                 check_value_format(c, base, value, true);
-                if (c->line_failed || op == CHECK_OP_REMOVE)
+                /* A wrong operator is reported by the parser. */
+                if (c->line_failed || is_match || op == CHECK_OP_REMOVE)
                         return;
-                if (is_match) {
-                        log_line_invalid_op(c, base);
-                        return;
-                }
                 if (op == CHECK_OP_ASSIGN_FINAL) {
                         log_line_warning(c, "%s key takes '=' or '+=' operator, assuming '='.", base);
                         op = CHECK_OP_ASSIGN;
