@@ -59,6 +59,7 @@ struct udev {
         bool sas_legacy_path;
         char *net_naming_scheme;
         int net_altnames;
+        char *net_altnames_invalid; /* the invalid value of net_altnames=, "" if it is empty */
 };
 
 /**
@@ -149,6 +150,8 @@ static void udev_read_conf(struct udev *udev, const char *filename) {
                                 if (streq(key, "net_altnames")) {
                                         log_debug("%s:%u: empty net_altnames=, ignoring.", filename, line_nr);
                                         udev->net_altnames = -EINVAL;
+                                        free(udev->net_altnames_invalid);
+                                        udev->net_altnames_invalid = strdup("");
                                 }
                                 continue;
                         }
@@ -206,6 +209,8 @@ static void udev_read_conf(struct udev *udev, const char *filename) {
                                 if (b < 0)
                                         log_debug("%s:%u: invalid boolean '%s' for net_altnames, ignoring.", filename, line_nr, val);
                                 udev->net_altnames = b < 0 ? -EINVAL : b;
+                                free(udev->net_altnames_invalid);
+                                udev->net_altnames_invalid = b < 0 ? strdup(val) : NULL;
                                 continue;
                         }
 
@@ -295,6 +300,7 @@ int udev_read_hwdb_format(const char *root) {
         udev_read_conf(&tmp, filename);
         log_set_max_level(level);
         free(tmp.net_naming_scheme);
+        free(tmp.net_altnames_invalid);
 
         return tmp.hwdb_format;
 }
@@ -320,6 +326,14 @@ int udev_get_net_altnames(struct udev *udev) {
         if (udev == NULL)
                 return 1;
         return udev->net_altnames;
+}
+
+/* Not part of the public API, used by udevd. Returns the value of net_altnames= in udev.conf if it is
+ * invalid, "" if it is empty, and NULL if it is valid or not set. */
+const char *udev_get_net_altnames_invalid(struct udev *udev) {
+        if (udev == NULL)
+                return NULL;
+        return udev->net_altnames_invalid;
 }
 
 /**
@@ -353,6 +367,7 @@ _public_ struct udev *udev_unref(struct udev *udev) {
         if (udev->refcount > 0)
                 return udev;
         free(udev->net_naming_scheme);
+        free(udev->net_altnames_invalid);
         free(udev);
         return NULL;
 }

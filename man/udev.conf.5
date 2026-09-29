@@ -121,11 +121,12 @@ Takes a boolean argument\&. Defaults to
 is ignored, i\&.e\&. no alternative names are assigned to network interfaces, which
 80\-net\-altnames\&.rules
 requests by default (see
-\fBudev\fR(7))\&. An invalid or empty value is ignored, with a warning when
+\fBudev\fR(7))\&. An invalid or empty value is ignored, with a warning whenever the configuration is read: when
 \fBudevd\fR
-starts\&. The file is only read when
+starts, and by
+\fBudevadm test\fR\&.
 \fBudevd\fR
-starts, and alternative names are only assigned when an interface is added\&.
+only reads the file when it starts, and alternative names are only assigned when an interface is added\&.
 .RE
 .PP
 \fInet_naming_scheme\fR

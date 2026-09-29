@@ -153,10 +153,11 @@
           interfaces, which <filename>80-net-altnames.rules</filename> requests
           by default (see
           <citerefentry><refentrytitle>udev</refentrytitle><manvolnum>7</manvolnum></citerefentry>).
-          An invalid or empty value is ignored, with a warning when
-          <command>udevd</command> starts. The file is only read when
-          <command>udevd</command> starts, and alternative names are only
-          assigned when an interface is added.</para>
+          An invalid or empty value is ignored, with a warning whenever the
+          configuration is read: when <command>udevd</command> starts, and by
+          <command>udevadm test</command>. <command>udevd</command> only reads
+          the file when it starts, and alternative names are only assigned
+          when an interface is added.</para>
         </listitem>
       </varlistentry>
 

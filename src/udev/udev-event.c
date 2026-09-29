@@ -1293,8 +1293,20 @@ static int copy_all_tags(struct udev_device *d, struct udev_device *s) {
 
 /* Warns about an invalid net_altnames= in udev.conf, when udevd or udevadm test start. */
 void udev_event_check_config(struct udev *udev) {
-        if (udev_get_net_altnames(udev) < 0)
-                log_warning("Invalid or empty net_altnames= in udev.conf, using the default: yes.");
+        _cleanup_free_ char *escaped = NULL;
+        const char *value;
+
+        if (udev_get_net_altnames(udev) >= 0)
+                return;
+
+        value = udev_get_net_altnames_invalid(udev);
+        if (isempty(value)) {
+                log_warning("Empty net_altnames= in udev.conf, using the default: yes.");
+                return;
+        }
+
+        escaped = cescape(value);
+        log_warning("Invalid net_altnames=\"%s\" in udev.conf, using the default: yes.", escaped ?: value);
 }
 
 /* The ID_NET_NAME_* properties that are assigned as alternative names with OPTIONS+="net_altnames", in
