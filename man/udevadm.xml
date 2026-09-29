@@ -1326,6 +1326,13 @@
         </listitem>
       </varlistentry>
       <varlistentry>
+        <term><varname>$SYSTEMD_UTF8</varname></term>
+        <listitem><para>Takes a boolean argument. Overrides whether non-ASCII glyphs are used in the output,
+        e.g. the box drawing characters of <command>udevadm info --tree</command>. By default, they are
+        used unless the character set of the locale, as set by <varname>$LC_ALL</varname>,
+        <varname>$LC_CTYPE</varname> or <varname>$LANG</varname>, is not UTF-8.</para></listitem>
+      </varlistentry>
+      <varlistentry>
         <term><varname>$UDEV_DEVICE_VERIFY_SYSFS</varname></term>
         <listitem>
           <para>Takes a boolean. Like systemd, <command>udevadm</command>, <command>udevd</command> and

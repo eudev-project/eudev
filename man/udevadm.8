@@ -1048,6 +1048,16 @@ Use the given quantity of colours, subject to
 .RE
 .RE
 .PP
+\fI$SYSTEMD_UTF8\fR
+.RS 4
+Takes a boolean argument\&. Overrides whether non\-ASCII glyphs are used in the output, e\&.g\&. the box drawing characters of
+\fBudevadm info \-\-tree\fR\&. By default, they are used unless the character set of the locale, as set by
+\fI$LC_ALL\fR,
+\fI$LC_CTYPE\fR
+or
+\fI$LANG\fR, is not UTF\-8\&.
+.RE
+.PP
 \fI$UDEV_DEVICE_VERIFY_SYSFS\fR
 .RS 4
 Takes a boolean\&. Like systemd,

@@ -38,6 +38,7 @@
 #include "process-util.h"
 #include "util.h"
 #include "fileio.h"
+#include "log.h"
 #include "path-util.h"
 
 static volatile unsigned cached_columns = 0;
@@ -269,8 +270,19 @@ DEFINE_ANSI_FUNC_256(highlight_grey,    "\x1B[0;1;38:5:245m", "\x1B[0;1;90m")
 
 static bool is_locale_utf8_impl(void) {
         const char *set;
+        int r;
 
         /* Note that we default to 'true' here, since today UTF8 is pretty much supported everywhere. */
+
+        r = secure_getenv_bool("SYSTEMD_UTF8");
+        if (r >= 0)
+                return r;
+        if (r != -ENXIO)
+                log_debug_errno(r, "Failed to parse $SYSTEMD_UTF8, ignoring: %m");
+
+        /* This function may be called from a library, and setlocale() is not thread safe. Assuming yes. */
+        if (!is_main_thread())
+                return true;
 
         if (!setlocale(LC_ALL, ""))
                 return true;
