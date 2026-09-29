@@ -2032,6 +2032,25 @@ usec_t udev_device_get_usec_initialized(struct udev_device *udev_device)
         return udev_device->usec_initialized;
 }
 
+/* Checks that the path of an attribute, i.e. the syspath and the name of the attribute, stays below
+ * /sys when resolved, like device_chase() of systemd does before reading or writing an attribute: e.g.
+ * a name like "../../../../etc/passwd", a symlink out of sysfs in the path, or a syspath that was taken
+ * as it was, e.g. "/sys/../tmp" from DEVPATH= of udev_device_new_from_environment(), is refused.
+ * Attributes of parent devices, like "../idVendor", stay below /sys and are fine. */
+static int sysattr_check_path(const char *path)
+{
+        _cleanup_free_ char *resolved = NULL;
+        int r;
+
+        r = sysfs_resolve(path, &resolved);
+        if (r == -ENODEV)
+                r = -EINVAL; /* like systemd */
+        if (r < 0)
+                return log_debug_errno(r, "refusing sysfs attribute %s: %m", path);
+
+        return 0;
+}
+
 /**
  * udev_device_get_sysattr_value:
  * @udev_device: udev device
@@ -2096,6 +2115,12 @@ _public_ const char *udev_device_get_sysattr_value(struct udev_device *udev_devi
         /* skip non-readable files */
         if ((statbuf.st_mode & S_IRUSR) == 0)
                 goto out;
+
+        /* do not read outside of sysfs */
+        if (sysattr_check_path(path) < 0) {
+                udev_list_entry_add(&udev_device->sysattr_value_list, sysattr, NULL);
+                goto out;
+        }
 
         /* read attribute value */
         fd = open(path, O_RDONLY|O_CLOEXEC);
@@ -2168,6 +2193,11 @@ _public_ int udev_device_set_sysattr_value(struct udev_device *udev_device, cons
         v = strndup(value, len);
         if (v == NULL)
                 return -ENOMEM;
+
+        /* do not write outside of sysfs; a missing attribute fails with ENOENT below */
+        r = sysattr_check_path(path);
+        if (r < 0 && r != -ENOENT)
+                goto fail;
 
         /* Do not check the permissions of the attribute, write-only attributes like "remove" are
          * fine. Let the kernel do it and propagate the error. */
