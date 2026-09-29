@@ -1291,6 +1291,41 @@
 
     <variablelist class='environment-variables'>
       <varlistentry>
+        <term><varname>$SYSTEMD_COLORS</varname></term>
+        <listitem>
+          <para>Takes a boolean argument, or a special value. By default (unset), <command>udevadm</command>
+          uses colors in its output if standard output and standard error are terminals, and
+          <varname>$TERM</varname> is set and not <literal>dumb</literal>. If <varname>$COLORTERM</varname>
+          is set to <literal>truecolor</literal> or <literal>24bit</literal>, 24-bit colors will be enabled,
+          256 colors otherwise. If <varname>$NO_COLOR</varname> is set (to any value), no colors are
+          used.</para>
+          <variablelist>
+            <varlistentry>
+              <term><option>true</option></term>
+              <listitem><para>Same as unset, except that <varname>$NO_COLOR</varname> is ignored.</para></listitem>
+            </varlistentry>
+            <varlistentry>
+              <term><option>false</option></term>
+              <listitem><para>The output will be monochrome.</para></listitem>
+            </varlistentry>
+            <varlistentry>
+              <term><literal>16</literal></term>
+              <term><literal>256</literal></term>
+              <term><literal>24bit</literal></term>
+              <listitem><para>Always use the base 16 ANSI colors, 256 colors, or 24 bit color,
+              respectively.</para></listitem>
+            </varlistentry>
+            <varlistentry>
+              <term><literal>auto-16</literal></term>
+              <term><literal>auto-256</literal></term>
+              <term><literal>auto-24bit</literal></term>
+              <listitem><para>Use the given quantity of colours, subject to <varname>$TERM</varname>, and what
+              the console is connected to.</para></listitem>
+            </varlistentry>
+          </variablelist>
+        </listitem>
+      </varlistentry>
+      <varlistentry>
         <term><varname>$UDEV_DEVICE_VERIFY_SYSFS</varname></term>
         <listitem>
           <para>Takes a boolean. Like systemd, <command>udevadm</command>, <command>udevd</command> and

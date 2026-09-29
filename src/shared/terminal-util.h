@@ -19,6 +19,7 @@
   along with systemd; If not, see <http://www.gnu.org/licenses/>.
 ***/
 
+#include <errno.h>
 #include <stdbool.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -38,15 +39,49 @@
 
 int open_terminal(const char *name, int mode);
 
-/* Colors for the output on standard output, as systemd's ansi-color.h uses them. They
- * are empty strings unless standard output is a terminal, $NO_COLOR is not set and
- * $TERM is not "dumb". */
+/* Like systemd's on_tty(): whether both standard output and standard error are terminals. The
+ * result is cached. */
+bool on_tty(void);
+/* Like systemd's getenv_terminal_is_dumb() and terminal_is_dumb(): whether $TERM is unset or
+ * "dumb", or, for the latter, also whether standard output or standard error is not a terminal. */
+bool getenv_terminal_is_dumb(void);
+bool terminal_is_dumb(void);
+
+/* Limits the use of ANSI colors to a subset, like systemd's ColorMode. */
+typedef enum ColorMode {
+        COLOR_OFF,        /* No colors, monochrome output. */
+        COLOR_16,         /* Only the base 16 colors. */
+        COLOR_256,        /* Only 256 colors. */
+        COLOR_24BIT,      /* For truecolor or 24bit color support, no restriction. */
+        _COLOR_MODE_FIXED_MAX,
+
+        /* The "AUTO" modes are as the above, but subject to suitable settings for the environment variables
+         * TERM and NO_COLOR. */
+        COLOR_AUTO_16 = _COLOR_MODE_FIXED_MAX,
+        COLOR_AUTO_256,
+        COLOR_AUTO_24BIT,
+
+        /* Same as default (unset), except that $NO_COLOR is ignored/overridden */
+        COLOR_TRUE,
+
+        _COLOR_MODE_MAX,
+        _COLOR_MODE_INVALID = -EINVAL,
+} ColorMode;
+
+/* Colors for the output on standard output, chosen like systemd's get_color_mode() does it: as
+ * $SYSTEMD_COLORS says if it is set, otherwise none if $NO_COLOR is set, if standard output or
+ * standard error is not a terminal, or if $TERM is unset or "dumb", and 24 bit colors if
+ * $COLORTERM says so, 256 colors otherwise. The ansi_*() functions return the sequences of
+ * systemd's ansi-color.h for the mode, or empty strings without colors. */
+ColorMode parse_systemd_colors(void);
+ColorMode get_color_mode(void);
 bool colors_enabled(void);
 const char *ansi_normal(void);
 const char *ansi_highlight(void);
 const char *ansi_highlight_red(void);
 const char *ansi_highlight_green(void);
 const char *ansi_highlight_yellow(void);
+const char *ansi_highlight_yellow4(void);
 const char *ansi_highlight_blue(void);
 const char *ansi_highlight_magenta(void);
 const char *ansi_highlight_cyan(void);

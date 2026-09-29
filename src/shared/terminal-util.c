@@ -88,12 +88,154 @@ int open_terminal(const char *name, int mode) {
         return fd;
 }
 
-bool colors_enabled(void) {
-        static int cached = -1;
+static int cached_on_tty = -1;
+static int cached_on_dev_null = -1;
 
-        if (cached < 0)
-                cached = isatty(STDOUT_FILENO) > 0 && !getenv("NO_COLOR") && !streq_ptr(getenv("TERM"), "dumb");
-        return cached;
+bool on_tty(void) {
+
+        /* Like systemd, check both standard output and standard error, so that the output is not
+         * colored if either one is piped somewhere. The result is cached, so that it is kept when
+         * a pager is opened, see pager_open(). */
+
+        if (cached_on_tty < 0)
+                cached_on_tty = isatty(STDOUT_FILENO) > 0 && isatty(STDERR_FILENO) > 0;
+
+        return cached_on_tty;
+}
+
+static bool on_dev_null(void) {
+        struct stat dst, ost, est;
+
+        if (cached_on_dev_null >= 0)
+                return cached_on_dev_null;
+
+        if (stat("/dev/null", &dst) < 0 || fstat(STDOUT_FILENO, &ost) < 0 || fstat(STDERR_FILENO, &est) < 0)
+                cached_on_dev_null = false;
+        else
+                cached_on_dev_null = dst.st_dev == ost.st_dev && dst.st_ino == ost.st_ino &&
+                                     dst.st_dev == est.st_dev && dst.st_ino == est.st_ino;
+
+        return cached_on_dev_null;
+}
+
+bool getenv_terminal_is_dumb(void) {
+        const char *e;
+
+        e = getenv("TERM");
+        if (!e)
+                return true;
+
+        return streq(e, "dumb");
+}
+
+bool terminal_is_dumb(void) {
+        if (!on_tty() && !on_dev_null())
+                return true;
+
+        return getenv_terminal_is_dumb();
+}
+
+static const char* const color_mode_table[_COLOR_MODE_MAX] = {
+        [COLOR_OFF]        = "off",
+        [COLOR_16]         = "16",
+        [COLOR_256]        = "256",
+        [COLOR_24BIT]      = "24bit",
+        [COLOR_AUTO_16]    = "auto-16",
+        [COLOR_AUTO_256]   = "auto-256",
+        [COLOR_AUTO_24BIT] = "auto-24bit",
+        [COLOR_TRUE]       = "true",
+};
+
+/* Like systemd's color_mode_from_string(), which also takes a boolean, true for COLOR_TRUE. */
+static ColorMode color_mode_from_string(const char *s) {
+        int m, r;
+
+        for (m = 0; m < _COLOR_MODE_MAX; m++)
+                if (streq(color_mode_table[m], s))
+                        return m;
+
+        r = parse_boolean(s);
+        if (r < 0)
+                return _COLOR_MODE_INVALID;
+
+        return r ? COLOR_TRUE : COLOR_OFF;
+}
+
+ColorMode parse_systemd_colors(void) {
+        const char *e;
+
+        /* Note: do not log in this function, to avoid infinite recursion issues, as the log functions call
+         * this when deciding whether to color the output. */
+
+        e = getenv("SYSTEMD_COLORS");
+        if (!e)
+                return _COLOR_MODE_INVALID;
+
+        return color_mode_from_string(e);
+}
+
+static ColorMode get_color_mode_impl(void) {
+        const char *e;
+        ColorMode m;
+
+        /* Returns the mode used to choose output colors. The possible modes are COLOR_OFF for no colors,
+         * COLOR_16 for only the base 16 ANSI colors, COLOR_256 for more colors, and COLOR_24BIT for
+         * unrestricted color output. */
+
+        /* First, we check $SYSTEMD_COLORS, which is the explicit way to change the mode. */
+        m = parse_systemd_colors();
+        if (m >= 0 && m < _COLOR_MODE_FIXED_MAX)
+                return m;
+
+        /* If SYSTEMD_COLORS=true was set explicitly, skip the environment checks below — the user
+         * explicitly requested colors, so honor it even when stdout is piped or $NO_COLOR is set. */
+        if (m != COLOR_TRUE) {
+                /* Check for the presence of $NO_COLOR; value is ignored. */
+                if (getenv("NO_COLOR"))
+                        return COLOR_OFF;
+
+                /* Turn colors off unless we are on a TTY. And if we are on a TTY we turn it off if $TERM
+                 * is set to "dumb". There's one special tweak though: if we are PID 1 then we do not check
+                 * whether we are connected to a TTY, because we don't keep /dev/console open continuously
+                 * due to fear of SAK, and hence things are a bit weird. */
+                if (getpid() == 1 ? getenv_terminal_is_dumb() : terminal_is_dumb())
+                        return COLOR_OFF;
+        }
+
+        /* We failed to figure out any reason to *disable* colors. Let's see how many colors we shall use. */
+        if (m == COLOR_AUTO_16)
+                return COLOR_16;
+        if (m == COLOR_AUTO_256)
+                return COLOR_256;
+        if (m == COLOR_AUTO_24BIT)
+                return COLOR_24BIT;
+
+        e = getenv("COLORTERM");
+        if (streq_ptr(e, "truecolor") || streq_ptr(e, "24bit"))
+                return COLOR_24BIT;
+
+        /* Note that the Linux console can only display 16 colors. We still enable 256 color mode
+         * even for PID1 output though (which typically goes to the Linux console), since the Linux
+         * console is able to parse the 256 color sequences and automatically map them to the closest
+         * color in the 16 color palette (since kernel 3.16). Doing 256 colors is nice for people who
+         * invoke systemd in a container or via a serial link or such, and use a true 256 color
+         * terminal to do so. */
+        return COLOR_256;
+}
+
+ColorMode get_color_mode(void) {
+        static int cached_color_mode = _COLOR_MODE_INVALID;
+
+        if (cached_color_mode < 0) {
+                cached_color_mode = get_color_mode_impl();
+                assert(cached_color_mode >= 0 && cached_color_mode < _COLOR_MODE_FIXED_MAX);
+        }
+
+        return cached_color_mode;
+}
+
+bool colors_enabled(void) {
+        return get_color_mode() != COLOR_OFF;
 }
 
 #define DEFINE_ANSI_FUNC(name, seq)                             \
@@ -101,17 +243,29 @@ bool colors_enabled(void) {
                 return colors_enabled() ? seq : "";             \
         }
 
-/* The 256-color variants of systemd are replaced by their 16-color fallbacks. */
-DEFINE_ANSI_FUNC(normal,            "\x1B[0m")
-DEFINE_ANSI_FUNC(highlight,         "\x1B[0;1;39m")
-DEFINE_ANSI_FUNC(highlight_red,     "\x1B[0;1;31m")
-DEFINE_ANSI_FUNC(highlight_green,   "\x1B[0;1;32m")
-DEFINE_ANSI_FUNC(highlight_yellow,  "\x1B[0;1;33m")
-DEFINE_ANSI_FUNC(highlight_blue,    "\x1B[0;1;34m")
-DEFINE_ANSI_FUNC(highlight_magenta, "\x1B[0;1;35m")
-DEFINE_ANSI_FUNC(highlight_cyan,    "\x1B[0;1;36m")
-DEFINE_ANSI_FUNC(grey,              "\x1B[0;90m")
-DEFINE_ANSI_FUNC(highlight_grey,    "\x1B[0;1;90m")
+/* Like systemd's DEFINE_ANSI_FUNC_256(): in 256 color mode the 16 color fallback is emitted
+ * first, for terminals with incomplete 256 color support, like the Linux console. */
+#define DEFINE_ANSI_FUNC_256(name, seq, fallback)               \
+        const char *ansi_##name(void) {                         \
+                switch (get_color_mode()) {                     \
+                case COLOR_OFF: return "";                      \
+                case COLOR_16: return fallback;                 \
+                case COLOR_256: return fallback seq;            \
+                default: return seq;                            \
+                }                                               \
+        }
+
+DEFINE_ANSI_FUNC(normal,                "\x1B[0m")
+DEFINE_ANSI_FUNC(highlight,             "\x1B[0;1;39m")
+DEFINE_ANSI_FUNC(highlight_red,         "\x1B[0;1;31m")
+DEFINE_ANSI_FUNC(highlight_green,       "\x1B[0;1;32m")
+DEFINE_ANSI_FUNC_256(highlight_yellow,  "\x1B[0;1;38:5:185m", "\x1B[0;1;33m")
+DEFINE_ANSI_FUNC_256(highlight_yellow4, "\x1B[0;1;38:5:100m", "\x1B[0;1;33m")
+DEFINE_ANSI_FUNC(highlight_blue,        "\x1B[0;1;34m")
+DEFINE_ANSI_FUNC(highlight_magenta,     "\x1B[0;1;35m")
+DEFINE_ANSI_FUNC(highlight_cyan,        "\x1B[0;1;36m")
+DEFINE_ANSI_FUNC_256(grey,              "\x1B[0;38:5:245m", "\x1B[0;90m")
+DEFINE_ANSI_FUNC_256(highlight_grey,    "\x1B[0;1;38:5:245m", "\x1B[0;1;90m")
 
 static bool is_locale_utf8_impl(void) {
         const char *set;

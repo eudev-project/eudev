@@ -383,7 +383,7 @@ static void print_record(struct udev_device *device, const char *prefix) {
 
         str = udev_device_get_driver(device);
         if (str)
-                printf("%sV: %s%s%s\n", prefix, ansi_highlight_yellow(), str, ansi_normal());
+                printf("%sV: %s%s%s\n", prefix, ansi_highlight_yellow4(), str, ansi_normal());
 
         udev_list_entry_foreach(list_entry, udev_device_get_properties_list_entry(device))
                 printf("%sE: %s=%s\n",

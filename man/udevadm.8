@@ -1008,6 +1008,46 @@ Print help text\&.
 .RE
 .SH "ENVIRONMENT"
 .PP
+\fI$SYSTEMD_COLORS\fR
+.RS 4
+Takes a boolean argument, or a special value\&. By default (unset),
+\fBudevadm\fR
+uses colors in its output if standard output and standard error are terminals, and
+\fI$TERM\fR
+is set and not
+dumb\&. If
+\fI$COLORTERM\fR
+is set to
+truecolor
+or
+24bit, 24\-bit colors will be enabled, 256 colors otherwise\&. If
+\fI$NO_COLOR\fR
+is set (to any value), no colors are used\&.
+.PP
+\fBtrue\fR
+.RS 4
+Same as unset, except that
+\fI$NO_COLOR\fR
+is ignored\&.
+.RE
+.PP
+\fBfalse\fR
+.RS 4
+The output will be monochrome\&.
+.RE
+.PP
+16, 256, 24bit
+.RS 4
+Always use the base 16 ANSI colors, 256 colors, or 24 bit color, respectively\&.
+.RE
+.PP
+auto\-16, auto\-256, auto\-24bit
+.RS 4
+Use the given quantity of colours, subject to
+\fI$TERM\fR, and what the console is connected to\&.
+.RE
+.RE
+.PP
 \fI$UDEV_DEVICE_VERIFY_SYSFS\fR
 .RS 4
 Takes a boolean\&. Like systemd,
