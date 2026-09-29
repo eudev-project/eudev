@@ -32,6 +32,7 @@
 #include <sys/signalfd.h>
 
 #include "missing.h"
+#include "netif-naming-scheme.h"
 #include "udev.h"
 #include "udev-util.h"
 
@@ -188,6 +189,17 @@ int main(int argc __attribute__((unused)), char *argv[]) {
 
         /* Like the devices a udevd worker receives, do not read info from the db */
         udev_device_set_info_loaded(dev);
+
+        /* NAME= of a network interface makes the rules select the naming scheme, which logs the scheme it
+         * uses at info level, as udevd does once when it starts. Select it here without that line, so that
+         * it does not end up in the output of the tests; warnings about unknown schemes are still shown. */
+        if (udev_device_get_ifindex(dev) > 0) {
+                int level = log_get_max_level();
+
+                log_set_max_level(MIN(level, LOG_NOTICE));
+                (void) naming_scheme_init(udev);
+                log_set_max_level(level);
+        }
 
         event = udev_event_new(dev, EVENT_TEST_RULE_RUNNER);
 
