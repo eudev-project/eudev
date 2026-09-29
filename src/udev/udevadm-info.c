@@ -88,19 +88,24 @@ static int collect_attributes(struct udev_device *device, SysAttr **ret, size_t 
                 if (skip_attribute(name))
                         continue;
 
+                errno = 0;
                 value = udev_device_get_sysattr_value(device, name);
-                if (value == NULL)
-                        continue;
+                if (value) {
+                        /* skip any values that look like a path */
+                        if (value[0] == '/')
+                                continue;
 
-                /* skip any values that look like a path */
-                if (value[0] == '/')
-                        continue;
+                        /* skip nonprintable attributes */
+                        len = strlen(value);
+                        while (len > 0 && isprint((unsigned char) value[len-1]))
+                                len--;
+                        if (len > 0)
+                                continue;
 
-                /* skip nonprintable attributes */
-                len = strlen(value);
-                while (len > 0 && isprint((unsigned char) value[len-1]))
-                        len--;
-                if (len > 0)
+                } else if (IN_SET(errno, EACCES, EPERM))
+                        /* like systemd, e.g. write-only attributes */
+                        value = "(not readable)";
+                else
                         continue;
 
                 if (!GREEDY_REALLOC(sysattrs, n_allocated, n_items + 1))

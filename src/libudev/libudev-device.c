@@ -2059,7 +2059,8 @@ static int sysattr_check_path(const char *path)
  * The retrieved value is cached in the device. Repeated calls will return the same
  * value and not open the attribute again.
  *
- * Returns: the content of a sys attribute file, or #NULL if there is no sys attribute value.
+ * Returns: the content of a sys attribute file, or #NULL if there is no sys attribute value,
+ * with errno set, e.g. to EACCES for an attribute that is not readable.
  **/
 _public_ const char *udev_device_get_sysattr_value(struct udev_device *udev_device, const char *sysattr)
 {
@@ -2067,25 +2068,35 @@ _public_ const char *udev_device_get_sysattr_value(struct udev_device *udev_devi
         char path[UTIL_PATH_SIZE];
         char value[4096];
         struct stat statbuf;
-        int fd;
+        int fd, r;
         ssize_t size;
         size_t len;
         const char *val = NULL;
 
-        if (udev_device == NULL)
+        if (udev_device == NULL) {
+                errno = EINVAL;
                 return NULL;
-        if (sysattr == NULL)
+        }
+        if (sysattr == NULL) {
+                errno = EINVAL;
                 return NULL;
+        }
 
         /* look for possibly already cached result */
         list_entry = udev_list_get_entry(&udev_device->sysattr_value_list);
         list_entry = udev_list_entry_get_by_name(list_entry, sysattr);
-        if (list_entry != NULL)
-                return udev_list_entry_get_value(list_entry);
+        if (list_entry != NULL) {
+                val = udev_list_entry_get_value(list_entry);
+                if (!val)
+                        errno = ENOENT;
+                return val;
+        }
 
         strscpyl(path, sizeof(path), udev_device_get_syspath(udev_device), "/", sysattr, NULL);
         if (lstat(path, &statbuf) != 0) {
+                r = -errno;
                 udev_list_entry_add(&udev_device->sysattr_value_list, sysattr, NULL);
+                errno = -r;
                 goto out;
         }
 
@@ -2098,27 +2109,31 @@ _public_ const char *udev_device_get_sysattr_value(struct udev_device *udev_devi
                     streq(sysattr, "subsystem") ||
                     streq(sysattr, "module")) {
                         if (util_get_sys_core_link_value(udev_device->udev, sysattr,
-                                                         udev_device->syspath, value, sizeof(value)) < 0)
+                                                         udev_device->syspath, value, sizeof(value)) < 0) {
+                                errno = ENOENT;
                                 return NULL;
+                        }
                         list_entry = udev_list_entry_add(&udev_device->sysattr_value_list, sysattr, value);
                         val = udev_list_entry_get_value(list_entry);
                         goto out;
                 }
 
+                /* other symlinks are not values */
+                errno = ENOENT;
                 goto out;
         }
 
         /* skip directories */
-        if (S_ISDIR(statbuf.st_mode))
+        if (S_ISDIR(statbuf.st_mode)) {
+                errno = EISDIR;
                 goto out;
-
-        /* skip non-readable files */
-        if ((statbuf.st_mode & S_IRUSR) == 0)
-                goto out;
+        }
 
         /* do not read outside of sysfs */
-        if (sysattr_check_path(path) < 0) {
+        r = sysattr_check_path(path);
+        if (r < 0) {
                 udev_list_entry_add(&udev_device->sysattr_value_list, sysattr, NULL);
+                errno = -r;
                 goto out;
         }
 
@@ -2127,11 +2142,16 @@ _public_ const char *udev_device_get_sysattr_value(struct udev_device *udev_devi
         if (fd < 0)
                 goto out;
         size = read(fd, value, sizeof(value));
+        r = size < 0 ? -errno : 0;
         close(fd);
-        if (size < 0)
+        if (size < 0) {
+                errno = -r;
                 goto out;
-        if (size == sizeof(value))
+        }
+        if (size == sizeof(value)) {
+                errno = ENOBUFS;
                 goto out;
+        }
 
         /* got a valid value, store it in cache and return it */
         value[size] = '\0';
@@ -2278,40 +2298,113 @@ int udev_device_cache_sysattr_value(struct udev_device *udev_device, const char 
         return 1;
 }
 
+/* Adds the attributes in the directory subdir of the device, or in the device directory itself, to the
+ * list of attributes, and its subdirectories to the stack. Like device_sysattrs_read_all_internal() of
+ * systemd: a subdirectory with a uevent file is a child device, and is skipped. Returns the number of
+ * added attributes. */
+static int sysattr_list_read_dir(struct udev_device *udev_device, const char *subdir,
+                                 char ***stack, size_t *n_stack, size_t *n_allocated)
+{
+        _cleanup_closedir_ DIR *dir = NULL;
+        _cleanup_free_ char *path = NULL;
+        struct dirent *dent;
+        int num = 0;
+
+        if (subdir) {
+                path = strjoin(udev_device->syspath, "/", subdir, NULL);
+                if (!path)
+                        return -ENOMEM;
+        }
+
+        dir = opendir(path ?: udev_device->syspath);
+        if (!dir) {
+                if (subdir && errno == ENOENT)
+                        return 0; /* maybe a child device, which is removed already */
+                return -errno;
+        }
+
+        if (subdir) {
+                if (faccessat(dirfd(dir), "uevent", F_OK, 0) >= 0)
+                        return 0; /* a child device, skipping */
+                if (errno != ENOENT) {
+                        log_debug_errno(errno, "failed to access %s/uevent, ignoring sub-directory %s: %m",
+                                        path, subdir);
+                        return 0;
+                }
+        }
+
+        for (dent = readdir(dir); dent != NULL; dent = readdir(dir)) {
+                _cleanup_free_ char *name = NULL;
+                struct stat statbuf;
+
+                if (streq(dent->d_name, ".") || streq(dent->d_name, ".."))
+                        continue;
+
+                /* only handle symlinks, regular files, and directories */
+                if (!IN_SET(dent->d_type, DT_LNK, DT_REG, DT_DIR))
+                        continue;
+
+                name = subdir ? strjoin(subdir, "/", dent->d_name, NULL) : strdup(dent->d_name);
+                if (!name)
+                        return -ENOMEM;
+
+                if (dent->d_type == DT_DIR) {
+                        /* push the sub-directory onto the stack, and read it later */
+                        if (!GREEDY_REALLOC(*stack, *n_allocated, *n_stack + 1))
+                                return -ENOMEM;
+                        (*stack)[(*n_stack)++] = TAKE_PTR(name);
+                        continue;
+                }
+
+                if (fstatat(dirfd(dir), dent->d_name, &statbuf, AT_SYMLINK_NOFOLLOW) < 0)
+                        continue;
+
+                /* also attributes that are write-only, like "remove" */
+                if ((statbuf.st_mode & (S_IRUSR | S_IWUSR)) == 0)
+                        continue;
+
+                if (!udev_list_entry_add(&udev_device->sysattr_list, name, NULL))
+                        return -ENOMEM;
+                num++;
+        }
+
+        return num;
+}
+
+/* Like device_sysattrs_read_all() of systemd: the attributes of the device, and of its subdirectories,
+ * e.g. "power/control", but not of child devices. */
 static int udev_device_sysattr_list_read(struct udev_device *udev_device)
 {
-        struct dirent *dent;
-        DIR *dir;
-        int num = 0;
+        char **stack = NULL;
+        size_t n_stack = 0, n_allocated = 0;
+        int num = 0, r;
 
         if (udev_device == NULL)
                 return -EINVAL;
         if (udev_device->sysattr_list_read)
                 return 0;
 
-        dir = opendir(udev_device_get_syspath(udev_device));
-        if (!dir)
-                return -errno;
+        r = sysattr_list_read_dir(udev_device, NULL, &stack, &n_stack, &n_allocated);
+        while (r >= 0) {
+                num += r;
 
-        for (dent = readdir(dir); dent != NULL; dent = readdir(dir)) {
-                char path[UTIL_PATH_SIZE];
-                struct stat statbuf;
+                if (n_stack == 0)
+                        break;
 
-                /* only handle symlinks and regular files */
-                if (dent->d_type != DT_LNK && dent->d_type != DT_REG)
-                        continue;
+                _cleanup_free_ char *subdir = stack[--n_stack];
 
-                strscpyl(path, sizeof(path), udev_device_get_syspath(udev_device), "/", dent->d_name, NULL);
-                if (lstat(path, &statbuf) != 0)
-                        continue;
-                if ((statbuf.st_mode & S_IRUSR) == 0)
-                        continue;
-
-                udev_list_entry_add(&udev_device->sysattr_list, dent->d_name, NULL);
-                num++;
+                r = sysattr_list_read_dir(udev_device, subdir, &stack, &n_stack, &n_allocated);
         }
 
-        closedir(dir);
+        while (n_stack > 0)
+                free(stack[--n_stack]);
+        free(stack);
+
+        if (r < 0) {
+                udev_list_cleanup(&udev_device->sysattr_list);
+                return r;
+        }
+
         udev_device->sysattr_list_read = true;
 
         return num;
