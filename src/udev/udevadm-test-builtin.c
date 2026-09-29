@@ -78,6 +78,11 @@ static int adm_builtin(struct udev *udev, int argc, char *argv[]) {
                 case 'V':
                         printf("%s\n", UDEV_VERSION);
                         goto out;
+                case '?':
+                        rc = EXIT_FAILURE;
+                        goto out;
+                default:
+                        assert_not_reached("Unknown option");
                 }
 
         command = argv[optind++];
