@@ -1710,6 +1710,20 @@ KERNEL=="sda", ENV{CONT}=="xy", SYMLINK+="found"
 KERNEL=="sda", SYMLINK+="bad", \\
 EOF
         },
+        {
+                desc            => "attribute names with whitespace",
+                devpath         => "/devices/pci0000:00/0000:00:1f.2/host0/target0:0:0/0:0:0:0/block/sda",
+                exp_name        => "found",
+                not_exp_name    => "bad",
+                rules           => <<EOF
+KERNEL=="sda", PROGRAM="/bin/sh -c 'echo yes >\\"/sys%p/a b\\"'"
+KERNEL=="sda", ATTR{a b}=="yes", SYMLINK+="found"
+KERNEL=="sda", ATTR{a b}=="no", SYMLINK+="bad"
+KERNEL=="sda", ATTR{a}b=="yes", SYMLINK+="bad"
+KERNEL=="sda", ENV {X}=="", SYMLINK+="bad"
+KERNEL=="sda", RUN+="/bin/sh -c 'rm -f \\"/sys%p/a b\\"'"
+EOF
+        },
 );
 
 sub udev {

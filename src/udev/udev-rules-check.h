@@ -51,7 +51,7 @@ void udev_rules_check_note_level(struct udev_rules_check *c, int level);
 void udev_rules_check_file_begin(struct udev_rules_check *c, const char *filename);
 void udev_rules_check_line_begin(struct udev_rules_check *c, unsigned line_nr, const char *line);
 void udev_rules_check_delimiters(struct udev_rules_check *c, const char *pos);
-void udev_rules_check_token(struct udev_rules_check *c, const char *key, UdevRulesCheckOp op,
+void udev_rules_check_token(struct udev_rules_check *c, const char *key, const char *attr, UdevRulesCheckOp op,
                             const char *value, bool is_case_insensitive);
 void udev_rules_check_line_end(struct udev_rules_check *c, bool valid);
 void udev_rules_check_file_end(struct udev_rules_check *c);

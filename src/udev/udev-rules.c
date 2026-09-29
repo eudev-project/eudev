@@ -1095,48 +1095,43 @@ static int verify_regular(const char *path, bool follow) {
         return 0;
 }
 
-static int get_key(struct udev *udev __attribute__((unused)), char **line, char **key, enum operation_type *op, char **value,
+/* Parses the next KEY{attribute}<operator>"value" of a rule, like parse_line() of systemd: the key ends
+ * at whitespace, '=', '{' or an operator, the attribute is everything up to the closing brace, e.g.
+ * ATTR{a b} and ATTR{a=b} are fine, and whitespace may precede and follow the operator. Returns 1 and
+ * moves *line behind the value, 0 at the end of the line, or -EINVAL for a syntax error, with *line
+ * unchanged. */
+static int get_key(char **line, char **ret_key, char **ret_attr, enum operation_type *op, char **value,
                    bool *is_case_insensitive) {
         char *linepos;
-        char *temp;
+        char *key, *key_end, *attr = NULL;
         unsigned i, j;
         bool is_escaped = false;
         const char *k;
 
-        linepos = *line;
-        if (linepos == NULL || linepos[0] == '\0')
-                return -1;
+        key = *line + strspn(*line, WHITESPACE ",");
+        if (key[0] == '\0')
+                return 0;
 
-        /* skip whitespace */
-        while (isspace(linepos[0]) || linepos[0] == ',')
-                linepos++;
-
-        /* get the key */
-        if (linepos[0] == '\0')
-                return -1;
-        *key = linepos;
-
-        for (;;) {
-                linepos++;
-                if (linepos[0] == '\0')
-                        return -1;
-                if (isspace(linepos[0]))
+        for (key_end = key; ; key_end++) {
+                if (key_end[0] == '\0')
+                        return -EINVAL;
+                if (strchr(WHITESPACE "={", key_end[0]))
                         break;
-                if (linepos[0] == '=')
+                if (strchr("+-!:", key_end[0]) && key_end[1] == '=')
                         break;
-                if ((linepos[0] == '+') || (linepos[0] == '-') || (linepos[0] == '!') || (linepos[0] == ':'))
-                        if (linepos[1] == '=')
-                                break;
         }
 
-        /* remember end of key */
-        temp = linepos;
+        if (key_end[0] == '{') {
+                attr = key_end + 1;
+                linepos = strchr(attr, '}');
+                if (!linepos)
+                        return -EINVAL;
+                *(linepos++) = '\0';
+        } else
+                linepos = key_end;
 
         /* skip whitespace after key */
-        while (isspace(linepos[0]))
-                linepos++;
-        if (linepos[0] == '\0')
-                return -1;
+        linepos += strspn(linepos, WHITESPACE);
 
         /* get operation type */
         if (linepos[0] == '=' && linepos[1] == '=') {
@@ -1158,16 +1153,13 @@ static int get_key(struct udev *udev __attribute__((unused)), char **line, char 
                 *op = OP_ASSIGN_FINAL;
                 linepos += 2;
         } else
-                return -1;
+                return -EINVAL;
 
         /* terminate key */
-        temp[0] = '\0';
+        key_end[0] = '\0';
 
         /* skip whitespace after operator */
-        while (isspace(linepos[0]))
-                linepos++;
-        if (linepos[0] == '\0')
-                return -1;
+        linepos += strspn(linepos, WHITESPACE);
 
         /* check if the value is prefixed with:
          * - "e" for C-style escaped strings
@@ -1181,14 +1173,14 @@ static int get_key(struct udev *udev __attribute__((unused)), char **line, char 
                 else if (*k == 'i' && !*is_case_insensitive)
                         *is_case_insensitive = true;
                 else
-                        return -1;
+                        return -EINVAL;
         linepos += is_escaped + *is_case_insensitive;
 
         /* value must be double quotated */
         if (linepos[0] == '"')
                 linepos++;
         else
-                return -1;
+                return -EINVAL;
         *value = linepos;
 
         if (!is_escaped) {
@@ -1199,7 +1191,7 @@ static int get_key(struct udev *udev __attribute__((unused)), char **line, char 
                                 break;
 
                         if (linepos[i] == '\0')
-                                return -1;
+                                return -EINVAL;
 
                         /* double quotes can be escaped */
                         if (linepos[i] == '\\')
@@ -1218,39 +1210,22 @@ static int get_key(struct udev *udev __attribute__((unused)), char **line, char 
                         if (linepos[i] == '\\')
                                 i++;
                         if (linepos[i] == '\0')
-                                return -1;
+                                return -EINVAL;
                 }
                 linepos[i] = '\0';
 
                 r = cunescape_length(linepos, i, 0, &unescaped);
                 if (r < 0)
-                        return -1;
+                        return -EINVAL;
                 assert((unsigned) r <= i);
                 memcpy(linepos, unescaped, r + 1);
         }
 
         /* move line to next key */
         *line = linepos + i + 1;
-        return 0;
-}
-
-/* extract possible KEY{attr} */
-static const char *get_key_attribute(struct udev *udev __attribute__((unused)), char *str) {
-        char *pos;
-        char *attr;
-
-        attr = strchr(str, '{');
-        if (attr != NULL) {
-                attr++;
-                pos = strchr(attr, '}');
-                if (pos == NULL) {
-                        log_rule_error("Missing closing brace of the attribute.");
-                        return NULL;
-                }
-                pos[0] = '\0';
-                return attr;
-        }
-        return NULL;
+        *ret_key = key;
+        *ret_attr = attr;
+        return 1;
 }
 
 static int rule_add_key(struct rule_tmp *rule_tmp, enum token_type type,
@@ -1548,7 +1523,6 @@ static int parse_options(struct rule_tmp *rule_tmp, enum operation_type op, cons
 static int add_rule(struct udev_rules *rules, char *line,
                     unsigned int filename_off, unsigned int lineno) {
         char *linepos;
-        const char *attr;
         struct rule_tmp rule_tmp;
 
         memzero(&rule_tmp, sizeof(struct rule_tmp));
@@ -1564,37 +1538,47 @@ static int add_rule(struct udev_rules *rules, char *line,
 
         linepos = line;
         for (;;) {
-                char *key;
+                char *key, *attr;
                 char *value;
                 enum operation_type op;
                 bool is_case_insensitive;
+                int r;
 
                 if (checking)
                         udev_rules_check_delimiters(checking, linepos);
 
-                if (get_key(rules->udev, &linepos, &key, &op, &value, &is_case_insensitive) != 0) {
-                        /* The end of the line, possibly after whitespace and stray commas, which
-                         * systemd-udevd accepts as well. */
-                        linepos += strspn(linepos, WHITESPACE ",");
-                        if (*linepos == '\0')
-                                break;
-
-                        /* Otherwise, this is a parsing error. Drop the whole line, like systemd-udevd
-                         * does, instead of applying only the keys before the error. */
+                /* The line ends after the last key, possibly after whitespace and stray commas, which
+                 * systemd-udevd accepts as well. */
+                r = get_key(&linepos, &key, &attr, &op, &value, &is_case_insensitive);
+                if (r == 0)
+                        break;
+                if (r < 0) {
+                        /* A parsing error. Drop the whole line, like systemd-udevd does, instead of
+                         * applying only the keys before the error. */
                         log_rule_error("Invalid key/value pair, ignoring.");
-                        if (*linepos == '#')
+                        if (linepos[strspn(linepos, WHITESPACE ",")] == '#')
                                 log_rule_error("Hint: comments can only start at the beginning of a line.");
                         goto invalid;
                 }
 
                 if (checking)
-                        udev_rules_check_token(checking, key, check_op(op), value, is_case_insensitive);
+                        udev_rules_check_token(checking, key, attr, check_op(op), value, is_case_insensitive);
 
                 if (is_case_insensitive && op > OP_MATCH_MAX) {
                         log_rule_error("Invalid prefix 'i' for '%s'. The 'i' prefix can be specified only for '==' or '!=' operator.", key);
                         goto invalid;
                 }
                 rule_tmp.case_insensitive = is_case_insensitive;
+
+                /* Like systemd, refuse an attribute of the keys that take none. The keys that take
+                 * one check it below. */
+                if (attr && STR_IN_SET(key, "ACTION", "DEVPATH", "KERNEL", "SUBSYSTEM", "DRIVER",
+                                       "KERNELS", "SUBSYSTEMS", "DRIVERS", "TAGS", "TAG", "PROGRAM",
+                                       "RESULT", "WAIT_FOR", "WAIT_FOR_SYSFS", "LABEL", "GOTO",
+                                       "SYMLINK", "OWNER", "GROUP", "MODE", "OPTIONS")) {
+                        log_rule_invalid_attr(key);
+                        goto invalid;
+                }
 
                 if (streq(key, "ACTION")) {
                         if (op > OP_MATCH_MAX) {
@@ -1649,10 +1633,9 @@ static int add_rule(struct udev_rules *rules, char *line,
                         continue;
                 }
 
-                if (startswith(key, "ATTR{")) {
-                        attr = get_key_attribute(rules->udev, key + strlen("ATTR"));
-                        if (attr == NULL) {
-                                log_rule_invalid_attr("ATTR");
+                if (streq(key, "ATTR")) {
+                        if (!attr) {
+                                log_rule_invalid_attr(key);
                                 goto invalid;
                         }
                         if (op == OP_REMOVE) {
@@ -1666,10 +1649,9 @@ static int add_rule(struct udev_rules *rules, char *line,
                         continue;
                 }
 
-                if (startswith(key, "SYSCTL{")) {
-                        attr = get_key_attribute(rules->udev, key + strlen("SYSCTL"));
-                        if (attr == NULL) {
-                                log_rule_invalid_attr("SYSCTL");
+                if (streq(key, "SYSCTL")) {
+                        if (!attr) {
+                                log_rule_invalid_attr(key);
                                 goto invalid;
                         }
                         if (op == OP_REMOVE) {
@@ -1683,10 +1665,9 @@ static int add_rule(struct udev_rules *rules, char *line,
                         continue;
                 }
 
-                if (startswith(key, "SECLABEL{")) {
-                        attr = get_key_attribute(rules->udev, key + strlen("SECLABEL"));
+                if (streq(key, "SECLABEL")) {
                         if (!attr) {
-                                log_rule_invalid_attr("SECLABEL");
+                                log_rule_invalid_attr(key);
                                 goto invalid;
                         }
                         if (op == OP_REMOVE) {
@@ -1725,14 +1706,13 @@ static int add_rule(struct udev_rules *rules, char *line,
                         continue;
                 }
 
-                if (startswith(key, "ATTRS{")) {
-                        if (op > OP_MATCH_MAX) {
-                                log_rule_invalid_op("ATTRS");
+                if (streq(key, "ATTRS")) {
+                        if (!attr) {
+                                log_rule_invalid_attr(key);
                                 goto invalid;
                         }
-                        attr = get_key_attribute(rules->udev, key + strlen("ATTRS"));
-                        if (attr == NULL) {
-                                log_rule_invalid_attr("ATTRS");
+                        if (op > OP_MATCH_MAX) {
+                                log_rule_invalid_op("ATTRS");
                                 goto invalid;
                         }
                         if (startswith(attr, "device/"))
@@ -1752,10 +1732,9 @@ static int add_rule(struct udev_rules *rules, char *line,
                         continue;
                 }
 
-                if (startswith(key, "ENV{")) {
-                        attr = get_key_attribute(rules->udev, key + strlen("ENV"));
-                        if (attr == NULL) {
-                                log_rule_invalid_attr("ENV");
+                if (streq(key, "ENV")) {
+                        if (!attr) {
+                                log_rule_invalid_attr(key);
                                 goto invalid;
                         }
                         if (op == OP_REMOVE) {
@@ -1831,8 +1810,7 @@ static int add_rule(struct udev_rules *rules, char *line,
                 }
 
                 if (startswith(key, "IMPORT")) {
-                        attr = get_key_attribute(rules->udev, key + strlen("IMPORT"));
-                        if (attr == NULL) {
+                        if (!attr) {
                                 log_rule_invalid_attr("IMPORT");
                                 goto invalid;
                         }
@@ -1897,8 +1875,7 @@ static int add_rule(struct udev_rules *rules, char *line,
                                 log_rule_invalid_prefix("TEST");
                                 goto invalid;
                         }
-                        attr = get_key_attribute(rules->udev, key + strlen("TEST"));
-                        if (attr != NULL) {
+                        if (attr) {
                                 mode = strtol(attr, NULL, 8);
                                 rule_add_key(&rule_tmp, TK_M_TEST, op, value, &mode);
                         } else {
@@ -1908,9 +1885,8 @@ static int add_rule(struct udev_rules *rules, char *line,
                 }
 
                 if (startswith(key, "RUN")) {
-                        attr = get_key_attribute(rules->udev, key + strlen("RUN"));
-                        if (attr == NULL)
-                                attr = "program";
+                        if (!attr)
+                                attr = (char *) "program";
                         if (op == OP_REMOVE) {
                                 log_rule_invalid_op("RUN");
                                 goto invalid;
@@ -1967,6 +1943,10 @@ static int add_rule(struct udev_rules *rules, char *line,
                 }
 
                 if (startswith(key, "NAME")) {
+                        if (attr) {
+                                log_rule_invalid_attr("NAME");
+                                goto invalid;
+                        }
                         if (op == OP_REMOVE) {
                                 log_rule_invalid_op("NAME");
                                 goto invalid;
@@ -2078,8 +2058,12 @@ static int add_rule(struct udev_rules *rules, char *line,
                         continue;
                 }
 
-                if (is_systemd_only(SYSTEMD_ONLY_KEY, key, strcspn(key, "{"))) {
-                        log_systemd_only(SYSTEMD_ONLY_KEY, key);
+                if (is_systemd_only(SYSTEMD_ONLY_KEY, key, strlen(key))) {
+                        _cleanup_free_ char *what = NULL;
+
+                        if (attr && asprintf(&what, "%s{%s}", key, attr) < 0)
+                                what = NULL;
+                        log_systemd_only(SYSTEMD_ONLY_KEY, what ?: key);
                         goto ignore;
                 }
 

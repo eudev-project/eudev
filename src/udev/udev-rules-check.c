@@ -543,41 +543,17 @@ static void set_label(struct udev_rules_check *c, char **label, const char *valu
         *label = s;
 }
 
-void udev_rules_check_token(struct udev_rules_check *c, const char *key, UdevRulesCheckOp op,
+void udev_rules_check_token(struct udev_rules_check *c, const char *base, const char *attr, UdevRulesCheckOp op,
                             const char *value, bool is_case_insensitive) {
-        _cleanup_free_ char *base = NULL, *attr = NULL;
         bool is_match = IN_SET(op, CHECK_OP_MATCH, CHECK_OP_NOMATCH);
-        const char *brace;
         mode_t mode;
 
         assert(c);
-        assert(key);
+        assert(base);
         assert(value);
 
         if (c->line_failed)
                 return;
-
-        /* Split KEY{attr}. A missing closing brace is reported by the parser. */
-        brace = strchr(key, '{');
-        if (brace) {
-                const char *end = strchr(brace + 1, '}');
-
-                if (!end)
-                        return;
-
-                base = strndup(key, brace - key);
-                attr = strndup(brace + 1, end - brace - 1);
-                if (!base || !attr) {
-                        log_oom();
-                        return;
-                }
-        } else {
-                base = strdup(key);
-                if (!base) {
-                        log_oom();
-                        return;
-                }
-        }
 
         /* The parser takes any key that starts with these names. */
         if ((startswith(base, "IMPORT") && !streq(base, "IMPORT")) ||
@@ -614,11 +590,8 @@ void udev_rules_check_token(struct udev_rules_check *c, const char *key, UdevRul
                 add_token(c, base, is_match, op, value, NULL, is_case_insensitive, true, false);
 
         } else if (streq(base, "NAME")) {
-                if (attr) {
-                        log_line_invalid_attr(c, base);
-                        return;
-                }
-                if (op == CHECK_OP_REMOVE)
+                /* An attribute or a wrong operator is reported by the parser. */
+                if (attr || op == CHECK_OP_REMOVE)
                         return;
                 if (op == CHECK_OP_ADD) {
                         log_line_warning(c, "%s key takes '==', '!=', '=', or ':=' operator, assuming '='.", base);
