@@ -77,9 +77,10 @@ _udevadm() {
         [COMMON]='-h --help -V --version'
         [DEBUG]='-d --debug'
         [INFO_STANDALONE]='-r --root -a --attribute-walk -t --tree -x --export -e --export-db -c --cleanup-db
-                           -w --wait-for-initialization --value'
+                           -w --wait-for-initialization --value --no-pager --initialized-match --initialized-nomatch'
         [INFO_ARG]='-q --query -p --path -n --name -P --export-prefix -d --device-id-of-file --property
-                    --json'
+                    --json --subsystem-match --subsystem-nomatch --attr-match --attr-nomatch --property-match
+                    --tag-match --sysname-match --name-match --parent-match'
         [TRIGGER_STANDALONE]='-v --verbose -n --dry-run -q --quiet -w --settle --wait-daemon --uuid
                               --initialized-match --initialized-nomatch --include-parents'
         [TRIGGER_ARG]='-t --type -c --action -s --subsystem-match -S --subsystem-nomatch
@@ -93,7 +94,9 @@ _udevadm() {
         [MONITOR_ARG]='-s --subsystem-match -t --tag-match'
         [HWDB_STANDALONE]='-u --update -s --strict --usr'
         [HWDB_ARG]='-o --output -t --test -r --root'
-        [TEST_ARG]='-a --action -N --resolve-names --json'
+        [TEST_STANDALONE]='-v --verbose'
+        [TEST_ARG]='-a --action -N --resolve-names -D --extra-rules-dir --json'
+        [TEST_BUILTIN]='-a --action'
         [VERIFY_STANDALONE]='--no-summary --no-style'
         [VERIFY_ARG]='-N --resolve-names --root'
         [CAT_STANDALONE]='--tldr --config'
@@ -140,6 +143,13 @@ _udevadm() {
                         ;;
                     --json)
                         comps=$( udevadm info --json=help 2>/dev/null )
+                        ;;
+                    --parent-match)
+                        comps=$( __get_all_sysdevs )
+                        local IFS=$'\n'
+                        ;;
+                    --name-match)
+                        comps=$( __get_all_device_nodes )
                         ;;
                     *)
                         comps=''
@@ -270,19 +280,33 @@ _udevadm() {
                     -N|--resolve-names)
                         comps='early late never'
                         ;;
+                    -D|--extra-rules-dir)
+                        comps=''
+                        compopt -o dirnames
+                        ;;
                     --json)
                         comps=$( udevadm test --json help 2>/dev/null )
                         ;;
                 esac
             elif [[ $cur = -* ]]; then
-                comps="${OPTS[COMMON]} ${OPTS[TEST_ARG]}"
+                comps="${OPTS[COMMON]} ${OPTS[TEST_ARG]} ${OPTS[TEST_STANDALONE]}"
             else
-                comps=$( __get_all_sysdevs )
+                comps=$( __get_all_devices )
                 local IFS=$'\n'
             fi
             ;;
 
         'test-builtin')
+            if __contains_word "$prev" ${OPTS[TEST_BUILTIN]}; then
+                case $prev in
+                    -a|--action)
+                        comps='add remove change move online offline bind unbind'
+                        ;;
+                esac
+                COMPREPLY=( $(compgen -W '$comps' -- "$cur") )
+                return 0
+            fi
+
             for ((i=0; i < COMP_CWORD; i++)); do
                 if __contains_word "${COMP_WORDS[i]}" "${builtins[@]}"; then
                     builtin=${COMP_WORDS[i]}
@@ -291,11 +315,11 @@ _udevadm() {
             done
 
             if [[ $cur = -* ]]; then
-                comps="${OPTS[COMMON]}"
+                comps="${OPTS[COMMON]} ${OPTS[TEST_BUILTIN]}"
             elif [[ -z $builtin ]]; then
                 comps="${builtins[@]}"
             else
-                comps=$( __get_all_sysdevs )
+                comps=$( __get_all_devices )
                 local IFS=$'\n'
             fi
             ;;

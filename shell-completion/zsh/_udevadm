@@ -22,6 +22,18 @@ _udevadm_info(){
         '--property=[Show only properties by this name.]:NAME' \
         '--wait-for-initialization=-[Wait for device to be initialized.]:SECONDS' \
         '--json=[Generate JSON output]:MODE:(pretty short off)' \
+        '--no-pager[Do not pipe output into a pager.]' \
+        '--subsystem-match=[When used with --export-db, only show devices of the given subsystem.]:SUBSYSTEM' \
+        '--subsystem-nomatch=[When used with --export-db, only show devices not of the given subsystem.]:SUBSYSTEM' \
+        '--attr-match=[When used with --export-db, only show devices matching the given attribute.]:FILE[=VALUE]' \
+        '--attr-nomatch=[When used with --export-db, only show devices not matching the given attribute.]:FILE[=VALUE]' \
+        '--property-match=[When used with --export-db, only show devices matching the given property and value.]:KEY=VALUE' \
+        '--tag-match=[When used with --export-db, only show devices with the given tag.]:TAG' \
+        '--sysname-match=[When used with --export-db, only show devices with the given /sys path.]:NAME' \
+        '--name-match=[When used with --export-db, only show devices with the given name in /dev.]:device files:_files -W /dev' \
+        '--parent-match=[When used with --export-db, only show devices with the given parent device.]:sys files:_files -W /sys' \
+        '--initialized-match[When used with --export-db, only show devices that are initialized.]' \
+        '--initialized-nomatch[When used with --export-db, only show devices that are not initialized.]' \
         '*::devpath:_path_files -g "*(-/,-%)"'
 }
 
@@ -110,8 +122,10 @@ _udevadm_test(){
     _arguments \
         '(-)'{-h,--help}'[Show help]' \
         '(-)'{-V,--version}'[Show package version]' \
-        '--action=[The action string.]:actions:(add change remove move online offline bind unbind)' \
+        '(-a --action)'{-a,--action=}'[The action string.]:actions:(add change remove move online offline bind unbind)' \
         '(-N --resolve-names)'{-N,--resolve-names=}'[When to resolve names.]:resolve:(early late never)' \
+        '(-D --extra-rules-dir=)'{-D,--extra-rules-dir=}'[Also load rules from the directory.]:directories:_directories' \
+        '(-v --verbose)'{-v,--verbose}'[Show verbose logs.]' \
         '--json=[Generate JSON output]:MODE:(pretty short off)' \
         '*::devpath:_files -W /sys'
 }
@@ -122,13 +136,16 @@ _udevadm_test-builtin(){
         _arguments \
             '(- *)'{-h,--help}'[Print help]' \
             '(- *)'{-V,--version}'[Print version of the program]' \
+            '(-a --action)'{-a,--action=}'[The action string.]:actions:(add change remove move online offline bind unbind)' \
             '*::builtins:(blkid btrfs factory_reset hwdb input_id keyboard kmod net_driver net_id path_id tpm2_id usb_id)'
     elif  (( CURRENT == 3 )); then
         _arguments \
+            '(-a --action)'{-a,--action=}'[The action string.]:actions:(add change remove move online offline bind unbind)' \
             '(- *)--help[Print help text]' \
             '*::syspath:_files -W /sys'
     else
         _arguments \
+            '(-a --action)'{-a,--action=}'[The action string.]:actions:(add change remove move online offline bind unbind)' \
             '(- *)--help[Print help text]'
     fi
 }
