@@ -27,22 +27,6 @@
 #include "strv.h"
 #include "terminal-util.h"
 
-static bool use_colors(void) {
-        static int cached = -1;
-
-        if (cached < 0)
-                cached = isatty(STDOUT_FILENO) > 0 && !getenv("NO_COLOR") && !streq_ptr(getenv("TERM"), "dumb");
-        return cached;
-}
-
-static const char *ansi_highlight(void) {
-        return use_colors() ? ANSI_HIGHLIGHT_ON : "";
-}
-
-static const char *ansi_normal(void) {
-        return use_colors() ? ANSI_HIGHLIGHT_OFF : "";
-}
-
 static int str_compare(const void *a, const void *b) {
         return strcmp(*(char * const *) a, *(char * const *) b);
 }

@@ -16,9 +16,7 @@
  */
 
 #include <dirent.h>
-#include <langinfo.h>
 #include <limits.h>
-#include <locale.h>
 #include <poll.h>
 #include <sys/stat.h>
 
@@ -534,92 +532,6 @@ int search_rules_files(char * const *args, const char *root, char ***ret_names, 
         *ret_paths = paths;
         names = paths = NULL;
         return 0;
-}
-
-bool colors_enabled(void) {
-        static int cached = -1;
-
-        if (cached < 0)
-                cached = isatty(STDOUT_FILENO) > 0 && !getenv("NO_COLOR") && !streq_ptr(getenv("TERM"), "dumb");
-        return cached;
-}
-
-#define DEFINE_ANSI_FUNC(name, seq)                             \
-        const char *ansi_##name(void) {                         \
-                return colors_enabled() ? seq : "";             \
-        }
-
-/* The 256-color variants of systemd are replaced by their 16-color fallbacks. */
-DEFINE_ANSI_FUNC(normal,            "\x1B[0m")
-DEFINE_ANSI_FUNC(highlight,         "\x1B[0;1;39m")
-DEFINE_ANSI_FUNC(highlight_red,     "\x1B[0;1;31m")
-DEFINE_ANSI_FUNC(highlight_green,   "\x1B[0;1;32m")
-DEFINE_ANSI_FUNC(highlight_yellow,  "\x1B[0;1;33m")
-DEFINE_ANSI_FUNC(highlight_blue,    "\x1B[0;1;34m")
-DEFINE_ANSI_FUNC(highlight_magenta, "\x1B[0;1;35m")
-DEFINE_ANSI_FUNC(highlight_cyan,    "\x1B[0;1;36m")
-DEFINE_ANSI_FUNC(grey,              "\x1B[0;90m")
-DEFINE_ANSI_FUNC(highlight_grey,    "\x1B[0;1;90m")
-
-static bool is_locale_utf8_impl(void) {
-        const char *set;
-
-        /* Note that we default to 'true' here, since today UTF8 is pretty much supported everywhere. */
-
-        if (!setlocale(LC_ALL, ""))
-                return true;
-
-        set = nl_langinfo(CODESET);
-        if (!set || streq(set, "UTF-8"))
-                return true;
-
-        set = setlocale(LC_CTYPE, NULL);
-        if (!set)
-                return true;
-
-        /* Unless LC_CTYPE is explicitly overridden, return true. Because here CTYPE is effectively unset
-         * and everything can do to UTF-8 nowadays. */
-        return (streq(set, "C") || streq(set, "POSIX")) &&
-                !getenv("LC_ALL") &&
-                !getenv("LC_CTYPE") &&
-                !getenv("LANG");
-}
-
-bool is_locale_utf8(void) {
-        static int cached = -1;
-
-        if (cached < 0)
-                cached = is_locale_utf8_impl();
-
-        return cached;
-}
-
-const char *glyph(Glyph code) {
-        static const char* const draw_table[2][_GLYPH_MAX] = {
-                /* ASCII fallback */
-                [false] = {
-                        [GLYPH_TREE_VERTICAL]   = "| ",
-                        [GLYPH_TREE_BRANCH]     = "|-",
-                        [GLYPH_TREE_RIGHT]      = "`-",
-                        [GLYPH_TREE_SPACE]      = "  ",
-                        [GLYPH_VERTICAL_DOTTED] = ":",
-                        [GLYPH_ELLIPSIS]        = "...",
-                },
-
-                /* UTF-8 */
-                [true] = {
-                        [GLYPH_TREE_VERTICAL]   = "\u2502 ",        /* │ */
-                        [GLYPH_TREE_BRANCH]     = "\u251c\u2500",   /* ├─ */
-                        [GLYPH_TREE_RIGHT]      = "\u2514\u2500",   /* └─ */
-                        [GLYPH_TREE_SPACE]      = "  ",
-                        [GLYPH_VERTICAL_DOTTED] = "\u2506",         /* ┆ */
-                        [GLYPH_ELLIPSIS]        = "\u2026",         /* … */
-                },
-        };
-
-        assert(code >= 0 && code < _GLYPH_MAX);
-
-        return draw_table[is_locale_utf8()][code];
 }
 
 int parse_json_argument(const char *s, JsonFormatFlags *ret) {

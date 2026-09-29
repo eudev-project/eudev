@@ -18,6 +18,7 @@
 #pragma once
 
 #include "json-writer.h"
+#include "terminal-util.h"
 #include "udev.h"
 
 struct udev_device *find_device(struct udev *udev,
@@ -46,36 +47,6 @@ int chase_below_root(const char *root, const char *path, char **ret);
  * file or of a directory of rules files, below root. Returns the paths as found in ret_names,
  * and the ones with symlinks resolved in ret_paths. */
 int search_rules_files(char * const *args, const char *root, char ***ret_names, char ***ret_paths);
-
-/* Colors for the output on standard output, as systemd's ansi-color.h uses them. They
- * are empty strings unless standard output is a terminal, $NO_COLOR is not set and
- * $TERM is not "dumb". */
-bool colors_enabled(void);
-const char *ansi_normal(void);
-const char *ansi_highlight(void);
-const char *ansi_highlight_red(void);
-const char *ansi_highlight_green(void);
-const char *ansi_highlight_yellow(void);
-const char *ansi_highlight_blue(void);
-const char *ansi_highlight_magenta(void);
-const char *ansi_highlight_cyan(void);
-const char *ansi_grey(void);
-const char *ansi_highlight_grey(void);
-
-/* Tree drawing glyphs, as systemd's glyph-util.h has them. UTF-8 box drawing characters are used
- * unless the locale's character set is not UTF-8, like systemd's is_locale_utf8() decides. */
-typedef enum Glyph {
-        GLYPH_TREE_VERTICAL,
-        GLYPH_TREE_BRANCH,
-        GLYPH_TREE_RIGHT,
-        GLYPH_TREE_SPACE,
-        GLYPH_VERTICAL_DOTTED,
-        GLYPH_ELLIPSIS,
-        _GLYPH_MAX,
-} Glyph;
-
-bool is_locale_utf8(void);
-const char *glyph(Glyph code);
 
 /* Parses the argument of --json= with json_parse_format(), and logs an unknown argument, like
  * systemd's parse_json_argument(). Returns 1 if the argument was parsed, 0 if a list of the
