@@ -296,7 +296,17 @@ As in systemd, a network interface name is valid if it has 1 to 15 printable ASC
 :,
 /
 and
-%, is not only digits, and is not
+%, is not only digits, is not an interface index written in another way, i\&.e\&. a number from 1 to 2147483647 with a
+0x,
+0o
+or
+0b
+prefix or a
++
+sign, e\&.g\&.
+0x10
+or
++5, and is not
 \&.,
 \&.\&.,
 all

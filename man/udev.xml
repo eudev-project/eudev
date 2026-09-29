@@ -392,8 +392,12 @@
             are errors, and the rule line is ignored.</para>
             <para>As in systemd, a network interface name is valid if it has 1 to 15
             printable ASCII characters other than space, <literal>:</literal>,
-            <literal>/</literal> and <literal>%</literal>, is not only digits, and is
-            not <literal>.</literal>, <literal>..</literal>, <literal>all</literal> or
+            <literal>/</literal> and <literal>%</literal>, is not only digits, is not
+            an interface index written in another way, i.e. a number from 1 to
+            2147483647 with a <literal>0x</literal>, <literal>0o</literal> or
+            <literal>0b</literal> prefix or a <literal>+</literal> sign, e.g.
+            <literal>0x10</literal> or <literal>+5</literal>, and is not
+            <literal>.</literal>, <literal>..</literal>, <literal>all</literal> or
             <literal>default</literal>. With the naming schemes <literal>v249</literal>
             and later (see <xref linkend="net-naming"/>), all other characters are
             replaced by <literal>_</literal>, and a name that is still not valid is

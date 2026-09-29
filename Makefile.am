@@ -32,7 +32,8 @@ zshcompletiondir = @zshcompletiondir@
 
 EXTRA_DIST = \
 	shell-completion/bash/udevadm \
-	shell-completion/zsh/_udevadm
+	shell-completion/zsh/_udevadm \
+	tools/gen-80-net-name-slot.py
 
 if ENABLE_PROGRAMS
 if ENABLE_BASH_COMPLETION
