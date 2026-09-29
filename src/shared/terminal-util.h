@@ -102,3 +102,11 @@ typedef enum Glyph {
 
 bool is_locale_utf8(void);
 const char *glyph(Glyph code);
+
+/* Clickable links for terminal emulators that support them (OSC 8), like systemd's
+ * pretty-print.c: enabled by the boolean $SYSTEMD_URLIFY, and otherwise if colors are. The
+ * functions return the text alone without links. */
+bool urlify_enabled(void);
+int terminal_urlify(const char *url, const char *text, char **ret);
+int terminal_urlify_path(const char *path, const char *text, char **ret);
+int terminal_urlify_man(const char *page, const char *section, char **ret);

@@ -28,6 +28,12 @@ static char **arg_cmdline = NULL;
 static bool arg_print = false;
 
 static void help(void) {
+        _cleanup_free_ char *link = NULL;
+
+        if (terminal_urlify_man("udevadm", "8", &link) < 0)
+                link = NULL;
+
+
         printf("%s lock [OPTIONS...] COMMAND\n"
                "%s lock [OPTIONS...] --print\n"
                "\n%sLock a block device and run a command.%s\n\n"
@@ -37,11 +43,12 @@ static void help(void) {
                "  -b --backing=FILE    File whose backing block device to lock\n"
                "  -t --timeout=SECS    Block at most the specified time waiting for lock\n"
                "  -p --print           Only show which block device the lock would be taken on\n"
-               "\nSee the udevadm(8) man page for details.\n",
+               "\nSee the %s man page for details.\n",
                program_invocation_short_name,
                program_invocation_short_name,
                ansi_highlight(),
-               ansi_normal());
+               ansi_normal(),
+               link ?: "udevadm(8)");
 }
 
 static int parse_argv(int argc, char *argv[]) {

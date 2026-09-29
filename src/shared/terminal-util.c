@@ -20,6 +20,7 @@
 #include <sys/ioctl.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/utsname.h>
 #include <termios.h>
 #include <unistd.h>
 #include <fcntl.h>
@@ -338,4 +339,154 @@ const char *glyph(Glyph code) {
         assert(code >= 0 && code < _GLYPH_MAX);
 
         return draw_table[is_locale_utf8()][code];
+}
+
+/* The "operating system command" ("OSC") start sequence, and the "string terminator", as systemd
+ * uses them. */
+#define ANSI_OSC "\x1B]"
+#define ANSI_ST "\x1B\\"
+
+bool urlify_enabled(void) {
+        static int cached_urlify_enabled = -1;
+
+        if (cached_urlify_enabled < 0) {
+                const char *e;
+                int val = -ENXIO;
+
+                e = getenv("SYSTEMD_URLIFY");
+                if (e)
+                        val = parse_boolean(e);
+                if (val >= 0)
+                        cached_urlify_enabled = val;
+                else
+                        cached_urlify_enabled = colors_enabled();
+        }
+
+        return cached_urlify_enabled;
+}
+
+static bool url_suitable_for_osc8(const char *url) {
+        const char *c;
+
+        assert(url);
+
+        /* Not all URLs are safe for inclusion in OSC 8 due to charset and length restrictions. Let's detect
+         * which ones those are */
+
+        /* If the URL is longer than 2K let's not try to do OSC 8. As per recommendation in
+         * https://gist.github.com/egmontkob/eb114294efbcd5adb1944c9f3cb5feda#length-limits */
+        if (strlen(url) > 2000)
+                return false;
+
+        /* OSC sequences may only contain chars from the 32..126 range, as per ECMA-48 */
+        for (c = url; *c; c++)
+                if ((unsigned char) *c < 32 || (unsigned char) *c >= 127)
+                        return false;
+
+        return true;
+}
+
+int terminal_urlify(const char *url, const char *text, char **ret) {
+        char *n;
+
+        assert(url);
+        assert(ret);
+
+        /* Takes a URL and a pretty string and formats it as clickable link for the terminal. See
+         * https://gist.github.com/egmontkob/eb114294efbcd5adb1944c9f3cb5feda for details. */
+
+        if (isempty(text))
+                text = url;
+
+        if (urlify_enabled() && url_suitable_for_osc8(url))
+                n = strjoin(ANSI_OSC "8;;", url, ANSI_ST,
+                            text,
+                            ANSI_OSC "8;;" ANSI_ST, NULL);
+        else
+                n = strdup(text);
+        if (!n)
+                return -ENOMEM;
+
+        *ret = n;
+        return 0;
+}
+
+static int file_url_from_path(const char *path, char **ret) {
+        _cleanup_free_ char *absolute = NULL;
+        struct utsname u;
+        char *url;
+
+        assert(path);
+        assert(ret);
+
+        if (uname(&u) < 0)
+                return -errno;
+
+        if (!path_is_absolute(path)) {
+                absolute = path_make_absolute_cwd(path);
+                if (!absolute)
+                        return -ENOMEM;
+
+                path = absolute;
+        }
+
+        /* As suggested by https://gist.github.com/egmontkob/eb114294efbcd5adb1944c9f3cb5feda, let's include the local
+         * hostname here. Note that we don't use gethostname_malloc() or gethostname_strict() since we are interested
+         * in the raw string the kernel has set, whatever it may be, under the assumption that terminals are not overly
+         * careful with validating the strings either. */
+
+        url = strjoin("file://", u.nodename, path, NULL);
+        if (!url)
+                return -ENOMEM;
+
+        *ret = url;
+        return 0;
+}
+
+int terminal_urlify_path(const char *path, const char *text, char **ret) {
+        _cleanup_free_ char *url = NULL;
+        char *n;
+        int r;
+
+        assert(path);
+        assert(ret);
+
+        /* Much like terminal_urlify() above, but takes a file system path as input
+         * and turns it into a proper file:// URL first. */
+
+        if (isempty(path))
+                return -EINVAL;
+
+        if (isempty(text))
+                text = path;
+
+        if (!urlify_enabled()) {
+                n = strdup(text);
+                if (!n)
+                        return -ENOMEM;
+
+                *ret = n;
+                return 0;
+        }
+
+        r = file_url_from_path(path, &url);
+        if (r < 0)
+                return r;
+
+        return terminal_urlify(url, text, ret);
+}
+
+int terminal_urlify_man(const char *page, const char *section, char **ret) {
+        _cleanup_free_ char *url = NULL, *text = NULL;
+
+        assert(page);
+        assert(section);
+        assert(ret);
+
+        url = strjoin("man:", page, "(", section, ")", NULL);
+        text = strjoin(page, "(", section, ")", NULL);
+        if (!url || !text)
+                return -ENOMEM;
+
+        return terminal_urlify(url, text, ret);
 }

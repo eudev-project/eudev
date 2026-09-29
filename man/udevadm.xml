@@ -1555,6 +1555,14 @@
         too.</para></listitem>
       </varlistentry>
       <varlistentry>
+        <term><varname>$SYSTEMD_URLIFY</varname></term>
+        <listitem><para>The value must be a boolean. Controls whether clickable links should be generated in
+        the output for terminal emulators supporting this, e.g. for the file names shown by
+        <command>udevadm cat</command> and the man pages mentioned in the help texts. This can be specified
+        to override the decision that <command>udevadm</command> makes based on whether colors are used, see
+        <varname>$SYSTEMD_COLORS</varname> above.</para></listitem>
+      </varlistentry>
+      <varlistentry>
         <term><varname>$SYSTEMD_UTF8</varname></term>
         <listitem><para>Takes a boolean argument. Overrides whether non-ASCII glyphs are used in the output,
         e.g. the box drawing characters of <command>udevadm info --tree</command>. By default, they are

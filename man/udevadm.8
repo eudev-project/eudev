@@ -1333,6 +1333,17 @@ variables are to be honoured, other than to disable the pager,
 must be set too\&.
 .RE
 .PP
+\fI$SYSTEMD_URLIFY\fR
+.RS 4
+The value must be a boolean\&. Controls whether clickable links should be generated in the output for terminal emulators supporting this, e\&.g\&. for the file names shown by
+\fBudevadm cat\fR
+and the man pages mentioned in the help texts\&. This can be specified to override the decision that
+\fBudevadm\fR
+makes based on whether colors are used, see
+\fI$SYSTEMD_COLORS\fR
+above\&.
+.RE
+.PP
 \fI$SYSTEMD_UTF8\fR
 .RS 4
 Takes a boolean argument\&. Overrides whether non\-ASCII glyphs are used in the output, e\&.g\&. the box drawing characters of

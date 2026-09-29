@@ -16,6 +16,12 @@ static bool arg_tldr = false;
 static bool arg_config = false;
 
 static void help(void) {
+        _cleanup_free_ char *link = NULL;
+
+        if (terminal_urlify_man("udevadm", "8", &link) < 0)
+                link = NULL;
+
+
         printf("%s cat [OPTIONS] [FILE...]\n"
                "\n%sShow udev rules files.%s\n\n"
                "  -h --help            Show this help\n"
@@ -23,10 +29,11 @@ static void help(void) {
                "     --root=PATH       Operate on an alternate filesystem root\n"
                "     --tldr            Skip comments and empty lines\n"
                "     --config          Show udev.conf rather than udev rules files\n"
-               "\nSee the udevadm(8) man page for details.\n",
+               "\nSee the %s man page for details.\n",
                program_invocation_short_name,
                ansi_highlight(),
-               ansi_normal());
+               ansi_normal(),
+               link ?: "udevadm(8)");
 }
 
 static int parse_argv(int argc, char *argv[]) {
@@ -82,19 +89,24 @@ static int parse_argv(int argc, char *argv[]) {
 /* Like cat_file() of systemd's pretty-print.c, for files without sections. */
 static int cat_file(const char *name, const char *path, bool *newline) {
         _cleanup_fclose_ FILE *f = NULL;
-        _cleanup_free_ char *line = NULL;
+        _cleanup_free_ char *line = NULL, *urlified = NULL;
         size_t size = 0;
         ssize_t n;
+        int r;
 
         if (*newline)
                 putc('\n', stdout);
         *newline = true;
 
+        r = terminal_urlify_path(path, NULL, &urlified);
+        if (r < 0)
+                return log_error_errno(r, "Failed to urlify path \"%s\": %m", path);
+
         printf("%s# %s%s%s%s\n",
                ansi_highlight_blue(),
                path_equal(name, path) ? "" : name,
                path_equal(name, path) ? "" : " -> ",
-               path,
+               urlified,
                ansi_normal());
 
         f = fopen(path, "re");

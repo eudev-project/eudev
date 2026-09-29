@@ -20,6 +20,12 @@ static char *arg_root = NULL;
 static bool arg_strict = false;
 
 static void help(void) {
+        _cleanup_free_ char *link = NULL;
+
+        if (terminal_urlify_man("systemd-hwdb", "8", &link) < 0)
+                link = NULL;
+
+
         printf("%s [OPTIONS...] COMMAND ...\n\n"
                "%sUpdate or query the hardware database.%s\n"
                "\nCommands:\n"
@@ -31,10 +37,11 @@ static void help(void) {
                "  -s --strict     When updating, return non-zero exit value on any parsing error\n"
                "     --usr        Generate in " UDEV_LIBEXEC_DIR " instead of /etc/udev\n"
                "  -r --root=PATH  Alternative root path in the filesystem\n"
-               "\nSee the systemd-hwdb(8) man page for details.\n",
+               "\nSee the %s man page for details.\n",
                program_invocation_short_name,
                ansi_highlight(),
-               ansi_normal());
+               ansi_normal(),
+               link ?: "systemd-hwdb(8)");
 }
 
 static int parse_argv(int argc, char *argv[]) {
