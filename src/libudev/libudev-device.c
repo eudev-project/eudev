@@ -964,10 +964,14 @@ int udev_device_read_db(struct udev_device *udev_device)
         strscpyl(filename, sizeof(filename), UDEV_ROOT_RUN "/udev/data/", id, NULL);
 
         /* We will retry if we couldn't access the file, e.g. because the device has not been
-         * processed by udevd yet, but not if parsing failed. */
+         * processed by udevd yet, but not if parsing failed. Like systemd, a missing file is not
+         * logged: the device properties are read many times, and most devices have no database. */
         f = fopen(filename, "re");
-        if (f == NULL)
-                return log_debug_errno(errno, "no db file to read %s: %m", filename);
+        if (f == NULL) {
+                if (errno == ENOENT)
+                        return -ENOENT;
+                return log_debug_errno(errno, "failed to read db file %s: %m", filename);
+        }
 
         udev_device->db_loaded = true;
 
