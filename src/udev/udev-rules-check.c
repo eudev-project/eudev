@@ -402,13 +402,12 @@ static void check_value_format(struct udev_rules_check *c, const char *key, cons
                                     value, key, offset + 1, hint);
 }
 
+/* A missing or empty attribute is reported by the parser. */
 static void check_attr_format(struct udev_rules_check *c, const char *key, const char *attr) {
         size_t offset;
         const char *hint;
 
-        if (isempty(attr))
-                log_line_invalid_attr(c, key);
-        else if (check_format(attr, &offset, &hint) < 0)
+        if (check_format(attr, &offset, &hint) < 0)
                 log_line_error_fail(c, "Invalid attribute \"%s\" for %s (char %zu: %s), ignoring.",
                                     attr, key, offset + 1, hint);
 }
@@ -555,15 +554,6 @@ void udev_rules_check_token(struct udev_rules_check *c, const char *base, const 
         if (c->line_failed)
                 return;
 
-        /* The parser takes any key that starts with these names. */
-        if ((startswith(base, "IMPORT") && !streq(base, "IMPORT")) ||
-            (startswith(base, "TEST") && !streq(base, "TEST")) ||
-            (startswith(base, "RUN") && !streq(base, "RUN")) ||
-            (startswith(base, "NAME") && !streq(base, "NAME"))) {
-                log_line_error_fail(c, "Invalid key '%s'.", base);
-                return;
-        }
-
         /* An 'i' prefix of an assignment is reported by the parser. */
         if (!is_match && is_case_insensitive)
                 return;
@@ -612,13 +602,8 @@ void udev_rules_check_token(struct udev_rules_check *c, const char *base, const 
                 add_token(c, base, is_match, op, value, NULL, is_case_insensitive, true, false);
 
         } else if (streq(base, "ENV")) {
-                if (!attr)
-                        return;
-                if (isempty(attr)) {
-                        log_line_invalid_attr(c, base);
-                        return;
-                }
-                if (op == CHECK_OP_REMOVE)
+                /* A missing or empty attribute or a wrong operator is reported by the parser. */
+                if (isempty(attr) || op == CHECK_OP_REMOVE)
                         return;
                 if (op == CHECK_OP_ASSIGN_FINAL) {
                         log_line_warning(c, "%s key takes '==', '!=', '=', or '+=' operator, assuming '='.", base);
@@ -646,7 +631,7 @@ void udev_rules_check_token(struct udev_rules_check *c, const char *base, const 
                 add_token(c, base, is_match, op, value, NULL, is_case_insensitive, true, false);
 
         } else if (STR_IN_SET(base, "ATTR", "SYSCTL")) {
-                if (!attr)
+                if (isempty(attr))
                         return;
                 check_attr_format(c, base, attr);
                 if (c->line_failed)
@@ -665,7 +650,7 @@ void udev_rules_check_token(struct udev_rules_check *c, const char *base, const 
                 add_token(c, base, is_match, op, value, attr, is_case_insensitive, true, streq(base, "ATTR"));
 
         } else if (streq(base, "ATTRS")) {
-                if (!attr)
+                if (isempty(attr))
                         return;
                 check_attr_format(c, base, attr);
                 if (c->line_failed || !is_match)
@@ -825,12 +810,9 @@ void udev_rules_check_token(struct udev_rules_check *c, const char *base, const 
                 c->current.has_other = true;
 
         } else if (streq(base, "SECLABEL")) {
-                if (!attr)
+                /* A missing or empty attribute is reported by the parser. */
+                if (isempty(attr))
                         return;
-                if (isempty(attr)) {
-                        log_line_invalid_attr(c, base);
-                        return;
-                }
                 check_value_format(c, base, value, true);
                 if (c->line_failed || op == CHECK_OP_REMOVE)
                         return;

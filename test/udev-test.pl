@@ -1724,6 +1724,23 @@ KERNEL=="sda", ENV {X}=="", SYMLINK+="bad"
 KERNEL=="sda", RUN+="/bin/sh -c 'rm -f \\"/sys%p/a b\\"'"
 EOF
         },
+        {
+                desc            => "key names are exact, and attributes where a key needs one",
+                devpath         => "/devices/pci0000:00/0000:00:1f.2/host0/target0:0:0/0:0:0:0/block/sda",
+                exp_name        => "found",
+                not_exp_name    => "bad",
+                rules           => <<EOF
+KERNEL=="sda", NAMEX!="nomatch", SYMLINK+="bad"
+KERNEL=="sda", NAME{x}!="nomatch", SYMLINK+="bad"
+KERNEL=="sda", TESTX=="/sys", SYMLINK+="bad"
+KERNEL=="sda", RUNX+="/bin/true", SYMLINK+="bad"
+KERNEL=="sda", IMPORTX{parent}="*", SYMLINK+="bad"
+KERNEL=="sda", ENV{}=="", SYMLINK+="bad"
+KERNEL=="sda", ENV=="", SYMLINK+="bad"
+KERNEL=="sda", ACTION{x}=="add", SYMLINK+="bad"
+KERNEL=="sda", TEST{}=="/sys", SYMLINK+="found"
+EOF
+        },
 );
 
 sub udev {

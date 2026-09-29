@@ -98,7 +98,8 @@
       <varname>ATTR{<replaceable>filename</replaceable>}</varname>; the attribute may
       contain any character except <literal>}</literal>, also whitespace. A rule line
       with a key-value pair that cannot be parsed, e.g. with a value that is not quoted,
-      or with an unknown key, an attribute or an operator the key does not take, an unknown built-in
+      or with an unknown key, an attribute or an operator the key does not take, a missing or
+      empty attribute, an unknown built-in
       command, or an unknown type of <varname>IMPORT{}</varname> or <varname>RUN{}</varname>,
       is ignored as a whole, and an error message says so. Valid operators are:</para>
       <variablelist>

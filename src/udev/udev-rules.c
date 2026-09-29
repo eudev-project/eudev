@@ -1570,12 +1570,16 @@ static int add_rule(struct udev_rules *rules, char *line,
                 }
                 rule_tmp.case_insensitive = is_case_insensitive;
 
-                /* Like systemd, refuse an attribute of the keys that take none. The keys that take
-                 * one check it below. */
+                /* Like systemd, refuse an attribute of the keys that take none, and a missing or empty
+                 * attribute of the keys that need one. TEST and RUN check theirs below. */
                 if (attr && STR_IN_SET(key, "ACTION", "DEVPATH", "KERNEL", "SUBSYSTEM", "DRIVER",
                                        "KERNELS", "SUBSYSTEMS", "DRIVERS", "TAGS", "TAG", "PROGRAM",
                                        "RESULT", "WAIT_FOR", "WAIT_FOR_SYSFS", "LABEL", "GOTO",
-                                       "SYMLINK", "OWNER", "GROUP", "MODE", "OPTIONS")) {
+                                       "NAME", "SYMLINK", "OWNER", "GROUP", "MODE", "OPTIONS")) {
+                        log_rule_invalid_attr(key);
+                        goto invalid;
+                }
+                if (isempty(attr) && STR_IN_SET(key, "ATTR", "SYSCTL", "SECLABEL", "ATTRS", "ENV", "IMPORT")) {
                         log_rule_invalid_attr(key);
                         goto invalid;
                 }
@@ -1634,10 +1638,6 @@ static int add_rule(struct udev_rules *rules, char *line,
                 }
 
                 if (streq(key, "ATTR")) {
-                        if (!attr) {
-                                log_rule_invalid_attr(key);
-                                goto invalid;
-                        }
                         if (op == OP_REMOVE) {
                                 log_rule_invalid_op("ATTR");
                                 goto invalid;
@@ -1650,10 +1650,6 @@ static int add_rule(struct udev_rules *rules, char *line,
                 }
 
                 if (streq(key, "SYSCTL")) {
-                        if (!attr) {
-                                log_rule_invalid_attr(key);
-                                goto invalid;
-                        }
                         if (op == OP_REMOVE) {
                                 log_rule_invalid_op("SYSCTL");
                                 goto invalid;
@@ -1666,10 +1662,6 @@ static int add_rule(struct udev_rules *rules, char *line,
                 }
 
                 if (streq(key, "SECLABEL")) {
-                        if (!attr) {
-                                log_rule_invalid_attr(key);
-                                goto invalid;
-                        }
                         if (op == OP_REMOVE) {
                                 log_rule_invalid_op("SECLABEL");
                                 goto invalid;
@@ -1707,10 +1699,6 @@ static int add_rule(struct udev_rules *rules, char *line,
                 }
 
                 if (streq(key, "ATTRS")) {
-                        if (!attr) {
-                                log_rule_invalid_attr(key);
-                                goto invalid;
-                        }
                         if (op > OP_MATCH_MAX) {
                                 log_rule_invalid_op("ATTRS");
                                 goto invalid;
@@ -1733,10 +1721,6 @@ static int add_rule(struct udev_rules *rules, char *line,
                 }
 
                 if (streq(key, "ENV")) {
-                        if (!attr) {
-                                log_rule_invalid_attr(key);
-                                goto invalid;
-                        }
                         if (op == OP_REMOVE) {
                                 log_rule_invalid_op("ENV");
                                 goto invalid;
@@ -1809,11 +1793,7 @@ static int add_rule(struct udev_rules *rules, char *line,
                         continue;
                 }
 
-                if (startswith(key, "IMPORT")) {
-                        if (!attr) {
-                                log_rule_invalid_attr("IMPORT");
-                                goto invalid;
-                        }
+                if (streq(key, "IMPORT")) {
                         if (op == OP_REMOVE) {
                                 log_rule_invalid_op("IMPORT");
                                 goto invalid;
@@ -1864,7 +1844,7 @@ static int add_rule(struct udev_rules *rules, char *line,
                         continue;
                 }
 
-                if (startswith(key, "TEST")) {
+                if (streq(key, "TEST")) {
                         mode_t mode = 0;
 
                         if (op > OP_MATCH_MAX) {
@@ -1884,7 +1864,7 @@ static int add_rule(struct udev_rules *rules, char *line,
                         continue;
                 }
 
-                if (startswith(key, "RUN")) {
+                if (streq(key, "RUN")) {
                         if (!attr)
                                 attr = (char *) "program";
                         if (op == OP_REMOVE) {
@@ -1942,11 +1922,7 @@ static int add_rule(struct udev_rules *rules, char *line,
                         continue;
                 }
 
-                if (startswith(key, "NAME")) {
-                        if (attr) {
-                                log_rule_invalid_attr("NAME");
-                                goto invalid;
-                        }
+                if (streq(key, "NAME")) {
                         if (op == OP_REMOVE) {
                                 log_rule_invalid_op("NAME");
                                 goto invalid;

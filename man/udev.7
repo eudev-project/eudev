@@ -67,7 +67,7 @@ A matching rule may rename a network interface, add symlinks pointing to the dev
 .PP
 A rule consists of a comma\-separated list of one or more key\-value pairs\&. Each key has a distinct operation, depending on the used operator\&. Some keys take an attribute in braces right after the key name, like
 \fIATTR{\fR\fI\fIfilename\fR\fR\fI}\fR; the attribute may contain any character except
-}, also whitespace\&. A rule line with a key\-value pair that cannot be parsed, e\&.g\&. with a value that is not quoted, or with an unknown key, an attribute or an operator the key does not take, an unknown built\-in command, or an unknown type of
+}, also whitespace\&. A rule line with a key\-value pair that cannot be parsed, e\&.g\&. with a value that is not quoted, or with an unknown key, an attribute or an operator the key does not take, a missing or empty attribute, an unknown built\-in command, or an unknown type of
 \fIIMPORT{}\fR
 or
 \fIRUN{}\fR, is ignored as a whole, and an error message says so\&. Valid operators are:
