@@ -334,20 +334,35 @@ static void log_systemd_only(enum systemd_only_type type, const char *what) {
                        what, systemd_only_type_table[type]);
 }
 
-/* Checks whether the command of IMPORT{builtin}, IMPORT{program} or RUN{builtin} is a systemd-only
- * builtin, or a builtin of eudev that this build leaves out, and logs it. */
-static bool check_systemd_only_builtin(const char *key, const char *cmd) {
-        _cleanup_free_ char *what = NULL;
-        size_t len = strcspn(cmd, " ");
-
+/* Checks whether the command of IMPORT{builtin}, IMPORT{program}, RUN{builtin}, RUN{program} or
+ * PROGRAM names a builtin of eudev that this build leaves out, i.e. tpm2_id, and logs it. For PROGRAM
+ * and RUN{program}, this is a program of the same name, which does not exist either. */
+static bool check_disabled_builtin(const char *key, const char *cmd) {
 #ifndef ENABLE_TPM2
+        size_t len;
+
+        cmd += strspn(cmd, WHITESPACE);
+        len = strcspn(cmd, WHITESPACE);
         if (len == strlen("tpm2_id") && strneq(cmd, "tpm2_id", len)) {
                 log_rule_error("%s=\"tpm2_id\" is not supported by this build of eudev (configured with --disable-tpm2), ignoring the rule.",
                                key);
                 return true;
         }
 #endif
+        return false;
+}
 
+/* Checks whether the command of IMPORT{builtin}, IMPORT{program} or RUN{builtin} is a systemd-only
+ * builtin, or a builtin of eudev that this build leaves out, and logs it. */
+static bool check_systemd_only_builtin(const char *key, const char *cmd) {
+        _cleanup_free_ char *what = NULL;
+        size_t len;
+
+        if (check_disabled_builtin(key, cmd))
+                return true;
+
+        cmd += strspn(cmd, WHITESPACE);
+        len = strcspn(cmd, WHITESPACE);
         if (!is_systemd_only(SYSTEMD_ONLY_BUILTIN, cmd, len))
                 return false;
 
@@ -1781,6 +1796,8 @@ static int add_rule(struct udev_rules *rules, char *line,
                                 log_rule_invalid_op("PROGRAM");
                                 goto invalid;
                         }
+                        if (check_disabled_builtin("PROGRAM", value))
+                                goto ignore;
                         rule_add_key(&rule_tmp, TK_M_PROGRAM, op, value, NULL);
                         continue;
                 }
@@ -1866,6 +1883,8 @@ static int add_rule(struct udev_rules *rules, char *line,
                 }
 
                 if (streq(key, "RUN")) {
+                        const char *what = attr ? "RUN{program}" : "RUN";
+
                         if (!attr)
                                 attr = (char *) "program";
                         if (op < OP_MATCH_MAX || op == OP_REMOVE) {
@@ -1887,6 +1906,8 @@ static int add_rule(struct udev_rules *rules, char *line,
                         } else if (streq(attr, "program")) {
                                 enum udev_builtin_cmd cmd = UDEV_BUILTIN_MAX;
 
+                                if (check_disabled_builtin(what, value))
+                                        goto ignore;
                                 rule_add_key(&rule_tmp, TK_A_RUN_PROGRAM, op, value, &cmd);
                         } else {
                                 log_rule_invalid_attr("RUN");
