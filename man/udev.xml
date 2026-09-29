@@ -455,9 +455,10 @@
           <term><varname>ENV{<replaceable>key</replaceable>}</varname></term>
           <listitem>
             <para>Set a device property value. Property names with a leading <literal>.</literal>
-            are neither stored in the database nor exported to events or
-            external tools (run by, for example, the <varname>PROGRAM</varname>
-            match key).</para>
+            are not stored in the database. Like all other properties, they are passed in the
+            environment of the programs run by <varname>RUN</varname>,
+            <varname>PROGRAM</varname> and <varname>IMPORT{program}</varname>, and are sent
+            with the event to the event listeners.</para>
             <para>A property name may only contain ASCII letters, digits, <literal>_</literal>
             and <literal>.</literal>, and a value must be valid UTF-8 without control
             characters, like newlines or tabs. Other properties are refused: an assignment or an

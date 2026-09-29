@@ -353,9 +353,11 @@ The value that should be written to kernel parameter\&.
 .RS 4
 Set a device property value\&. Property names with a leading
 \&.
-are neither stored in the database nor exported to events or external tools (run by, for example, the
+are not stored in the database\&. Like all other properties, they are passed in the environment of the programs run by
+\fIRUN\fR,
 \fIPROGRAM\fR
-match key)\&.
+and
+\fIIMPORT{program}\fR, and are sent with the event to the event listeners\&.
 .sp
 A property name may only contain ASCII letters, digits,
 _

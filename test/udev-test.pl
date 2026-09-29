@@ -1681,6 +1681,18 @@ EOF
 KERNEL=="sda1", PROGRAM="/bin/sh -c 'test -d /run/udev/tags && ! test -e /run/udev/tags/onlysda && test -e /run/udev/tags/shared/b8:1'", SYMLINK+="found"
 EOF
         },
+        {
+                desc            => "private properties are passed to programs, not stored in the database",
+                devpath         => "/devices/pci0000:00/0000:00:1f.2/host0/target0:0:0/0:0:0:0/block/sda",
+                exp_name        => "found",
+                exp_rem_error   => "yes",
+                option          => "clean",
+                rules           => <<EOF
+KERNEL=="sda", ENV{.PRIV}="secret"
+KERNEL=="sda", PROGRAM=="/usr/bin/printenv .PRIV", RESULT=="secret", ENV{P1}="1"
+ACTION=="add", KERNEL=="sda", ENV{P1}=="1", RUN+="/bin/sh -c 'grep -qx E:P1=1 /run/udev/data/b8:0 && ! grep -q PRIV /run/udev/data/b8:0 && ln -s sda /dev/found'"
+EOF
+        },
 );
 
 sub udev {

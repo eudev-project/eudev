@@ -2635,8 +2635,8 @@ _public_ int udev_device_has_current_tag(struct udev_device *udev_device, const 
 
 /* Builds the buffer of "KEY=VALUE" strings of the properties, which is sent to udevd workers and
  * libudev monitors, and the environment of the programs udevd runs, which points into the buffer.
- * Like systemd's device_update_properties_bufs(), without a fixed limit of their size. Private
- * properties, with a leading ".", are neither sent nor exported. */
+ * Like systemd's device_update_properties_bufs(), without a fixed limit of their size. Like there,
+ * private properties, with a leading ".", are included; they are only not stored in the database. */
 static int update_envp_monitor_buf(struct udev_device *udev_device)
 {
         char version[STRLEN("UDEV_DATABASE_VERSION=") + DECIMAL_STR_MAX(unsigned) + 1];
@@ -2649,13 +2649,8 @@ static int update_envp_monitor_buf(struct udev_device *udev_device)
         len = strlen(version) + 1;
 
         udev_list_entry_foreach(list_entry, udev_device_get_properties_list_entry(udev_device)) {
-                const char *key = udev_list_entry_get_name(list_entry);
-
-                /* skip private variables */
-                if (key[0] == '.')
-                        continue;
-
-                len += strlen(key) + 1 + strlen(udev_list_entry_get_value(list_entry)) + 1;
+                len += strlen(udev_list_entry_get_name(list_entry)) + 1 +
+                       strlen(udev_list_entry_get_value(list_entry)) + 1;
                 n++;
         }
 
@@ -2673,13 +2668,9 @@ static int update_envp_monitor_buf(struct udev_device *udev_device)
         s = stpcpy(s, version) + 1;
 
         udev_list_entry_foreach(list_entry, udev_device_get_properties_list_entry(udev_device)) {
-                const char *key = udev_list_entry_get_name(list_entry);
-
-                if (key[0] == '.')
-                        continue;
-
                 envp[i++] = s;
-                s = stpcpy(stpcpy(stpcpy(s, key), "="), udev_list_entry_get_value(list_entry)) + 1;
+                s = stpcpy(stpcpy(stpcpy(s, udev_list_entry_get_name(list_entry)), "="),
+                           udev_list_entry_get_value(list_entry)) + 1;
         }
         envp[i] = NULL;
         assert((size_t) (s - buf) == len);
