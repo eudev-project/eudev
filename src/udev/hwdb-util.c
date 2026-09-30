@@ -40,7 +40,8 @@
  */
 
 static char *list_conf_file_path (void) {
-        static const char *main_hwdb_dir = UDEV_HWDB_DIR;
+        /* the directory of the administrator, and the one of the shipped files */
+        static const char *main_hwdb_dir = UDEV_CONF_DIR "/hwdb.d";
         static const char *libexec_dir = UDEV_LIBEXEC_DIR "/hwdb.d";
         const char *path_variable = getenv ("UDEV_HWDB_PATH");
         /* UDEV_HWDB_PATH comes last, so that it cannot override

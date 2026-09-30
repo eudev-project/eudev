@@ -185,10 +185,11 @@ AC_SUBST([udevlibexecdir], [${rootlibexecdir}])
 # sysconfdir paths
 AC_SUBST([udevconfdir],[${sysconfdir}/udev])
 AC_SUBST([udevconffile],[${udevconfdir}/udev.conf])
-AC_SUBST([udevhwdbdir],[${udevconfdir}/hwdb.d])
 AC_SUBST([udevhwdbbin],[${udevconfdir}/hwdb.bin])
 
 # udevlibexecdir paths
+# the shipped hwdb files, like in systemd; ${udevconfdir}/hwdb.d is the directory of the administrator
+AC_SUBST([udevhwdbdir],[${udevlibexecdir}/hwdb.d])
 AC_SUBST([udevkeymapdir],[${udevlibexecdir}/keymaps])
 AC_SUBST([udevkeymapforceredir],[${udevkeymapdir}/force-release])
 AC_SUBST([udevrulesdir],[${udevlibexecdir}/rules.d])

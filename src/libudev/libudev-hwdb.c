@@ -427,7 +427,7 @@ static int trie_search_f(struct udev_hwdb *hwdb, const char *search) {
 }
 
 static char *get_hwdb_bin_paths (void) {
-        /* UDEV_HWDB_BIN is hwdb.bin in the configured sysconfdir, like the sources in hwdb.d there */
+        /* UDEV_HWDB_BIN is hwdb.bin in the configured sysconfdir, next to the hwdb.d of the administrator */
         static const char default_locations[] =
           UDEV_HWDB_BIN "\0"
           UDEV_LIBEXEC_DIR "/hwdb.bin\0";

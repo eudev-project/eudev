@@ -44,7 +44,7 @@ static void help(void) {
                "  -V,--version         show package version\n"
                "\n"
                "The HWDB is searched in "
-               UDEV_HWDB_DIR ", " UDEV_LIBEXEC_DIR "/hwdb.d, "
+               UDEV_CONF_DIR "/hwdb.d, " UDEV_LIBEXEC_DIR "/hwdb.d, "
                "and the UDEV_HWDB_PATH search path.\n"
                "The format of hwdb.bin is configured with hwdb_format= in udev.conf.\n");
         print_man_page_link();
