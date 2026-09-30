@@ -33,7 +33,9 @@
 
 #include "missing.h"
 #include "netif-naming-scheme.h"
+#include "path-util.h"
 #include "udev.h"
+#include "udev-rules-check.h"
 #include "udev-util.h"
 
 #ifndef HAVE_UNSHARE
@@ -91,6 +93,27 @@ static int fake_dev(const char *dir) {
         return 0;
 }
 
+/* Mount an empty, read-only tmpfs over each directory that the rules are read from, so that no rules of
+ * the host get into the tests. The one below UDEV_ROOT_RUN is in the test's /run already, and holds the
+ * rules of the test. A directory that does not exist has no rules to hide. */
+static int mask_rules_dirs(void) {
+        const char *const *dir;
+
+        for (dir = udev_rules_get_dirs(); *dir; dir++) {
+                if (path_startswith(*dir, UDEV_ROOT_RUN))
+                        continue;
+
+                if (mount("tmpfs", *dir, "tmpfs", MS_RDONLY|MS_NOSUID|MS_NODEV|MS_NOEXEC, "mode=0755") < 0) {
+                        if (IN_SET(errno, ENOENT, ENOTDIR))
+                                continue;
+                        fprintf(stderr, "failed to mount an empty directory over %s: %m\n", *dir);
+                        return -errno;
+                }
+        }
+
+        return 0;
+}
+
 static int fake_filesystems(void) {
         static const struct fakefs {
                 const char *src;
@@ -100,8 +123,6 @@ static int fake_filesystems(void) {
                 { "test/sys", "/sys",                   "failed to mount test /sys" },
                 { "test/dev", "/dev",                   "failed to mount test /dev" },
                 { "test/run", UDEV_ROOT_RUN,            "failed to mount test " UDEV_ROOT_RUN },
-                { "test/run", "/etc/udev/rules.d",      "failed to mount empty /etc/udev/rules.d" },
-                { "test/run", "/lib/udev/rules.d",      "failed to mount empty /lib/udev/rules.d" },
         };
         unsigned int i;
         int err;
@@ -130,10 +151,12 @@ static int fake_filesystems(void) {
                 err = mount(fakefss[i].src, fakefss[i].target, "none", MS_BIND|MS_REC, NULL);
                 if (err < 0) {
                         err = -errno;
-                        fprintf(stderr, "%s %m", fakefss[i].error);
+                        fprintf(stderr, "%s: %m\n", fakefss[i].error);
                         return err;
                 }
         }
+
+        err = mask_rules_dirs();
 out:
         return err;
 }
