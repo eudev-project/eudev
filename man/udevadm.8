@@ -115,25 +115,25 @@ or
 \fB\-p\fR, \fB\-\-path=\fR\fB\fIDEVPATH\fR\fR
 .RS 4
 The
-/sys
+/sys/
 path of the device to query, e\&.g\&.
-[/sys]/class/block/sda\&. Note that this option usually is not very useful, since
-\fBudev\fR
-can guess the type of the argument, so
-\fBudevadm \-\-devpath=/class/block/sda\fR
+[/sys/]/class/block/sda\&. This option is an alternative to the positional argument with a
+/sys/
+prefix\&.
+\fBudevadm info \-\-path=/class/block/sda\fR
 is equivalent to
-\fBudevadm /sys/class/block/sda\fR\&.
+\fBudevadm info /sys/class/block/sda\fR\&.
 .RE
 .PP
 \fB\-n\fR, \fB\-\-name=\fR\fB\fIFILE\fR\fR
 .RS 4
 The name of the device node or a symlink to query, e\&.g\&.
-[/dev]/sda\&. Note that this option usually is not very useful, since
-\fBudev\fR
-can guess the type of the argument, so
-\fBudevadm \-\-name=sda\fR
+[/dev/]/sda\&. This option is an alternative to the positional argument with a
+/dev/
+prefix\&.
+\fBudevadm info \-\-name=sda\fR
 is equivalent to
-\fBudevadm /dev/sda\fR\&.
+\fBudevadm info /dev/sda\fR\&.
 .RE
 .PP
 \fB\-r\fR, \fB\-\-root\fR
