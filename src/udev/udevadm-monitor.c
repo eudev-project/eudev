@@ -32,6 +32,7 @@
 #include <linux/types.h>
 #include <linux/netlink.h>
 
+#include "pager.h"
 #include "udev.h"
 #include "udev-util.h"
 #include "udevadm-util.h"
@@ -65,6 +66,8 @@ static void print_device(struct udev_device *device, const char *source, int pro
 }
 
 static void help(void) {
+        pager_open(0);
+
         printf("%s monitor [--property] [--kernel] [--udev] [--help]\n\n"
                "Listen to kernel and udev events.\n\n"
                "  -h --help                                Show this help\n"

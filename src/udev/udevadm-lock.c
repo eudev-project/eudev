@@ -15,6 +15,7 @@
 
 #include "blockdev-util.h"
 #include "fileio.h"
+#include "pager.h"
 #include "path-util.h"
 #include "strv.h"
 #include "udev.h"
@@ -28,6 +29,8 @@ static char **arg_cmdline = NULL;
 static bool arg_print = false;
 
 static void help(void) {
+        pager_open(0);
+
         printf("%s lock [OPTIONS...] COMMAND\n"
                "%s lock [OPTIONS...] --print\n"
                "\n%sLock a block device and run a command.%s\n\n"

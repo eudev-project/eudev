@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "pager.h"
 #include "path-util.h"
 #include "strv.h"
 #include "udev.h"
@@ -16,6 +17,8 @@ static bool arg_tldr = false;
 static bool arg_config = false;
 
 static void help(void) {
+        pager_open(0);
+
         printf("%s cat [OPTIONS] [FILE...]\n"
                "\n%sShow udev rules files.%s\n\n"
                "  -h --help            Show this help\n"

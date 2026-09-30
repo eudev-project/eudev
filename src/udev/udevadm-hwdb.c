@@ -23,6 +23,7 @@
 #include <string.h>
 #include <ctype.h>
 
+#include "pager.h"
 #include "util.h"
 
 #include "udev.h"
@@ -30,6 +31,8 @@
 #include "hwdb-util.h"
 
 static void help(void) {
+        pager_open(0);
+
         printf("Usage: udevadm hwdb OPTIONS\n"
                "  -u,--update          update the hardware database\n"
                "  -s,--strict          when updating, return non-zero exit value on any parsing error\n"

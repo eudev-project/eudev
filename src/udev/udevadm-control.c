@@ -25,11 +25,14 @@
 #include <sys/wait.h>
 #include <sys/un.h>
 
+#include "pager.h"
 #include "udev.h"
 #include "udev-util.h"
 #include "udevadm-util.h"
 
 static void print_help(void) {
+        pager_open(0);
+
         printf("%s control COMMAND\n\n"
                "Control the udev daemon.\n\n"
                "  -h --help                Show this help\n"

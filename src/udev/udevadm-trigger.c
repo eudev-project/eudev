@@ -32,6 +32,7 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 
+#include "pager.h"
 #include "random-util.h"
 #include "set.h"
 #include "udev.h"
@@ -517,6 +518,8 @@ static const char *keyval(const char *str, const char **val, char *buf, size_t s
 }
 
 static void help(void) {
+        pager_open(0);
+
         printf("%s trigger OPTIONS\n\n"
                "Request events from the kernel.\n\n"
                "  -h --help                         Show this help\n"

@@ -9,6 +9,7 @@
 #include <sys/inotify.h>
 #include <unistd.h>
 
+#include "pager.h"
 #include "path-util.h"
 #include "strv.h"
 #include "udev.h"
@@ -162,6 +163,8 @@ static struct udev_monitor *setup_monitor(struct udev *udev, const char *name) {
 }
 
 static void help(void) {
+        pager_open(0);
+
         printf("%s wait [OPTIONS] DEVICE [DEVICE...]\n\n"
                "Wait for devices or device symlinks being created.\n\n"
                "  -h --help             Print this message\n"

@@ -1099,6 +1099,7 @@ finish:
 }
 
 static void help(void) {
+        pager_open(arg_pager_flags);
 
         printf("%s info [OPTIONS] [DEVPATH|FILE]\n\n"
                "Query sysfs or the udev database.\n\n"

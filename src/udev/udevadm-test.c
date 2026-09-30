@@ -28,6 +28,7 @@
 #include <getopt.h>
 #include <sys/signalfd.h>
 
+#include "pager.h"
 #include "path-util.h"
 #include "strv.h"
 #include "udev.h"
@@ -42,6 +43,8 @@ static void maybe_insert_empty_line(void) {
 }
 
 static void help(void) {
+        pager_open(0);
+
 
         printf("%s test [OPTIONS] DEVPATH|FILE\n\n"
                "Test an event run.\n"

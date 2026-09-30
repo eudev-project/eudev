@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include "pager.h"
 #include "strv.h"
 #include "udev.h"
 #include "udev-rules-check.h"
@@ -16,6 +17,8 @@ static bool arg_summary = true;
 static bool arg_style = true;
 
 static void help(void) {
+        pager_open(0);
+
         printf("%s verify [OPTIONS] [FILE...]\n"
                "\n%sVerify udev rules files.%s\n\n"
                "  -h --help                            Show this help\n"

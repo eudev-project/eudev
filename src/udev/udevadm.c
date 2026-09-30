@@ -24,6 +24,7 @@
 #include <errno.h>
 #include <getopt.h>
 
+#include "pager.h"
 #include "udev.h"
 #include "udevadm-util.h"
 
@@ -63,6 +64,8 @@ static const struct udevadm_cmd *udevadm_cmds[] = {
 
 static int adm_help(struct udev *udev __attribute__((unused)), int argc __attribute__((unused)), char *argv[] __attribute__((unused))) {
         unsigned int i;
+
+        pager_open(0);
 
         printf("%s [--help] [--version] [--debug] COMMAND [COMMAND OPTIONS]\n\n"
                "Send control commands or test the device manager.\n\n"

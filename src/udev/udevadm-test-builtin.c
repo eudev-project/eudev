@@ -31,10 +31,13 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
+#include "pager.h"
 #include "udev.h"
 #include "udevadm-util.h"
 
 static void help(struct udev *udev) {
+        pager_open(0);
+
         printf("%s test-builtin [OPTIONS] COMMAND DEVPATH\n\n"
                "Test a built-in command.\n\n"
                "  -h --help               Print this message\n"

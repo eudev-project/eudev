@@ -32,12 +32,15 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
+#include "pager.h"
 #include "udev.h"
 #include "udev-util.h"
 #include "udevadm-util.h"
 #include "util.h"
 
 static void help(void) {
+        pager_open(0);
+
         printf("%s settle OPTIONS\n\n"
                "Wait for pending udev events.\n\n"
                "  -h --help                 Show this help\n"
