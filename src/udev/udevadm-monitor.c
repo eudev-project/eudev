@@ -34,6 +34,7 @@
 
 #include "udev.h"
 #include "udev-util.h"
+#include "udevadm-util.h"
 
 static bool udev_exit;
 
@@ -74,6 +75,7 @@ static void help(void) {
                "  -s --subsystem-match=SUBSYSTEM[/DEVTYPE] Filter events by subsystem\n"
                "  -t --tag-match=TAG                       Filter events by tag\n"
                , program_invocation_short_name);
+        print_man_page_link();
 }
 
 static int adm_monitor(struct udev *udev, int argc, char *argv[]) {

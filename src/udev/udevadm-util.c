@@ -642,3 +642,12 @@ int parse_device_action(const char *str, const char **ret) {
         *ret = device_action_table[a];
         return 1;
 }
+
+void print_man_page_link(void) {
+        _cleanup_free_ char *link = NULL;
+
+        if (terminal_urlify_man("udevadm", "8", &link) < 0)
+                link = NULL;
+
+        printf("\nSee the %s man page for details.\n", link ?: "udevadm(8)");
+}

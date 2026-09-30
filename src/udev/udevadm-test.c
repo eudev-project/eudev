@@ -53,6 +53,7 @@ static void help(void) {
                "  -v --verbose                         Show verbose logs\n"
                "     --json=pretty|short|off           Generate JSON output\n"
                , program_invocation_short_name);
+        print_man_page_link();
 }
 
 static int adm_test(struct udev *udev, int argc, char *argv[]) {

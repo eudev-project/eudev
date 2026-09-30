@@ -548,6 +548,7 @@ static void help(void) {
                "     --prioritized-subsystem=SUBSYSTEM[,SUBSYSTEM…]\n"
                "                                    Trigger devices from a matching subsystem first\n"
                , program_invocation_short_name);
+        print_man_page_link();
 }
 
 static int adm_trigger(struct udev *udev, int argc, char *argv[]) {

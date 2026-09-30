@@ -27,6 +27,7 @@
 
 #include "udev.h"
 #include "udev-util.h"
+#include "udevadm-util.h"
 
 static void print_help(void) {
         printf("%s control COMMAND\n\n"
@@ -45,6 +46,7 @@ static void print_help(void) {
                "     --revert              Revert previously set configurations\n"
                "  -t --timeout=SECONDS     Maximum time to block for a reply\n"
                , program_invocation_short_name);
+        print_man_page_link();
 }
 
 /* A command option, which is sent to the daemon after all options are parsed. */

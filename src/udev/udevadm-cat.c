@@ -16,24 +16,17 @@ static bool arg_tldr = false;
 static bool arg_config = false;
 
 static void help(void) {
-        _cleanup_free_ char *link = NULL;
-
-        if (terminal_urlify_man("udevadm", "8", &link) < 0)
-                link = NULL;
-
-
         printf("%s cat [OPTIONS] [FILE...]\n"
                "\n%sShow udev rules files.%s\n\n"
                "  -h --help            Show this help\n"
                "  -V --version         Show package version\n"
                "     --root=PATH       Operate on an alternate filesystem root\n"
                "     --tldr            Skip comments and empty lines\n"
-               "     --config          Show udev.conf rather than udev rules files\n"
-               "\nSee the %s man page for details.\n",
+               "     --config          Show udev.conf rather than udev rules files\n",
                program_invocation_short_name,
                ansi_highlight(),
-               ansi_normal(),
-               link ?: "udevadm(8)");
+               ansi_normal());
+        print_man_page_link();
 }
 
 static int parse_argv(int argc, char *argv[]) {

@@ -66,3 +66,7 @@ int device_action_from_string(const char *s);
 /* Like systemd's parse_device_action(): returns 1 and the action if str is one, 0 after listing the
  * actions for "help", and -EINVAL otherwise. */
 int parse_device_action(const char *str, const char **ret);
+
+/* The last line of the help texts, like systemd's: "See the udevadm(8) man page for details.",
+ * with a link to the man page if links are enabled. */
+void print_man_page_link(void);

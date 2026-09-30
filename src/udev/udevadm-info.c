@@ -1144,6 +1144,7 @@ static void help(void) {
                "     --initialized-match      Query devices that are already initialized\n"
                "     --initialized-nomatch    Query devices that are not initialized yet\n"
                , program_invocation_short_name);
+        print_man_page_link();
 }
 
 enum query_type {

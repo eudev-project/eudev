@@ -26,6 +26,7 @@
 #include "util.h"
 
 #include "udev.h"
+#include "udevadm-util.h"
 #include "hwdb-util.h"
 
 static void help(void) {
@@ -41,8 +42,8 @@ static void help(void) {
                "The HWDB is searched in "
                UDEV_HWDB_DIR ", " UDEV_LIBEXEC_DIR "/hwdb.d, "
                "and the UDEV_HWDB_PATH search path.\n"
-               "The format of hwdb.bin is configured with hwdb_format= in udev.conf.\n"
-               "\n");
+               "The format of hwdb.bin is configured with hwdb_format= in udev.conf.\n");
+        print_man_page_link();
 }
 
 static int adm_hwdb(struct udev *udev, int argc, char *argv[]) {

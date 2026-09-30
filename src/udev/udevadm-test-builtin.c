@@ -40,9 +40,10 @@ static void help(struct udev *udev) {
                "  -h --help               Print this message\n"
                "  -V --version            Print version of the program\n"
                "  -a --action=ACTION|help Set action string\n"
-               "\nCommands:\n"
                , program_invocation_short_name);
+        print_man_page_link();
 
+        printf("\nCommands:\n");
         udev_builtin_list(udev);
 }
 

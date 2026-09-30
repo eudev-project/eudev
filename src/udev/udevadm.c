@@ -25,6 +25,7 @@
 #include <getopt.h>
 
 #include "udev.h"
+#include "udevadm-util.h"
 
 static int adm_version(struct udev *udev __attribute__((unused)), int argc __attribute__((unused)), char *argv[] __attribute__((unused))) {
         printf("%s\n", UDEV_VERSION);
@@ -71,6 +72,7 @@ static int adm_help(struct udev *udev __attribute__((unused)), int argc __attrib
         for (i = 0; i < ELEMENTSOF(udevadm_cmds); i++)
                 if (udevadm_cmds[i]->help != NULL)
                         printf("  %-12s  %s\n", udevadm_cmds[i]->name, udevadm_cmds[i]->help);
+        print_man_page_link();
         return 0;
 }
 

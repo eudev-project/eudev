@@ -171,6 +171,7 @@ static void help(void) {
                "     --removed          Wait for devices being removed\n"
                "     --settle           Also wait for all queued events being processed\n",
                program_invocation_short_name);
+        print_man_page_link();
 }
 
 static int parse_argv(int argc, char *argv[]) {

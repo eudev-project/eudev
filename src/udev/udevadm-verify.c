@@ -16,12 +16,6 @@ static bool arg_summary = true;
 static bool arg_style = true;
 
 static void help(void) {
-        _cleanup_free_ char *link = NULL;
-
-        if (terminal_urlify_man("udevadm", "8", &link) < 0)
-                link = NULL;
-
-
         printf("%s verify [OPTIONS] [FILE...]\n"
                "\n%sVerify udev rules files.%s\n\n"
                "  -h --help                            Show this help\n"
@@ -29,12 +23,11 @@ static void help(void) {
                "  -N --resolve-names=early|late|never  When to resolve names\n"
                "     --root=PATH                       Operate on an alternate filesystem root\n"
                "     --no-summary                      Do not show summary\n"
-               "     --no-style                        Ignore style issues\n"
-               "\nSee the %s man page for details.\n",
+               "     --no-style                        Ignore style issues\n",
                program_invocation_short_name,
                ansi_highlight(),
-               ansi_normal(),
-               link ?: "udevadm(8)");
+               ansi_normal());
+        print_man_page_link();
 }
 
 /* Like systemd's parse_resolve_name_timing(): returns 1 if parsed, 0 for "help", and a

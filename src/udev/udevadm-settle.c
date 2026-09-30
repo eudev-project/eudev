@@ -34,6 +34,7 @@
 
 #include "udev.h"
 #include "udev-util.h"
+#include "udevadm-util.h"
 #include "util.h"
 
 static void help(void) {
@@ -44,6 +45,7 @@ static void help(void) {
                "  -t --timeout=SECONDS      Maximum time to wait for events\n"
                "  -E --exit-if-exists=FILE  Stop waiting if file exists\n"
                , program_invocation_short_name);
+        print_man_page_link();
 }
 
 static int adm_settle(struct udev *udev, int argc, char *argv[]) {
