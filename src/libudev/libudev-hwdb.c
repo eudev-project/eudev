@@ -470,9 +470,11 @@ static struct udev_hwdb *hwdb_new(struct udev *udev, char *bin_paths) {
         hwdb->refcount = 1;
         udev_list_init(udev, &hwdb->properties_list, true);
 
-        /* find hwdb.bin in hwdb_bin_paths */
+        /* find hwdb.bin in hwdb_bin_paths, and log each path that is tried like sd-hwdb, so that the
+         * path of the opened one is shown */
         hwdb->bin_paths = bin_paths;
         NULSTR_FOREACH(hwdb_bin_path, hwdb->bin_paths) {
+                log_debug("Trying to open \"%s\"...", hwdb_bin_path);
                 hwdb->f = fopen(hwdb_bin_path, "re");
                 if (hwdb->f)
                         break;
@@ -486,7 +488,7 @@ static struct udev_hwdb *hwdb_new(struct udev *udev, char *bin_paths) {
         }
 
         if (!hwdb->f) {
-                log_debug("%s does not exist, please run udevadm hwdb --update", hwdb_bin_path);
+                log_debug("hwdb.bin does not exist, please run 'udevadm hwdb --update'.");
                 udev_hwdb_unref(hwdb);
                 return NULL;
         }
