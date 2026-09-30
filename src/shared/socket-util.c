@@ -4,46 +4,23 @@
  * systemd a446e8ff2c. */
 
 #include <errno.h>
-#include <stdlib.h>
 #include <string.h>
 
 #include "socket-util.h"
 #include "util.h"
 
-/* Like parse_ifindex() of systemd, i.e. with the syntax of its safe_atoi(): leading whitespace is
- * skipped, and besides decimal, "0x" prefixes a hexadecimal, "0b" a binary, and "0o" or "0" an octal
- * number. */
 int parse_ifindex(const char *s) {
-        unsigned base = 0;
-        const char *k;
-        char *x = NULL;
-        long l;
+        int ifi, r;
 
         assert(s);
 
-        s += strspn(s, WHITESPACE);
-
-        /* like mangle_base() of systemd */
-        if ((k = startswith(s, "0b")) || (k = startswith(s, "0B"))) {
-                base = 2;
-                s = k;
-        } else if ((k = startswith(s, "0o")) || (k = startswith(s, "0O"))) {
-                base = 8;
-                s = k;
-        }
-
-        errno = 0;
-        l = strtol(s, &x, base);
-        if (errno > 0)
-                return -errno;
-        if (!x || x == s || *x != 0)
-                return -EINVAL;
-        if ((long) (int) l != l)
-                return -ERANGE;
-        if (l <= 0)
+        r = safe_atoi(s, &ifi);
+        if (r < 0)
+                return r;
+        if (ifi <= 0)
                 return -EINVAL;
 
-        return (int) l;
+        return ifi;
 }
 
 bool ifname_valid_char(char a) {
