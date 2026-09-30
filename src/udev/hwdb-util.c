@@ -674,7 +674,10 @@ int hwdb_update(struct udev *udev, const char *root, const char *hwdb_bin, bool 
                 err = log_oom();
                 goto out;
         }
+        /* Like systemd, masks, i.e. symlinks to /dev/null and empty files, and files that are not regular
+         * files are not listed, so that they do not count as hwdb files. */
         err = conf_files_list_strv_path(&files, ".hwdb", root,
+                                        CONF_FILES_REGULAR | CONF_FILES_FILTER_MASKED | CONF_FILES_WARN,
                                         conf_file_path);
         if (err < 0) {
                 log_error_errno(err, "failed to enumerate hwdb files: %m");

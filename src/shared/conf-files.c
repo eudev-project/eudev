@@ -24,6 +24,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <sys/stat.h>
+#include <sys/sysmacros.h>
 #include <dirent.h>
 
 #include "macro.h"
@@ -33,9 +34,52 @@
 #include "strv.h"
 #include "path-util.h"
 #include "hashmap.h"
+#include "set.h"
 #include "conf-files.h"
 
-static int files_add(Hashmap *h, const char *root, const char *path, const char *suffix) {
+/* Like conf_file_chase_and_verify() of systemd, for the flags that are implemented here: returns
+ * -ERFKILL if the file is a mask, another negative error if it is skipped, and 0 if it is listed. */
+static int conf_file_verify(const char *path, ConfFilesFlags flags) {
+        int log_level = FLAGS_SET(flags, CONF_FILES_WARN) ? LOG_WARNING : LOG_DEBUG;
+        struct stat st;
+
+        if (stat(path, &st) < 0) {
+                int r = -errno;
+
+                /* A symlink to /dev/null masks the file, also where /dev/null does not exist, e.g.
+                 * below the root directory. */
+                if (r == -ENOENT && FLAGS_SET(flags, CONF_FILES_FILTER_MASKED_BY_SYMLINK)) {
+                        _cleanup_free_ char *target = NULL;
+
+                        if (readlink_malloc(path, &target) >= 0 && path_equal(target, "/dev/null")) {
+                                log_debug("File '%s' is a mask (symlink to /dev/null).", path);
+                                return -ERFKILL;
+                        }
+                }
+
+                return log_full_errno(log_level, r, "Failed to chase '%s': %m", path);
+        }
+
+        if (FLAGS_SET(flags, CONF_FILES_FILTER_MASKED_BY_SYMLINK) &&
+            S_ISCHR(st.st_mode) && st.st_rdev == makedev(1, 3)) {
+                log_debug("File '%s' is a mask (symlink to /dev/null).", path);
+                return -ERFKILL;
+        }
+
+        if (FLAGS_SET(flags, CONF_FILES_FILTER_MASKED_BY_EMPTY) &&
+            S_ISREG(st.st_mode) && st.st_size <= 0) {
+                log_debug("File '%s' is a mask (an empty file).", path);
+                return -ERFKILL;
+        }
+
+        if (FLAGS_SET(flags, CONF_FILES_REGULAR) && !S_ISREG(st.st_mode))
+                return log_debug_errno(S_ISDIR(st.st_mode) ? EISDIR : EBADFD,
+                                       "File '%s' is not a regular file: %m", path);
+
+        return 0;
+}
+
+static int files_add(Hashmap *h, Set *masked, const char *root, const char *path, const char *suffix, ConfFilesFlags flags) {
         _cleanup_closedir_ DIR *dir = NULL;
         char *dirpath;
 
@@ -71,6 +115,35 @@ static int files_add(Hashmap *h, const char *root, const char *path, const char 
                 if (!p)
                         return -ENOMEM;
 
+                /* Like systemd: a file of an earlier directory overrides the files with the same name, a
+                 * mask masks them, and a file that is neither listed nor a mask, e.g. one that is not a
+                 * regular file, does not hide them. */
+                if (flags & (CONF_FILES_FILTER_MASKED | CONF_FILES_REGULAR)) {
+                        if (hashmap_contains(h, de->d_name)) {
+                                log_debug("Skipping overridden file: %s.", p);
+                                free(p);
+                                continue;
+                        }
+
+                        if (set_contains(masked, de->d_name)) {
+                                log_debug("File '%s' is masked by previous entry.", p);
+                                free(p);
+                                continue;
+                        }
+
+                        r = conf_file_verify(p, flags);
+                        if (r < 0) {
+                                free(p);
+
+                                if (r == -ERFKILL) {
+                                        r = set_put_strdup(masked, de->d_name);
+                                        if (r < 0)
+                                                return r;
+                                }
+                                continue;
+                        }
+                }
+
                 r = hashmap_put(h, eudev_basename(p), p);
                 if (r == -EEXIST) {
                         log_debug("Skipping overridden file: %s.", p);
@@ -95,8 +168,9 @@ static int base_cmp(const void *a, const void *b) {
         return strcmp(eudev_basename(s1), eudev_basename(s2));
 }
 
-static int conf_files_list_strv_internal(char ***strv, const char *suffix, const char *root, char **dirs) {
+static int conf_files_list_strv_internal(char ***strv, const char *suffix, const char *root, ConfFilesFlags flags, char **dirs) {
         _cleanup_hashmap_free_ Hashmap *fh = NULL;
+        _cleanup_set_free_free_ Set *masked = NULL;
         char **files, **p;
         int r;
 
@@ -111,8 +185,15 @@ static int conf_files_list_strv_internal(char ***strv, const char *suffix, const
         if (!fh)
                 return -ENOMEM;
 
+        /* the names of the masked files */
+        if (flags & CONF_FILES_FILTER_MASKED) {
+                masked = set_new(&string_hash_ops);
+                if (!masked)
+                        return -ENOMEM;
+        }
+
         STRV_FOREACH(p, dirs) {
-                r = files_add(fh, root, *p, suffix);
+                r = files_add(fh, masked, root, *p, suffix, flags);
                 if (r == -ENOMEM) {
                         return r;
                 } else if (r < 0)
@@ -141,7 +222,7 @@ int conf_files_list_strv(char ***strv, const char *suffix, const char *root, con
         if (!copy)
                 return -ENOMEM;
 
-        return conf_files_list_strv_internal(strv, suffix, root, copy);
+        return conf_files_list_strv_internal(strv, suffix, root, 0, copy);
 }
 
 /* Copy every non-empty path element from path_variable to
@@ -183,7 +264,7 @@ static ssize_t conf_files_list_follow_path (const char *path_variable, char **de
 }
 
 /* path is a colon-separated list of directories. */
-int conf_files_list_strv_path(char ***strv, const char *suffix, const char *root, const char* path) {
+int conf_files_list_strv_path(char ***strv, const char *suffix, const char *root, ConfFilesFlags flags, const char* path) {
         _cleanup_strv_free_ char **copy = NULL;
 
         assert(strv);
@@ -202,5 +283,5 @@ int conf_files_list_strv_path(char ***strv, const char *suffix, const char *root
 
         assert (error == path_length);
 
-        return conf_files_list_strv_internal(strv, suffix, root, copy);
+        return conf_files_list_strv_internal(strv, suffix, root, flags, copy);
 }

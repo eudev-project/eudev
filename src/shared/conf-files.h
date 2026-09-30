@@ -22,5 +22,14 @@
 
 #include "macro.h"
 
+/* The flags of systemd's conf_files_list_strv_full(), as far as they are implemented. */
+typedef enum ConfFilesFlags {
+        CONF_FILES_REGULAR                  = 1 << 1, /* inode must be regular file */
+        CONF_FILES_FILTER_MASKED_BY_SYMLINK = 1 << 4, /* implement /dev/null symlink based masking */
+        CONF_FILES_FILTER_MASKED_BY_EMPTY   = 1 << 5, /* implement masking by empty file */
+        CONF_FILES_FILTER_MASKED            = CONF_FILES_FILTER_MASKED_BY_SYMLINK | CONF_FILES_FILTER_MASKED_BY_EMPTY,
+        CONF_FILES_WARN                     = 1 << 7, /* warn on some errors */
+} ConfFilesFlags;
+
 int conf_files_list_strv(char ***strv, const char *suffix, const char *root, const char* const* dirs);
-int conf_files_list_strv_path(char ***strv, const char *suffix, const char *root, const char* path);
+int conf_files_list_strv_path(char ***strv, const char *suffix, const char *root, ConfFilesFlags flags, const char* path);
