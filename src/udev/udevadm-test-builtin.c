@@ -89,48 +89,40 @@ static int adm_builtin(struct udev *udev, int argc, char *argv[]) {
                         assert_not_reached("Unknown option");
                 }
 
-        if (argc - optind > 2) {
+        /* Like systemd, an error is only logged, and the exit status is 1. */
+        if (argc - optind != 2) {
                 log_error("Expected two arguments: command string and device path.");
                 rc = EXIT_FAILURE;
                 goto out;
         }
 
         command = argv[optind++];
-        if (command == NULL) {
-                fprintf(stderr, "command missing\n");
-                help(udev);
-                rc = 2;
-                goto out;
-        }
-
         syspath = argv[optind++];
-        if (syspath == NULL) {
-                fprintf(stderr, "device is missing\n");
-                rc = 3;
-                goto out;
-        }
 
         udev_builtin_init(udev);
 
         cmd = udev_builtin_lookup(command);
         if (cmd >= UDEV_BUILTIN_MAX) {
-                fprintf(stderr, "unknown command '%s'\n", command);
-                help(udev);
-                rc = 5;
+                log_error("Unknown command '%s'", command);
+                rc = EXIT_FAILURE;
                 goto out;
         }
 
         dev = find_device_with_action(udev, syspath, action);
         if (dev == NULL) {
                 log_error_errno(errno > 0 ? errno : ENODEV, "Failed to open device '%s': %m", syspath);
-                rc = 4;
+                rc = EXIT_FAILURE;
                 goto out;
         }
 
-        rc = udev_builtin_run(dev, cmd, command, EVENT_UDEVADM_TEST_BUILTIN);
-        if (rc < 0) {
-                fprintf(stderr, "error executing '%s', exit code %i\n\n", command, rc);
-                rc = 6;
+        r = udev_builtin_run(dev, cmd, command, EVENT_UDEVADM_TEST_BUILTIN);
+        if (r < 0) {
+                log_debug_errno(r, "Builtin command '%s' fails: %m", command);
+                rc = EXIT_FAILURE;
+        } else if (r > 0) {
+                /* the builtins that return EXIT_FAILURE */
+                log_debug("Builtin command '%s' fails.", command);
+                rc = EXIT_FAILURE;
         }
 out:
         udev_device_unref(dev);
