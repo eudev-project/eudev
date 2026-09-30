@@ -217,7 +217,7 @@ When used with
 \fB\-\-tag\-match\fR\fB[=TAG]\fR
 .RS 4
 When used with
-\fB\-\-export\-db\fR, only show devices with the given tag\&.
+\fB\-\-export\-db\fR, only show devices with the given tag\&. When this option is specified more than once, devices that have any of the given tags are shown\&.
 .RE
 .PP
 \fB\-\-sysname\-match\fR\fB[=NAME]\fR
@@ -480,7 +480,7 @@ Trigger events for devices with a matching property value\&. This option can be 
 .PP
 \fB\-g\fR, \fB\-\-tag\-match=\fR\fB\fITAG\fR\fR
 .RS 4
-Trigger events for devices with a matching tag\&. This option can be specified multiple times\&.
+Trigger events for devices with a matching tag\&. When this option is specified multiple times, devices that have any of the given tags are triggered\&.
 .RE
 .PP
 \fB\-y\fR, \fB\-\-sysname\-match=\fR\fB\fIPATH\fR\fR
@@ -710,7 +710,7 @@ Filter events by subsystem[/devtype]\&. Only udev events with a matching subsyst
 .PP
 \fB\-t\fR, \fB\-\-tag\-match=\fR\fB\fIstring\fR\fR
 .RS 4
-Filter events by property\&. Only udev events with a given tag attached will pass\&.
+Filter udev events by tag\&. Only udev events with a given tag attached will pass\&. When this option is specified more than once, the events of devices that have any of the given tags pass\&.
 .RE
 .PP
 \fB\-V\fR, \fB\-\-version\fR

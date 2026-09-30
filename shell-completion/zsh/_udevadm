@@ -102,7 +102,7 @@ _udevadm_monitor(){
         '(-u --udev)'{-u,--udev}'[Print the udev event after the rule processing.]' \
         '(-p --property)'{-p,--property}'[Also print the properties of the event.]' \
         '(-s --subsystem-match)'{-s,--subsystem-match=}'[Filter events by subsystem/\[devtype\].]:SUBSYSTEM' \
-        '(-t --tag-match)'{-t,--tag-match=}'[Filter events by property.]:TAG'
+        '(-t --tag-match)'{-t,--tag-match=}'[Filter events by tag.]:TAG'
 }
 
 (( $+functions[_udevadm_hwdb] )) ||

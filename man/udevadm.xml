@@ -268,7 +268,9 @@
         <varlistentry>
           <term><option>--tag-match<optional>=TAG</optional></option></term>
           <listitem>
-            <para>When used with <option>--export-db</option>, only show devices with the given tag.</para>
+            <para>When used with <option>--export-db</option>, only show devices with the given tag. When
+            this option is specified more than once, devices that have any of the given tags are
+            shown.</para>
           </listitem>
         </varlistentry>
         <varlistentry>
@@ -539,8 +541,8 @@
           <term><option>-g</option></term>
           <term><option>--tag-match=<replaceable>TAG</replaceable></option></term>
           <listitem>
-            <para>Trigger events for devices with a matching tag. This
-            option can be specified multiple times.</para>
+            <para>Trigger events for devices with a matching tag. When this option is specified
+            multiple times, devices that have any of the given tags are triggered.</para>
           </listitem>
         </varlistentry>
         <varlistentry>
@@ -843,7 +845,9 @@
           <term><option>-t</option></term>
           <term><option>--tag-match=<replaceable>string</replaceable></option></term>
           <listitem>
-            <para>Filter events by property. Only udev events with a given tag attached will pass.</para>
+            <para>Filter udev events by tag. Only udev events with a given tag attached will pass. When
+            this option is specified more than once, the events of devices that have any of the given tags
+            pass.</para>
           </listitem>
         </varlistentry>
         <varlistentry>
