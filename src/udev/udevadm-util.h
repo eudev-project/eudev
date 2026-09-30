@@ -38,8 +38,8 @@ struct udev_device *find_device_with_action(struct udev *udev, const char *id, c
 int device_is_processed(struct udev_device *dev);
 int device_wait_for_initialization(struct udev_device *device, usec_t timeout_usec, struct udev_device **ret);
 
-/* Like systemd's parse_path_argument() with suppress_root: makes the path absolute and
- * returns NULL for "/". */
+/* Like systemd's parse_path_argument() with suppress_root: makes the path absolute and simplifies
+ * it, and returns NULL for an empty path or "/". */
 int parse_root_argument(const char *s, char **ret);
 
 /* Resolves path below root, like systemd's chase() with CHASE_PREFIX_ROOT: absolute symlinks

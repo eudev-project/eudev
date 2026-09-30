@@ -240,14 +240,22 @@ int parse_root_argument(const char *s, char **ret) {
         assert(s);
         assert(ret);
 
+        /* Like systemd, an empty path is no root either, and the path is simplified once here, so that
+         * the paths joined to it later have no "//" or "/./". */
+        if (isempty(s)) {
+                free(*ret);
+                *ret = NULL;
+                return 0;
+        }
+
         p = path_make_absolute_cwd(s);
         if (!p)
                 return log_oom();
 
-        path_kill_slashes(p);
+        path_simplify(p);
 
         free(*ret);
-        if (path_equal(p, "/")) {
+        if (empty_or_root(p)) {
                 free(p);
                 *ret = NULL;
         } else

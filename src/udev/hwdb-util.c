@@ -28,6 +28,7 @@
 #include "conf-files.h"
 #include "label.h"
 #include "mkdir.h"
+#include "path-util.h"
 
 #include "udev.h"
 #include "hwdb-util.h"
@@ -620,8 +621,8 @@ int hwdb_update(struct udev *udev, const char *root, const char *hwdb_bin, bool 
 
         if (strlen(root)) {
                 /* --root has been specified, prepend it to
-                   the hwdb.bin destination file. */
-                full_hwdb_bin = strjoin(root, "/", hwdb_bin, NULL);
+                   the hwdb.bin destination file, like systemd's path_join(). */
+                full_hwdb_bin = path_join(root, hwdb_bin);
                 /* Do nothing if no --root, so that hwdb_bin
                    may still be relative. */
                 if (full_hwdb_bin == NULL)
@@ -771,7 +772,7 @@ int hwdb_query(struct udev *udev, const char *modalias, const char *root) {
                 for (i = 0; i < ELEMENTSOF(bin_paths) && !hwdb; i++) {
                         _cleanup_free_ char *hwdb_bin = NULL;
 
-                        hwdb_bin = strjoin(root, bin_paths[i], NULL);
+                        hwdb_bin = path_join(root, bin_paths[i]);
                         if (!hwdb_bin)
                                 return log_oom();
 

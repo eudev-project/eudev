@@ -64,11 +64,11 @@ static int adm_hwdb(struct udev *udev, int argc, char *argv[]) {
                 { "help",   no_argument,       NULL, 'h' },
                 {}
         };
+        _cleanup_free_ char *root = NULL;
         const char *test = NULL;
-        const char *root = "";
         bool update = false;
         bool strict = false;
-        int c;
+        int c, r;
         int rc = EXIT_SUCCESS;
 
         _cleanup_free_ char *hwdb_bin = strdup("/etc/udev/hwdb.bin");
@@ -105,7 +105,11 @@ static int adm_hwdb(struct udev *udev, int argc, char *argv[]) {
                         test = optarg;
                         break;
                 case 'r':
-                        root = optarg;
+                        /* like systemd, the root directory is made absolute and simplified once, and
+                         * "/" is no root */
+                        r = parse_root_argument(optarg, &root);
+                        if (r < 0)
+                                return EXIT_FAILURE;
                         break;
                 case 'h':
                         help();
