@@ -281,7 +281,10 @@ enum token_type {
         TK_END,
 };
 
-/* we try to pack stuff in a way that we take only 12 bytes per token */
+/* We try to pack stuff in a way that we take only 16 bytes per token. The offsets into the string buffer
+ * (label_off, filename_off, value_off, attr_off) and the index of a token (rule_goto) take 32 bits, like
+ * the line number; the number of the tokens of a rule, which counts the rule token too, takes 16 bits,
+ * see RULE_TOKENS_MAX. */
 struct token {
         union {
                 unsigned char type;                /* same in rule and key */
@@ -292,8 +295,8 @@ struct token {
                         unsigned int unused:6;
                         unsigned short token_count;
                         unsigned int label_off;
-                        unsigned short filename_off;
-                        unsigned short filename_line;
+                        unsigned int filename_off;
+                        unsigned int filename_line;
                 } rule;
                 struct {
                         enum token_type type:8;
@@ -1704,9 +1707,7 @@ static int add_rule(struct udev_rules *rules, char *line,
         memzero(&rule_tmp, sizeof(struct rule_tmp));
         rule_tmp.rules = rules;
         rule_tmp.rule.type = TK_RULE;
-        /* the offset in the rule is limited to unsigned short */
-        if (filename_off < USHRT_MAX)
-                rule_tmp.rule.rule.filename_off = filename_off;
+        rule_tmp.rule.rule.filename_off = filename_off;
         rule_tmp.rule.rule.filename_line = lineno;
 
         if (checking)
@@ -2473,13 +2474,6 @@ struct udev_rules *udev_rules_new(struct udev *udev, int resolve_names) {
                 log_error_errno(r, "failed to enumerate rules files: %m");
                 return udev_rules_unref(rules);
         }
-
-        /*
-         * The offset value in the rules strct is limited; add all
-         * rules file names to the beginning of the string buffer.
-         */
-        STRV_FOREACH(f, files)
-                rules_add_string(rules, *f);
 
         STRV_FOREACH(f, files)
                 parse_file(rules, *f);
