@@ -1783,6 +1783,18 @@ KERNEL=="sda", OWNER="4294967296", SYMLINK+="bad"
 EOF
         },
         {
+                desc            => "TEST with an invalid mode is an error",
+                devpath         => "/devices/pci0000:00/0000:00:1f.2/host0/target0:0:0/0:0:0:0/block/sda",
+                exp_name        => "found",
+                not_exp_name    => "bad",
+                rules           => <<EOF
+KERNEL=="sda", TEST{0999}!="/nonexistent", SYMLINK+="bad"
+KERNEL=="sda", TEST{-1}!="/nonexistent", SYMLINK+="bad"
+KERNEL=="sda", TEST{17777}!="/nonexistent", SYMLINK+="bad"
+KERNEL=="sda", TEST{0444}=="uevent", SYMLINK+="found"
+EOF
+        },
+        {
                 desc            => "NAME=\"%k\" and NAME=\"\" are errors",
                 devpath         => "/devices/pci0000:00/0000:00:1f.2/host0/target0:0:0/0:0:0:0/block/sda",
                 exp_name        => "found",

@@ -638,12 +638,9 @@ void udev_rules_check_token(struct udev_rules_check *c, const char *base, const 
                 _cleanup_free_ char *m = NULL;
 
                 if (!isempty(attr)) {
-                        int r = parse_mode(attr, &mode);
-
-                        if (r < 0) {
-                                log_line_error_fail(c, "Failed to parse mode '%s': %s", attr, strerror(-r));
+                        /* An invalid mode is reported by the parser. */
+                        if (parse_mode(attr, &mode) < 0)
                                 return;
-                        }
                         if (asprintf(&m, "%04o", (unsigned) mode) < 0) {
                                 log_oom();
                                 return;

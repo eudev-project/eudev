@@ -2072,12 +2072,16 @@ static int add_rule(struct udev_rules *rules, char *line,
                                 log_rule_invalid_prefix("TEST");
                                 goto invalid;
                         }
-                        if (attr) {
-                                mode = strtol(attr, NULL, 8);
+                        /* like systemd, an invalid mode is an error, TEST{} has no mode */
+                        if (!isempty(attr)) {
+                                r = parse_mode(attr, &mode);
+                                if (r < 0) {
+                                        log_rule_error_errno(r, "Failed to parse mode '%s': %m", attr);
+                                        goto invalid;
+                                }
                                 rule_add_key(&rule_tmp, TK_M_TEST, op, value, &mode);
-                        } else {
+                        } else
                                 rule_add_key(&rule_tmp, TK_M_TEST, op, value, NULL);
-                        }
                         continue;
                 }
 

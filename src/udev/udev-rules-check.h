@@ -7,9 +7,9 @@
  * udev-rules.c parses a rules file with udev_rules_check_file(). The levels of all
  * messages about the file are collected, and the rules are checked for the issues that
  * systemd's rules parser reports but eudev's does not: operators that are taken as another
- * one, invalid substitutions, invalid modes of TEST, empty values, conflicting and duplicate
- * expressions, lines without effect, unused labels, and the style of the delimiters between
- * the keys. Invalid keys, attributes and operators are reported by the parser.
+ * one, invalid substitutions, empty values, conflicting and duplicate expressions, lines
+ * without effect, unused labels, and the style of the delimiters between the keys. Invalid
+ * keys, attributes, operators and modes of TEST are reported by the parser.
  */
 
 #include <stdbool.h>
