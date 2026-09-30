@@ -341,11 +341,37 @@ Symlink names must never conflict with the kernel\*(Aqs default device node name
 .RS 4
 The permissions for the device node\&. Every specified value overrides the compiled\-in default value\&.
 .sp
-A user or group given as a number must be a valid user or group ID, in decimal without leading zeros; the rule line is ignored otherwise, and also when
+Users and groups are resolved like systemd does it, with the user and group database: a number must be a valid user or group ID, in decimal without leading zeros, and is looked up as ID, anything else must be a valid name\&. If the database does not have them, the ID 0 and the name
+root, the ID 65534 and the name
+nobody, the IDs of system users and groups (up to the ones set with the
+\fB\-\-with\-system\-uid\-max\fR
+and
+\fB\-\-with\-system\-gid\-max\fR
+options of configure, by default
+\fISYS_UID_MAX\fR
+and
+\fISYS_GID_MAX\fR
+of
+/etc/login\&.defs
+of the build system, or 999), and the IDs and names (foreign\-\fIN\fR) of the range of foreign users and groups of systemd are taken as they are\&.
+.sp
+A number, and a name without substitutions, unless
+\fBudevd\fR
+is started with
+\fB\-\-resolve\-names=late\fR
+or
+\fBnever\fR, is resolved when the rules are read\&. If the user or group does not exist, an error is logged, and only this key is ignored: the rest of the rule line, e\&.g\&.
+\fIMODE\fR
+or
+\fISYMLINK\fR, still applies, also with
+\fBstatic_node=\fR\&. Unlike systemd, which ignores the whole rule line then, the rules keep working on a system that lacks a group they use\&. If
 \fIOWNER\fR
 or
 \fIGROUP\fR
-is empty\&. A
+is empty, or not a valid user or group name or ID, e\&.g\&. a number with leading zeros, the rule line is ignored with an error message\&. The other values are resolved whenever the rule is applied; if that fails, an error is logged, and the owner or group is left as it is\&. With
+\fB\-\-resolve\-names=never\fR, they are ignored\&.
+.sp
+A
 \fIMODE\fR
 is an octal number of at most
 7777; an empty one is an error\&. A

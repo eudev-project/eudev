@@ -758,18 +758,20 @@ void udev_rules_check_token(struct udev_rules_check *c, const char *base, const 
                         op = CHECK_OP_ASSIGN;
                 }
 
-                /* An empty value and an invalid user or group ID are reported by the parser. An
-                 * empty MODE is kept, and fails whenever the rule is applied. */
+                /* An empty value, and a user or group that cannot be resolved while the rules are
+                 * read, are reported by the parser. An empty MODE is kept, and fails whenever the
+                 * rule is applied. */
                 if (streq(base, "MODE")) {
                         if (!isempty(value) && parse_mode(value, &mode) < 0)
                                 check_value_format(c, base, value, true);
                 } else if (!in_charset(value, DIGITS)) {
-                        /* Like the parser: names are resolved when the rules are read, unless they
-                         * start with a substitution, or name resolution is late or disabled. */
-                        if (!(c->resolve_names > 0 && !strchr("$%", value[0])) && c->resolve_names >= 0)
-                                check_value_format(c, base, value, true);
-                        else if (c->resolve_names < 0)
+                        /* Like the parser: names without substitutions are resolved when the rules are
+                         * read, if names are resolved early, other names whenever the rule is applied,
+                         * and no names if name resolution is disabled. */
+                        if (c->resolve_names < 0)
                                 return;
+                        if (!(c->resolve_names > 0 && get_substitution_type(value) == SUBST_TYPE_PLAIN))
+                                check_value_format(c, base, value, true);
                 }
                 if (c->line_failed)
                         return;

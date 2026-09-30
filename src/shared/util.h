@@ -324,9 +324,6 @@ int null_or_empty_fd(int fd);
 
 bool nulstr_contains(const char*nulstr, const char *needle);
 
-int get_user_creds(const char **username, uid_t *uid, gid_t *gid, const char **home, const char **shell);
-int get_group_creds(const char **groupname, gid_t *gid);
-
 char *strjoin(const char *x, ...) _sentinel_;
 
 bool is_main_thread(void);

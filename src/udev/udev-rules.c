@@ -28,6 +28,8 @@
 #include <dirent.h>
 #include <fnmatch.h>
 #include <time.h>
+#include <grp.h>
+#include <pwd.h>
 #include <sys/sysmacros.h>
 
 #include "def.h"
@@ -41,6 +43,7 @@
 #include "strbuf.h"
 #include "strv.h"
 #include "util.h"
+#include "utf8.h"
 #include "sysctl-util.h"
 
 /* While 'udevadm verify' checks a rules file, see udev-rules-check.c, the levels of all
@@ -755,98 +758,209 @@ static int add_token(struct udev_rules *rules, struct token *token) {
         return 0;
 }
 
-static uid_t add_uid(struct udev_rules *rules, const char *owner) {
-        unsigned int i;
-        uid_t uid = 0;
-        unsigned int off;
-        int r;
+/* The ID of the user and group "nobody", and the range of the IDs of the foreign users and groups of
+ * systemd, with its default base, which systemd synthesizes when the database does not know them. */
+#define UID_NOBODY              ((uid_t) 65534U)
+#define GID_NOBODY              ((gid_t) 65534U)
+#define FOREIGN_UID_BASE        ((uid_t) 0x7FFE0000U)
+#define FOREIGN_UID_MAX         (FOREIGN_UID_BASE + 0xFFFFU)
 
-        /* lookup, if we know it already */
-        for (i = 0; i < rules->uids_cur; i++) {
-                off = rules->uids[i].name_off;
-                if (streq(rules_str(rules, off), owner)) {
-                        uid = rules->uids[i].uid;
-                        return uid;
-                }
-        }
-        r = get_user_creds(&owner, &uid, NULL, NULL, NULL);
-        if (r < 0) {
-                if (r == -ENOENT || r == -ESRCH)
-                        log_rule_error("specified user '%s' unknown", owner);
-                else
-                        log_rule_error_errno(r, "error resolving user '%s': %m", owner);
-        }
-
-        /* grow buffer if needed */
-        if (rules->uids_cur+1 >= rules->uids_max) {
-                struct uid_gid *uids;
-                unsigned int add;
-
-                /* double the buffer size */
-                add = rules->uids_max;
-                if (add < 1)
-                        add = 8;
-
-                uids = realloc(rules->uids, (rules->uids_max + add ) * sizeof(struct uid_gid));
-                if (uids == NULL)
-                        return uid;
-                rules->uids = uids;
-                rules->uids_max += add;
-        }
-        rules->uids[rules->uids_cur].uid = uid;
-        off = rules_add_string(rules, owner);
-        if (off <= 0)
-                return uid;
-        rules->uids[rules->uids_cur].name_off = off;
-        rules->uids_cur++;
-        return uid;
+static bool uid_is_foreign(uid_t uid) {
+        return uid >= FOREIGN_UID_BASE && uid <= FOREIGN_UID_MAX;
 }
 
-static gid_t add_gid(struct udev_rules *rules, const char *group) {
+/* Like valid_user_group_name(u, VALID_USER_RELAX) of systemd. */
+static bool valid_user_group_name_relaxed(const char *u) {
+        if (isempty(u))
+                return false;
+
+        /* something that parses as numeric user ID is no name */
+        if (parse_uid(u, NULL) >= 0)
+                return false;
+
+        if (startswith(u, " ") || endswith(u, " "))
+                return false;
+        if (!utf8_is_valid(u))
+                return false;
+        if (string_has_cc(u, NULL))
+                return false;
+        if (strpbrk(u, ":/"))
+                return false;
+        if (in_charset(u, DIGITS))
+                return false;
+        if (u[0] == '-' && in_charset(u + 1, DIGITS))
+                return false;
+        if (streq(u, ".") || streq(u, ".."))
+                return false;
+
+        return true;
+}
+
+/* The ID of a foreign user or group of systemd, named "foreign-N", with N up to 65535. */
+static bool name_is_foreign(const char *name, uid_t *ret) {
+        const char *e;
+        uid_t id;
+
+        e = startswith(name, "foreign-");
+        if (!e || parse_uid(e, &id) < 0 || id > 0xFFFF)
+                return false;
+
+        *ret = FOREIGN_UID_BASE + id;
+        return true;
+}
+
+/* Resolves a user or group like userdb_by_name() and groupdb_by_name() of systemd with USERDB_PARSE_NUMERIC
+ * and USERDB_SYNTHESIZE_NUMERIC do it, from the user and group database of NSS: a name that is a valid ID is
+ * looked up by the ID, any other name must be valid. When the database does not know it, like systemd
+ * synthesizes them, the ID 0 and the name "root", the ID 65534 and the name "nobody", the IDs of the foreign
+ * range of systemd and the names "foreign-N", and the IDs of system accounts are taken as they are. Returns
+ * -EINVAL for a name that is not valid, and -ESRCH for an unknown one. */
+static int resolve_user_or_group(const char *name, bool group, uid_t *ret) {
+        uid_t id;
+
+        assert(name);
+        assert(ret);
+
+        if (parse_uid(name, &id) >= 0) {
+                if (group) {
+                        struct group *g = getgrgid(id);
+
+                        if (g) {
+                                *ret = g->gr_gid;
+                                return 0;
+                        }
+                } else {
+                        struct passwd *p = getpwuid(id);
+
+                        if (p) {
+                                *ret = p->pw_uid;
+                                return 0;
+                        }
+                }
+
+                if (id == 0 || id == (group ? GID_NOBODY : UID_NOBODY) || uid_is_foreign(id) ||
+                    (group ? gid_is_system(id) : uid_is_system(id))) {
+                        *ret = id;
+                        return 0;
+                }
+                return -ESRCH;
+        }
+
+        if (!valid_user_group_name_relaxed(name))
+                return -EINVAL;
+
+        if (group) {
+                struct group *g = getgrnam(name);
+
+                if (g) {
+                        *ret = g->gr_gid;
+                        return 0;
+                }
+        } else {
+                struct passwd *p = getpwnam(name);
+
+                if (p) {
+                        *ret = p->pw_uid;
+                        return 0;
+                }
+        }
+
+        if (streq(name, "root")) {
+                *ret = 0;
+                return 0;
+        }
+        if (streq(name, "nobody")) {
+                *ret = group ? GID_NOBODY : UID_NOBODY;
+                return 0;
+        }
+        if (name_is_foreign(name, ret))
+                return 0;
+
+        return -ESRCH;
+}
+
+/* Like STRERROR_USER() and STRERROR_GROUP() of systemd. Like STRERROR() of systemd, the message of another
+ * error is taken with strerror_r() into the buffer, as strerror() is not thread-safe. */
+#define ERRNO_BUF_LEN 1024
+#define STRERROR_USER_GROUP(error, group) \
+        strerror_user_group((error), (group), (char[ERRNO_BUF_LEN]) { 0 }, ERRNO_BUF_LEN)
+
+static const char *strerror_user_group(int error, bool group, char *buf, size_t size) {
+        switch (abs(error)) {
+        case ESRCH:
+                return group ? "Unknown group" : "Unknown user";
+        case ENOEXEC:
+                return group ? "Not a system group" : "Not a system user";
+        default:
+#ifdef STRERROR_R_CHAR_P
+                /* the GNU strerror_r() of glibc returns the message, maybe a static one */
+                return strerror_r(abs(error), buf, size);
+#else
+                /* the POSIX strerror_r(), e.g. of musl */
+                if (strerror_r(abs(error), buf, size) != 0)
+                        (void) snprintf(buf, size, "Unknown error %i", abs(error));
+                return buf;
+#endif
+        }
+}
+
+/* Like rule_resolve_user() and rule_resolve_group() of systemd: resolves a user or group of a rule while the
+ * rules are read, and remembers it for the next rules. A user or group that cannot be resolved is an error:
+ * -ESRCH for one that does not exist, and the caller drops the key, -EINVAL for an invalid value, and the
+ * caller drops the rule line. */
+static int rule_resolve_user_or_group(struct udev_rules *rules, const char *name, bool group, uid_t *ret) {
+        struct uid_gid **cache = group ? &rules->gids : &rules->uids;
+        unsigned int *cur = group ? &rules->gids_cur : &rules->uids_cur;
+        unsigned int *max = group ? &rules->gids_max : &rules->uids_max;
         unsigned int i;
-        gid_t gid = 0;
-        unsigned int off;
+        ssize_t off;
+        uid_t id;
         int r;
 
         /* lookup, if we know it already */
-        for (i = 0; i < rules->gids_cur; i++) {
-                off = rules->gids[i].name_off;
-                if (streq(rules_str(rules, off), group)) {
-                        gid = rules->gids[i].gid;
-                        return gid;
+        for (i = 0; i < *cur; i++)
+                if (streq(rules_str(rules, (*cache)[i].name_off), name)) {
+                        *ret = (*cache)[i].uid;
+                        return 0;
                 }
-        }
-        r = get_group_creds(&group, &gid);
-        if (r < 0) {
-                if (r == -ENOENT || r == -ESRCH)
-                        log_rule_error("specified group '%s' unknown", group);
-                else
-                        log_rule_error_errno(r, "error resolving group '%s': %m", group);
-        }
+
+        r = resolve_user_or_group(name, group, &id);
+        if (r < 0)
+                return log_rule_error_errno(r, "Failed to resolve %s '%s', ignoring: %s",
+                                            group ? "group" : "user", name, STRERROR_USER_GROUP(r, group));
 
         /* grow buffer if needed */
-        if (rules->gids_cur+1 >= rules->gids_max) {
-                struct uid_gid *gids;
+        if (*cur + 1 >= *max) {
+                struct uid_gid *ids;
                 unsigned int add;
 
                 /* double the buffer size */
-                add = rules->gids_max;
+                add = *max;
                 if (add < 1)
                         add = 8;
 
-                gids = realloc(rules->gids, (rules->gids_max + add ) * sizeof(struct uid_gid));
-                if (gids == NULL)
-                        return gid;
-                rules->gids = gids;
-                rules->gids_max += add;
+                ids = realloc(*cache, (*max + add) * sizeof(struct uid_gid));
+                if (!ids)
+                        return log_oom();
+                *cache = ids;
+                *max += add;
         }
-        rules->gids[rules->gids_cur].gid = gid;
-        off = rules_add_string(rules, group);
-        if (off <= 0)
-                return gid;
-        rules->gids[rules->gids_cur].name_off = off;
-        rules->gids_cur++;
-        return gid;
+
+        off = strbuf_add_string(rules->strbuf, name, strlen(name));
+        if (off < 0)
+                return log_oom();
+
+        (*cache)[*cur].name_off = off;
+        (*cache)[*cur].uid = id;
+        (*cur)++;
+
+        *ret = id;
+        return 0;
+}
+
+/* Whether a value of a rule has no substitutions, like rule_get_substitution_type() of systemd. */
+static bool value_is_plain(const char *value) {
+        return value[0] != '[' && !strchr(value, '%') && !strchr(value, '$');
 }
 
 /* Adds a property imported by the rule to the device of the event. Failures are logged. Only -ENOMEM is
@@ -2043,51 +2157,37 @@ static int add_rule(struct udev_rules *rules, char *line,
                         continue;
                 }
 
-                if (streq(key, "OWNER")) {
-                        uid_t uid;
+                if (streq(key, "OWNER") || streq(key, "GROUP")) {
+                        bool group = streq(key, "GROUP");
+                        uid_t id;
 
                         if (op < OP_MATCH_MAX || op == OP_REMOVE) {
-                                log_rule_invalid_op("OWNER");
+                                log_rule_invalid_op(key);
                                 goto invalid;
                         }
 
-                        /* Like systemd, a number must be a valid user ID, and an empty value is refused */
-                        if (in_charset(value, DIGITS)) {
-                                if (parse_uid(value, &uid) < 0) {
-                                        log_rule_error_errno(EINVAL, "Failed to resolve user '%s', ignoring: %m", value);
+                        /* Like systemd: a number, which must be a valid ID, also an empty value, and a name
+                         * without substitutions when names are resolved early, are resolved now. Other values
+                         * are resolved whenever the rule is applied, and ignored when names are never
+                         * resolved. An invalid value drops the line, like systemd. Unlike systemd, which
+                         * drops the line too, a user or group that does not exist drops only this key, so
+                         * that the rest of the line, e.g. MODE or SYMLINK, still applies on a system that
+                         * lacks a user or group of the rules. */
+                        if (in_charset(value, DIGITS) || (rules->resolve_names > 0 && value_is_plain(value))) {
+                                r = rule_resolve_user_or_group(rules, value, group, &id);
+                                if (r == -ESRCH)
+                                        continue;
+                                if (r < 0)
                                         goto invalid;
-                                }
-                                rule_add_key(&rule_tmp, TK_A_OWNER_ID, op, NULL, &uid);
-                        } else if ((rules->resolve_names > 0) && strchr("$%", value[0]) == NULL) {
-                                uid = add_uid(rules, value);
-                                rule_add_key(&rule_tmp, TK_A_OWNER_ID, op, NULL, &uid);
-                        } else if (rules->resolve_names >= 0) {
-                                rule_add_key(&rule_tmp, TK_A_OWNER, op, value, NULL);
-                        }
-                        rule_tmp.rule.rule.can_set_name = true;
-                        continue;
-                }
-
-                if (streq(key, "GROUP")) {
-                        gid_t gid;
-
-                        if (op < OP_MATCH_MAX || op == OP_REMOVE) {
-                                log_rule_invalid_op("GROUP");
-                                goto invalid;
-                        }
-
-                        /* Like systemd, a number must be a valid group ID, and an empty value is refused */
-                        if (in_charset(value, DIGITS)) {
-                                if (parse_gid(value, &gid) < 0) {
-                                        log_rule_error_errno(EINVAL, "Failed to resolve group '%s', ignoring: %m", value);
-                                        goto invalid;
-                                }
-                                rule_add_key(&rule_tmp, TK_A_GROUP_ID, op, NULL, &gid);
-                        } else if ((rules->resolve_names > 0) && strchr("$%", value[0]) == NULL) {
-                                gid = add_gid(rules, value);
-                                rule_add_key(&rule_tmp, TK_A_GROUP_ID, op, NULL, &gid);
-                        } else if (rules->resolve_names >= 0) {
-                                rule_add_key(&rule_tmp, TK_A_GROUP, op, value, NULL);
+                                rule_add_key(&rule_tmp, group ? TK_A_GROUP_ID : TK_A_OWNER_ID, op, NULL, &id);
+                        } else if (rules->resolve_names >= 0)
+                                rule_add_key(&rule_tmp, group ? TK_A_GROUP : TK_A_OWNER, op, value, NULL);
+                        else {
+                                if (group)
+                                        log_rule_debug("Resolving group name is disabled, ignoring GROUP=\"%s\".", value);
+                                else
+                                        log_rule_debug("User name resolution is disabled, ignoring OWNER=\"%s\".", value);
+                                continue;
                         }
                         rule_tmp.rule.rule.can_set_name = true;
                         continue;
@@ -3107,47 +3207,45 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                 }
                 case TK_A_OWNER: {
                         char owner[UTIL_NAME_SIZE];
-                        const char *ow = owner;
-                        int r;
+                        uid_t uid;
 
                         if (event->owner_final)
                                 break;
                         if (cur->key.op == OP_ASSIGN_FINAL)
                                 event->owner_final = true;
                         udev_event_apply_format(event, rules_str(rules, cur->key.value_off), owner, sizeof(owner), false, properties_list);
-                        event->owner_set = true;
-                        r = get_user_creds(&ow, &event->uid, NULL, NULL, NULL);
-                        if (r < 0) {
-                                if (r == -ENOENT || r == -ESRCH)
-                                        log_event_error(event, rules, rule, "specified user '%s' unknown", owner);
-                                else
-                                        log_event_error_errno(event, rules, rule, r, "error resolving user '%s': %m", owner);
 
-                                event->uid = 0;
+                        /* Like systemd, leave the owner as it is when the user cannot be resolved. */
+                        r = resolve_user_or_group(owner, false, &uid);
+                        if (r < 0) {
+                                log_event_error_errno(event, rules, rule, r, "Failed to resolve user \"%s\", ignoring: %s",
+                                                      owner, STRERROR_USER_GROUP(r, false));
+                                break;
                         }
+                        event->owner_set = true;
+                        event->uid = uid;
                         log_event_debug(event, rules, rule, "Set owner: %s(%u)", owner, event->uid);
                         break;
                 }
                 case TK_A_GROUP: {
                         char group[UTIL_NAME_SIZE];
-                        const char *gr = group;
-                        int r;
+                        gid_t gid;
 
                         if (event->group_final)
                                 break;
                         if (cur->key.op == OP_ASSIGN_FINAL)
                                 event->group_final = true;
                         udev_event_apply_format(event, rules_str(rules, cur->key.value_off), group, sizeof(group), false, properties_list);
-                        event->group_set = true;
-                        r = get_group_creds(&gr, &event->gid);
-                        if (r < 0) {
-                                if (r == -ENOENT || r == -ESRCH)
-                                        log_event_error(event, rules, rule, "specified group '%s' unknown", group);
-                                else
-                                        log_event_error_errno(event, rules, rule, r, "error resolving group '%s': %m", group);
 
-                                event->gid = 0;
+                        /* Like systemd, leave the group as it is when the group cannot be resolved. */
+                        r = resolve_user_or_group(group, true, &gid);
+                        if (r < 0) {
+                                log_event_error_errno(event, rules, rule, r, "Failed to resolve group \"%s\", ignoring: %s",
+                                                      group, STRERROR_USER_GROUP(r, true));
+                                break;
                         }
+                        event->group_set = true;
+                        event->gid = gid;
                         log_event_debug(event, rules, rule, "Set group: %s(%u)", group, event->gid);
                         break;
                 }

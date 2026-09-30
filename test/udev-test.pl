@@ -567,12 +567,12 @@ SUBSYSTEMS=="scsi", ATTRS{whitespace_test}=="WHITE  SPACE   ", SYMLINK+="matched
 EOF
         },
         {
-                desc            => "permissions USER=bad GROUP=name",
+                desc            => "permissions with an unknown OWNER and GROUP, which are ignored",
                 devpath         => "/devices/virtual/tty/tty33",
                 exp_name        => "tty33",
-                exp_perms       => "0:0:0600",
+                exp_perms       => "0:0:0640",
                 rules           => <<EOF
-KERNEL=="tty33", OWNER="bad", GROUP="name"
+KERNEL=="tty33", OWNER="bad", GROUP="name", MODE="0640"
 EOF
         },
         {
@@ -1070,7 +1070,7 @@ EOF
                 exp_perms       => "root:tty:0640",
                 rules           => <<EOF
 KERNEL=="sda", GROUP:="tty"
-KERNEL=="sda", GROUP="not-ok", MODE="0640", SYMLINK+="ok"
+KERNEL=="sda", GROUP="root", MODE="0640", SYMLINK+="ok"
 EOF
         },
         {
@@ -1081,7 +1081,7 @@ EOF
                 rules           => <<EOF
 KERNEL=="sda", GROUP:="tty"
 SUBSYSTEM=="block", MODE:="640"
-KERNEL=="sda", GROUP="not-ok", MODE="0666", SYMLINK+="ok"
+KERNEL=="sda", GROUP="root", MODE="0666", SYMLINK+="ok"
 EOF
         },
         {
@@ -1780,6 +1780,20 @@ KERNEL=="sda", GROUP="", SYMLINK+="bad"
 KERNEL=="sda", OWNER="01", SYMLINK+="bad"
 KERNEL=="sda", GROUP="65535", SYMLINK+="bad"
 KERNEL=="sda", OWNER="4294967296", SYMLINK+="bad"
+EOF
+        },
+        {
+                desc            => "unknown users and groups are ignored, invalid ones are errors",
+                devpath         => "/devices/pci0000:00/0000:00:1f.2/host0/target0:0:0/0:0:0:0/block/sda",
+                exp_name        => "found",
+                not_exp_name    => "bad",
+                exp_perms       => "1:2:0640",
+                rules           => <<EOF
+KERNEL=="sda", OWNER="1", GROUP="2", MODE="0600"
+KERNEL=="sda", OWNER="nosuchuser", GROUP="nosuchgroup", OWNER="+1", OWNER="4294967294", MODE="0640", SYMLINK+="found"
+KERNEL=="sda", GROUP=" 1", SYMLINK+="bad"
+KERNEL=="sda", ENV{NOSUCH}="nosuchuser"
+KERNEL=="sda", OWNER="\$env{NOSUCH}", GROUP="\$env{NOSUCH}"
 EOF
         },
         {

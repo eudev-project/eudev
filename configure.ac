@@ -92,6 +92,7 @@ AC_FUNC_GETGROUPS
 AC_FUNC_LSTAT_FOLLOWS_SLASHED_SYMLINK
 AC_HEADER_MAJOR
 AC_FUNC_MMAP
+AC_FUNC_STRERROR_R
 
 AC_CHECK_FUNCS(
 	[alarm dup2 ftruncate localtime_r mempcpy mkdir munmap nl_langinfo rmdir \

@@ -440,9 +440,29 @@
           <listitem>
             <para>The permissions for the device node. Every specified value overrides
             the compiled-in default value.</para>
-            <para>A user or group given as a number must be a valid user or group ID, in
-            decimal without leading zeros; the rule line is ignored otherwise, and also when
-            <varname>OWNER</varname> or <varname>GROUP</varname> is empty. A
+            <para>Users and groups are resolved like systemd does it, with the user and group
+            database: a number must be a valid user or group ID, in decimal without leading
+            zeros, and is looked up as ID, anything else must be a valid name. If the database
+            does not have them, the ID 0 and the name <literal>root</literal>, the ID 65534 and
+            the name <literal>nobody</literal>, the IDs of system users and groups (up to the ones
+            set with the <option>--with-system-uid-max</option> and
+            <option>--with-system-gid-max</option> options of configure, by default
+            <varname>SYS_UID_MAX</varname> and <varname>SYS_GID_MAX</varname> of
+            <filename>/etc/login.defs</filename> of the build system, or 999), and the IDs and names (<literal>foreign-</literal><replaceable>N</replaceable>) of the range of
+            foreign users and groups of systemd are taken as they are.</para>
+            <para>A number, and a name without substitutions, unless <command>udevd</command> is
+            started with <option>--resolve-names=late</option> or <option>never</option>, is
+            resolved when the rules are read. If the user or group does not exist, an error is
+            logged, and only this key is ignored: the rest of the rule line, e.g.
+            <varname>MODE</varname> or <varname>SYMLINK</varname>, still applies, also with
+            <option>static_node=</option>. Unlike systemd, which ignores the whole rule line
+            then, the rules keep working on a system that lacks a group they use. If
+            <varname>OWNER</varname> or <varname>GROUP</varname> is empty, or not a valid user or
+            group name or ID, e.g. a number with leading zeros, the rule line is ignored with an
+            error message. The other values are resolved whenever the rule is
+            applied; if that fails, an error is logged, and the owner or group is left as it
+            is. With <option>--resolve-names=never</option>, they are ignored.</para>
+            <para>A
             <varname>MODE</varname> is an octal number of at most <literal>7777</literal>;
             an empty one is an error. A <varname>MODE</varname> that is not valid, also
             after substitutions, fails with an error message whenever the rule is applied,

@@ -38,14 +38,12 @@
 #include <ctype.h>
 #include <sys/prctl.h>
 #include <sys/utsname.h>
-#include <pwd.h>
 #include <netinet/ip.h>
 #include <linux/kd.h>
 #include <dlfcn.h>
 #include <sys/wait.h>
 #include <sys/time.h>
 #include <glob.h>
-#include <grp.h>
 #include <sys/mman.h>
 #include <sys/vfs.h>
 #include <linux/magic.h>
@@ -1903,111 +1901,6 @@ int fopen_temporary(const char *path, FILE **_f, char **_temp_path) {
 
         *_f = f;
         *_temp_path = t;
-
-        return 0;
-}
-
-int get_user_creds(
-                const char **username,
-                uid_t *uid, gid_t *gid,
-                const char **home,
-                const char **shell) {
-
-        struct passwd *p;
-        uid_t u;
-
-        assert(username);
-        assert(*username);
-
-        /* We enforce some special rules for uid=0: in order to avoid
-         * NSS lookups for root we hardcode its data. */
-
-        if (streq(*username, "root") || streq(*username, "0")) {
-                *username = "root";
-
-                if (uid)
-                        *uid = 0;
-
-                if (gid)
-                        *gid = 0;
-
-                if (home)
-                        *home = "/root";
-
-                if (shell)
-                        *shell = "/bin/sh";
-
-                return 0;
-        }
-
-        if (parse_uid(*username, &u) >= 0) {
-                errno = 0;
-                p = getpwuid(u);
-
-                /* If there are multiple users with the same id, make
-                 * sure to leave $USER to the configured value instead
-                 * of the first occurrence in the database. However if
-                 * the uid was configured by a numeric uid, then let's
-                 * pick the real username from /etc/passwd. */
-                if (p)
-                        *username = p->pw_name;
-        } else {
-                errno = 0;
-                p = getpwnam(*username);
-        }
-
-        if (!p)
-                return errno > 0 ? -errno : -ESRCH;
-
-        if (uid)
-                *uid = p->pw_uid;
-
-        if (gid)
-                *gid = p->pw_gid;
-
-        if (home)
-                *home = p->pw_dir;
-
-        if (shell)
-                *shell = p->pw_shell;
-
-        return 0;
-}
-
-int get_group_creds(const char **groupname, gid_t *gid) {
-        struct group *g;
-        gid_t id;
-
-        assert(groupname);
-
-        /* We enforce some special rules for gid=0: in order to avoid
-         * NSS lookups for root we hardcode its data. */
-
-        if (streq(*groupname, "root") || streq(*groupname, "0")) {
-                *groupname = "root";
-
-                if (gid)
-                        *gid = 0;
-
-                return 0;
-        }
-
-        if (parse_gid(*groupname, &id) >= 0) {
-                errno = 0;
-                g = getgrgid(id);
-
-                if (g)
-                        *groupname = g->gr_name;
-        } else {
-                errno = 0;
-                g = getgrnam(*groupname);
-        }
-
-        if (!g)
-                return errno > 0 ? -errno : -ESRCH;
-
-        if (gid)
-                *gid = g->gr_gid;
 
         return 0;
 }
