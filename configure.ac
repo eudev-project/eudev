@@ -278,11 +278,16 @@ fi
 
 # ------------------------------------------------------------------------------
 # The man pages are shipped pre-built (man/make.sh regenerates them), so installing them needs no tools.
-# Like the man option of systemd's meson, they are not installed by default.
+# Like the man option of systemd's meson, they are not installed by default. They describe the programs,
+# udev.conf, the rules and the hwdb, and libudev has none, so there are none to install without the
+# programs.
 AC_ARG_ENABLE([manpages],
-	AS_HELP_STRING([--enable-manpages], [install the man pages [default=no]]),
+	AS_HELP_STRING([--enable-manpages], [install the man pages, not with --disable-programs [default=no]]),
 	[], [enable_manpages=no])
-AM_CONDITIONAL(ENABLE_MANPAGES, [test "x$enable_manpages" = "xyes"])
+install_manpages=$enable_manpages
+AS_IF([test "x$enable_manpages" = "xyes" && test "x$enable_programs" != "xyes"],
+	[install_manpages="no (--disable-programs)"])
+AM_CONDITIONAL(ENABLE_MANPAGES, [test "x$install_manpages" = "xyes"])
 
 # ------------------------------------------------------------------------------
 have_kmod=no
@@ -543,7 +548,7 @@ AC_MSG_RESULT([
 
 	SELinux:                 ${have_selinux}
 	SMACK:                   ${enable_smack}
-	man pages:               ${enable_manpages}
+	man pages:               ${install_manpages}
 	hwdb.d files:            ${enable_hwdb}
 	systemd-hwdb:            ${enable_systemd_hwdb}
 	bashcompletiondir:       ${with_bashcompletiondir}
