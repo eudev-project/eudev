@@ -2041,7 +2041,7 @@ usec_t udev_device_get_usec_initialized(struct udev_device *udev_device)
  * a name like "../../../../etc/passwd", a symlink out of sysfs in the path, or a syspath that was taken
  * as it was, e.g. "/sys/../tmp" from DEVPATH= of udev_device_new_from_environment(), is refused.
  * Attributes of parent devices, like "../idVendor", stay below /sys and are fine. */
-static int sysattr_check_path(const char *path)
+static int sysattr_check_path(const char *path, char **ret_resolved)
 {
         _cleanup_free_ char *resolved = NULL;
         int r;
@@ -2052,6 +2052,8 @@ static int sysattr_check_path(const char *path)
         if (r < 0)
                 return log_debug_errno(r, "refusing sysfs attribute %s: %m", path);
 
+        if (ret_resolved)
+                *ret_resolved = TAKE_PTR(resolved);
         return 0;
 }
 
@@ -2142,7 +2144,7 @@ _public_ const char *udev_device_get_sysattr_value(struct udev_device *udev_devi
                 return sysattr_cache_error(udev_device, sysattr, EISDIR);
 
         /* do not read outside of sysfs */
-        r = sysattr_check_path(path);
+        r = sysattr_check_path(path, NULL);
         if (r < 0)
                 return sysattr_cache_error(udev_device, sysattr, r);
 
@@ -2180,7 +2182,7 @@ cache:
 _public_ int udev_device_set_sysattr_value(struct udev_device *udev_device, const char *sysattr, char *value)
 {
         char path[UTIL_PATH_SIZE];
-        _cleanup_free_ char *v = NULL;
+        _cleanup_free_ char *v = NULL, *resolved = NULL;
         struct udev_list_entry *list_entry;
         ssize_t size;
         size_t len;
@@ -2212,16 +2214,17 @@ _public_ int udev_device_set_sysattr_value(struct udev_device *udev_device, cons
         while (len > 0 && strchr(NEWLINE, v[len - 1]))
                 v[--len] = '\0';
 
-        /* do not write outside of sysfs; a missing attribute fails with ENOENT below */
-        r = sysattr_check_path(path);
-        if (r < 0 && r != -ENOENT)
+        /* Like systemd, follow the symlinks of the path, also of its last component, and do not write
+         * outside of sysfs; a missing attribute fails with ENOENT. */
+        r = sysattr_check_path(path, &resolved);
+        if (r < 0)
                 goto fail;
 
         /* Do not check the permissions of the attribute, write-only attributes like "remove" are
          * fine. Let the kernel do it and propagate the error. */
-        fd = open(path, O_WRONLY|O_CLOEXEC|O_NOFOLLOW);
+        fd = open(resolved, O_WRONLY|O_CLOEXEC|O_NOFOLLOW);
         if (fd < 0) {
-                r = errno == ELOOP ? -EINVAL : -errno;
+                r = -errno;
                 goto fail;
         }
         size = write(fd, v, len);
