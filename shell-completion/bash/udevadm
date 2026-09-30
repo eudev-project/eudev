@@ -268,7 +268,7 @@ _udevadm() {
                 return 0
             fi
 
-            comps="-h --help ${OPTS[HWDB_STANDALONE]} ${OPTS[HWDB_ARG]}"
+            comps="${OPTS[COMMON]} ${OPTS[HWDB_STANDALONE]} ${OPTS[HWDB_ARG]}"
             ;;
 
         'test')

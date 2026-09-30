@@ -935,6 +935,13 @@
           </listitem>
         </varlistentry>
         <varlistentry>
+          <term><option>-V</option></term>
+          <term><option>--version</option></term>
+          <listitem>
+            <para>Print version.</para>
+          </listitem>
+        </varlistentry>
+        <varlistentry>
           <term><option>-h</option></term>
           <term><option>--help</option></term>
           <listitem>

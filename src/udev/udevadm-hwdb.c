@@ -41,6 +41,7 @@ static void help(void) {
                "  -t,--test=MODALIAS   query database and print result\n"
                "  -r,--root=PATH       alternative root path in the filesystem\n"
                "  -h,--help\n"
+               "  -V,--version         show package version\n"
                "\n"
                "The HWDB is searched in "
                UDEV_HWDB_DIR ", " UDEV_LIBEXEC_DIR "/hwdb.d, "
@@ -62,6 +63,7 @@ static int adm_hwdb(struct udev *udev, int argc, char *argv[]) {
                 { "test",   required_argument, NULL, 't' },
                 { "root",   required_argument, NULL, 'r' },
                 { "help",   no_argument,       NULL, 'h' },
+                { "version", no_argument,      NULL, 'V' },
                 {}
         };
         _cleanup_free_ char *root = NULL;
@@ -77,7 +79,7 @@ static int adm_hwdb(struct udev *udev, int argc, char *argv[]) {
                 goto out;
         }
 
-        while ((c = getopt_long(argc, argv, "uso:t:r:h", options, NULL)) >= 0)
+        while ((c = getopt_long(argc, argv, "uso:t:r:hV", options, NULL)) >= 0)
                 switch(c) {
                 case 'u':
                         update = true;
@@ -113,6 +115,9 @@ static int adm_hwdb(struct udev *udev, int argc, char *argv[]) {
                         break;
                 case 'h':
                         help();
+                        return EXIT_SUCCESS;
+                case 'V':
+                        printf("%s\n", UDEV_VERSION);
                         return EXIT_SUCCESS;
                 case '?':
                         return EXIT_FAILURE;
