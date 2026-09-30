@@ -17,6 +17,7 @@
   along with systemd; If not, see <http://www.gnu.org/licenses/>.
 ***/
 
+#include <fcntl.h>
 #include <unistd.h>
 #include <sys/sendfile.h>
 #include <stdio_ext.h>
@@ -26,6 +27,146 @@
 #include "utf8.h"
 #include "ctype.h"
 #include "socket-util.h"
+
+/* Like read_virtual_file() of systemd: reads a file of a virtual file system like sysfs or procfs, in a single
+ * read() if possible, as the content of "raw" files of kernfs is retrieved from the device at every read.
+ * With max_size SIZE_MAX, the whole file is read, and a file larger than READ_VIRTUAL_BYTES_MAX fails with
+ * EFBIG; otherwise at most max_size bytes are read. Returns 1 if the whole file was read, 0 if the content
+ * is truncated. The content is NUL-terminated; without ret_size, a content with an embedded NUL fails with
+ * EBADMSG. */
+int read_virtual_file(const char *filename, size_t max_size, char **ret_contents, size_t *ret_size) {
+        _cleanup_free_ char *buf = NULL;
+        _cleanup_close_ int fd = -1;
+        size_t n, size;
+        int n_retries;
+        bool truncated = false;
+
+        assert(filename);
+        assert(max_size <= READ_VIRTUAL_BYTES_MAX || max_size == SIZE_MAX);
+
+        fd = open(filename, O_RDONLY|O_NOCTTY|O_CLOEXEC);
+        if (fd < 0)
+                return -errno;
+
+        /* Limit the number of attempts to read the number of bytes returned by fstat(). */
+        n_retries = 3;
+
+        for (;;) {
+                struct stat st;
+
+                if (fstat(fd, &st) < 0)
+                        return -errno;
+
+                if (!S_ISREG(st.st_mode))
+                        return -EBADF;
+
+                /* Be prepared for files from /proc which generally report a file size of 0. */
+                if (st.st_size > 0 && n_retries > 1) {
+                        /* Let's use the file size if we have more than 1 attempt left. On the last attempt
+                         * we'll ignore the file size */
+
+                        if (st.st_size > SSIZE_MAX) { /* Avoid overflow with 32-bit size_t and 64-bit off_t. */
+
+                                if (max_size == SIZE_MAX)
+                                        return -EFBIG;
+
+                                size = max_size;
+                        } else {
+                                size = MIN((size_t) st.st_size, max_size);
+
+                                if (size > READ_VIRTUAL_BYTES_MAX)
+                                        return -EFBIG;
+                        }
+
+                        n_retries--;
+                } else if (n_retries > 1) {
+                        /* Files in /proc are generally smaller than the page size so let's start with
+                         * a page size buffer from malloc and only use the max buffer on the final try. */
+                        size = MIN(MIN(page_size() - 1, (size_t) READ_VIRTUAL_BYTES_MAX), max_size);
+                        n_retries = 1;
+                } else {
+                        size = MIN((size_t) READ_VIRTUAL_BYTES_MAX, max_size);
+                        n_retries = 0;
+                }
+
+                buf = malloc(size + 1);
+                if (!buf)
+                        return -ENOMEM;
+
+                for (;;) {
+                        ssize_t k;
+
+                        /* Read one more byte so we can detect whether the content of the
+                         * file has already changed or the guessed size for files from /proc
+                         * wasn't large enough . */
+                        k = read(fd, buf, size + 1);
+                        if (k >= 0) {
+                                n = k;
+                                break;
+                        }
+
+                        if (errno != EINTR)
+                                return -errno;
+                }
+
+                /* Consider a short read as EOF */
+                if (n <= size)
+                        break;
+
+                /* If a maximum size is specified and we already read more we know the file is larger, and
+                 * can handle this as truncation case. Note that if the size of what we read equals the
+                 * maximum size then this doesn't mean truncation, the file might or might not end on that
+                 * byte. We need to rerun the loop in that case, with a larger buffer size, so that we read
+                 * at least one more byte to be able to distinguish EOF from truncation. */
+                if (max_size != SIZE_MAX && n > max_size) {
+                        n = size; /* Make sure we never use more than what we sized the buffer for (so that
+                                   * we have one free byte in it for the trailing NUL we add below). */
+                        truncated = true;
+                        break;
+                }
+
+                /* We have no further attempts left? Then the file is apparently larger than our limits. Give up. */
+                if (n_retries <= 0)
+                        return -EFBIG;
+
+                /* Hmm... either we read too few bytes from /proc or less likely the content of the file
+                 * might have been changed (and is now bigger) while we were processing, let's try again
+                 * either with the new file size. */
+
+                if (lseek(fd, 0, SEEK_SET) < 0)
+                        return -errno;
+
+                free(buf);
+                buf = NULL;
+        }
+
+        if (ret_contents) {
+
+                /* Safety check: if the caller doesn't want to know the size of what we just read it will
+                 * rely on the trailing NUL byte. But if there's an embedded NUL byte, then we should refuse
+                 * operation as otherwise there'd be ambiguity about what we just read. */
+                if (!ret_size && memchr(buf, 0, n))
+                        return -EBADMSG;
+
+                if (n < size) {
+                        char *p;
+
+                        /* Return rest of the buffer to libc */
+                        p = realloc(buf, n + 1);
+                        if (!p)
+                                return -ENOMEM;
+                        buf = p;
+                }
+
+                buf[n] = 0;
+                *ret_contents = TAKE_PTR(buf);
+        }
+
+        if (ret_size)
+                *ret_size = n;
+
+        return !truncated;
+}
 
 int write_string_stream(FILE *f, const char *line) {
         assert(f);

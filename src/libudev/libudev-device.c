@@ -2085,13 +2085,14 @@ static const char *sysattr_cache_error(struct udev_device *udev_device, const ch
  **/
 _public_ const char *udev_device_get_sysattr_value(struct udev_device *udev_device, const char *sysattr)
 {
+        _cleanup_free_ char *buf = NULL;
         struct udev_list_entry *list_entry;
         char path[UTIL_PATH_SIZE];
-        char value[4096];
+        char link_value[UTIL_PATH_SIZE];
+        const char *value;
         struct stat statbuf;
-        int fd, r;
-        ssize_t size;
-        size_t len;
+        size_t size, len;
+        int r;
 
         if (udev_device == NULL) {
                 errno = EINVAL;
@@ -2126,8 +2127,9 @@ _public_ const char *udev_device_get_sysattr_value(struct udev_device *udev_devi
                     streq(sysattr, "subsystem") ||
                     streq(sysattr, "module")) {
                         if (util_get_sys_core_link_value(udev_device->udev, sysattr,
-                                                         udev_device->syspath, value, sizeof(value)) < 0)
+                                                         udev_device->syspath, link_value, sizeof(link_value)) < 0)
                                 return sysattr_cache_error(udev_device, sysattr, ENOENT);
+                        value = link_value;
                         goto cache;
                 }
 
@@ -2144,24 +2146,18 @@ _public_ const char *udev_device_get_sysattr_value(struct udev_device *udev_devi
         if (r < 0)
                 return sysattr_cache_error(udev_device, sysattr, r);
 
-        /* read attribute value */
-        fd = open(path, O_RDONLY|O_CLOEXEC);
-        if (fd < 0)
-                return sysattr_cache_error(udev_device, sysattr, errno);
-        size = read(fd, value, sizeof(value));
-        r = size < 0 ? -errno : 0;
-        close(fd);
-        if (size < 0)
+        /* Like systemd, read the whole value, of up to READ_VIRTUAL_BYTES_MAX (4 MiB). Some attributes contain
+         * NUL bytes; the value ends at the first one, as it is a string. */
+        r = read_virtual_file(path, SIZE_MAX, &buf, &size);
+        if (r < 0)
                 return sysattr_cache_error(udev_device, sysattr, r);
-        if (size == sizeof(value))
-                return sysattr_cache_error(udev_device, sysattr, ENOBUFS);
 
         /* got a valid value, store it in cache and return it */
-        value[size] = '\0';
         /* drop trailing newlines, including carriage returns */
-        len = strlen(value);
-        while (len > 0 && strchr(NEWLINE, value[len - 1]))
-                value[--len] = '\0';
+        len = strlen(buf);
+        while (len > 0 && strchr(NEWLINE, buf[len - 1]))
+                buf[--len] = '\0';
+        value = buf;
 cache:
         list_entry = udev_list_entry_add(&udev_device->sysattr_value_list, sysattr, value);
         if (!list_entry) {
@@ -2206,19 +2202,15 @@ _public_ int udev_device_set_sysattr_value(struct udev_device *udev_device, cons
 
         strscpyl(path, sizeof(path), udev_device_get_syspath(udev_device), "/", sysattr, NULL);
 
-        len = strlen(value);
-
-        /* drop trailing newlines, including carriage returns */
-        while (len > 0 && strchr(NEWLINE, value[len - 1]))
-                len--;
-
-        /* value length is limited to 4k */
-        if (len > 4096)
-                return -EINVAL;
-
-        v = strndup(value, len);
+        /* Like systemd, the value length is limited to 4k: a longer value is truncated. Then trailing
+         * newlines, including carriage returns, are dropped. */
+        v = strndup(value, 4096);
         if (v == NULL)
                 return -ENOMEM;
+
+        len = strlen(v);
+        while (len > 0 && strchr(NEWLINE, v[len - 1]))
+                v[--len] = '\0';
 
         /* do not write outside of sysfs; a missing attribute fails with ENOENT below */
         r = sysattr_check_path(path);

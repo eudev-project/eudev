@@ -37,6 +37,11 @@ typedef enum {
 
 #define LONG_LINE_MAX (1U*1024U*1024U)
 
+/* The most that read_virtual_file() reads, like in systemd */
+#define READ_VIRTUAL_BYTES_MAX (4U*1024U*1024U - 2U)
+
+int read_virtual_file(const char *filename, size_t max_size, char **ret_contents, size_t *ret_size);
+
 int read_line(FILE *f, size_t limit, char **ret);
 
 int write_string_stream(FILE *f, const char *line);
