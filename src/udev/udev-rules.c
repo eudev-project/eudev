@@ -79,6 +79,14 @@ static unsigned parse_line_nr = 0;
 #define log_rule_invalid_attr(key)              log_rule_error("Invalid attribute for %s.", key)
 #define log_rule_invalid_prefix(key)            log_rule_error("Invalid prefix 'i' for %s.", key)
 
+/* A warning about a rule that 'udevadm verify' does not count as an issue of the rules file, like the ones
+ * that systemd logs with log_struct() instead of log_line_*(). */
+#define log_rule_warning_no_issue(fmt, ...)                                                         \
+        ((log_get_max_level() >= LOG_WARNING)                                                       \
+         ? log_internal(LOG_WARNING, 0, __FILE__, __LINE__, __func__, "%s:%u " fmt,                 \
+                        strna(parse_filename), parse_line_nr, ##__VA_ARGS__)                        \
+         : 0)
+
 /* The messages about applying a rule to the device of an event start, like the ones of log_event_*() of
  * systemd, with the name of the device and the rules file and first line of the rule, e.g.
  * "sda: /usr/lib/udev/rules.d/60-block.rules:14 ...". rule is the TK_RULE token of the rule. */
@@ -879,6 +887,11 @@ static int resolve_user_or_group(const char *name, bool group, uid_t *ret) {
         return -ESRCH;
 }
 
+/* Like systemd, device nodes should be owned by system accounts. */
+#define NON_SYSTEM_ACCOUNT_WARNING(Kind, kind)                                                          \
+        Kind " %s configured to own a device node is not a system " kind ". "                           \
+        "Support for device node ownership by non-system accounts is deprecated and will be removed in the future."
+
 /* Like STRERROR_USER() and STRERROR_GROUP() of systemd. Like STRERROR() of systemd, the message of another
  * error is taken with strerror_r() into the buffer, as strerror() is not thread-safe. */
 #define ERRNO_BUF_LEN 1024
@@ -928,6 +941,10 @@ static int rule_resolve_user_or_group(struct udev_rules *rules, const char *name
         if (r < 0)
                 return log_rule_error_errno(r, "Failed to resolve %s '%s', ignoring: %s",
                                             group ? "group" : "user", name, STRERROR_USER_GROUP(r, group));
+        if (group && !gid_is_system(id))
+                log_rule_warning_no_issue(NON_SYSTEM_ACCOUNT_WARNING("Group", "group"), name);
+        else if (!group && !uid_is_system(id))
+                log_rule_warning_no_issue(NON_SYSTEM_ACCOUNT_WARNING("User", "user"), name);
 
         /* grow buffer if needed */
         if (*cur + 1 >= *max) {
@@ -3222,6 +3239,8 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                                                       owner, STRERROR_USER_GROUP(r, false));
                                 break;
                         }
+                        if (!uid_is_system(uid))
+                                log_event_warning(event, rules, rule, NON_SYSTEM_ACCOUNT_WARNING("User", "user"), owner);
                         event->owner_set = true;
                         event->uid = uid;
                         log_event_debug(event, rules, rule, "Set owner: %s(%u)", owner, event->uid);
@@ -3244,6 +3263,8 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                                                       group, STRERROR_USER_GROUP(r, true));
                                 break;
                         }
+                        if (!gid_is_system(gid))
+                                log_event_warning(event, rules, rule, NON_SYSTEM_ACCOUNT_WARNING("Group", "group"), group);
                         event->group_set = true;
                         event->gid = gid;
                         log_event_debug(event, rules, rule, "Set group: %s(%u)", group, event->gid);

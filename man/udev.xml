@@ -449,7 +449,9 @@
             <option>--with-system-gid-max</option> options of configure, by default
             <varname>SYS_UID_MAX</varname> and <varname>SYS_GID_MAX</varname> of
             <filename>/etc/login.defs</filename> of the build system, or 999), and the IDs and names (<literal>foreign-</literal><replaceable>N</replaceable>) of the range of
-            foreign users and groups of systemd are taken as they are.</para>
+            foreign users and groups of systemd are taken as they are. Like systemd, a warning
+            is logged for a user or group that is not a system account, as device nodes owned
+            by other accounts are deprecated.</para>
             <para>A number, and a name without substitutions, unless <command>udevd</command> is
             started with <option>--resolve-names=late</option> or <option>never</option>, is
             resolved when the rules are read. If the user or group does not exist, an error is
