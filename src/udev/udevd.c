@@ -58,6 +58,8 @@
 
 #define WORKER_NUM_MAX UINT64_C(2048)
 
+#define DEFAULT_EVENT_TIMEOUT_USEC (180 * USEC_PER_SEC)
+
 #define EVENT_REQUEUE_INTERVAL_USEC (200 * USEC_PER_MSEC)
 #define EVENT_REQUEUE_TIMEOUT_USEC  (3 * USEC_PER_MINUTE)
 
@@ -80,7 +82,23 @@ static int arg_daemonize = false;
 static int arg_resolve_names = 1;
 /* udev.trace on the kernel command line */
 static bool arg_trace = false;
-/* the log level of udev.conf, the kernel command line or --debug */
+
+/* Like UdevConfig of systemd: the settings of the command line and of the kernel command line, which are
+ * merged by manager_merge_config(). A negative log level and 0 for the other settings mean that the setting
+ * is not given. */
+struct udev_config {
+        int log_level;
+        unsigned children_max;
+        int exec_delay;
+        usec_t timeout_usec;
+};
+
+#define UDEV_CONFIG_INIT { .log_level = -1, }
+
+static struct udev_config config_by_command = UDEV_CONFIG_INIT;
+static struct udev_config config_by_kernel = UDEV_CONFIG_INIT;
+
+/* the log level of the kernel command line, --debug or udev.conf, in this order */
 static int default_log_level;
 /* the log level set with udevadm control, or -1 */
 static int control_log_level = -1;
@@ -88,12 +106,13 @@ static int control_log_level = -1;
 static bool control_trace = false;
 /* trace logging is enabled, then the log level is debug */
 static bool trace = false;
+/* the merged settings, see manager_merge_config() */
 static unsigned arg_children_max;
 /* the maximum number of workers before udevadm control changes it */
 static unsigned default_children_max;
 static int arg_exec_delay;
-static usec_t arg_event_timeout_usec = 180 * USEC_PER_SEC;
-static usec_t arg_event_timeout_warn_usec = 180 * USEC_PER_SEC / 3;
+static usec_t arg_event_timeout_usec = DEFAULT_EVENT_TIMEOUT_USEC;
+static usec_t arg_event_timeout_warn_usec = DEFAULT_EVENT_TIMEOUT_USEC / 3;
 static sigset_t sigmask_orig;
 static UDEV_LIST(event_list);
 Hashmap *workers;
@@ -1067,7 +1086,8 @@ static void event_queue_update(void) {
 }
 
 /* Like manager_merge_config_log_level() of systemd: with trace logging, the log level is debug, otherwise it is
- * the one set with udevadm control, or the default one. */
+ * the one set with udevadm control, or the default one. udev.conf has the lowest priority, then followed by
+ * --debug, the kernel command line, and udevadm control. */
 static int manager_merge_config_log_level(void) {
         trace = control_trace || arg_trace;
 
@@ -1075,6 +1095,22 @@ static int manager_merge_config_log_level(void) {
                 return LOG_DEBUG;
 
         return control_log_level >= 0 ? control_log_level : default_log_level;
+}
+
+/* Like manager_merge_config() of systemd: the kernel command line takes precedence over the command line,
+ * and 0 means that the setting is not given, so that e.g. udev.children-max=0 does not override
+ * --children-max=. The log level is merged as described above; this is called once at startup, when the
+ * current log level is the one of udev.conf, which udev_new() applied. */
+static void manager_merge_config(void) {
+        default_log_level = config_by_kernel.log_level >= 0 ? config_by_kernel.log_level :
+                            config_by_command.log_level >= 0 ? config_by_command.log_level :
+                            log_get_max_level();
+
+        arg_children_max = config_by_kernel.children_max ?: config_by_command.children_max;
+        arg_exec_delay = config_by_kernel.exec_delay ?: config_by_command.exec_delay;
+        arg_event_timeout_usec = config_by_kernel.timeout_usec ?: config_by_command.timeout_usec ?:
+                                 DEFAULT_EVENT_TIMEOUT_USEC;
+        arg_event_timeout_warn_usec = (arg_event_timeout_usec / 3) ? : 1;
 }
 
 static void manager_set_log_level(int log_level) {
@@ -1502,23 +1538,21 @@ static int parse_proc_cmdline_item(const char *key, const char *value) {
                 if (prio < 0)
                         log_warning("invalid udev.log-priority ignored: %s", value);
                 else
-                        log_set_max_level(prio);
+                        config_by_kernel.log_level = prio;
         } else if (streq(key, "children-max")) {
-                r = safe_atou(value, &arg_children_max);
+                r = safe_atou(value, &config_by_kernel.children_max);
                 if (r < 0)
                         log_warning("invalid udev.children-max ignored: %s", value);
         } else if (streq(key, "exec-delay")) {
-                r = safe_atoi(value, &arg_exec_delay);
+                r = safe_atoi(value, &config_by_kernel.exec_delay);
                 if (r < 0)
                         log_warning("invalid udev.exec-delay ignored: %s", value);
         } else if (streq(key, "event-timeout")) {
-                r = safe_atou64(value, &arg_event_timeout_usec);
+                r = safe_atou64(value, &config_by_kernel.timeout_usec);
                 if (r < 0)
                         log_warning("invalid udev.event-timeout ignored: %s", value);
-                else {
-                        arg_event_timeout_usec *= USEC_PER_SEC;
-                        arg_event_timeout_warn_usec = (arg_event_timeout_usec / 3) ? : 1;
-                }
+                else
+                        config_by_kernel.timeout_usec *= USEC_PER_SEC;
         }
 
         return 0;
@@ -1569,26 +1603,25 @@ static int parse_argv(int argc, char *argv[]) {
                         arg_daemonize = true;
                         break;
                 case 'c':
-                        r = safe_atou(optarg, &arg_children_max);
+                        r = safe_atou(optarg, &config_by_command.children_max);
                         if (r < 0)
                                 log_warning("Invalid --children-max ignored: %s", optarg);
                         break;
                 case 'e':
-                        r = safe_atoi(optarg, &arg_exec_delay);
+                        r = safe_atoi(optarg, &config_by_command.exec_delay);
                         if (r < 0)
                                 log_warning("Invalid --exec-delay ignored: %s", optarg);
                         break;
                 case 't':
-                        r = safe_atou64(optarg, &arg_event_timeout_usec);
+                        r = safe_atou64(optarg, &config_by_command.timeout_usec);
                         if (r < 0)
                                 log_warning("Invalid --event-timeout ignored: %s", optarg);
-                        else {
-                                arg_event_timeout_usec *= USEC_PER_SEC;
-                                arg_event_timeout_warn_usec = (arg_event_timeout_usec / 3) ? : 1;
-                        }
+                        else
+                                config_by_command.timeout_usec *= USEC_PER_SEC;
                         break;
                 case 'D':
                         arg_debug = true;
+                        config_by_command.log_level = LOG_DEBUG;
                         break;
                 case 'N':
                         if (streq(optarg, "early")) {
@@ -1674,12 +1707,10 @@ int main(int argc, char *argv[]) {
         if (r < 0)
                 log_warning_errno(r, "failed to parse kernel command line, ignoring: %m");
 
-        if (arg_debug) {
+        if (arg_debug)
                 log_set_target(LOG_TARGET_CONSOLE);
-                log_set_max_level(LOG_DEBUG);
-        }
 
-        default_log_level = log_get_max_level();
+        manager_merge_config();
         log_set_max_level(manager_merge_config_log_level());
 
         if (getuid() != 0) {
