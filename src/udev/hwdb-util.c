@@ -483,7 +483,7 @@ static int insert_data(struct trie *trie, struct udev_list *match_list,
         value++;
 
         /* Replace multiple leading spaces by a single space */
-        while (isblank(line[0]) && isblank(line[1]))
+        while (isblank((unsigned char) line[0]) && isblank((unsigned char) line[1]))
                 line++;
 
         if (isempty(line + 1)) {
@@ -534,7 +534,7 @@ static int import_file(struct udev *udev, struct trie *trie, const char *filenam
 
                 /* strip trailing whitespace */
                 len = strlen(line);
-                while (len > 0 && isspace(line[len-1]))
+                while (len > 0 && isspace((unsigned char) line[len-1]))
                         len--;
                 line[len] = '\0';
 
