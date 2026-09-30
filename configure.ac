@@ -29,13 +29,9 @@ AS_IF([test "x$ac_cv_prog_cc_c99" = "xno"], [
 	AC_MSG_ERROR([no C99 compiler found, $PACKAGE requires a C99 compiler.])
 ])
 
-AC_PROG_CXX
 AC_PROG_CPP
 AC_PROG_INSTALL
-AC_PROG_LN_S
 AC_PROG_MAKE_SET
-
-AC_PATH_PROG([M4], [m4])
 
 # Checks for header files.
 AC_CHECK_HEADERS(

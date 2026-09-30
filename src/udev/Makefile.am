@@ -3,7 +3,6 @@ ACLOCAL_AMFLAGS = -I m4 ${ACLOCAL_FLAGS}
 AM_CPPFLAGS = \
 	$(LIBC_CPPFLAGS) \
 	-include $(top_builddir)/config.h \
-	-DROOTPREFIX=\"$(rootprefix)\" \
 	-DUDEV_HWDB_DIR=\"$(udevhwdbdir)\" \
 	-DUDEV_HWDB_BIN=\"$(udevhwdbbin)\" \
 	-DUDEV_CONF_DIR=\"$(udevconfdir)\" \
