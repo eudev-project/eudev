@@ -2055,13 +2055,30 @@ static int sysattr_check_path(const char *path)
         return 0;
 }
 
+/* Like systemd, caches that the attribute cannot be read, with the error, except when out of memory,
+ * which may be transient. Returns NULL with errno set. */
+static const char *sysattr_cache_error(struct udev_device *udev_device, const char *sysattr, int error)
+{
+        struct udev_list_entry *list_entry;
+
+        error = abs(error);
+        if (error != ENOMEM) {
+                list_entry = udev_list_entry_add(&udev_device->sysattr_value_list, sysattr, NULL);
+                if (list_entry)
+                        udev_list_entry_set_num(list_entry, error);
+        }
+
+        errno = error;
+        return NULL;
+}
+
 /**
  * udev_device_get_sysattr_value:
  * @udev_device: udev device
  * @sysattr: attribute name
  *
  * The retrieved value is cached in the device. Repeated calls will return the same
- * value and not open the attribute again.
+ * value and not open the attribute again. So is the error, when it cannot be read.
  *
  * Returns: the content of a sys attribute file, or #NULL if there is no sys attribute value,
  * with errno set, e.g. to EACCES for an attribute that is not readable.
@@ -2075,7 +2092,6 @@ _public_ const char *udev_device_get_sysattr_value(struct udev_device *udev_devi
         int fd, r;
         ssize_t size;
         size_t len;
-        const char *val = NULL;
 
         if (udev_device == NULL) {
                 errno = EINVAL;
@@ -2086,23 +2102,20 @@ _public_ const char *udev_device_get_sysattr_value(struct udev_device *udev_devi
                 return NULL;
         }
 
-        /* look for possibly already cached result */
+        /* look for possibly already cached result, also a failure */
         list_entry = udev_list_get_entry(&udev_device->sysattr_value_list);
         list_entry = udev_list_entry_get_by_name(list_entry, sysattr);
         if (list_entry != NULL) {
-                val = udev_list_entry_get_value(list_entry);
+                const char *val = udev_list_entry_get_value(list_entry);
+
                 if (!val)
-                        errno = ENOENT;
+                        errno = udev_list_entry_get_num(list_entry) ?: ENOENT;
                 return val;
         }
 
         strscpyl(path, sizeof(path), udev_device_get_syspath(udev_device), "/", sysattr, NULL);
-        if (lstat(path, &statbuf) != 0) {
-                r = -errno;
-                udev_list_entry_add(&udev_device->sysattr_value_list, sysattr, NULL);
-                errno = -r;
-                goto out;
-        }
+        if (lstat(path, &statbuf) != 0)
+                return sysattr_cache_error(udev_device, sysattr, errno);
 
         if (S_ISLNK(statbuf.st_mode)) {
                 /*
@@ -2113,49 +2126,35 @@ _public_ const char *udev_device_get_sysattr_value(struct udev_device *udev_devi
                     streq(sysattr, "subsystem") ||
                     streq(sysattr, "module")) {
                         if (util_get_sys_core_link_value(udev_device->udev, sysattr,
-                                                         udev_device->syspath, value, sizeof(value)) < 0) {
-                                errno = ENOENT;
-                                return NULL;
-                        }
-                        list_entry = udev_list_entry_add(&udev_device->sysattr_value_list, sysattr, value);
-                        val = udev_list_entry_get_value(list_entry);
-                        goto out;
+                                                         udev_device->syspath, value, sizeof(value)) < 0)
+                                return sysattr_cache_error(udev_device, sysattr, ENOENT);
+                        goto cache;
                 }
 
                 /* other symlinks are not values */
-                errno = ENOENT;
-                goto out;
+                return sysattr_cache_error(udev_device, sysattr, ENOENT);
         }
 
         /* skip directories */
-        if (S_ISDIR(statbuf.st_mode)) {
-                errno = EISDIR;
-                goto out;
-        }
+        if (S_ISDIR(statbuf.st_mode))
+                return sysattr_cache_error(udev_device, sysattr, EISDIR);
 
         /* do not read outside of sysfs */
         r = sysattr_check_path(path);
-        if (r < 0) {
-                udev_list_entry_add(&udev_device->sysattr_value_list, sysattr, NULL);
-                errno = -r;
-                goto out;
-        }
+        if (r < 0)
+                return sysattr_cache_error(udev_device, sysattr, r);
 
         /* read attribute value */
         fd = open(path, O_RDONLY|O_CLOEXEC);
         if (fd < 0)
-                goto out;
+                return sysattr_cache_error(udev_device, sysattr, errno);
         size = read(fd, value, sizeof(value));
         r = size < 0 ? -errno : 0;
         close(fd);
-        if (size < 0) {
-                errno = -r;
-                goto out;
-        }
-        if (size == sizeof(value)) {
-                errno = ENOBUFS;
-                goto out;
-        }
+        if (size < 0)
+                return sysattr_cache_error(udev_device, sysattr, r);
+        if (size == sizeof(value))
+                return sysattr_cache_error(udev_device, sysattr, ENOBUFS);
 
         /* got a valid value, store it in cache and return it */
         value[size] = '\0';
@@ -2163,10 +2162,13 @@ _public_ const char *udev_device_get_sysattr_value(struct udev_device *udev_devi
         len = strlen(value);
         while (len > 0 && strchr(NEWLINE, value[len - 1]))
                 value[--len] = '\0';
+cache:
         list_entry = udev_list_entry_add(&udev_device->sysattr_value_list, sysattr, value);
-        val = udev_list_entry_get_value(list_entry);
-out:
-        return val;
+        if (!list_entry) {
+                errno = ENOMEM;
+                return NULL;
+        }
+        return udev_list_entry_get_value(list_entry);
 }
 
 /**
