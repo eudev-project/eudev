@@ -340,6 +340,44 @@ fi
 AM_CONDITIONAL([ENABLE_TPM2], [test "x$enable_tpm2" != xno])
 
 # ------------------------------------------------------------------------------
+# system-uid-max, system-gid-max - the highest user and group IDs of system accounts, like the meson
+# options of systemd: by default, or with 0, SYS_UID_MAX and SYS_GID_MAX of /etc/login.defs of the
+# build system, and 999 if it does not set them
+# ------------------------------------------------------------------------------
+AC_ARG_WITH([system-uid-max],
+	AS_HELP_STRING([--with-system-uid-max=UID],
+		[the highest user ID of system users @<:@default: SYS_UID_MAX of /etc/login.defs, or 999@:>@]),
+	[], [with_system_uid_max=0])
+AC_ARG_WITH([system-gid-max],
+	AS_HELP_STRING([--with-system-gid-max=GID],
+		[the highest group ID of system groups @<:@default: SYS_GID_MAX of /etc/login.defs, or 999@:>@]),
+	[], [with_system_gid_max=0])
+
+# the last value of the setting $1 in /etc/login.defs, like systemd's meson.build finds it
+login_defs_value() {
+	test -r /etc/login.defs && $AWK -v key="$1" '$1 == key && NF >= 2 { v = $2 } END { print v }' /etc/login.defs
+}
+
+AS_IF([test "x$with_system_uid_max" = x0 || test -z "$with_system_uid_max"],
+	[with_system_uid_max=$(login_defs_value SYS_UID_MAX)])
+AS_IF([test -z "$with_system_uid_max"], [with_system_uid_max=999])
+AS_IF([test "x$with_system_gid_max" = x0 || test -z "$with_system_gid_max"],
+	[with_system_gid_max=$(login_defs_value SYS_GID_MAX)])
+AS_IF([test -z "$with_system_gid_max"], [with_system_gid_max=999])
+
+for v in "$with_system_uid_max" "$with_system_gid_max"; do
+	case "$v" in
+	*@<:@!0-9@:>@*|???????????*)
+		AC_MSG_ERROR([*** invalid system user or group ID: $v]) ;;
+	esac
+	AS_IF([test "$v" -ge 4294967295],
+		[AC_MSG_ERROR([*** invalid system user or group ID: $v])])
+done
+
+AC_DEFINE_UNQUOTED([SYSTEM_UID_MAX], [$with_system_uid_max], [The highest user ID of system users])
+AC_DEFINE_UNQUOTED([SYSTEM_GID_MAX], [$with_system_gid_max], [The highest group ID of system groups])
+
+# ------------------------------------------------------------------------------
 
 AC_CONFIG_FILES([Makefile
 	hwdb/Makefile
@@ -393,6 +431,9 @@ AC_MSG_RESULT([
 
 	pkgconfiglibdir:         ${libdir}/pkgconfig
 	sharepkgconfigdir        ${datadir}/pkgconfig
+
+	system UIDs:             <=${with_system_uid_max}
+	system GIDs:             <=${with_system_gid_max}
 
 	systemd-hwdb:            ${enable_systemd_hwdb}
 	bashcompletiondir:       ${with_bashcompletiondir}
