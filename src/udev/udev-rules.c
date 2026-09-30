@@ -2439,8 +2439,11 @@ static int parse_file(struct udev_rules *rules, const char *filename) {
                                 rules->tokens[i].key.rule_goto = j;
                                 break;
                         }
-                        if (rules->tokens[i].key.rule_goto == 0)
+                        if (rules->tokens[i].key.rule_goto == 0) {
                                 log_rule_error("GOTO=\"%s\" has no matching label, ignoring.", label);
+                                if (checking)
+                                        udev_rules_check_goto_unresolved(checking, parse_line_nr);
+                        }
                 }
         }
 

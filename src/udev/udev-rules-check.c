@@ -61,6 +61,7 @@ typedef struct CheckLine {
         char *goto_label;
         bool referenced;        /* the label is the target of a GOTO */
         bool has_other;         /* the line does something else than GOTO and LABEL */
+        bool dropped;           /* the GOTO has no label, and the line has no effect any more */
         CheckToken *tokens;
         size_t n_tokens;
 } CheckLine;
@@ -953,16 +954,42 @@ void udev_rules_check_line_end(struct udev_rules_check *c, bool valid) {
         c->n_tokens_allocated = 0;
 }
 
+/* Called by the parser after it reported that a GOTO of the line has no matching label. Like
+ * rule_resolve_goto() of systemd, report right after that when the line has no effect any more. */
+void udev_rules_check_goto_unresolved(struct udev_rules_check *c, unsigned line_nr) {
+        size_t i, k;
+
+        assert(c);
+
+        for (i = 0; i < c->n_lines; i++) {
+                CheckLine *line = &c->lines[i];
+
+                if (line->line_nr != line_nr || !line->goto_label)
+                        continue;
+
+                if (line->has_other || line->dropped)
+                        return;
+
+                c->line_nr = line_nr;
+                log_line_warning(c, "The line has no effect any more, dropping.");
+
+                for (k = 0; k < line->n_tokens; k++)
+                        check_token_done(&line->tokens[k]);
+                line->n_tokens = 0;
+                line->dropped = true;
+                return;
+        }
+}
+
 void udev_rules_check_file_end(struct udev_rules_check *c) {
         size_t i, j;
 
         assert(c);
 
-        /* Link GOTOs to LABELs like the parser. A GOTO without a matching label is reported by
-         * the parser; like systemd, also report when the line does nothing else. */
+        /* Link GOTOs to LABELs like the parser, to find the unused labels. A GOTO without a matching
+         * label, and a line that has no effect any more then, are reported while the file is parsed. */
         for (i = 0; i < c->n_lines; i++) {
                 CheckLine *line = &c->lines[i];
-                bool found = false;
 
                 if (!line->goto_label)
                         continue;
@@ -970,20 +997,8 @@ void udev_rules_check_file_end(struct udev_rules_check *c) {
                 for (j = i + 1; j < c->n_lines; j++)
                         if (streq_ptr(c->lines[j].label, line->goto_label)) {
                                 c->lines[j].referenced = true;
-                                found = true;
                                 break;
                         }
-
-                if (!found && !line->has_other) {
-                        size_t k;
-
-                        c->line_nr = line->line_nr;
-                        log_line_warning(c, "The line has no effect any more, dropping.");
-
-                        for (k = 0; k < line->n_tokens; k++)
-                                check_token_done(&line->tokens[k]);
-                        line->n_tokens = 0;
-                }
         }
 
         for (i = 0; i < c->n_lines; i++) {
