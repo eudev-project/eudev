@@ -150,13 +150,19 @@ static int adm_control(struct udev *udev, int argc, char *argv[]) {
                         commands[n_commands++] = (struct control_command) { .c = c, .value = r };
                         break;
                 case 't': {
-                        int seconds;
+                        usec_t timeout_usec;
 
-                        seconds = atoi(optarg);
-                        if (seconds >= 0)
-                                timeout = seconds;
+                        /* Like systemd, units are accepted, e.g. "500ms", and the default unit is
+                         * seconds. The control socket takes the timeout in seconds, round up. */
+                        r = parse_sec(optarg, &timeout_usec);
+                        if (r < 0) {
+                                log_error_errno(r, "Failed to parse timeout value '%s': %m", optarg);
+                                return rc;
+                        }
+                        if (timeout_usec == USEC_INFINITY || timeout_usec / USEC_PER_SEC >= INT_MAX / MSEC_PER_SEC)
+                                timeout = -1;
                         else
-                                fprintf(stderr, "invalid timeout value\n");
+                                timeout = (timeout_usec + USEC_PER_SEC - 1) / USEC_PER_SEC;
                         break;
                 }
                 case 'h':

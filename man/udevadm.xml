@@ -785,7 +785,10 @@
           <term><option>-t</option></term>
           <term><option>--timeout=</option><replaceable>seconds</replaceable></term>
           <listitem>
-            <para>The maximum number of seconds to wait for a reply from udevd.</para>
+            <para>The maximum number of seconds to wait for a reply from udevd. Takes a value in
+            seconds, or in the usual supported time units, e.g. <literal>500ms</literal> or
+            <literal>1min</literal>, which is rounded up to whole seconds, or
+            <literal>infinity</literal>. The default is 60 seconds.</para>
           </listitem>
         </varlistentry>
         <varlistentry>
