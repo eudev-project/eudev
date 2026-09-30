@@ -23,6 +23,9 @@ use strict;
 # automake reports a test exiting with this as skipped
 my $EXIT_TEST_SKIP      = 77;
 
+# the test sysfs is a directory, which libudev refuses as sysfs by default
+$ENV{UDEV_DEVICE_VERIFY_SYSFS} = "0";
+
 my $udev_bin            = "./test-udev";
 my $valgrind            = 0;
 my $udev_bin_valgrind   = "valgrind --tool=memcheck --leak-check=yes --quiet $udev_bin";

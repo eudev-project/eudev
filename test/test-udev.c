@@ -152,6 +152,10 @@ int main(int argc __attribute__((unused)), char *argv[]) {
         if (err < 0)
                 return EXIT_FAILURE;
 
+        /* test/sys is a directory, which libudev refuses as sysfs by default */
+        if (setenv("UDEV_DEVICE_VERIFY_SYSFS", "0", 1) < 0)
+                return EXIT_FAILURE;
+
         udev = udev_new();
         if (udev == NULL)
                 return EXIT_FAILURE;

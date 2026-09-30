@@ -48,7 +48,8 @@ if [ -z "${DL_IN_NS:-}" ]; then
                 exit 77
         fi
         UDEVADM=$(realpath "${TEST_UDEVADM:-$(dirname "$DRIVER")/../src/udev/udevadm}" 2>/dev/null)
-        export DL_IN_NS=1 DRIVER UDEVADM
+        # /sys is a tmpfs here, which libudev refuses as sysfs by default
+        export DL_IN_NS=1 DRIVER UDEVADM UDEV_DEVICE_VERIFY_SYSFS=0
         [ -n "${DL_OLD_DRIVER:-}" ] && DL_OLD_DRIVER=$(realpath "$DL_OLD_DRIVER") && export DL_OLD_DRIVER
         exec unshare --user --map-root-user --mount --propagation private "$0" "$@"
 fi

@@ -52,6 +52,10 @@ int main(int argc, char *argv[]) {
                 return EXIT_FAILURE;
         }
 
+        /* /sys is a tmpfs, which libudev refuses as sysfs by default */
+        if (setenv("UDEV_DEVICE_VERIFY_SYSFS", "0", 1) < 0)
+                return EXIT_FAILURE;
+
         udev = udev_new();
         if (!udev)
                 return EXIT_FAILURE;

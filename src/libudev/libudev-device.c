@@ -31,6 +31,8 @@
 #include <net/if.h>
 #include <sys/stat.h>
 #include <sys/ioctl.h>
+#include <sys/vfs.h>
+#include <linux/magic.h>
 #include <sys/socket.h>
 #include <linux/sockios.h>
 #include <sys/sysmacros.h>
@@ -508,6 +510,38 @@ static int sysfs_resolve(const char *path, char **ret)
                 return -ENOMEM;
 
         *ret = t;
+        return 0;
+}
+
+/* Like device_set_syspath() of systemd: only operate on sysfs, i.e. refuse a syspath like /sys/fs/cgroup/...,
+ * where things are not arranged as kobjects of the kernel, unless $UDEV_DEVICE_VERIFY_SYSFS, or
+ * $SYSTEMD_DEVICE_VERIFY_SYSFS when it is not set, is false, e.g. for tests with a directory as /sys. */
+static int sysfs_verify(const char *path)
+{
+        const char *name = "UDEV_DEVICE_VERIFY_SYSFS", *e;
+        struct statfs sfs;
+        int r;
+
+        e = secure_getenv(name);
+        if (!e) {
+                name = "SYSTEMD_DEVICE_VERIFY_SYSFS";
+                e = secure_getenv(name);
+        }
+        if (e) {
+                r = parse_boolean(e);
+                if (r < 0)
+                        log_debug_errno(r, "Failed to parse $%s value: %m", name);
+                else if (r == 0)
+                        return 0;
+        }
+
+        if (statfs(path, &sfs) < 0)
+                return log_debug_errno(errno, "failed to check if syspath \"%s\" is backed by sysfs: %m", path);
+        if (!F_TYPE_EQUAL(sfs.f_type, SYSFS_MAGIC)) {
+                log_debug("the syspath \"%s\" is outside of sysfs, refusing.", path);
+                return -ENODEV;
+        }
+
         return 0;
 }
 
@@ -1221,6 +1255,11 @@ static struct udev_device *udev_device_new(struct udev *udev)
  * device and the udev database entry. The syspath is the absolute
  * path to the device, including the sys mount point.
  *
+ * Like in systemd, the device must be on sysfs, otherwise the call fails with ENODEV,
+ * unless the environment variable UDEV_DEVICE_VERIFY_SYSFS, or SYSTEMD_DEVICE_VERIFY_SYSFS
+ * when it is not set, is false, e.g. "0", to allow tests with a directory as /sys. The
+ * variables are ignored in programs that run with elevated privileges (setuid etc.).
+ *
  * The initial refcount is 1, and needs to be decremented to
  * release the resources of the udev device.
  *
@@ -1288,6 +1327,12 @@ _public_ struct udev_device *udev_device_new_from_syspath(struct udev *udev, con
                         errno = EISDIR;
                         return NULL;
                 }
+        }
+
+        r = sysfs_verify(path);
+        if (r < 0) {
+                errno = -r;
+                return NULL;
         }
 
         udev_device = udev_device_new(udev);

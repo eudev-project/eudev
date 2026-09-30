@@ -60,6 +60,10 @@ test_udev_devlink_LDADD = \
 test_udev_devlink_CPPFLAGS = \
 	$(test_udev_CPPFLAGS)
 
+# The tests use a directory or tmpfs as /sys, which libudev refuses by default.
+AM_TESTS_ENVIRONMENT = \
+	UDEV_DEVICE_VERIFY_SYSFS=0; export UDEV_DEVICE_VERIFY_SYSFS;
+
 TESTS = \
 	test-json-writer \
 	udev-test.pl \

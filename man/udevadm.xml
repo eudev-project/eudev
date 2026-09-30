@@ -1269,6 +1269,27 @@
   </refsect1>
 
   <refsect1>
+    <title>Environment</title>
+
+    <variablelist class='environment-variables'>
+      <varlistentry>
+        <term><varname>$UDEV_DEVICE_VERIFY_SYSFS</varname></term>
+        <listitem>
+          <para>Takes a boolean. Like systemd, <command>udevadm</command>, <command>udevd</command> and
+          all programs that use libudev only take a device, e.g. given by its path below
+          <filename>/sys</filename>, when it is on sysfs, and refuse e.g. paths below
+          <filename>/sys/fs/cgroup</filename>. When this variable is false, e.g.
+          <literal>0</literal>, this check is not done, e.g. for tests with a directory or a tmpfs
+          as <filename>/sys</filename>. For compatibility with systemd,
+          <varname>$SYSTEMD_DEVICE_VERIFY_SYSFS</varname> is used the same way when
+          <varname>$UDEV_DEVICE_VERIFY_SYSFS</varname> is not set. Both are ignored by programs
+          that run with elevated privileges, e.g. setuid.</para>
+        </listitem>
+      </varlistentry>
+    </variablelist>
+  </refsect1>
+
+  <refsect1>
     <title>Initialized Devices</title>
 
     <para>Initialized devices are those for which at least one udev rule already completed execution

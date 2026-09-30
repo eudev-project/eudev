@@ -987,6 +987,23 @@ Print version\&.
 .RS 4
 Print help text\&.
 .RE
+.SH "ENVIRONMENT"
+.PP
+\fI$UDEV_DEVICE_VERIFY_SYSFS\fR
+.RS 4
+Takes a boolean\&. Like systemd,
+\fBudevadm\fR,
+\fBudevd\fR
+and all programs that use libudev only take a device, e\&.g\&. given by its path below
+/sys, when it is on sysfs, and refuse e\&.g\&. paths below
+/sys/fs/cgroup\&. When this variable is false, e\&.g\&.
+0, this check is not done, e\&.g\&. for tests with a directory or a tmpfs as
+/sys\&. For compatibility with systemd,
+\fI$SYSTEMD_DEVICE_VERIFY_SYSFS\fR
+is used the same way when
+\fI$UDEV_DEVICE_VERIFY_SYSFS\fR
+is not set\&. Both are ignored by programs that run with elevated privileges, e\&.g\&. setuid\&.
+.RE
 .SH "INITIALIZED DEVICES"
 .PP
 Initialized devices are those for which at least one udev rule already completed execution \(en for any action but
