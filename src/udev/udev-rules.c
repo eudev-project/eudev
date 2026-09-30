@@ -2151,13 +2151,14 @@ static int add_rule(struct udev_rules *rules, char *line,
                         if (op < OP_MATCH_MAX) {
                                 rule_add_key(&rule_tmp, TK_M_NAME, op, value, NULL);
                         } else {
+                                /* like systemd, drop the line */
                                 if (streq(value, "%k")) {
-                                        log_rule_error("NAME=\"%%k\" is ignored, because it breaks kernel supplied names, please remove it.");
-                                        continue;
+                                        log_rule_error("Ignoring NAME=\"%%k\", as it will take no effect.");
+                                        goto invalid;
                                 }
                                 if (value[0] == '\0') {
-                                        log_rule_debug("NAME=\"\" is ignored, because udev will not delete any device nodes, please remove it.");
-                                        continue;
+                                        log_rule_error("Ignoring NAME=\"\", as udev will not delete any network interfaces.");
+                                        goto invalid;
                                 }
                                 rule_add_key(&rule_tmp, TK_A_NAME, op, value, NULL);
                         }

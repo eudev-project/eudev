@@ -1783,6 +1783,17 @@ KERNEL=="sda", OWNER="4294967296", SYMLINK+="bad"
 EOF
         },
         {
+                desc            => "NAME=\"%k\" and NAME=\"\" are errors",
+                devpath         => "/devices/pci0000:00/0000:00:1f.2/host0/target0:0:0/0:0:0:0/block/sda",
+                exp_name        => "found",
+                not_exp_name    => "bad",
+                rules           => <<EOF
+KERNEL=="sda", NAME="%k", SYMLINK+="bad"
+KERNEL=="sda", NAME="", SYMLINK+="bad"
+KERNEL=="sda", SYMLINK+="found"
+EOF
+        },
+        {
                 desc            => "unknown users and groups are ignored, invalid ones are errors",
                 devpath         => "/devices/pci0000:00/0000:00:1f.2/host0/target0:0:0/0:0:0:0/block/sda",
                 exp_name        => "found",

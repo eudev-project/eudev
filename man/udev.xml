@@ -383,7 +383,9 @@
           <term><varname>NAME</varname></term>
           <listitem>
             <para>The name to use for a network interface. The name of a device node
-            cannot be changed by udev, only additional symlinks can be created.</para>
+            cannot be changed by udev, only additional symlinks can be created.
+            <literal>NAME="%k"</literal>, which has no effect, and <literal>NAME=""</literal>
+            are errors, and the rule line is ignored.</para>
             <para>As in systemd, a network interface name is valid if it has 1 to 15
             printable ASCII characters other than space, <literal>:</literal>,
             <literal>/</literal> and <literal>%</literal>, is not only digits, and is

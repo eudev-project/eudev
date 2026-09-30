@@ -569,13 +569,9 @@ void udev_rules_check_token(struct udev_rules_check *c, const char *base, const 
                 }
 
                 if (!is_match) {
-                        /* NAME="%k" is reported by the parser. */
-                        if (streq(value, "%k"))
+                        /* NAME="%k" and NAME="" are reported by the parser. */
+                        if (streq(value, "%k") || isempty(value))
                                 return;
-                        if (isempty(value)) {
-                                log_line_error_fail(c, "Ignoring NAME=\"\", as udev will not delete any network interfaces.");
-                                return;
-                        }
                         check_value_format(c, base, value, false);
                         c->current.has_other = true;
                 }
