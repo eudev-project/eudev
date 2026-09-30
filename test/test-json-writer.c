@@ -24,6 +24,12 @@
 
 static int failures;
 
+/* the colors of sd-json: strings, numbers, booleans and null, and the end of a color */
+#define G "\x1B[0;32m"
+#define B "\x1B[0;1;34m"
+#define H "\x1B[0;1;39m"
+#define N "\x1B[0m"
+
 typedef void (*writer_func)(JsonWriter *w);
 
 static void check(const char *name, writer_func func, JsonFormatFlags flags, int exp_r, const char *exp) {
@@ -74,6 +80,12 @@ static void doc_nested(JsonWriter *w) {
         json_writer_field_string(w, "k", "v");
         json_writer_object_end(w);
         json_writer_array_end(w);
+        json_writer_object_end(w);
+}
+
+static void doc_boolean(JsonWriter *w) {
+        json_writer_object_begin(w);
+        json_writer_field_boolean(w, "on", true);
         json_writer_object_end(w);
 }
 
@@ -146,6 +158,12 @@ static void bad_too_deep(JsonWriter *w) {
 int main(void) {
         JsonFormatFlags flags;
 
+        /* for JSON_FORMAT_COLOR_AUTO, also when the test runs on a terminal */
+        if (setenv("SYSTEMD_COLORS", "0", 1) < 0) {
+                perror("setenv");
+                return EXIT_FAILURE;
+        }
+
         check("nested short", doc_nested, JSON_FORMAT_NEWLINE, 0,
               "{\"path\":\"/devices/virtual/net/lo\",\"number\":18446744073709551615,\"prio\":-5,\"watch\":false,"
               "\"none\":null,\"empty\":[],\"emptyobj\":{},\"tags\":[\"a\",{\"k\":\"v\"}]}\n");
@@ -178,6 +196,24 @@ int main(void) {
               "\"beyond \\ufffd\\ufffd\\ufffd\\ufffd end\","
               "\"bad \\ufffd \\ufffd \\ufffd\\ufffd \\ufffd\\ufffd \\ufffd\\ufffd\\ufffd end\","
               "null]\n");
+        /* the colors of sd-json */
+        check("nested short color", doc_nested, JSON_FORMAT_NEWLINE|JSON_FORMAT_COLOR, 0,
+              "{\"" G "path" N "\":\"" G "/devices/virtual/net/lo" N "\","
+              "\"" G "number" N "\":" B "18446744073709551615" N ","
+              "\"" G "prio" N "\":" B "-5" N ","
+              "\"" G "watch" N "\":" H "false" N ","
+              "\"" G "none" N "\":" H "null" N ","
+              "\"" G "empty" N "\":[],"
+              "\"" G "emptyobj" N "\":{},"
+              "\"" G "tags" N "\":[\"" G "a" N "\",{\"" G "k" N "\":\"" G "v" N "\"}]}\n");
+        check("boolean pretty color", doc_boolean, JSON_FORMAT_PRETTY|JSON_FORMAT_COLOR, 0,
+              "{\n"
+              "\t\"" G "on" N "\" : " H "true" N "\n"
+              "}\n");
+        /* $SYSTEMD_COLORS=0 is set, and turns off the colors */
+        check("nested short color auto", doc_nested, JSON_FORMAT_NEWLINE|JSON_FORMAT_COLOR_AUTO, 0,
+              "{\"path\":\"/devices/virtual/net/lo\",\"number\":18446744073709551615,\"prio\":-5,\"watch\":false,"
+              "\"none\":null,\"empty\":[],\"emptyobj\":{},\"tags\":[\"a\",{\"k\":\"v\"}]}\n");
         check("scalar", doc_scalar, JSON_FORMAT_PRETTY, 0, "\"x\"\n");
         check("nothing", doc_nothing, JSON_FORMAT_PRETTY, 0, "");
 
@@ -190,7 +226,7 @@ int main(void) {
         check("two values", bad_two_values, 0, -EINVAL, NULL);
         check("too deep", bad_too_deep, 0, -EINVAL, NULL);
 
-        if (json_parse_format("pretty", &flags) != 1 || flags != JSON_FORMAT_PRETTY ||
+        if (json_parse_format("pretty", &flags) != 1 || flags != (JSON_FORMAT_PRETTY|JSON_FORMAT_COLOR_AUTO) ||
             json_parse_format("short", &flags) != 1 || flags != JSON_FORMAT_NEWLINE ||
             json_parse_format("off", &flags) != 1 || json_format_enabled(flags) ||
             json_parse_format("foo", &flags) != -EINVAL) {

@@ -20,6 +20,7 @@
 #include <string.h>
 
 #include "json-writer.h"
+#include "terminal-util.h"
 #include "util.h"
 
 int json_parse_format(const char *s, JsonFormatFlags *ret) {
@@ -27,7 +28,7 @@ int json_parse_format(const char *s, JsonFormatFlags *ret) {
         assert(ret);
 
         if (streq(s, "pretty"))
-                *ret = JSON_FORMAT_PRETTY;
+                *ret = JSON_FORMAT_PRETTY|JSON_FORMAT_COLOR_AUTO;
         else if (streq(s, "short"))
                 *ret = JSON_FORMAT_NEWLINE;
         else if (streq(s, "off"))
@@ -49,6 +50,20 @@ void json_writer_init(JsonWriter *w, FILE *f, JsonFormatFlags flags) {
         memzero(w, sizeof(*w));
         w->f = f ?: stdout;
         w->flags = flags;
+
+        if ((flags & (JSON_FORMAT_COLOR_AUTO|JSON_FORMAT_COLOR)) == JSON_FORMAT_COLOR_AUTO && colors_enabled())
+                w->flags |= JSON_FORMAT_COLOR;
+}
+
+/* The sequences of systemd's ansi-color.h that sd-json colors with. */
+#define JSON_ANSI_GREEN          "\x1B[0;32m"
+#define JSON_ANSI_HIGHLIGHT_BLUE "\x1B[0;1;34m"
+#define JSON_ANSI_HIGHLIGHT      "\x1B[0;1;39m"
+#define JSON_ANSI_NORMAL         "\x1B[0m"
+
+static void json_writer_color(JsonWriter *w, const char *seq) {
+        if (w->flags & JSON_FORMAT_COLOR)
+                fputs(seq, w->f);
 }
 
 static void json_writer_fail(JsonWriter *w, int error) {
@@ -206,8 +221,11 @@ static int utf8_scalar_len(const char *str) {
         return len;
 }
 
-static void json_write_string(FILE *f, const char *s) {
+static void json_write_string(JsonWriter *w, const char *s) {
+        FILE *f = w->f;
+
         fputc('"', f);
+        json_writer_color(w, JSON_ANSI_GREEN);
 
         while (*s != '\0') {
                 unsigned char c = *s;
@@ -258,6 +276,7 @@ static void json_write_string(FILE *f, const char *s) {
                 s++;
         }
 
+        json_writer_color(w, JSON_ANSI_NORMAL);
         fputc('"', f);
 }
 
@@ -270,7 +289,7 @@ void json_writer_key(JsonWriter *w, const char *key) {
         if (!json_writer_begin_item(w, true))
                 return;
 
-        json_write_string(w->f, key);
+        json_write_string(w, key);
         fputs(w->flags & JSON_FORMAT_PRETTY ? " : " : ":", w->f);
         w->after_key = true;
 }
@@ -284,7 +303,7 @@ void json_writer_string(JsonWriter *w, const char *s) {
         if (!json_writer_begin_item(w, false))
                 return;
 
-        json_write_string(w->f, s);
+        json_write_string(w, s);
         json_writer_end_item(w);
 }
 
@@ -292,7 +311,9 @@ void json_writer_integer(JsonWriter *w, int64_t i) {
         if (!json_writer_begin_item(w, false))
                 return;
 
+        json_writer_color(w, JSON_ANSI_HIGHLIGHT_BLUE);
         fprintf(w->f, "%" PRId64, i);
+        json_writer_color(w, JSON_ANSI_NORMAL);
         json_writer_end_item(w);
 }
 
@@ -300,7 +321,9 @@ void json_writer_unsigned(JsonWriter *w, uint64_t u) {
         if (!json_writer_begin_item(w, false))
                 return;
 
+        json_writer_color(w, JSON_ANSI_HIGHLIGHT_BLUE);
         fprintf(w->f, "%" PRIu64, u);
+        json_writer_color(w, JSON_ANSI_NORMAL);
         json_writer_end_item(w);
 }
 
@@ -308,7 +331,9 @@ void json_writer_boolean(JsonWriter *w, bool b) {
         if (!json_writer_begin_item(w, false))
                 return;
 
+        json_writer_color(w, JSON_ANSI_HIGHLIGHT);
         fputs(b ? "true" : "false", w->f);
+        json_writer_color(w, JSON_ANSI_NORMAL);
         json_writer_end_item(w);
 }
 
@@ -316,7 +341,9 @@ void json_writer_null(JsonWriter *w) {
         if (!json_writer_begin_item(w, false))
                 return;
 
+        json_writer_color(w, JSON_ANSI_HIGHLIGHT);
         fputs("null", w->f);
+        json_writer_color(w, JSON_ANSI_NORMAL);
         json_writer_end_item(w);
 }
 

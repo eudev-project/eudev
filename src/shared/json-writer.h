@@ -32,6 +32,10 @@
  *     json_writer_object_end(&w);
  *     r = json_writer_finish(&w);
  *
+ * With JSON_FORMAT_COLOR, the strings, numbers, booleans and null are colored like sd-json does it:
+ * strings in green, numbers in bright blue, booleans and null in bold. JSON_FORMAT_COLOR_AUTO turns
+ * the colors on when colors_enabled() says so.
+ *
  * Strings are escaped as JSON requires. Any Unicode scalar value is written as is, including
  * noncharacters like U+FFFE, as sd-json's formatter does. Bytes that are not valid UTF-8 are
  * written as U+FFFD, the replacement character, so the output is always valid JSON. A misuse, like
@@ -49,15 +53,17 @@ typedef enum JsonFormatFlags {
                                          * with a newline */
         JSON_FORMAT_SEQ     = 1 << 3,   /* RFC 7464 application/json-seq: prefix with the record separator,
                                          * terminate with a newline */
+        JSON_FORMAT_COLOR      = 1 << 4, /* insert ANSI color sequences */
+        JSON_FORMAT_COLOR_AUTO = 1 << 5, /* insert ANSI color sequences if colors_enabled() says so */
 } JsonFormatFlags;
 
 static inline bool json_format_enabled(JsonFormatFlags flags) {
         return !(flags & JSON_FORMAT_OFF);
 }
 
-/* Parses the argument of a --json= option like systemd's parse_json_argument(): "pretty", "short"
- * or "off". For "help", lists them on stdout and returns 0. Returns 1 when parsed, and -EINVAL for
- * anything else. */
+/* Parses the argument of a --json= option like systemd's parse_json_argument(): "pretty", which
+ * is colored on a terminal, "short" or "off". For "help", lists them on stdout and returns 0.
+ * Returns 1 when parsed, and -EINVAL for anything else. */
 int json_parse_format(const char *s, JsonFormatFlags *ret);
 
 #define JSON_WRITER_DEPTH_MAX 32
