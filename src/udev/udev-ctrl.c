@@ -39,6 +39,7 @@ enum udev_ctrl_msg_type {
         UDEV_CTRL_EXIT,
         UDEV_CTRL_SET_TRACE,
         UDEV_CTRL_REVERT,
+        _UDEV_CTRL_MSG_TYPE_MAX,
 };
 
 struct udev_ctrl_msg_wire {
@@ -480,6 +481,14 @@ struct udev_ctrl_msg *udev_ctrl_receive_msg(struct udev_ctrl_connection *conn) {
 
         if (uctrl_msg->ctrl_msg_wire.magic != UDEV_CTRL_MAGIC) {
                 log_error("message magic 0x%08x doesn't match, ignore it", uctrl_msg->ctrl_msg_wire.magic);
+                goto err;
+        }
+
+        /* e.g. from a newer udevadm, which then finds the message unsupported, if it expects a reply */
+        if (uctrl_msg->ctrl_msg_wire.type <= UDEV_CTRL_UNKNOWN ||
+            uctrl_msg->ctrl_msg_wire.type >= _UDEV_CTRL_MSG_TYPE_MAX) {
+                log_warning("received control message of unknown type %i, message ignored",
+                            (int) uctrl_msg->ctrl_msg_wire.type);
                 goto err;
         }
 
