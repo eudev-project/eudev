@@ -879,6 +879,13 @@ int udev_event_spawn(struct udev_event *event,
                 return -EINVAL;
         }
 
+        /* The callers get the environment with udev_device_get_properties_envp(), which fails only when
+         * out of memory. Like systemd, fail then, instead of running the program with an empty
+         * environment. */
+        if (!envp)
+                return log_error_errno(ENOMEM, "%s: Failed to get device properties: %m",
+                                       udev_device_get_sysname(event->dev) ?: "n/a");
+
         /* pipes from child to parent */
         if (result != NULL || log_get_max_level() >= LOG_INFO) {
                 if (pipe2(outpipe, O_NONBLOCK) != 0) {
