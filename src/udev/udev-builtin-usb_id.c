@@ -284,8 +284,8 @@ static int builtin_usb_id(struct udev_device *dev, int argc __attribute__((unuse
                 /* Generic SPC-2 device */
                 scsi_vendor = udev_device_get_sysattr_value(dev_scsi, "vendor");
                 if (!scsi_vendor) {
-                        log_debug("%s: cannot get SCSI vendor attribute",
-                             udev_device_get_sysname(dev_scsi));
+                        log_debug_errno(errno, "%s: Failed to get SCSI vendor attribute: %m",
+                                        udev_device_get_sysname(dev_scsi));
                         goto fallback;
                 }
                 encode_devnode_name(scsi_vendor, vendor_str_enc, sizeof(vendor_str_enc));
@@ -294,8 +294,8 @@ static int builtin_usb_id(struct udev_device *dev, int argc __attribute__((unuse
 
                 scsi_model = udev_device_get_sysattr_value(dev_scsi, "model");
                 if (!scsi_model) {
-                        log_debug("%s: cannot get SCSI model attribute",
-                             udev_device_get_sysname(dev_scsi));
+                        log_debug_errno(errno, "%s: Failed to get SCSI model attribute: %m",
+                                        udev_device_get_sysname(dev_scsi));
                         goto fallback;
                 }
                 encode_devnode_name(scsi_model, model_str_enc, sizeof(model_str_enc));
@@ -312,8 +312,8 @@ static int builtin_usb_id(struct udev_device *dev, int argc __attribute__((unuse
 
                 scsi_rev = udev_device_get_sysattr_value(dev_scsi, "rev");
                 if (!scsi_rev) {
-                        log_debug("%s: cannot get SCSI revision attribute",
-                             udev_device_get_sysname(dev_scsi));
+                        log_debug_errno(errno, "%s: Failed to get SCSI revision attribute: %m",
+                                        udev_device_get_sysname(dev_scsi));
                         goto fallback;
                 }
                 util_replace_whitespace(scsi_rev, revision_str, sizeof(revision_str)-1);
@@ -328,16 +328,14 @@ static int builtin_usb_id(struct udev_device *dev, int argc __attribute__((unuse
 
 fallback:
         vendor_id = udev_device_get_sysattr_value(dev_usb, "idVendor");
-        if (!vendor_id) {
-                log_debug("%s: Failed to get idVendor attribute", udev_device_get_sysname(dev_usb));
-                return EXIT_FAILURE;
-        }
+        if (!vendor_id)
+                return log_debug_errno(errno > 0 ? errno : ENOENT, "%s: Failed to get idVendor attribute: %m",
+                                       udev_device_get_sysname(dev_usb));
 
         product_id = udev_device_get_sysattr_value(dev_usb, "idProduct");
-        if (!product_id) {
-                log_debug("%s: Failed to get idProduct attribute", udev_device_get_sysname(dev_usb));
-                return EXIT_FAILURE;
-        }
+        if (!product_id)
+                return log_debug_errno(errno > 0 ? errno : ENOENT, "%s: Failed to get idProduct attribute: %m",
+                                       udev_device_get_sysname(dev_usb));
 
         /* fallback to USB vendor & device */
         if (vendor_str[0] == '\0') {
