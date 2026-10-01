@@ -20,6 +20,7 @@
 #include "log.h"
 #include "reread-partition-table.h"
 #include "set.h"
+#include "strv.h"
 #include "udev-util.h"
 #include "util.h"
 
@@ -149,13 +150,19 @@ static int device_new_from_devname(struct udev *udev, const char *devname, struc
         return 0;
 }
 
+/* eudev: *changed is set when a kernel partition device was resized, removed or added, and *disk_triggered
+ * when a change event for the disk was triggered, while systemd uses *changed for both. With
+ * REREADPT_FORCE_UEVENT, the syspaths of the resized partitions are added to *resized, see
+ * reread_partition_table_full(). */
 static int process_partition(
                 struct udev_device *d,
                 int fd,
                 blkid_partition pp,
                 Set **partnos,
                 RereadPartitionTableFlags flags,
-                bool *changed) {
+                bool *changed,
+                bool *disk_triggered,
+                char ***resized) {
 
         _cleanup_udev_device_unref_ struct udev_device *partition = NULL;
         _cleanup_free_ char *subnode = NULL;
@@ -168,6 +175,8 @@ static int process_partition(
         assert(pp);
         assert(partnos);
         assert(changed);
+        assert(disk_triggered);
+        assert(resized);
 
         node = udev_device_get_devnode(d);
         if (!node)
@@ -221,14 +230,14 @@ static int process_partition(
                         log_device_debug(partition, "Kernel partition device '%s' already matches partition table, not modifying.", subnode);
 
                         if (FLAGS_SET(flags, REREADPT_FORCE_UEVENT)) {
-                                if (!*changed) {
+                                if (!*disk_triggered) {
                                         /* Make sure to synthesize a change event on the main device, before we issue the first one on a partition device */
                                         r = device_trigger(d, "change", NULL);
                                         if (r < 0)
                                                 return log_device_debug_errno(d, r, "Failed to issue 'change' uevent on device '%s': %m", node);
 
                                         log_device_debug(d, "Successfully issued 'change' uevent on device '%s'.", node);
-                                        *changed = true;
+                                        *disk_triggered = true;
                                 }
 
                                 r = device_trigger(partition, "change", NULL);
@@ -251,6 +260,13 @@ static int process_partition(
 
                         log_device_debug(partition, "Successfully resized kernel partition device '%s' to match partition table.", subnode);
                         *changed = true;
+
+                        /* eudev: the kernel sends no uevent for a resized partition, see
+                         * reread_partition_table_full() */
+                        if (FLAGS_SET(flags, REREADPT_FORCE_UEVENT) &&
+                            strv_extend(resized, udev_device_get_syspath(partition)) < 0)
+                                return log_oom_debug();
+
                         return 1;
                 }
 
@@ -387,9 +403,10 @@ static int reread_partition_table_full(struct udev_device *dev, int fd, RereadPa
         _cleanup_(blkid_free_probep) blkid_probe b = NULL;
         _cleanup_udev_enumerate_unref_ struct udev_enumerate *e = NULL;
         _cleanup_set_free_ Set *found_partnos = NULL;
+        _cleanup_strv_free_ char **resized = NULL;
         const char *pttype = NULL;
         blkid_partlist pl;
-        bool changed = false;
+        bool changed = false, disk_triggered = false;
         int n_partitions, ret = 0;
 
         b = blkid_new_probe();
@@ -447,7 +464,7 @@ static int reread_partition_table_full(struct udev_device *dev, int fd, RereadPa
                 if (!pp)
                         return log_device_debug_errno(dev, errno_or_else(EIO), "Unable to get partition data of partition %i of partition table of '%s': %m", i, p);
 
-                RET_GATHER(ret, process_partition(dev, fd, pp, &found_partnos, flags, &changed));
+                RET_GATHER(ret, process_partition(dev, fd, pp, &found_partnos, flags, &changed, &disk_triggered, &resized));
         }
 
         /* Only delete unrecognized partitions if everything else worked */
@@ -460,18 +477,47 @@ static int reread_partition_table_full(struct udev_device *dev, int fd, RereadPa
         if (r < 0)
                 return r;
 
-        if (changed)
-                return 1;
-
         if (FLAGS_SET(flags, REREADPT_FORCE_UEVENT)) {
-                /* No change? Then trigger an event manually if we were told to */
+                char **path;
+
                 *ret_triggered = true;
-                r = device_trigger(dev, "change", NULL);
-                if (r < 0)
-                        return log_device_debug_errno(dev, r, "Failed to issue 'change' uevent on device '%s': %m", p);
+
+                /* No change? Then trigger an event manually if we were told to.
+                 *
+                 * eudev: also after the kernel partition devices were updated with BLKPG. Unlike BLKRRPART,
+                 * which sends a change event for the disk, and removes and adds all partitions, BLKPG sends
+                 * only remove and add events for the partitions that are removed or added, and no event for
+                 * a resized partition, so listeners would not learn that the partition table and the size
+                 * of a partition changed. systemd a446e8ff2c sends none of these change events (when the
+                 * first partition was updated, it does not even send the change event for the disk before
+                 * the change event of an unchanged partition). */
+                if (!disk_triggered) {
+                        r = device_trigger(dev, "change", NULL);
+                        if (r < 0)
+                                return log_device_debug_errno(dev, r, "Failed to issue 'change' uevent on device '%s': %m", p);
+                }
+
+                STRV_FOREACH(path, resized) {
+                        _cleanup_udev_device_unref_ struct udev_device *partition = NULL;
+
+                        partition = udev_device_new_from_syspath(udev_device_get_udev(dev), *path);
+                        if (!partition) {
+                                log_device_debug(dev, "Resized kernel partition device '%s' disappeared, ignoring.", *path);
+                                continue;
+                        }
+
+                        r = device_trigger(partition, "change", NULL);
+                        if (r < 0)
+                                RET_GATHER(ret, log_device_debug_errno(partition, r, "Failed to issue 'change' uevent on resized partition: %m"));
+                        else
+                                log_device_debug(partition, "Successfully issued 'change' uevent on resized partition.");
+                }
+
+                if (ret < 0)
+                        return ret;
         }
 
-        return 0;
+        return changed;
 #else
         log_device_debug(dev, "We don't have libblkid, falling back to BLKRRPART on '%s'.", p);
         *ret_triggered = true;
