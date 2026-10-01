@@ -133,9 +133,16 @@ static int conf_file_chase_and_verify(const char *root, const char *original_pat
                     S_ISREG(st.st_mode) && st.st_size <= 0)
                         return conf_file_mask(masked, name, original_path, "an empty file");
 
-                if (FLAGS_SET(flags, CONF_FILES_REGULAR) && !S_ISREG(st.st_mode))
-                        return log_debug_errno(S_ISDIR(st.st_mode) ? EISDIR : EBADFD,
-                                               "File '%s' is not a regular file: %m", original_path);
+                if (FLAGS_SET(flags, CONF_FILES_REGULAR) && !S_ISREG(st.st_mode)) {
+                        if (S_ISDIR(st.st_mode))
+                                return log_debug_errno(EISDIR, "File '%s' is not a regular file: %m",
+                                                       original_path);
+
+                        /* Unlike systemd, without the text of EBADFD, "File descriptor in bad state",
+                         * which says nothing about e.g. a FIFO. */
+                        log_debug("File '%s' is not a regular file, ignoring.", original_path);
+                        return -EBADFD;
+                }
         }
 
         if (ret_resolved)
