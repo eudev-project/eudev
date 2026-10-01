@@ -615,7 +615,9 @@
         <varlistentry>
           <term><varname>GOTO</varname></term>
           <listitem>
-            <para>Jumps to the next <varname>LABEL</varname> with a matching name.</para>
+            <para>Jumps to the next <varname>LABEL</varname> with a matching name. Like in
+            systemd, only the first <varname>GOTO</varname> of a rule counts; the later ones
+            are ignored with a warning.</para>
           </listitem>
         </varlistentry>
 

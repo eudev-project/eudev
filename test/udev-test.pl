@@ -1203,6 +1203,16 @@ LABEL="exists"
 EOF
         },
         {
+                desc            => "only the first GOTO of a rule counts",
+                devpath         => "/devices/pci0000:00/0000:00:1f.2/host0/target0:0:0/0:0:0:0/block/sda/sda1",
+                exp_name        => "right",
+                rules           => <<EOF
+KERNEL=="sda1", GOTO="does-not-exist", GOTO="skip"
+KERNEL=="sda1", SYMLINK+="right"
+LABEL="skip"
+EOF
+        },
+        {
                 desc            => "SYMLINK+ compare test",
                 devpath         => "/devices/pci0000:00/0000:00:1f.2/host0/target0:0:0/0:0:0:0/block/sda/sda1",
                 exp_name        => "right",

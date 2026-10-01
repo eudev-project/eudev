@@ -726,13 +726,10 @@ void udev_rules_check_token(struct udev_rules_check *c, const char *base, const 
                 set_label(c, &c->current.label, value);
 
         } else if (streq(base, "GOTO")) {
-                /* An attribute or a wrong operator is reported by the parser. */
-                if (attr || op != CHECK_OP_ASSIGN)
+                /* An attribute, a wrong operator and a GOTO after the first are reported by the
+                 * parser, which ignores the later ones. */
+                if (attr || op != CHECK_OP_ASSIGN || c->current.goto_label)
                         return;
-                if (c->current.goto_label) {
-                        log_line_warning(c, "Contains multiple GOTO keys, ignoring GOTO=\"%s\".", value);
-                        return;
-                }
 
                 set_label(c, &c->current.goto_label, value);
 

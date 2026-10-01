@@ -511,6 +511,8 @@ struct rule_tmp {
         bool failed;
         /* the value of the currently parsed key has the "i" prefix */
         bool case_insensitive;
+        /* the rule has a GOTO already */
+        bool has_goto;
 };
 
 #ifdef DEBUG
@@ -2117,6 +2119,12 @@ static int add_rule(struct udev_rules *rules, char *line,
                                 log_rule_invalid_op("GOTO");
                                 goto invalid;
                         }
+                        /* like systemd, only the first GOTO counts */
+                        if (rule_tmp.has_goto) {
+                                log_rule_warning("Contains multiple GOTO keys, ignoring GOTO=\"%s\".", value);
+                                continue;
+                        }
+                        rule_tmp.has_goto = true;
                         rule_add_key(&rule_tmp, TK_A_GOTO, 0, value, NULL);
                         continue;
                 }

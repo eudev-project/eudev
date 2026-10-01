@@ -535,7 +535,9 @@ may jump\&.
 .RS 4
 Jumps to the next
 \fILABEL\fR
-with a matching name\&.
+with a matching name\&. Like in systemd, only the first
+\fIGOTO\fR
+of a rule counts; the later ones are ignored with a warning\&.
 .RE
 .PP
 \fIIMPORT{\fR\fI\fItype\fR\fR\fI}\fR
