@@ -65,9 +65,11 @@ is the number of CPUs
 \fBudevd\fR
 may run on, according to its CPU affinity, and
 RAM
-the size of the physical memory, or the
+the size of the physical memory, or the memory limit of the cgroup of PID 1 when it is smaller:
 \fImemory\&.max\fR
-limit of the cgroup of PID 1 (cgroup v2) when it is smaller\&.
+with cgroup v2, or
+\fImemory\&.limit_in_bytes\fR
+in the hierarchy of the memory controller with cgroup v1\&.
 .RE
 .PP
 \fB\-e\fR, \fB\-\-exec\-delay=\fR

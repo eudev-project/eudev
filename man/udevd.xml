@@ -101,8 +101,10 @@
           where <literal>CPUs</literal> is the number of CPUs
           <command>udevd</command> may run on, according to its CPU affinity,
           and <literal>RAM</literal> the size of the physical memory, or the
-          <varname>memory.max</varname> limit of the cgroup of PID 1 (cgroup
-          v2) when it is smaller.</para>
+          memory limit of the cgroup of PID 1 when it is smaller:
+          <varname>memory.max</varname> with cgroup v2, or
+          <varname>memory.limit_in_bytes</varname> in the hierarchy of the
+          memory controller with cgroup v1.</para>
         </listitem>
       </varlistentry>
 

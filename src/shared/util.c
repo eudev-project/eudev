@@ -88,9 +88,29 @@ size_t page_size(void) {
         return pgsz;
 }
 
-/* Like cg_get_root_path() of systemd: the cgroup of PID 1 in the unified hierarchy (cgroup v2), without a
- * trailing "/init.scope". */
-static int cg_get_root_path(char **ret) {
+#ifndef CGROUP2_SUPER_MAGIC
+#define CGROUP2_SUPER_MAGIC 0x63677270
+#endif
+
+/* Whether the comma separated list contains the word. */
+static bool list_contains_word(const char *list, const char *word) {
+        size_t n = strlen(word);
+
+        for (;;) {
+                if (strneq(list, word, n) && IN_SET(list[n], ',', '\0'))
+                        return true;
+
+                list = strchr(list, ',');
+                if (!list)
+                        return false;
+                list++;
+        }
+}
+
+/* Like cg_get_root_path() of systemd: the cgroup of PID 1, without a trailing "/init.scope". With controller
+ * NULL in the unified hierarchy (cgroup v2), otherwise in the hierarchy of cgroup v1 that the controller is
+ * attached to, like cg_pid_get_path() of systemd v257 for such a hierarchy. */
+static int cg_get_root_path(const char *controller, char **ret) {
         _cleanup_fclose_ FILE *f = NULL;
         int r;
 
@@ -110,13 +130,31 @@ static int cg_get_root_path(char **ret) {
                 if (r == 0)
                         return -ENODATA;
 
-                e = startswith(line, "0:");
-                if (!e)
-                        continue;
+                if (!controller) {
+                        e = startswith(line, "0:");
+                        if (!e)
+                                continue;
 
-                e = strchr(e, ':');
-                if (!e)
-                        continue;
+                        e = strchr(e, ':');
+                        if (!e)
+                                continue;
+                } else {
+                        char *l;
+
+                        /* "ID:CONTROLLER,CONTROLLER,...:PATH" */
+                        l = strchr(line, ':');
+                        if (!l)
+                                continue;
+
+                        l++;
+                        e = strchr(l, ':');
+                        if (!e)
+                                continue;
+                        *e = 0;
+
+                        if (!list_contains_word(l, controller))
+                                continue;
+                }
 
                 path = strdup(e + 1);
                 if (!path)
@@ -142,11 +180,27 @@ static int cg_get_root_path(char **ret) {
         }
 }
 
+/* Whether the controllers are in cgroup v1: like cg_all_unified() of systemd v257, which is false when
+ * /sys/fs/cgroup is a tmpfs, in the "legacy" and the "hybrid" setups, with the hierarchies of cgroup v1 mounted
+ * below it; in the hybrid setup, cgroup v2 is mounted below it too, but without controllers. Unlike systemd
+ * v257, which refused a tmpfs without its own hierarchy /sys/fs/cgroup/systemd or cgroup v2 on
+ * /sys/fs/cgroup/unified, any tmpfs means cgroup v1 here, e.g. also as set up by OpenRC. Anything else,
+ * cgroup v2 or nothing mounted, is handled as cgroup v2, like systemd a446e8ff2c does. */
+static bool cg_is_legacy(void) {
+        struct statfs fs;
+
+        if (statfs("/sys/fs/cgroup/", &fs) < 0)
+                return false;
+
+        return F_TYPE_EQUAL(fs.f_type, TMPFS_MAGIC);
+}
+
 uint64_t physical_memory(void) {
         _cleanup_free_ char *root = NULL, *p = NULL, *value = NULL;
         uint64_t mem, lim;
         size_t ps;
         long sc;
+        bool legacy;
         int r;
 
         /* We return this as uint64_t in case we are running as 32-bit process on a 64-bit kernel with huge amounts of
@@ -163,31 +217,51 @@ uint64_t physical_memory(void) {
         assert((uint64_t) sc <= UINT64_MAX / ps);
         mem = (uint64_t) sc * (uint64_t) ps;
 
-        r = cg_get_root_path(&root);
+        /* eudev: like systemd v231 to v257, read the limit of cgroup v1 too, memory.limit_in_bytes, which
+         * systemd a446e8ff2c no longer does. systemd took the cgroup of PID 1 in its own hierarchy
+         * (name=systemd), which exists only when systemd is PID 1, and read the file of that cgroup in the
+         * hierarchy of the memory controller; here, the cgroup of PID 1 in that hierarchy is used. */
+        legacy = cg_is_legacy();
+
+        r = cg_get_root_path(legacy ? "memory" : NULL, &root);
         if (r < 0) {
                 log_debug_errno(r, "Failed to determine root cgroup, ignoring cgroup memory limit: %m");
                 return mem;
         }
 
-        p = strjoin("/sys/fs/cgroup/", root, "/memory.max", NULL);
-        if (!p) {
-                log_oom_debug();
-                return mem;
-        }
+        if (legacy) {
+                p = strjoin("/sys/fs/cgroup/memory/", root, "/memory.limit_in_bytes", NULL);
+                if (!p) {
+                        log_oom_debug();
+                        return mem;
+                }
 
-        r = read_one_line_file(p, &value);
-        if (r == -ENOENT) /* Field does not exist on the system's top-level cgroup, hence don't
-                           * complain. (Note that it might exist on our own root though, if we live
-                           * in a cgroup namespace, hence check anyway instead of not even
-                           * trying.) */
-                return mem;
-        if (r < 0) {
-                log_debug_errno(r, "Failed to read memory.max cgroup attribute, ignoring cgroup memory limit: %m");
-                return mem;
-        }
+                r = read_one_line_file(p, &value);
+                if (r < 0) {
+                        log_debug_errno(r, "Failed to read memory.limit_in_bytes cgroup attribute, ignoring cgroup memory limit: %m");
+                        return mem;
+                }
+        } else {
+                p = strjoin("/sys/fs/cgroup/", root, "/memory.max", NULL);
+                if (!p) {
+                        log_oom_debug();
+                        return mem;
+                }
 
-        if (streq(value, "max"))
-                return mem;
+                r = read_one_line_file(p, &value);
+                if (r == -ENOENT) /* Field does not exist on the system's top-level cgroup, hence don't
+                                   * complain. (Note that it might exist on our own root though, if we live
+                                   * in a cgroup namespace, hence check anyway instead of not even
+                                   * trying.) */
+                        return mem;
+                if (r < 0) {
+                        log_debug_errno(r, "Failed to read memory.max cgroup attribute, ignoring cgroup memory limit: %m");
+                        return mem;
+                }
+
+                if (streq(value, "max"))
+                        return mem;
+        }
 
         r = safe_atou64(value, &lim);
         if (r < 0) {
