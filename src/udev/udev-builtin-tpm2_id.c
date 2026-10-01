@@ -54,6 +54,8 @@
 #define TPM2_RC_SUCCESS                 UINT32_C(0x000)
 #define TPM2_RC_INITIALIZE              UINT32_C(0x100)
 #define TPM2_RC_VALUE                   UINT32_C(0x084)
+#define TPM2_RC_P                       UINT32_C(0x040) /* format one: the error is about a parameter */
+#define TPM2_RC_N_MASK                  UINT32_C(0xF00) /* format one: the number of the parameter, handle or session */
 #define TPM2_RC_YIELDED                 UINT32_C(0x908)
 #define TPM2_RC_TESTING                 UINT32_C(0x90A)
 #define TPM2_RC_RETRY                   UINT32_C(0x922)
@@ -389,7 +391,10 @@ static int tpm2_get_capability(
         size = tpm2_transmit(d, cmd, sizeof(cmd), buf, &rc, &params);
         if (size < 0)
                 return size;
-        if (rc == TPM2_RC_VALUE)
+        /* TPM_RC_VALUE, whether or not it names the parameter, as the TCG reference implementation does
+         * (e.g. 0x2C4 for a bad property). systemd a446e8ff2c takes only the bare 0x084 as "apparently
+         * doesn't exist". */
+        if ((rc & ~(TPM2_RC_N_MASK|TPM2_RC_P)) == TPM2_RC_VALUE)
                 return log_debug_errno(ENXIO, "Requested TPM2 capability 0x%04" PRIx32 " property 0x%04" PRIx32 " apparently doesn't exist: TPM2 error 0x%" PRIx32,
                                        capability, property, rc);
         if (rc != TPM2_RC_SUCCESS)
