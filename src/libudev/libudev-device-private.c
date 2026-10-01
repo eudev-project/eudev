@@ -31,9 +31,12 @@
 
 #include "libudev.h"
 #include "libudev-private.h"
+#include "def.h"
 #include "fileio.h"
+#include "id128-util.h"
 #include "log.h"
 #include "path-util.h"
+#include "strv.h"
 #include "utf8.h"
 
 static int udev_device_tag(struct udev_device *dev, const char *tag, bool add)
@@ -480,8 +483,9 @@ int device_get_sysattr_u64(struct udev_device *device, const char *sysattr, uint
 }
 
 /* Triggers a synthetic uevent of the device with the syspath by writing the action, e.g. "change", to its
- * uevent attribute, with the UUID, unless it is NULL. */
-static int uevent_trigger(const char *syspath, const char *action, const char *uuid)
+ * uevent attribute, with the UUID, unless it is NULL, and then the arguments joined by
+ * trigger_args_join(), unless they are NULL. */
+static int uevent_trigger_full(const char *syspath, const char *action, const char *uuid, const char *args)
 {
         _cleanup_close_ int fd = -1;
         char filename[UTIL_PATH_SIZE];
@@ -489,9 +493,12 @@ static int uevent_trigger(const char *syspath, const char *action, const char *u
 
         assert(syspath);
         assert(action);
+        assert(uuid || !args);
 
         strscpyl(filename, sizeof(filename), syspath, "/uevent", NULL);
-        s = uuid ? strjoina(action, " ", uuid) : action;
+        s = !uuid ? action :
+            !args ? strjoina(action, " ", uuid) :
+                    strjoina(action, " ", uuid, " ", args);
 
         fd = open(filename, O_WRONLY|O_CLOEXEC|O_NOCTTY);
         if (fd < 0)
@@ -500,6 +507,45 @@ static int uevent_trigger(const char *syspath, const char *action, const char *u
         if (write(fd, s, strlen(s)) < 0)
                 return -errno;
 
+        return 0;
+}
+
+static int uevent_trigger(const char *syspath, const char *action, const char *uuid)
+{
+        return uevent_trigger_full(syspath, action, uuid, NULL);
+}
+
+/* Like the checks of sd_device_trigger_with_args() of systemd 66563e97b7: joins the KEY VALUE pairs of
+ * args to "KEY=VALUE KEY=VALUE ...". Returns -EINVAL if their number is odd, or one of them is empty or
+ * not alphanumerical, and sets *ret to NULL if there are none. */
+static int trigger_args_join(char * const *args, char **ret)
+{
+        _cleanup_free_ char *joined = NULL;
+        char * const *k;
+
+        assert(ret);
+
+        if (strv_length(args) % 2 != 0)
+                return -EINVAL;
+
+        /* The kernel requests that both keys and values are alphanumerical. See action_arg_word_end() in
+         * lib/kobject_uevent.c and Documentation/ABI/testing/sysfs-uevent in the kernel. */
+        STRV_FOREACH(k, args)
+                if (isempty(*k) || !in_charset(*k, ALPHANUMERICAL))
+                        return -EINVAL;
+
+        for (k = args; k && *k; k += 2) {
+                char *t;
+
+                t = joined ? strjoin(joined, " ", k[0], "=", k[1], NULL) : strjoin(k[0], "=", k[1], NULL);
+                if (!t)
+                        return -ENOMEM;
+
+                free(joined);
+                joined = t;
+        }
+
+        *ret = TAKE_PTR(joined);
         return 0;
 }
 
@@ -671,8 +717,10 @@ bool syspath_sends_uevents(const char *syspath)
         return access(strjoina(syspath, "/subsystem"), F_OK) >= 0;
 }
 
-/* Triggers a synthetic uevent of the device with the syspath, like device_trigger() with the UUID, as long as
- * the kernel supports UUIDs, and otherwise without it. Kernels before 4.13 accept the write of an action with
+/* Triggers a synthetic uevent of the device with the syspath, like device_trigger() with the UUID, followed by
+ * the arguments joined by trigger_args_join() unless they are NULL, as long as the kernel supports UUIDs, and
+ * otherwise without both; Linux 4.13 brought both, the kernel passes them on as SYNTH_UUID= and
+ * SYNTH_ARG_KEY=VALUE. Kernels before 4.13 accept the write of an action with
  * a UUID, log "uevent: unknown action-string", and send no uevent at all, so their missing support cannot be
  * told from the result of the write. So, unlike systemd, which looks at the result of the write, the first
  * call of the process triggers the uevent with the UUID on the device, and watches the uevents of the kernel
@@ -683,7 +731,8 @@ bool syspath_sends_uevents(const char *syspath)
  * subsystem, i.e. without a bus or class, never sends uevents, so it cannot tell, and is triggered with the
  * UUID, without waiting; the next call tries again. Returns 1 if the uevent was triggered with the UUID, 0 if
  * it was triggered without it, and a negative errno on failure. */
-int uevent_trigger_with_uuid(struct udev *udev, const char *syspath, const char *action, const char *uuid)
+static int uevent_trigger_with_uuid_full(struct udev *udev, const char *syspath, const char *action,
+                                         const char *uuid, const char *args)
 {
         _cleanup_(udev_monitor_unrefp) struct udev_monitor *monitor = NULL;
         usec_t deadline;
@@ -695,7 +744,7 @@ int uevent_trigger_with_uuid(struct udev *udev, const char *syspath, const char 
         assert(uuid);
 
         if (synthetic_uuid_supported > 0) {
-                r = uevent_trigger(syspath, action, uuid);
+                r = uevent_trigger_full(syspath, action, uuid, args);
                 return r < 0 ? r : 1;
         }
 
@@ -705,7 +754,7 @@ int uevent_trigger_with_uuid(struct udev *udev, const char *syspath, const char 
         }
 
         if (!syspath_sends_uevents(syspath)) {
-                r = uevent_trigger(syspath, action, uuid);
+                r = uevent_trigger_full(syspath, action, uuid, args);
                 return r < 0 ? r : 1;
         }
 
@@ -718,7 +767,7 @@ int uevent_trigger_with_uuid(struct udev *udev, const char *syspath, const char 
                 return r < 0 ? r : 0;
         }
 
-        r = uevent_trigger(syspath, action, uuid);
+        r = uevent_trigger_full(syspath, action, uuid, args);
         if (r < 0)
                 return r;
 
@@ -758,6 +807,60 @@ int uevent_trigger_with_uuid(struct udev *udev, const char *syspath, const char 
 
         r = uevent_trigger(syspath, action, NULL);
         return r < 0 ? r : 0;
+}
+
+int uevent_trigger_with_uuid(struct udev *udev, const char *syspath, const char *action, const char *uuid)
+{
+        return uevent_trigger_with_uuid_full(udev, syspath, action, uuid, NULL);
+}
+
+/* Like sd_device_trigger_with_args() of systemd 66563e97b7: triggers a synthetic uevent of the device with
+ * the syspath with the action, e.g. "change", a random UUID, and the arguments, which are KEY VALUE pairs,
+ * unless args is NULL, see uevent_trigger_with_uuid_full(). The kernel passes the arguments on as
+ * SYNTH_ARG_KEY=VALUE. Returns 1 if the uevent was triggered with the UUID, which is then stored in ret_uuid
+ * unless it is NULL, 0 if it was triggered without the UUID and the arguments, as the kernel does not
+ * support them, and ret_uuid is set to the empty string, and a negative errno on failure, e.g. -EINVAL
+ * if the arguments are not KEY VALUE pairs of alphanumerical words. */
+int uevent_trigger_with_args(struct udev *udev, const char *syspath, const char *action, char * const *args,
+                             char *ret_uuid)
+{
+        _cleanup_free_ char *joined = NULL;
+        char uuid[ID128_UUID_STRING_MAX];
+        id128_t id;
+        int r;
+
+        assert(udev);
+        assert(syspath);
+        assert(action);
+
+        r = trigger_args_join(args, &joined);
+        if (r < 0)
+                return r;
+
+        id128_randomize(&id);
+        id128_to_uuid_string(id, uuid);
+
+        r = uevent_trigger_with_uuid_full(udev, syspath, action, uuid, joined);
+        if (r < 0)
+                return r;
+
+        if (ret_uuid)
+                strcpy(ret_uuid, r > 0 ? uuid : "");
+        return r;
+}
+
+int device_trigger_with_args(struct udev_device *device, const char *action, char * const *args, char *ret_uuid)
+{
+        const char *syspath;
+
+        assert(device);
+        assert(action);
+
+        syspath = udev_device_get_syspath(device);
+        if (!syspath)
+                return -ENODEV;
+
+        return uevent_trigger_with_args(udev_device_get_udev(device), syspath, action, args, ret_uuid);
 }
 
 int device_get_sysnum_unsigned(struct udev_device *device, unsigned *ret)

@@ -129,6 +129,10 @@ int device_get_sysattr_u64(struct udev_device *device, const char *sysattr, uint
 int device_trigger(struct udev_device *device, const char *action, const char *uuid);
 bool syspath_sends_uevents(const char *syspath);
 int uevent_trigger_with_uuid(struct udev *udev, const char *syspath, const char *action, const char *uuid);
+/* Like sd_device_trigger_with_args() of systemd 66563e97b7, with the UUID of ID128_UUID_STRING_MAX bytes in ret_uuid */
+int uevent_trigger_with_args(struct udev *udev, const char *syspath, const char *action, char * const *args,
+                             char *ret_uuid);
+int device_trigger_with_args(struct udev_device *device, const char *action, char * const *args, char *ret_uuid);
 int device_get_sysnum_unsigned(struct udev_device *device, unsigned *ret);
 
 /* libudev-monitor.c - netlink/unix socket communication  */
