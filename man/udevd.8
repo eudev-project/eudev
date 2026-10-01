@@ -58,7 +58,16 @@ Issue (S6/dinit compatible) readiness notification via a file descriptor\&. A sh
 .PP
 \fB\-c\fR, \fB\-\-children\-max=\fR
 .RS 4
-Limit the number of events executed in parallel\&.
+Limit the number of events executed in parallel\&. When it is not specified or 0, the maximum is determined based on the system resources:
+MIN(2 \(mu CPUs + 16, MAX(RAM / 128 MiB, 10), 2048), where
+CPUs
+is the number of CPUs
+\fBudevd\fR
+may run on, according to its CPU affinity, and
+RAM
+the size of the physical memory, or the
+\fImemory\&.max\fR
+limit of the cgroup of PID 1 (cgroup v2) when it is smaller\&.
 .RE
 .PP
 \fB\-e\fR, \fB\-\-exec\-delay=\fR
@@ -160,7 +169,9 @@ level is assumed\&.
 \fIudev\&.children_max=\fR, \fIrd\&.udev\&.children_max=\fR
 .RS 4
 Limit the number of events executed in parallel\&. It takes precedence over
-\fB\-\-children\-max=\fR, unless it is 0\&.
+\fB\-\-children\-max=\fR, unless it is 0\&. See
+\fB\-\-children\-max=\fR
+for the default\&.
 .RE
 .PP
 \fIudev\&.exec_delay=\fR, \fIrd\&.udev\&.exec_delay=\fR

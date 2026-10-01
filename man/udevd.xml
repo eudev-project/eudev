@@ -94,7 +94,15 @@
       <varlistentry>
         <term><option>-c</option>, <option>--children-max=</option></term>
         <listitem>
-          <para>Limit the number of events executed in parallel.</para>
+          <para>Limit the number of events executed in parallel. When it is
+          not specified or 0, the maximum is determined based on the system
+          resources:
+          <literal>MIN(2 × CPUs + 16, MAX(RAM / 128 MiB, 10), 2048)</literal>,
+          where <literal>CPUs</literal> is the number of CPUs
+          <command>udevd</command> may run on, according to its CPU affinity,
+          and <literal>RAM</literal> the size of the physical memory, or the
+          <varname>memory.max</varname> limit of the cgroup of PID 1 (cgroup
+          v2) when it is smaller.</para>
         </listitem>
       </varlistentry>
 
@@ -204,7 +212,7 @@
         <listitem>
           <para>Limit the number of events executed in parallel. It takes
           precedence over <option>--children-max=</option>, unless it is
-          0.</para>
+          0. See <option>--children-max=</option> for the default.</para>
         </listitem>
       </varlistentry>
       <varlistentry>
