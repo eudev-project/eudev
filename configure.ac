@@ -379,6 +379,47 @@ AC_DEFINE_UNQUOTED([SYSTEM_UID_MAX], [$with_system_uid_max], [The highest user I
 AC_DEFINE_UNQUOTED([SYSTEM_GID_MAX], [$with_system_gid_max], [The highest group ID of system groups])
 
 # ------------------------------------------------------------------------------
+# nobody-user, nobody-group - the names of the user and the group with the ID 65534, like the meson
+# options of systemd, e.g. "nogroup" on Debian; with the same warnings about the local system
+# ------------------------------------------------------------------------------
+AC_ARG_WITH([nobody-user],
+	AS_HELP_STRING([--with-nobody-user=NAME],
+		[the name of the nobody user, the one with the UID 65534 @<:@default: nobody@:>@]),
+	[], [with_nobody_user=nobody])
+AC_ARG_WITH([nobody-group],
+	AS_HELP_STRING([--with-nobody-group=NAME],
+		[the name of the nobody group, the one with the GID 65534 @<:@default: nobody@:>@]),
+	[], [with_nobody_group=nobody])
+
+for v in "$with_nobody_user" "$with_nobody_group"; do
+	case "$v" in
+	''|yes|no|@<:@0-9-@:>@*|*@<:@!A-Za-z0-9._-@:>@*)
+		AC_MSG_ERROR([*** invalid name of the nobody user or group: $v]) ;;
+	esac
+done
+
+AS_IF([test "x$cross_compiling" = xno && command -v getent >/dev/null 2>&1], [
+	nobody_name=$(getent passwd 65534 | cut -d: -f1)
+	AS_IF([test -n "$nobody_name" && test "x$nobody_name" != "x$with_nobody_user"],
+		[AC_MSG_WARN([The local user with the UID 65534 does not match the configured user name "$with_nobody_user" of the nobody user (its name is $nobody_name).])])
+	nobody_id=$(getent passwd "$with_nobody_user" | cut -d: -f3)
+	AS_IF([test -n "$nobody_id" && test "x$nobody_id" != x65534],
+		[AC_MSG_WARN([The local user with the configured user name "$with_nobody_user" of the nobody user does not have UID 65534 (it has $nobody_id).])])
+	nobody_name=$(getent group 65534 | cut -d: -f1)
+	AS_IF([test -n "$nobody_name" && test "x$nobody_name" != "x$with_nobody_group"],
+		[AC_MSG_WARN([The local group with the GID 65534 does not match the configured group name "$with_nobody_group" of the nobody group (its name is $nobody_name).])])
+	nobody_id=$(getent group "$with_nobody_group" | cut -d: -f3)
+	AS_IF([test -n "$nobody_id" && test "x$nobody_id" != x65534],
+		[AC_MSG_WARN([The local group with the configured group name "$with_nobody_group" of the nobody group does not have GID 65534 (it has $nobody_id).])])
+])
+AS_IF([test "x$with_nobody_user" != "x$with_nobody_group" &&
+       ! (test "x$with_nobody_user" = xnobody && test "x$with_nobody_group" = xnogroup)],
+	[AC_MSG_WARN([The configured user name "$with_nobody_user" and group name "$with_nobody_group" of the nobody user/group are not equivalent.])])
+
+AC_DEFINE_UNQUOTED([NOBODY_USER_NAME], ["$with_nobody_user"], [The name of the user with the UID 65534])
+AC_DEFINE_UNQUOTED([NOBODY_GROUP_NAME], ["$with_nobody_group"], [The name of the group with the GID 65534])
+
+# ------------------------------------------------------------------------------
 
 AC_CONFIG_FILES([Makefile
 	hwdb/Makefile
@@ -435,6 +476,8 @@ AC_MSG_RESULT([
 
 	system UIDs:             <=${with_system_uid_max}
 	system GIDs:             <=${with_system_gid_max}
+	nobody user name:        ${with_nobody_user}
+	nobody group name:       ${with_nobody_group}
 
 	systemd-hwdb:            ${enable_systemd_hwdb}
 	bashcompletiondir:       ${with_bashcompletiondir}

@@ -766,7 +766,7 @@ static int add_token(struct udev_rules *rules, struct token *token) {
         return 0;
 }
 
-/* The ID of the user and group "nobody", and the range of the IDs of the foreign users and groups of
+/* The ID of the nobody user and group, and the range of the IDs of the foreign users and groups of
  * systemd, with its default base, which systemd synthesizes when the database does not know them. */
 #define UID_NOBODY              ((uid_t) 65534U)
 #define GID_NOBODY              ((gid_t) 65534U)
@@ -820,9 +820,10 @@ static bool name_is_foreign(const char *name, uid_t *ret) {
 /* Resolves a user or group like userdb_by_name() and groupdb_by_name() of systemd with USERDB_PARSE_NUMERIC
  * and USERDB_SYNTHESIZE_NUMERIC do it, from the user and group database of NSS: a name that is a valid ID is
  * looked up by the ID, any other name must be valid. When the database does not know it, like systemd
- * synthesizes them, the ID 0 and the name "root", the ID 65534 and the name "nobody", the IDs of the foreign
- * range of systemd and the names "foreign-N", and the IDs of system accounts are taken as they are. Returns
- * -EINVAL for a name that is not valid, and -ESRCH for an unknown one. */
+ * synthesizes them, the ID 0 and the name "root", the ID 65534 and the name of the nobody user or group of
+ * configure, "nobody" by default, the IDs of the foreign range of systemd and the names "foreign-N", and the
+ * IDs of system accounts are taken as they are. Returns -EINVAL for a name that is not valid, and -ESRCH for
+ * an unknown one. */
 static int resolve_user_or_group(const char *name, bool group, uid_t *ret) {
         uid_t id;
 
@@ -877,7 +878,7 @@ static int resolve_user_or_group(const char *name, bool group, uid_t *ret) {
                 *ret = 0;
                 return 0;
         }
-        if (streq(name, "nobody")) {
+        if (streq(name, group ? NOBODY_GROUP_NAME : NOBODY_USER_NAME)) {
                 *ret = group ? GID_NOBODY : UID_NOBODY;
                 return 0;
         }

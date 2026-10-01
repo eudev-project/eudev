@@ -347,8 +347,13 @@ Symlink names must never conflict with the kernel\*(Aqs default device node name
 The permissions for the device node\&. Every specified value overrides the compiled\-in default value\&.
 .sp
 Users and groups are resolved like systemd does it, with the user and group database: a number must be a valid user or group ID, in decimal without leading zeros, and is looked up as ID, anything else must be a valid name\&. If the database does not have them, the ID 0 and the name
-root, the ID 65534 and the name
-nobody, the IDs of system users and groups (up to the ones set with the
+root, the ID 65534 and the name of the nobody user or group (set with the
+\fB\-\-with\-nobody\-user\fR
+and
+\fB\-\-with\-nobody\-group\fR
+options of configure, by default
+nobody; Debian, for example, calls the group
+nogroup), the IDs of system users and groups (up to the ones set with the
 \fB\-\-with\-system\-uid\-max\fR
 and
 \fB\-\-with\-system\-gid\-max\fR
