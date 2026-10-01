@@ -592,7 +592,7 @@ Maximum number of seconds to wait for the event queue to become empty\&. Takes a
 500ms
 or
 1min, or
-infinity, which waits without a limit\&. The default value is 120 seconds\&. A value of 0 will check if the queue is empty and always return immediately\&.
+infinity, which waits without a limit\&. The default value is 120 seconds\&. A value of 0 will check if the queue is empty and always return immediately\&. A non\-zero value will return an exit code of 0 if queue became empty before timeout was reached, non\-zero otherwise\&.
 .RE
 .PP
 \fB\-E\fR, \fB\-\-exit\-if\-exists=\fR\fB\fIFILE\fR\fR

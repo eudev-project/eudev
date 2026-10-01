@@ -34,6 +34,7 @@
 #include <sys/types.h>
 
 #include "pager.h"
+#include "path-util.h"
 #include "udev.h"
 #include "udev-util.h"
 #include "udevadm-util.h"
@@ -88,6 +89,11 @@ static int adm_settle(struct udev *udev, int argc, char *argv[]) {
                 }
 
                 case 'E':
+                        if (!path_is_valid(optarg)) {
+                                log_error("Invalid path: %s", optarg);
+                                return EXIT_FAILURE;
+                        }
+
                         exists = optarg;
                         break;
 
@@ -113,7 +119,7 @@ static int adm_settle(struct udev *udev, int argc, char *argv[]) {
         }
 
         if (optind < argc) {
-                fprintf(stderr, "Extraneous argument: '%s'\n", argv[optind]);
+                log_error("This subprogram takes no positional arguments.");
                 return EXIT_FAILURE;
         }
 
@@ -147,6 +153,13 @@ static int adm_settle(struct udev *udev, int argc, char *argv[]) {
                         }
                         udev_ctrl_unref(uctrl);
                 }
+        } else if (access(UDEV_ROOT_RUN "/udev/control", F_OK) < 0) {
+                /* Like systemd, for non-privileged users, at least check if udevd is running. */
+                if (errno == ENOENT)
+                        log_error("udevd is not running.");
+                else
+                        log_error_errno(errno, "Failed to check if " UDEV_ROOT_RUN "/udev/control exists: %m");
+                return EXIT_FAILURE;
         }
 
         queue = udev_queue_new(udev);
@@ -178,8 +191,10 @@ static int adm_settle(struct udev *udev, int argc, char *argv[]) {
                 }
 
                 n = now(CLOCK_MONOTONIC);
-                if (n >= deadline)
+                if (n >= deadline) {
+                        log_error("Timed out while waiting for udev queue to empty.");
                         break;
+                }
 
                 /* wake up when queue is empty, at least every second, and at the deadline, which may
                  * be less than a second away */
