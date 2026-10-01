@@ -13,10 +13,9 @@
 static int builtin_factory_reset(struct udev_device *dev, int argc, char *argv[], enum udev_event_mode mode) {
         FactoryResetMode f;
 
-        if (argc != 2 || !streq(argv[1], "status")) {
-                log_warning("%s: expected: status", argv[0]);
-                return EXIT_FAILURE;
-        }
+        /* Like systemd, the errors are returned as negative error codes, with the reason. */
+        if (argc != 2 || !streq(argv[1], "status"))
+                return log_warning_errno(EINVAL, "%s: expected: status", argv[0]);
 
         /* Report factory reset mode at the moment of probing a device. */
         f = factory_reset_mode();
@@ -26,8 +25,7 @@ static int builtin_factory_reset(struct udev_device *dev, int argc, char *argv[]
                 return EXIT_SUCCESS;
         }
 
-        udev_builtin_add_property(dev, mode, "ID_FACTORY_RESET", factory_reset_mode_to_string(f));
-        return EXIT_SUCCESS;
+        return udev_builtin_add_property(dev, mode, "ID_FACTORY_RESET", factory_reset_mode_to_string(f));
 }
 
 const struct udev_builtin udev_builtin_factory_reset = {

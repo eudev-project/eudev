@@ -942,9 +942,12 @@ static int builtin_path_id(struct udev_device *dev, int argc __attribute__((unus
                                         path_prepend(&compat_path, "nvme-%s", nsid);
 
                                 if (streq(subsys, "nvme-subsystem")) {
-                                        if (find_real_nvme_parent(dev, &dev_other_branch) < 0) {
+                                        int r;
+
+                                        r = find_real_nvme_parent(dev, &dev_other_branch);
+                                        if (r < 0) {
                                                 free(path);
-                                                return EXIT_FAILURE;
+                                                return r;
                                         }
 
                                         parent = dev_other_branch;
@@ -1033,7 +1036,9 @@ static int builtin_path_id(struct udev_device *dev, int argc __attribute__((unus
                 free(path);
                 return EXIT_SUCCESS;
         }
-        return EXIT_FAILURE;
+
+        /* Like systemd, without a path the error is ENOENT. */
+        return -ENOENT;
 }
 
 const struct udev_builtin udev_builtin_path_id = {

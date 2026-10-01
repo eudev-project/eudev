@@ -223,7 +223,7 @@ static int builtin_usb_id(struct udev_device *dev, int argc __attribute__((unuse
         if (dev_interface == NULL) {
                 log_debug("unable to access usb_interface device of '%s'",
                      udev_device_get_syspath(dev));
-                return EXIT_FAILURE;
+                return -ENOENT;
         }
 
         (void) device_get_sysattr_safe_string(dev_interface, "bInterfaceNumber", &ifnum);
@@ -233,7 +233,7 @@ static int builtin_usb_id(struct udev_device *dev, int argc __attribute__((unuse
         if (r < 0) {
                 log_debug_errno(r, "%s: Failed to read bInterfaceClass attribute: %m",
                                 udev_device_get_sysname(dev));
-                return EXIT_FAILURE;
+                return r;
         }
 
         if (if_class_num == 8) {
@@ -252,7 +252,7 @@ static int builtin_usb_id(struct udev_device *dev, int argc __attribute__((unuse
         if (!dev_usb) {
                 log_debug("unable to find parent 'usb' device of '%s'",
                      udev_device_get_syspath(dev));
-                return EXIT_FAILURE;
+                return -ENOENT;
         }
 
         /* all interfaces of the device in a single string */
@@ -335,7 +335,7 @@ fallback:
                         usb_vendor = vendor_id;
                 if (!usb_vendor) {
                         log_debug("No USB vendor information available");
-                        return EXIT_FAILURE;
+                        return -ENOENT;
                 }
                 encode_devnode_name(usb_vendor, vendor_str_enc, sizeof(vendor_str_enc));
                 util_replace_whitespace(usb_vendor, vendor_str, sizeof(vendor_str)-1);
@@ -349,7 +349,7 @@ fallback:
                 if (!usb_model)
                         usb_model = product_id;
                 if (!usb_model)
-                        return EXIT_FAILURE;
+                        return -ENOENT;
                 encode_devnode_name(usb_model, model_str_enc, sizeof(model_str_enc));
                 util_replace_whitespace(usb_model, model_str, sizeof(model_str)-1);
                 util_replace_chars(model_str, NULL);

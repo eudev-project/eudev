@@ -486,9 +486,12 @@ static int builtin_blkid(struct udev_device *dev, int argc, char *argv[], enum u
                 {}
         };
 
+        /* Like systemd, the errors are returned as negative error codes, with the reason. */
+        errno = 0;
         pr = blkid_new_probe();
         if (!pr)
-                return EXIT_FAILURE;
+                return log_debug_errno(errno_or_else(ENOMEM), "%s: Failed to create blkid prober: %m",
+                                       udev_device_get_sysname(dev));
 
         for (;;) {
                 int option;
@@ -500,10 +503,9 @@ static int builtin_blkid(struct udev_device *dev, int argc, char *argv[], enum u
                 switch (option) {
                 case 'H':
 #ifdef HAVE_BLKID_PROBE_SET_HINT
-                        if (blkid_probe_set_hint(pr, optarg, 0) < 0) {
-                                log_error("Failed to use '%s' probing hint", optarg);
-                                return EXIT_FAILURE;
-                        }
+                        errno = 0;
+                        if (blkid_probe_set_hint(pr, optarg, 0) < 0)
+                                return log_error_errno(errno_or_else(ENOMEM), "Failed to use '%s' probing hint: %m", optarg);
                         break;
 #else
                         /* Use the hint <name>=<offset> as probing offset for old versions */
@@ -516,14 +518,10 @@ static int builtin_blkid(struct udev_device *dev, int argc, char *argv[], enum u
 #endif
                 case 'o':
                         r = safe_atoi64(optarg, &offset);
-                        if (r < 0) {
-                                log_error_errno(r, "Failed to parse '%s' as an integer: %m", optarg);
-                                return EXIT_FAILURE;
-                        }
-                        if (offset < 0) {
-                                log_error("Invalid offset %"PRIi64".", offset);
-                                return EXIT_FAILURE;
-                        }
+                        if (r < 0)
+                                return log_error_errno(r, "Failed to parse '%s' as an integer: %m", optarg);
+                        if (offset < 0)
+                                return log_error_errno(EINVAL, "Invalid offset %"PRIi64".", offset);
                         break;
                 case 'R':
                         noraid = true;
@@ -543,38 +541,41 @@ static int builtin_blkid(struct udev_device *dev, int argc, char *argv[], enum u
                 blkid_probe_filter_superblocks_usage(pr, BLKID_FLTR_NOTIN, BLKID_USAGE_RAID);
 
         devnode = udev_device_get_devnode(dev);
-        if (!devnode) {
-                log_debug("%s: Failed to get device name.", udev_device_get_sysname(dev));
-                return EXIT_FAILURE;
-        }
+        if (!devnode)
+                return log_debug_errno(ENOENT, "%s: Failed to get device name: %m", udev_device_get_sysname(dev));
 
         fd = open(devnode, O_RDONLY|O_CLOEXEC|O_NONBLOCK|O_NOCTTY);
         if (fd < 0) {
                 bool ignore = IN_SET(errno, ENODEV, ENXIO, ENOENT, ENOMEDIUM);
 
-                log_debug_errno(errno, "Failed to open block device %s%s: %m",
-                                devnode, ignore ? ", ignoring" : "");
-                return ignore ? EXIT_SUCCESS : EXIT_FAILURE;
+                r = log_debug_errno(errno, "Failed to open block device %s%s: %m",
+                                    devnode, ignore ? ", ignoring" : "");
+                return ignore ? EXIT_SUCCESS : r;
         }
 
+        errno = 0;
         err = blkid_probe_set_device(pr, fd, offset, 0);
         if (err < 0)
-                goto out;
+                return log_debug_errno(errno_or_else(ENOMEM), "%s: Failed to set device to blkid prober: %m",
+                                       udev_device_get_sysname(dev));
 
         log_debug("probe %s %sraid offset=%"PRIi64,
                   devnode,
                   noraid ? "no" : "", offset);
 
         err = probe_superblocks(pr);
-        if (err < 0) {
-                log_debug_errno(err, "Failed to probe superblocks of %s: %m", devnode);
-                goto out;
-        }
+        if (err < 0)
+                return log_debug_errno(err, "Failed to probe superblocks of %s: %m", devnode);
 
         /* If the device is a partition then its parent passed the root partition UUID to the device */
         root_partition = udev_device_get_property_value(dev, "ID_PART_GPT_AUTO_ROOT_UUID");
 
+        errno = 0;
         nvals = blkid_probe_numof_values(pr);
+        if (nvals < 0)
+                return log_debug_errno(errno_or_else(ENOMEM), "%s: Failed to get number of probed values: %m",
+                                       udev_device_get_sysname(dev));
+
         for (i = 0; i < nvals; i++) {
                 if (blkid_probe_get_value(pr, i, &name, &data, NULL))
                         continue;
@@ -626,10 +627,6 @@ static int builtin_blkid(struct udev_device *dev, int argc, char *argv[], enum u
 
         if (is_gpt)
                 find_gpt_root(dev, pr, backing_fname, mode);
-
-out:
-        if (err < 0)
-                return EXIT_FAILURE;
 
         return EXIT_SUCCESS;
 }

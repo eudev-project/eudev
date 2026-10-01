@@ -79,19 +79,16 @@ static int builtin_kmod(struct udev_device *dev, int argc, char *argv[], enum ud
         if (!ctx)
                 return 0;
 
-        if (argc < 2 || !streq(argv[1], "load")) {
-                log_error("expect: %s load [module...]", argv[0]);
-                return EXIT_FAILURE;
-        }
+        /* Like systemd, the errors are returned as negative error codes, with the reason. */
+        if (argc < 2 || !streq(argv[1], "load"))
+                return log_error_errno(EINVAL, "expect: %s load [module...]", argv[0]);
 
         if (!argv[2]) {
                 const char *modalias;
 
                 modalias = udev_device_get_property_value(dev, "MODALIAS");
-                if (!modalias) {
-                        log_warning("Failed to read property \"MODALIAS\".");
-                        return EXIT_FAILURE;
-                }
+                if (!modalias)
+                        return log_warning_errno(ENOENT, "Failed to read property \"MODALIAS\": %m");
 
                 log_debug("Execute '%s' '%s'", argv[1], modalias);
                 load_module(udev, modalias);

@@ -38,26 +38,19 @@ static int builtin_btrfs(struct udev_device *dev, int argc, char *argv[], enum u
         const char *node;
         int err;
 
-        if (!IN_SET(argc, 2, 3) || !streq(argv[1], "ready")) {
-                log_error("Invalid arguments.");
-                return EXIT_FAILURE;
-        }
+        /* Like systemd, the errors are returned as negative error codes, with the reason. */
+        if (!IN_SET(argc, 2, 3) || !streq(argv[1], "ready"))
+                return log_error_errno(EINVAL, "Invalid arguments.");
 
         node = udev_device_get_devnode(dev);
-        if (!node) {
-                log_error("Failed to get device node of '%s'", udev_device_get_syspath(dev));
-                return EXIT_FAILURE;
-        }
+        if (!node)
+                return log_error_errno(ENOENT, "Failed to get device node of '%s': %m", udev_device_get_syspath(dev));
 
-        if (argc == 3 && !streq(argv[2], node)) {
-                log_debug("Device node '%s' is not owned by the device, it must be '%s'.", argv[2], node);
-                return EXIT_FAILURE;
-        }
+        if (argc == 3 && !streq(argv[2], node))
+                return log_debug_errno(EINVAL, "Device node '%s' is not owned by the device, it must be '%s'.", argv[2], node);
 
-        if (strlen(node) >= sizeof(args.name)) {
-                log_debug("Device name too long for BTRFS_IOC_DEVICES_READY call: %s", node);
-                return EXIT_FAILURE;
-        }
+        if (strlen(node) >= sizeof(args.name))
+                return log_debug_errno(EINVAL, "Device name too long for BTRFS_IOC_DEVICES_READY call: %s", node);
 
         if (mode != EVENT_UDEV_WORKER) {
                 log_debug("Running in test mode, skipping execution of 'btrfs' builtin command.");
@@ -74,14 +67,13 @@ static int builtin_btrfs(struct udev_device *dev, int argc, char *argv[], enum u
                         return EXIT_SUCCESS;
                 }
 
-                log_debug_errno(errno, "Failed to open /dev/btrfs-control: %m");
-                return EXIT_FAILURE;
+                return log_debug_errno(errno, "Failed to open /dev/btrfs-control: %m");
         }
 
         strscpy(args.name, sizeof(args.name), node);
         err = ioctl(fd, BTRFS_IOC_DEVICES_READY, &args);
         if (err < 0)
-                return EXIT_FAILURE;
+                return log_debug_errno(errno, "Failed to call BTRFS_IOC_DEVICES_READY: %m");
 
         udev_builtin_add_property(dev, mode, "ID_BTRFS_READY", one_zero(err == 0));
         return EXIT_SUCCESS;

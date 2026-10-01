@@ -58,10 +58,10 @@ static int builtin_net_driver_set_driver(struct udev_device *dev, int argc __att
         ifname = udev_device_get_property_value(dev, "INTERFACE");
         if (!ifname)
                 ifname = udev_device_get_sysname(dev);
-        if (!ifname) {
-                log_warning("Failed to get network interface name of '%s'", udev_device_get_syspath(dev));
-                return EXIT_FAILURE;
-        }
+        /* Like systemd, the errors are returned as negative error codes, with the reason. */
+        if (!ifname)
+                return log_warning_errno(ENOENT, "Failed to get network interface name of '%s': %m",
+                                         udev_device_get_syspath(dev));
 
         r = ethtool_get_driver(ifname, &driver);
         if (IN_SET(r, -EOPNOTSUPP, -ENOTTY, -ENOSYS, -EAFNOSUPPORT, -EPFNOSUPPORT,
@@ -73,13 +73,10 @@ static int builtin_net_driver_set_driver(struct udev_device *dev, int argc __att
                 log_debug_errno(r, "Device '%s' already vanished, ignoring.", ifname);
                 return EXIT_SUCCESS;
         }
-        if (r < 0) {
-                log_warning_errno(r, "Failed to get driver for '%s': %m", ifname);
-                return EXIT_FAILURE;
-        }
+        if (r < 0)
+                return log_warning_errno(r, "Failed to get driver for '%s': %m", ifname);
 
-        udev_builtin_add_property(dev, mode, "ID_NET_DRIVER", driver);
-        return EXIT_SUCCESS;
+        return udev_builtin_add_property(dev, mode, "ID_NET_DRIVER", driver);
 }
 
 const struct udev_builtin udev_builtin_net_driver = {

@@ -155,9 +155,11 @@ static int builtin_hwdb(struct udev_device *dev, int argc, char *argv[], enum ud
         const char *subsystem = NULL;
         const char *prefix = NULL;
         _cleanup_udev_device_unref_ struct udev_device *srcdev = NULL;
+        int r;
 
+        /* Like systemd, the errors are returned as negative error codes, with the reason. */
         if (!hwdb)
-                return EXIT_FAILURE;
+                return -EINVAL;
 
         for (;;) {
                 int option;
@@ -187,21 +189,29 @@ static int builtin_hwdb(struct udev_device *dev, int argc, char *argv[], enum ud
 
         /* query a specific key given as argument */
         if (argv[optind]) {
-                if (udev_builtin_hwdb_lookup(dev, prefix, argv[optind], filter, mode) > 0)
-                        return EXIT_SUCCESS;
-                return EXIT_FAILURE;
+                r = udev_builtin_hwdb_lookup(dev, prefix, argv[optind], filter, mode);
+                if (r < 0)
+                        return log_debug_errno(r, "%s: Failed to look up hwdb: %m", udev_device_get_sysname(dev));
+                if (r == 0)
+                        return log_debug_errno(ENODATA, "%s: No entry found from hwdb.", udev_device_get_sysname(dev));
+                return EXIT_SUCCESS;
         }
 
         /* read data from another device than the device we will store the data */
         if (device) {
+                errno = 0;
                 srcdev = udev_device_new_from_device_id(udev_device_get_udev(dev), device);
                 if (!srcdev)
-                        return EXIT_FAILURE;
+                        return log_debug_errno(errno > 0 ? errno : ENODEV, "%s: Failed to create device object '%s': %m",
+                                               udev_device_get_sysname(dev), device);
         }
 
-        if (udev_builtin_hwdb_search(dev, srcdev, subsystem, prefix, filter, mode) > 0)
-                return EXIT_SUCCESS;
-        return EXIT_FAILURE;
+        r = udev_builtin_hwdb_search(dev, srcdev, subsystem, prefix, filter, mode);
+        if (r < 0)
+                return log_debug_errno(r, "%s: Failed to look up hwdb: %m", udev_device_get_sysname(dev));
+        if (r == 0)
+                return log_debug_errno(ENODATA, "%s: No entry found from hwdb.", udev_device_get_sysname(dev));
+        return EXIT_SUCCESS;
 }
 
 /* called at udev startup and reload */

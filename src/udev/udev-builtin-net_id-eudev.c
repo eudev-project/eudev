@@ -473,10 +473,11 @@ int udev_builtin_net_id_eudev(struct udev_device *dev, enum udev_event_mode mode
         struct netnames names = {};
         int err;
 
-        /* handle only ARPHRD_ETHER and ARPHRD_SLIP devices */
+        /* handle only ARPHRD_ETHER and ARPHRD_SLIP devices; like systemd, the errors are returned
+         * as negative error codes */
         s = udev_device_get_sysattr_value(dev, "type");
         if (!s)
-                return EXIT_FAILURE;
+                return -ENOENT;
         i = strtoul(s, NULL, 0);
         switch (i) {
         case ARPHRD_ETHER:
@@ -492,10 +493,10 @@ int udev_builtin_net_id_eudev(struct udev_device *dev, enum udev_event_mode mode
         /* skip stacked devices, like VLANs, ... */
         s = udev_device_get_sysattr_value(dev, "ifindex");
         if (!s)
-                return EXIT_FAILURE;
+                return -ENOENT;
         p = udev_device_get_sysattr_value(dev, "iflink");
         if (!p)
-                return EXIT_FAILURE;
+                return -ENOENT;
         if (!streq(s, p))
                 return 0;
 

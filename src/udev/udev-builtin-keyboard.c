@@ -211,11 +211,10 @@ static int builtin_keyboard(struct udev_device *dev, int argc __attribute__((unu
                 return EXIT_SUCCESS;
         }
 
+        /* Like systemd, the errors are returned as negative error codes, with the reason. */
         node = udev_device_get_devnode(dev);
-        if (!node) {
-                log_error("No device node for \"%s\"", udev_device_get_syspath(dev));
-                return EXIT_FAILURE;
-        }
+        if (!node)
+                return log_error_errno(ENOENT, "No device node for \"%s\": %m", udev_device_get_syspath(dev));
 
         udev_list_entry_foreach(entry, udev_device_get_properties_list_entry(dev)) {
                 const char *key;
@@ -250,7 +249,7 @@ static int builtin_keyboard(struct udev_device *dev, int argc __attribute__((unu
                         if (fd == -1) {
                                 fd = open_device(node);
                                 if (fd < 0)
-                                        return errno_is_device_absent_or_empty(fd) ? EXIT_SUCCESS : EXIT_FAILURE;
+                                        return errno_is_device_absent_or_empty(fd) ? EXIT_SUCCESS : fd;
                         }
 
                         map_keycode(fd, node, scancode, keycode);
@@ -267,7 +266,7 @@ static int builtin_keyboard(struct udev_device *dev, int argc __attribute__((unu
                         if (fd == -1) {
                                 fd = open_device(node);
                                 if (fd < 0)
-                                        return errno_is_device_absent_or_empty(fd) ? EXIT_SUCCESS : EXIT_FAILURE;
+                                        return errno_is_device_absent_or_empty(fd) ? EXIT_SUCCESS : fd;
                         }
 
                         if (has_abs == -1) {
@@ -275,10 +274,8 @@ static int builtin_keyboard(struct udev_device *dev, int argc __attribute__((unu
                                 int rc;
 
                                 rc = ioctl(fd, EVIOCGBIT(0, sizeof(bits)), &bits);
-                                if (rc < 0) {
-                                        log_error_errno(errno, "Unable to EVIOCGBIT device \"%s\"", node);
-                                        return EXIT_FAILURE;
-                                }
+                                if (rc < 0)
+                                        return log_error_errno(errno, "Unable to EVIOCGBIT device \"%s\": %m", node);
 
                                 has_abs = !!(bits & (1 << EV_ABS));
                                 if (!has_abs)

@@ -1605,10 +1605,8 @@ static int builtin_net_id(struct udev_device *dev, int argc __attribute__((unuse
 
         /* skip stacked devices, like VLANs, ... */
         r = device_is_stacked(dev);
-        if (r < 0) {
-                log_device_debug_errno(dev, r, "Failed to check if the device is stacked: %m");
-                return EXIT_FAILURE;
-        }
+        if (r < 0)
+                return log_device_debug_errno(dev, r, "Failed to check if the device is stacked: %m");
         if (r > 0)
                 return EXIT_SUCCESS;
 
