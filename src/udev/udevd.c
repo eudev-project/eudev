@@ -837,6 +837,97 @@ static void event_run(struct event *event) {
         worker_spawn(event);
 }
 
+/* appends ", " and the formatted text to *msg, or only the text when *msg is NULL; on failure, *msg is kept */
+_printf_(2, 3)
+static void strextendf_with_comma(char **msg, const char *format, ...) {
+        _cleanup_free_ char *add = NULL;
+        va_list ap;
+        char *n;
+        int r;
+
+        va_start(ap, format);
+        r = vasprintf(&add, format, ap);
+        va_end(ap);
+        if (r < 0)
+                return;
+
+        n = *msg ? strjoin(*msg, ", ", add, NULL) : strdup(add);
+        if (!n)
+                return;
+
+        free(*msg);
+        *msg = n;
+}
+
+/* Like log_device_uevent() of systemd 9692552071 (whose "Device is queued" message eudev has as
+ * "seq ... queued"): logs the event with its UUID and the caller information that udevadm trigger, udevd and
+ * other programs add to the synthetic uevents they trigger (SYNTH_UUID=, SYNTH_ARG_*=, see
+ * uevent_trigger_with_args()), as far as the event has them. PIDFDID and InvocationID come only from programs
+ * of systemd, eudev does not send them. */
+static void log_event_queued(struct udev_device *dev) {
+        _cleanup_free_ char *msg = NULL;
+        const char *s;
+        unsigned pid;
+        uint64_t u;
+        id128_t id;
+
+        if (log_get_max_level() < LOG_DEBUG)
+                return;
+
+        s = udev_device_get_property_value(dev, "SYNTH_UUID");
+        if (s && id128_from_string(s, &id) >= 0) {
+                char uuid[ID128_UUID_STRING_MAX];
+
+                strextendf_with_comma(&msg, "UUID=%s", id128_to_uuid_string(id, uuid));
+        }
+
+        s = udev_device_get_property_value(dev, "SYNTH_ARG_PID");
+        if (s && safe_atou(s, &pid) >= 0 && pid > 0 && pid <= INT_MAX)
+                strextendf_with_comma(&msg, "PID="PID_FMT, (pid_t) pid);
+
+        s = udev_device_get_property_value(dev, "SYNTH_ARG_PIDFDID");
+        if (s && safe_atou64(s, &u) >= 0)
+                strextendf_with_comma(&msg, "PIDFDID=%" PRIu64, u);
+
+        s = udev_device_get_property_value(dev, "SYNTH_ARG_Comm");
+        if (s)
+                strextendf_with_comma(&msg, "Comm=%s", s);
+
+        s = udev_device_get_property_value(dev, "SYNTH_ARG_InvocationID");
+        if (s && id128_from_string(s, &id) >= 0) {
+                char uuid[ID128_UUID_STRING_MAX], plain[ID128_UUID_STRING_MAX];
+                size_t i, n = 0;
+
+                /* the plain form of 32 hexadecimal digits, like SD_ID128_TO_STRING() */
+                id128_to_uuid_string(id, uuid);
+                for (i = 0; uuid[i] != '\0'; i++)
+                        if (uuid[i] != '-')
+                                plain[n++] = uuid[i];
+                plain[n] = '\0';
+                strextendf_with_comma(&msg, "InvocationID=%s", plain);
+        }
+
+        s = udev_device_get_property_value(dev, "SYNTH_ARG_TimestampRealtime");
+        if (s && safe_atou64(s, &u) >= 0) {
+                char buf[FORMAT_TIMESTAMP_MAX];
+
+                if (format_timestamp(buf, sizeof(buf), u))
+                        strextendf_with_comma(&msg, "TimestampRealtime='%s'", buf);
+        }
+
+        s = udev_device_get_property_value(dev, "SYNTH_ARG_TimestampMonotonic");
+        if (s && safe_atou64(s, &u) >= 0)
+                strextendf_with_comma(&msg, "TimestampMonotonic=" USEC_FMT, u);
+
+        s = udev_device_get_property_value(dev, "SYNTH_ARG_TimestampBoottime");
+        if (s && safe_atou64(s, &u) >= 0)
+                strextendf_with_comma(&msg, "TimestampBoottime=" USEC_FMT, u);
+
+        log_debug("seq %llu queued, '%s' '%s'%s%s%s", udev_device_get_seqnum(dev),
+                  udev_device_get_action(dev), udev_device_get_subsystem(dev),
+                  msg ? " (" : "", msg ?: "", msg ? ")" : "");
+}
+
 static int event_queue_insert(struct udev_device *dev) {
         struct event *event;
 
@@ -854,8 +945,7 @@ static int event_queue_insert(struct udev_device *dev) {
         event->is_block = streq("block", udev_device_get_subsystem(dev));
         event->ifindex = udev_device_get_ifindex(dev);
 
-        log_debug("seq %llu queued, '%s' '%s'", udev_device_get_seqnum(dev),
-             udev_device_get_action(dev), udev_device_get_subsystem(dev));
+        log_event_queued(dev);
 
         event->state = EVENT_QUEUED;
         udev_list_node_append(&event->node, &event_list);
