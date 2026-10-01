@@ -711,11 +711,10 @@ void udev_rules_check_token(struct udev_rules_check *c, const char *base, const 
                 c->current.has_other = true;
 
         } else if (streq(base, "LABEL")) {
-                /* An attribute or a wrong operator is reported by the parser. */
+                /* An attribute, a wrong operator and a LABEL after the first are reported by the
+                 * parser, which takes the last one. */
                 if (attr || op != CHECK_OP_ASSIGN)
                         return;
-                if (c->current.label)
-                        log_line_warning(c, "Contains multiple LABEL keys, ignoring LABEL=\"%s\".", c->current.label);
 
                 set_label(c, &c->current.label, value);
 

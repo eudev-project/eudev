@@ -563,6 +563,8 @@ struct rule_tmp {
         bool case_insensitive;
         /* the rule has a GOTO already */
         bool has_goto;
+        /* the rule has a LABEL already */
+        bool has_label;
 };
 
 #ifdef DEBUG
@@ -2469,6 +2471,11 @@ static int add_rule(struct udev_rules *rules, char *line,
                                 log_rule_invalid_op("LABEL");
                                 goto invalid;
                         }
+                        /* like systemd, the last LABEL counts */
+                        if (rule_tmp.has_label)
+                                log_rule_warning("Contains multiple LABEL keys, ignoring LABEL=\"%s\".",
+                                                 rules_str(rules, rule_tmp.rule.rule.label_off));
+                        rule_tmp.has_label = true;
                         r = rules_add_string(rules, value, &rule_tmp.rule.rule.label_off);
                         if (r < 0) {
                                 log_rule_error_errno(r, "Failed to add the key: %m");
