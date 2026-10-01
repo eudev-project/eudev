@@ -57,4 +57,3 @@ int conf_file_new(const char *path, const char *root, ConfFilesFlags flags, Conf
 int conf_files_list_strv(char ***ret, const char *suffix, const char *root, ConfFilesFlags flags, const char * const *dirs);
 int conf_files_list_strv_full(const char *suffix, const char *root, ConfFilesFlags flags, const char * const *dirs,
                               ConfFile ***ret_files, size_t *ret_n_files);
-int conf_files_list_strv_path(char ***strv, const char *suffix, const char *root, ConfFilesFlags flags, const char* path);

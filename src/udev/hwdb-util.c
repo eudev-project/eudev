@@ -610,8 +610,10 @@ static int import_file(struct udev *udev, struct trie *trie, const char *filenam
 
 int hwdb_update(struct udev *udev, const char *root, const char *hwdb_bin, bool strict) {
         _cleanup_free_ char *conf_file_path = NULL, *full_hwdb_bin = NULL;
+        _cleanup_strv_free_ char **dirs = NULL;
         struct trie *trie = NULL;
-        char **files = NULL, **f;
+        ConfFile **files = NULL;
+        size_t n_files = 0, i;
         uint16_t file_priority = 1;
         int err, format, ret = 0;
 
@@ -675,19 +677,24 @@ int hwdb_update(struct udev *udev, const char *root, const char *hwdb_bin, bool 
                 err = log_oom();
                 goto out;
         }
+        err = strv_split_and_extend(&dirs, conf_file_path, ":", false);
+        if (err < 0) {
+                err = log_oom();
+                goto out;
+        }
+
         /* Like systemd, masks, i.e. symlinks to /dev/null and empty files, and files that are not regular
-         * files are not listed, so that they do not count as hwdb files. */
-        err = conf_files_list_strv_path(&files, ".hwdb", root,
+         * files are not listed, so that they do not count as hwdb files. The files are resolved below
+         * root. */
+        err = conf_files_list_strv_full(".hwdb", root,
                                         CONF_FILES_REGULAR | CONF_FILES_FILTER_MASKED | CONF_FILES_WARN,
-                                        conf_file_path);
+                                        (const char * const *) dirs, &files, &n_files);
         if (err < 0) {
                 log_error_errno(err, "failed to enumerate hwdb files: %m");
                 goto out;
         }
 
-        if (strv_isempty(files)) {
-                strv_free(files);
-
+        if (n_files == 0) {
                 if (unlink(hwdb_bin) < 0) {
                         if (errno != ENOENT) {
                                 err = log_error_errno(errno, "Failed to remove compiled hwdb database %s: %m", hwdb_bin);
@@ -702,23 +709,24 @@ int hwdb_update(struct udev *udev, const char *root, const char *hwdb_bin, bool 
                 goto out;
         }
 
-        STRV_FOREACH(f, files) {
-                const char *path_in_root = *f;
+        for (i = 0; i < n_files; i++) {
+                const ConfFile *c = files[i];
+                const char *path_in_root = c->original_path;
 
-                /* Strip the root from the filename stored in the database, to not
-                 * leak build paths and keep the database reproducible. The files
-                 * are listed as the root directly followed by the path. */
-                if (!isempty(root) && startswith(*f, root)) {
-                        path_in_root = *f + strlen(root);
-                        while (path_in_root[0] == '/' && path_in_root[1] == '/')
-                                path_in_root++;
+                /* Like systemd, the database stores the path as found in the directory, without the
+                 * root, to not leak build paths and keep the database reproducible, and the file is read
+                 * with its symlinks resolved below the root. */
+                if (!isempty(root)) {
+                        const char *p = path_startswith(c->original_path, root);
+
+                        if (p && p > c->original_path && p[-1] == '/')
+                                path_in_root = p - 1;
                 }
 
-                log_debug("reading file '%s' -> '%s'", *f, path_in_root);
-                if (import_file(udev, trie, *f, path_in_root, file_priority++) < 0 && ret == 0)
+                log_debug("Reading file \"%s\" -> \"%s\"", c->original_path, c->resolved_path);
+                if (import_file(udev, trie, c->resolved_path, path_in_root, file_priority++) < 0 && ret == 0)
                         ret = -EINVAL;
         }
-        strv_free(files);
 
         strbuf_complete(trie->strings);
 
@@ -749,6 +757,7 @@ int hwdb_update(struct udev *udev, const char *root, const char *hwdb_bin, bool 
 
         err = strict ? ret : 0;
 out:
+        conf_file_free_array(files, n_files);
         if (trie) {
                 if (trie->root)
                         trie_node_cleanup(trie->root);
