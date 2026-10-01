@@ -72,9 +72,10 @@
       lexicographically, and in case of records in the same file, later records have
       higher priority.</para>
 
-      <para>The content of all hwdb files is read by
-      <citerefentry><refentrytitle>systemd-hwdb</refentrytitle><manvolnum>8</manvolnum></citerefentry>
-      and compiled to a binary database located at <filename>/etc/udev/hwdb.bin</filename>,
+      <para>The content of all hwdb files is read by <command>udevadm hwdb --update</command>
+      (see <citerefentry><refentrytitle>udevadm</refentrytitle><manvolnum>8</manvolnum></citerefentry>)
+      or by <citerefentry><refentrytitle>systemd-hwdb</refentrytitle><manvolnum>8</manvolnum></citerefentry>
+      (if installed) and compiled to a binary database located at <filename>/etc/udev/hwdb.bin</filename>,
       or alternatively <filename>/usr/lib/udev/hwdb.bin</filename> if you want ship the
       compiled database in an immutable image.  During runtime, only the binary database
       is used.</para>
@@ -147,8 +148,12 @@ PROPERTY_WITH_SPACES=some string</programlisting>
     <title>See Also</title>
     <para>
       <citerefentry>
+        <refentrytitle>udevadm</refentrytitle><manvolnum>8</manvolnum>
+      </citerefentry>,
+      <citerefentry>
         <refentrytitle>systemd-hwdb</refentrytitle><manvolnum>8</manvolnum>
       </citerefentry>
+      (if installed)
     </para>
   </refsect1>
 </refentry>

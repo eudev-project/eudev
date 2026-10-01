@@ -97,8 +97,11 @@ are ignored\&.
 In case multiple records match a given lookup string, the key\-value pairs from all records are combined\&. If a key is specified multiple times, the value from the record with the highest priority is used (each key can have only a single value)\&. The priority is higher when the record is in a file that sorts later lexicographically, and in case of records in the same file, later records have higher priority\&.
 .PP
 The content of all hwdb files is read by
+\fBudevadm hwdb \-\-update\fR
+(see
+\fBudevadm\fR(8)) or by
 \fBsystemd-hwdb\fR(8)
-and compiled to a binary database located at
+(if installed) and compiled to a binary database located at
 /etc/udev/hwdb\&.bin, or alternatively
 /usr/lib/udev/hwdb\&.bin
 if you want ship the compiled database in an immutable image\&. During runtime, only the binary database is used\&.
@@ -182,4 +185,6 @@ PROPERTY_WITH_SPACES=some string
 .\}
 .SH "SEE ALSO"
 .PP
+\fBudevadm\fR(8),
 \fBsystemd-hwdb\fR(8)
+(if installed)
