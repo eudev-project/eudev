@@ -616,6 +616,21 @@ bool gid_is_system(gid_t gid) {
         return gid <= acquire_ugid_allocation_range()->system_gid_max;
 }
 
+/* strtoul() and the other strto*() functions skip all leading characters for which isspace() is true, in
+ * the C locale \v and \f as well as WHITESPACE. The safe_ato*() functions skip, or refuse, exactly those
+ * characters too, so that their checks of the sign and of the base prefix see the character that strto*()
+ * parses first. systemd skips only WHITESPACE there, so that it parses "\v-1" as an unsigned -1. */
+static bool is_strto_space(char c) {
+        return isspace((unsigned char) c);
+}
+
+static const char *skip_strto_space(const char *s) {
+        while (is_strto_space(*s))
+                s++;
+
+        return s;
+}
+
 static const char *mangle_base(const char *s, unsigned *base) {
         const char *k;
 
@@ -655,10 +670,10 @@ int safe_atou_full(const char *s, unsigned base, unsigned *ret_u) {
          * otherwise, so that we return EINVAL preferably over ERANGE. */
 
         if (FLAGS_SET(base, SAFE_ATO_REFUSE_LEADING_WHITESPACE) &&
-            strchr(WHITESPACE, s[0]))
+            is_strto_space(s[0]))
                 return -EINVAL;
 
-        s += strspn(s, WHITESPACE);
+        s = skip_strto_space(s);
 
         if (FLAGS_SET(base, SAFE_ATO_REFUSE_PLUS_MINUS) &&
             (s[0] == '+' || s[0] == '-'))
@@ -700,7 +715,7 @@ int safe_atoi(const char *s, int *ret_i) {
 
         assert(s);
 
-        s += strspn(s, WHITESPACE);
+        s = skip_strto_space(s);
         s = mangle_base(s, &base);
 
         errno = 0;
@@ -925,10 +940,10 @@ int safe_atollu_full(const char *s, unsigned base, unsigned long long *ret_llu) 
         assert(SAFE_ATO_MASK_FLAGS(base) <= 16);
 
         if (FLAGS_SET(base, SAFE_ATO_REFUSE_LEADING_WHITESPACE) &&
-            strchr(WHITESPACE, s[0]))
+            is_strto_space(s[0]))
                 return -EINVAL;
 
-        s += strspn(s, WHITESPACE);
+        s = skip_strto_space(s);
 
         if (FLAGS_SET(base, SAFE_ATO_REFUSE_PLUS_MINUS) &&
             (s[0] == '+' || s[0] == '-'))
@@ -962,7 +977,7 @@ int safe_atolli(const char *s, long long int *ret_lli) {
 
         assert(s);
 
-        s += strspn(s, WHITESPACE);
+        s = skip_strto_space(s);
         s = mangle_base(s, &base);
 
         errno = 0;
