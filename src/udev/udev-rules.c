@@ -336,9 +336,13 @@ struct token {
                 unsigned char type;                /* same in rule and key */
                 struct {
                         enum token_type type:8;
-                        bool can_set_name:1;
-                        bool has_static_node:1;
-                        unsigned int unused:6;
+                        /* What the rule has, like the line types of systemd, see rule_add_key(): */
+                        bool has_name:1;                /* NAME= */
+                        bool has_devlink:1;             /* SYMLINK=, OWNER=, GROUP= or MODE= */
+                        bool has_static_node:1;         /* OPTIONS="static_node=" */
+                        bool has_goto:1;                /* a GOTO= that has its LABEL= */
+                        bool update_something:1;        /* other assignments, PROGRAM or IMPORT */
+                        unsigned int unused:3;
                         unsigned short token_count;
                         unsigned int label_off;
                         unsigned int filename_off;
@@ -1915,6 +1919,23 @@ static int rule_add_key(struct rule_tmp *rule_tmp, enum token_type type,
         token->key.type = type;
         token->key.op = op;
         rule_tmp->token_cur++;
+
+        /* Like the line types of rule_line_add_token() of systemd, which udev_rules_apply_to_event() uses to
+         * skip the rules that cannot do anything for the event. A GOTO without its LABEL is cleared in
+         * parse_file(). */
+        if (type == TK_A_NAME)
+                rule_tmp->rule.rule.has_name = true;
+        else if (IN_SET(type, TK_A_DEVLINK, TK_A_OWNER, TK_A_GROUP, TK_A_MODE, TK_A_OWNER_ID, TK_A_GROUP_ID,
+                        TK_A_MODE_ID))
+                rule_tmp->rule.rule.has_devlink = true;
+        else if (type == TK_A_STATIC_NODE)
+                rule_tmp->rule.rule.has_static_node = true;
+        else if (type == TK_A_GOTO)
+                rule_tmp->rule.rule.has_goto = true;
+        else if (type > TK_M_MAX ||
+                 IN_SET(type, TK_M_PROGRAM, TK_M_IMPORT_FILE, TK_M_IMPORT_PROG, TK_M_IMPORT_BUILTIN,
+                        TK_M_IMPORT_DB, TK_M_IMPORT_CMDLINE, TK_M_IMPORT_PARENT))
+                rule_tmp->rule.rule.update_something = true;
         return 0;
 }
 
@@ -2020,7 +2041,6 @@ static int parse_options(struct rule_tmp *rule_tmp, enum operation_type op, cons
                         }
                         case OPTION_STATIC_NODE:
                                 rule_add_key(rule_tmp, TK_A_STATIC_NODE, op, arg, NULL);
-                                rule_tmp->rule.rule.has_static_node = true;
                                 break;
                         case OPTION_LINK_PRIORITY: {
                                 int prio, r;
@@ -2491,7 +2511,6 @@ static int add_rule(struct udev_rules *rules, char *line,
                                 }
                                 rule_add_key(&rule_tmp, TK_A_NAME, op, value, NULL);
                         }
-                        rule_tmp.rule.rule.can_set_name = true;
                         continue;
                 }
 
@@ -2500,7 +2519,6 @@ static int add_rule(struct udev_rules *rules, char *line,
                                 rule_add_key(&rule_tmp, TK_M_DEVLINK, op, value, NULL);
                         else
                                 rule_add_key(&rule_tmp, TK_A_DEVLINK, op, value, NULL);
-                        rule_tmp.rule.rule.can_set_name = true;
                         continue;
                 }
 
@@ -2536,7 +2554,6 @@ static int add_rule(struct udev_rules *rules, char *line,
                                         log_rule_debug("User name resolution is disabled, ignoring OWNER=\"%s\".", value);
                                 continue;
                         }
-                        rule_tmp.rule.rule.can_set_name = true;
                         continue;
                 }
 
@@ -2561,7 +2578,6 @@ static int add_rule(struct udev_rules *rules, char *line,
                                 continue;
                         } else
                                 rule_add_key(&rule_tmp, TK_A_MODE, op, value, NULL);
-                        rule_tmp.rule.rule.can_set_name = true;
                         continue;
                 }
 
@@ -2633,7 +2649,7 @@ static int parse_file(struct udev_rules *rules, const char *filename) {
         unsigned int filename_off = 0;  /* avoid false maybe-uninitialized warning */
         unsigned line_nr = 0, first_line_nr = 0, too_long_line_nr = 0;
         bool ignore_line = false;
-        unsigned int i;
+        unsigned int i, rule_idx;
         int r;
 
         f = fopen(filename, "re");
@@ -2755,9 +2771,11 @@ static int parse_file(struct udev_rules *rules, const char *filename) {
         }
 
         /* link GOTOs to LABEL rules in this file to be able to fast-forward */
-        for (i = first_token; i < rules->token_cur; i++) {
-                if (rules->tokens[i].type == TK_RULE)
+        for (i = first_token, rule_idx = first_token; i < rules->token_cur; i++) {
+                if (rules->tokens[i].type == TK_RULE) {
                         parse_line_nr = rules->tokens[i].rule.filename_line;
+                        rule_idx = i;
+                }
                 if (rules->tokens[i].type == TK_A_GOTO) {
                         char *label = rules_str(rules, rules->tokens[i].key.value_off);
                         unsigned int j;
@@ -2773,6 +2791,8 @@ static int parse_file(struct udev_rules *rules, const char *filename) {
                                 break;
                         }
                         if (rules->tokens[i].key.rule_goto == 0) {
+                                /* like systemd, the rule has no GOTO then */
+                                rules->tokens[rule_idx].rule.has_goto = false;
                                 log_rule_error("GOTO=\"%s\" has no matching label, ignoring.", label);
                                 if (checking)
                                         udev_rules_check_goto_unresolved(checking, parse_line_nr);
@@ -3165,11 +3185,19 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
         struct token *cur;
         struct token *rule;
         enum escape_type esc = ESCAPE_UNSET;
+        bool has_node = false, is_netif = false;
         bool ok;
         int r;
 
         if (rules->tokens == NULL)
                 return 0;
+
+        /* Like udev_rule_apply_line_to_event() of systemd, NAME= applies only to a network interface, and
+         * SYMLINK=, OWNER=, GROUP= and MODE= only to a device node, and not on remove events. */
+        if (!streq_ptr(udev_device_get_action(event->dev), "remove")) {
+                has_node = major(udev_device_get_devnum(event->dev)) > 0;
+                is_netif = udev_device_get_ifindex(event->dev) > 0;
+        }
 
         /* loop through token list, match, run actions or forward to next rule */
         cur = &rules->tokens[0];
@@ -3180,6 +3208,12 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                 case TK_RULE:
                         /* current rule */
                         rule = cur;
+                        /* Like systemd, do not even evaluate a rule that cannot do anything for the event:
+                         * one without assignment, GOTO, PROGRAM or IMPORT, or whose only assignments do not
+                         * apply to the device or the event. */
+                        if (!rule->rule.has_goto && !rule->rule.update_something &&
+                            !(has_node && rule->rule.has_devlink) && !(is_netif && rule->rule.has_name))
+                                goto nomatch;
                         esc = ESCAPE_UNSET;
                         break;
                 case TK_M_ACTION:
@@ -4230,7 +4264,7 @@ int udev_rules_assigning_name_to(struct udev_rules *rules, const char *match_nam
                 case TK_RULE:
                         /* current rule */
                         rule = cur;
-                        if (!rule->rule.can_set_name)
+                        if (!rule->rule.has_name)
                                 goto nomatch;
                         break;
                 case TK_M_SUBSYSTEM:

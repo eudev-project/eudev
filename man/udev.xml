@@ -97,6 +97,19 @@
       <varname>GROUP</varname> and <varname>MODE</varname> have no effect on such a
       device.</para>
 
+      <para>Like in systemd, a rule line is not evaluated at all when it cannot do anything
+      for the event: when it has no assignment, <varname>GOTO</varname> (with its
+      <varname>LABEL</varname>), <varname>PROGRAM</varname> or <varname>IMPORT</varname> key,
+      or when its only assignments are <varname>NAME</varname>, and the device is not a
+      network interface, or <varname>SYMLINK</varname>, <varname>OWNER</varname>,
+      <varname>GROUP</varname> or <varname>MODE</varname>, and the device has no device
+      node, or only any of these keys on a remove event. Its match keys are not evaluated then,
+      so their errors that otherwise stop the processing of the event, e.g. of
+      <varname>TEST</varname> or <varname>SYSCTL{}</varname>, do not happen, and
+      <command>udevadm test</command> does not show the line.
+      <command>udevadm verify</command> reports a rule line that has none of these keys as
+      having no effect.</para>
+
       <para>A rule consists of a comma-separated list of one or more key-value pairs.
       Each key has a distinct operation, depending on the used operator. Some keys take
       an attribute in braces right after the key name, like

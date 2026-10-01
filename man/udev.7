@@ -74,6 +74,28 @@ and
 \fIMODE\fR
 have no effect on such a device\&.
 .PP
+Like in systemd, a rule line is not evaluated at all when it cannot do anything for the event: when it has no assignment,
+\fIGOTO\fR
+(with its
+\fILABEL\fR),
+\fIPROGRAM\fR
+or
+\fIIMPORT\fR
+key, or when its only assignments are
+\fINAME\fR, and the device is not a network interface, or
+\fISYMLINK\fR,
+\fIOWNER\fR,
+\fIGROUP\fR
+or
+\fIMODE\fR, and the device has no device node, or only any of these keys on a remove event\&. Its match keys are not evaluated then, so their errors that otherwise stop the processing of the event, e\&.g\&. of
+\fITEST\fR
+or
+\fISYSCTL{}\fR, do not happen, and
+\fBudevadm test\fR
+does not show the line\&.
+\fBudevadm verify\fR
+reports a rule line that has none of these keys as having no effect\&.
+.PP
 A rule consists of a comma\-separated list of one or more key\-value pairs\&. Each key has a distinct operation, depending on the used operator\&. Some keys take an attribute in braces right after the key name, like
 \fIATTR{\fR\fI\fIfilename\fR\fR\fI}\fR; the attribute may contain any character except
 }, also whitespace\&. A rule line with a key\-value pair that cannot be parsed, e\&.g\&. with a value that is not quoted, or with an unknown key, an attribute or an operator the key does not take, a missing or empty attribute, an unknown built\-in command, or an unknown type of

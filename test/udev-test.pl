@@ -1904,6 +1904,29 @@ KERNEL=="0000:00:1f.2", ACTION=="add", NAME="x", SYMLINK+="y", OWNER="1", GROUP=
 EOF
         },
         {
+                desc            => "rule lines that cannot do anything for the event are not evaluated",
+                devpath         => "/devices/pci0000:00/0000:00:1f.2/host0/target0:0:0/0:0:0:0/block/sda",
+                exp_name        => "found",
+                rules           => <<EOF
+KERNEL=="sda", TEST=="/etc/passwd/*/x"
+KERNEL=="sda", SYSCTL{kernel}=="x", NAME=="x", SYMLINK=="x", RESULT=="x", LABEL="x"
+KERNEL=="sda", SYSCTL{kernel}=="x", NAME="x"
+KERNEL=="sda", SYSCTL{kernel}=="x", GOTO="nosuchlabel"
+KERNEL=="sda", SYMLINK+="found"
+EOF
+        },
+        {
+                desc            => "rule lines whose only assignments do not apply to the device are not evaluated",
+                devpath         => "/devices/pci0000:00/0000:00:1f.2",
+                exp_name        => "found",
+                exp_rem_error   => "yes",
+                option          => "clean",
+                rules           => <<EOF
+KERNEL=="0000:00:1f.2", TEST=="/etc/passwd/*/x", NAME="x", SYMLINK+="y", OWNER="1", GROUP="1", MODE="0666"
+KERNEL=="0000:00:1f.2", ACTION=="add", RUN+="/bin/ln -s null /dev/found"
+EOF
+        },
+        {
                 desc            => "an IMPORT{file} error stops the processing of the event",
                 devpath         => "/devices/pci0000:00/0000:00:1f.2/host0/target0:0:0/0:0:0:0/block/sda",
                 exp_name        => "sda",
@@ -1932,7 +1955,7 @@ EOF
                 not_exp_name    => "bad",
                 rules           => <<EOF
 KERNEL=="sda", SYMLINK+="bad"
-KERNEL=="sda", TEST=="/etc/passwd/*/x"
+KERNEL=="sda", TEST=="/etc/passwd/*/x", ENV{X}="1"
 KERNEL=="sda", SYMLINK+="bad", RUN+="/bin/sh -c 'ln -s sda /dev/bad'"
 EOF
         },
@@ -1943,7 +1966,7 @@ EOF
                 not_exp_name    => "bad",
                 rules           => <<EOF
 KERNEL=="sda", SYMLINK+="bad"
-KERNEL=="sda", SYSCTL{kernel}=="x"
+KERNEL=="sda", SYSCTL{kernel}=="x", ENV{X}="1"
 KERNEL=="sda", SYMLINK+="bad", RUN+="/bin/sh -c 'ln -s sda /dev/bad'"
 EOF
         },
