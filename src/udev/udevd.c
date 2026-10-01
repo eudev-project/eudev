@@ -1314,8 +1314,8 @@ static void handle_ctrl_msg(struct udev_ctrl *uctrl) {
         if (!ctrl_msg)
                 return;
 
-        i = udev_ctrl_get_set_log_level(ctrl_msg);
-        if (i >= 0) {
+        if (udev_ctrl_get_set_log_level(ctrl_msg, &i) > 0) {
+                /* this also refuses a negative level, which was ignored silently */
                 if ((i & LOG_PRIMASK) != i)
                         log_warning("udevd message (SET_LOG_LEVEL) received with invalid log_level=%i, ignoring", i);
                 else {

@@ -507,10 +507,13 @@ struct udev_ctrl_msg *udev_ctrl_msg_unref(struct udev_ctrl_msg *ctrl_msg) {
         return NULL;
 }
 
-int udev_ctrl_get_set_log_level(struct udev_ctrl_msg *ctrl_msg) {
-        if (ctrl_msg->ctrl_msg_wire.type == UDEV_CTRL_SET_LOG_LEVEL)
-                return ctrl_msg->ctrl_msg_wire.intval;
-        return -1;
+/* Returns 1 and the log level in *ret if this is a SET_LOG_LEVEL message, and 0 otherwise, so that the caller
+ * can tell an invalid, e.g. negative, log level from another message. */
+int udev_ctrl_get_set_log_level(struct udev_ctrl_msg *ctrl_msg, int *ret) {
+        if (ctrl_msg->ctrl_msg_wire.type != UDEV_CTRL_SET_LOG_LEVEL)
+                return 0;
+        *ret = ctrl_msg->ctrl_msg_wire.intval;
+        return 1;
 }
 
 int udev_ctrl_get_stop_exec_queue(struct udev_ctrl_msg *ctrl_msg) {

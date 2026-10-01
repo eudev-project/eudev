@@ -199,7 +199,7 @@ struct udev_ctrl_msg;
 struct udev_ctrl_msg *udev_ctrl_receive_msg(struct udev_ctrl_connection *conn);
 struct udev_ctrl_msg *udev_ctrl_msg_unref(struct udev_ctrl_msg *ctrl_msg);
 int udev_ctrl_msg_reply(struct udev_ctrl_msg *ctrl_msg);
-int udev_ctrl_get_set_log_level(struct udev_ctrl_msg *ctrl_msg);
+int udev_ctrl_get_set_log_level(struct udev_ctrl_msg *ctrl_msg, int *ret);
 int udev_ctrl_get_stop_exec_queue(struct udev_ctrl_msg *ctrl_msg);
 int udev_ctrl_get_start_exec_queue(struct udev_ctrl_msg *ctrl_msg);
 int udev_ctrl_get_reload(struct udev_ctrl_msg *ctrl_msg);
