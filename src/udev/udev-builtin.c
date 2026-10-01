@@ -116,13 +116,16 @@ enum udev_builtin_cmd udev_builtin_lookup(const char *command) {
 }
 
 int udev_builtin_run(struct udev_device *dev, enum udev_builtin_cmd cmd, const char *command, enum udev_event_mode mode) {
-        char arg[UTIL_PATH_SIZE];
+        _cleanup_free_ char *arg = NULL;
         int argc;
         char *argv[UDEV_ARGV_MAX];
 
         /* we need '0' here to reset the internal state */
         optind = 0;
-        strscpy(arg, sizeof(arg), command);
+        /* like systemd, which splits the command into a new string vector, do not cut it */
+        arg = strdup(command);
+        if (!arg)
+                return log_oom();
         udev_build_argv(udev_device_get_udev(dev), arg, &argc, argv);
         return builtins[cmd]->cmd(dev, argc, argv, mode);
 }

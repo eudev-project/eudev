@@ -839,7 +839,12 @@ SUBSYSTEM=="net", OPTIONS="log_level=debug"</programlisting></para>
       and <varname>RUN</varname> fields support simple string substitutions.
       The substitutions are performed while the individual rule is being
       processed, so they use the device properties set by the preceding
-      rules. The available substitutions are:</para>
+      rules. Like in systemd, when the result does not fit into the buffer of the key (for
+      example 512 bytes for <varname>ENV</varname>, 1024 bytes for <varname>SYMLINK</varname>,
+      16384 bytes for <varname>PROGRAM</varname> and <varname>RUN</varname>), a match key fails,
+      with a debug message, and an assignment key is not applied, with a warning; an invalid
+      substitution, e.g. one with a missing closing brace, ends the result there, with a
+      warning. The available substitutions are:</para>
       <variablelist class='udev-directives'>
         <varlistentry>
           <term><option>$kernel</option>, <option>%k</option></term>

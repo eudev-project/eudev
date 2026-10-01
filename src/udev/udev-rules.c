@@ -1214,41 +1214,52 @@ static int import_parent_into_properties(struct udev_event *event, struct udev_r
         return n;
 }
 
-static int attr_subst_subdir(char *attr, size_t len) {
-        bool found = false;
+/* Like attr_subst_subdir() of systemd: replaces the first path component "*" of attr with the first
+ * subdirectory in which the rest of the path exists. Returns 0 when attr has no such component or it was
+ * replaced, -ENOENT when no subdirectory has the rest of the path, or when the path would be too long, and
+ * the error when the directory cannot be opened. Unlike systemd, where only as many characters as the
+ * directory has are left for the subdirectory and the rest of the path, so that it hardly ever finds
+ * anything since v243, the room of the whole buffer is used. */
+static int attr_subst_subdir(char attr[static UTIL_PATH_SIZE]) {
+        _cleanup_closedir_ DIR *dir = NULL;
+        char buf[UTIL_PATH_SIZE], *p;
+        const char *tail;
+        struct dirent *de;
+        size_t len, size;
+        bool truncated;
 
-        if (strstr(attr, "/*/")) {
-                char *pos;
-                char dirname[UTIL_PATH_SIZE];
-                const char *tail;
-                DIR *dir;
+        tail = strstr(attr, "/*/");
+        if (!tail)
+                return 0;
 
-                strscpy(dirname, sizeof(dirname), attr);
-                pos = strstr(dirname, "/*/");
-                if (pos == NULL)
-                        return -1;
-                pos[0] = '\0';
-                tail = &pos[2];
-                dir = opendir(dirname);
-                if (dir != NULL) {
-                        struct dirent *dent;
+        len = tail - attr + 1; /* include slash at the end */
+        tail += 2; /* include slash at the beginning */
 
-                        for (dent = readdir(dir); dent != NULL; dent = readdir(dir)) {
-                                struct stat stats;
+        p = buf;
+        size = strnpcpy_full(&p, sizeof(buf), attr, len, &truncated);
+        if (truncated)
+                return -ENOENT;
 
-                                if (dent->d_name[0] == '.')
-                                        continue;
-                                strscpyl(attr, len, dirname, "/", dent->d_name, tail, NULL);
-                                if (stat(attr, &stats) == 0) {
-                                        found = true;
-                                        break;
-                                }
-                        }
-                        closedir(dir);
-                }
+        dir = opendir(buf);
+        if (!dir)
+                return -errno;
+
+        for (de = readdir(dir); de; de = readdir(dir)) {
+                if (de->d_name[0] == '.')
+                        continue;
+
+                strscpyl_full(p, size, &truncated, de->d_name, tail, NULL);
+                if (truncated)
+                        continue;
+
+                if (faccessat(dirfd(dir), p, F_OK, 0) < 0)
+                        continue;
+
+                strcpy(attr, buf);
+                return 0;
         }
 
-        return found;
+        return -ENOENT;
 }
 
 /* Make the absolute canonical path 'path' relative to the absolute canonical directory 'dir',
@@ -2683,7 +2694,31 @@ static int match_key(struct udev_rules *rules, struct token *token, const char *
         return -1;
 }
 
-static int match_attr(struct udev_rules *rules, struct udev_device *dev, struct udev_event *event, struct token *cur) {
+/* Like apply_format_full() of systemd: substitutes format into result of size. If the result is truncated,
+ * like log_event_truncated() of systemd, a match fails, with a debug message, and an assignment is not
+ * applied, with a warning; returns false then. what says what is substituted. */
+static bool apply_format(struct udev_event *event, struct udev_rules *rules, struct token *rule, struct token *token,
+                         const char *format, char *result, size_t size, bool replace_whitespace,
+                         struct udev_list *properties_list, const char *what) {
+        bool truncated = false;
+
+        (void) udev_event_apply_format(event, format, result, size, replace_whitespace, properties_list, &truncated);
+        if (!truncated)
+                return true;
+
+        if (token->type < TK_M_MAX)
+                log_event_debug(event, rules, rule,
+                                "The %s is truncated while substituting into \"%s\", assuming the token fails.",
+                                what, format);
+        else
+                log_event_warning(event, rules, rule,
+                                  "The %s is truncated while substituting into \"%s\", refusing to apply the token.",
+                                  what, format);
+        return false;
+}
+
+static int match_attr(struct udev_rules *rules, struct udev_device *dev, struct udev_event *event,
+                      struct token *rule, struct token *cur, struct udev_list *properties_list) {
         const char *name;
         char nbuf[UTIL_NAME_SIZE];
         const char *value;
@@ -2693,7 +2728,9 @@ static int match_attr(struct udev_rules *rules, struct udev_device *dev, struct 
         name = rules_str(rules, cur->key.attr_off);
         switch (cur->key.attrsubst) {
         case SB_FORMAT:
-                udev_event_apply_format(event, name, nbuf, sizeof(nbuf), false, NULL);
+                if (!apply_format(event, rules, rule, cur, name, nbuf, sizeof(nbuf), false, properties_list,
+                                  "sysfs attribute name"))
+                        return -1;
                 name = nbuf;
                 /* fall through */
         case SB_NONE:
@@ -2898,7 +2935,7 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                                 goto nomatch;
                         break;
                 case TK_M_ATTR:
-                        if (match_attr(rules, event->dev, event, cur) != 0)
+                        if (match_attr(rules, event->dev, event, rule, cur, properties_list) != 0)
                                 goto nomatch;
                         break;
                 case TK_M_SYSCTL: {
@@ -2906,7 +2943,9 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                         _cleanup_free_ char *value = NULL;
                         size_t len;
 
-                        udev_event_apply_format(event, rules_str(rules, cur->key.attr_off), filename, sizeof(filename), false, properties_list);
+                        if (!apply_format(event, rules, rule, cur, rules_str(rules, cur->key.attr_off), filename, sizeof(filename),
+                                          false, properties_list, "sysctl entry name"))
+                                goto nomatch;
                         sysctl_normalize(filename);
                         if (sysctl_read(filename, &value) < 0)
                                 goto nomatch;
@@ -2952,7 +2991,7 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                                                         goto try_parent;
                                                 break;
                                         case TK_M_ATTRS:
-                                                if (match_attr(rules, event->dev_parent, event, key) != 0)
+                                                if (match_attr(rules, event->dev_parent, event, rule, key, properties_list) != 0)
                                                         goto try_parent;
                                                 break;
                                         case TK_M_TAGS: {
@@ -2990,17 +3029,23 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                         struct stat statbuf;
                         int match;
 
-                        udev_event_apply_format(event, rules_str(rules, cur->key.value_off), filename, sizeof(filename), false, properties_list);
+                        if (!apply_format(event, rules, rule, cur, rules_str(rules, cur->key.value_off), filename, sizeof(filename),
+                                          false, properties_list, "file name"))
+                                goto nomatch;
                         if (util_resolve_subsys_kernel(event->udev, filename, filename, sizeof(filename), 0) != 0) {
                                 if (filename[0] != '/') {
                                         char tmp[UTIL_PATH_SIZE];
+                                        bool truncated;
 
                                         strscpy(tmp, sizeof(tmp), filename);
-                                        strscpyl(filename, sizeof(filename),
+                                        /* like systemd, a path that does not fit fails */
+                                        strscpyl_full(filename, sizeof(filename), &truncated,
                                                       udev_device_get_syspath(event->dev), "/", tmp, NULL);
+                                        if (truncated)
+                                                goto nomatch;
                                 }
                         }
-                        attr_subst_subdir(filename, sizeof(filename));
+                        (void) attr_subst_subdir(filename);
 
                         /* like systemd, with a mode mask, at least one of its bits must be set */
                         match = (stat(filename, &statbuf) == 0);
@@ -3019,7 +3064,9 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
 
                         free(event->program_result);
                         event->program_result = NULL;
-                        udev_event_apply_format(event, rules_str(rules, cur->key.value_off), program, sizeof(program), false, properties_list);
+                        if (!apply_format(event, rules, rule, cur, rules_str(rules, cur->key.value_off), program, sizeof(program),
+                                          false, properties_list, "command"))
+                                goto nomatch;
                         envp = udev_device_get_properties_envp(event->dev);
                         log_event_debug(event, rules, rule, "Running command \"%s\"", program);
 
@@ -3046,7 +3093,9 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                 case TK_M_IMPORT_FILE: {
                         char import[UTIL_PATH_SIZE];
 
-                        udev_event_apply_format(event, rules_str(rules, cur->key.value_off), import, sizeof(import), false, properties_list);
+                        if (!apply_format(event, rules, rule, cur, rules_str(rules, cur->key.value_off), import, sizeof(import),
+                                          false, properties_list, "file name to be imported"))
+                                goto nomatch;
                         r = import_file_into_properties(event, rules, rule, import);
                         if (r < 0)
                                 return r;
@@ -3058,7 +3107,9 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                 case TK_M_IMPORT_PROG: {
                         char import[UTIL_LINE_SIZE];
 
-                        udev_event_apply_format(event, rules_str(rules, cur->key.value_off), import, sizeof(import), false, properties_list);
+                        if (!apply_format(event, rules, rule, cur, rules_str(rules, cur->key.value_off), import, sizeof(import),
+                                          false, properties_list, "command"))
+                                goto nomatch;
                         log_event_debug(event, rules, rule, "Importing properties from results of \"%s\"", import);
 
                         r = import_program_into_properties(event, rules, rule, timeout_usec, timeout_warn_usec,
@@ -3071,7 +3122,7 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                         break;
                 }
                 case TK_M_IMPORT_BUILTIN: {
-                        char command[UTIL_PATH_SIZE];
+                        char command[UTIL_LINE_SIZE];
 
                         if (udev_builtin_run_once(cur->key.builtin_cmd)) {
                                 /* check if we ran already */
@@ -3089,7 +3140,9 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                                 event->builtin_run |= (1 << cur->key.builtin_cmd);
                         }
 
-                        udev_event_apply_format(event, rules_str(rules, cur->key.value_off), command, sizeof(command), false, properties_list);
+                        if (!apply_format(event, rules, rule, cur, rules_str(rules, cur->key.value_off), command, sizeof(command),
+                                          false, properties_list, "builtin command"))
+                                goto nomatch;
                         log_event_debug(event, rules, rule,
                                         "Importing properties from results of builtin command \"%s\".", command);
 
@@ -3146,7 +3199,9 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                 case TK_M_IMPORT_PARENT: {
                         char import[UTIL_PATH_SIZE];
 
-                        udev_event_apply_format(event, rules_str(rules, cur->key.value_off), import, sizeof(import), false, properties_list);
+                        if (!apply_format(event, rules, rule, cur, rules_str(rules, cur->key.value_off), import, sizeof(import),
+                                          false, properties_list, "property name"))
+                                goto nomatch;
                         /* Like systemd-udevd, match only when at least one property was imported. */
                         r = import_parent_into_properties(event, rules, rule, import);
                         if (r < 0)
@@ -3242,7 +3297,9 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                                 break;
                         if (cur->key.op == OP_ASSIGN_FINAL)
                                 event->owner_final = true;
-                        udev_event_apply_format(event, rules_str(rules, cur->key.value_off), owner, sizeof(owner), false, properties_list);
+                        if (!apply_format(event, rules, rule, cur, rules_str(rules, cur->key.value_off), owner, sizeof(owner),
+                                          false, properties_list, "user name"))
+                                break;
 
                         /* Like systemd, leave the owner as it is when the user cannot be resolved. */
                         r = resolve_user_or_group(owner, false, &uid);
@@ -3266,7 +3323,9 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                                 break;
                         if (cur->key.op == OP_ASSIGN_FINAL)
                                 event->group_final = true;
-                        udev_event_apply_format(event, rules_str(rules, cur->key.value_off), group, sizeof(group), false, properties_list);
+                        if (!apply_format(event, rules, rule, cur, rules_str(rules, cur->key.value_off), group, sizeof(group),
+                                          false, properties_list, "group name"))
+                                break;
 
                         /* Like systemd, leave the group as it is when the group cannot be resolved. */
                         r = resolve_user_or_group(group, true, &gid);
@@ -3292,7 +3351,9 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                         /* like systemd, also when the value is not valid */
                         if (cur->key.op == OP_ASSIGN_FINAL)
                                 event->mode_final = true;
-                        udev_event_apply_format(event, rules_str(rules, cur->key.value_off), mode_str, sizeof(mode_str), false, properties_list);
+                        if (!apply_format(event, rules, rule, cur, rules_str(rules, cur->key.value_off), mode_str, sizeof(mode_str),
+                                          false, properties_list, "mode"))
+                                break;
                         r = parse_mode(mode_str, &mode);
                         if (r < 0) {
                                 log_event_error_errno(event, rules, rule, r, "Failed to parse mode \"%s\", ignoring: %m", mode_str);
@@ -3335,7 +3396,9 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                         const char *name, *label;
 
                         name = rules_str(rules, cur->key.attr_off);
-                        udev_event_apply_format(event, rules_str(rules, cur->key.value_off), label_str, sizeof(label_str), false, properties_list);
+                        if (!apply_format(event, rules, rule, cur, rules_str(rules, cur->key.value_off), label_str, sizeof(label_str),
+                                          false, properties_list, "security label"))
+                                break;
                         if (label_str[0] != '\0')
                                 label = label_str;
                         else
@@ -3350,7 +3413,8 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                 case TK_A_ENV: {
                         const char *name = rules_str(rules, cur->key.attr_off);
                         char *value = rules_str(rules, cur->key.value_off);
-                        char value_new[UTIL_NAME_SIZE];
+                        char value_new[UTIL_NAME_SIZE], *p = value_new;
+                        size_t l = sizeof(value_new);
                         const char *value_old = NULL;
                         int r;
 
@@ -3363,30 +3427,31 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                                 break;
                         }
 
+                        /* Like systemd: append the new value to the old one, separated by a space, and refuse
+                         * it when either does not fit. */
                         if (cur->key.op == OP_ADD)
                                 value_old = udev_event_get_property_value_with_fallback(event->dev, name, properties_list);
                         if (value_old) {
-                                char temp[UTIL_NAME_SIZE];
+                                bool truncated;
 
-                                /* append value separated by space */
-                                udev_event_apply_format(event, value, temp, sizeof(temp), false, properties_list);
-                                if (esc == ESCAPE_REPLACE) {
-                                        int count = util_replace_chars(temp, NULL);
-                                        if (count > 0)
-                                                log_event_debug(event, rules, rule,
-                                                                "Replaced %i character(s) from property value, results to \"%s\"",
-                                                                count, temp);
+                                l = strpcpyl_full(&p, l, &truncated, value_old, " ", NULL);
+                                if (truncated) {
+                                        log_event_warning(event, rules, rule,
+                                                          "The buffer for the property is full, refusing to append new property \"%s=%s\".",
+                                                          name, value);
+                                        break;
                                 }
-                                strscpyl(value_new, sizeof(value_new), value_old, " ", temp, NULL);
-                        } else {
-                                udev_event_apply_format(event, value, value_new, sizeof(value_new), false, properties_list);
-                                if (esc == ESCAPE_REPLACE) {
-                                        int count = util_replace_chars(value_new, NULL);
-                                        if (count > 0)
-                                                log_event_debug(event, rules, rule,
-                                                                "Replaced %i character(s) from property value, results to \"%s\"",
-                                                                count, value_new);
-                                }
+                        }
+
+                        if (!apply_format(event, rules, rule, cur, value, p, l, false, properties_list, "property value"))
+                                break;
+
+                        if (esc == ESCAPE_REPLACE) {
+                                int count = util_replace_chars(p, NULL);
+                                if (count > 0)
+                                        log_event_debug(event, rules, rule,
+                                                        "Replaced %i character(s) from property value, results to \"%s\"",
+                                                        count, p);
                         }
 
                         r = udev_device_add_property(event->dev, name, value_new);
@@ -3404,7 +3469,9 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                         char tag[UTIL_PATH_SIZE];
                         bool assign = cur->key.op == OP_ASSIGN || cur->key.op == OP_ASSIGN_FINAL;
 
-                        udev_event_apply_format(event, rules_str(rules, cur->key.value_off), tag, sizeof(tag), false, properties_list);
+                        if (!apply_format(event, rules, rule, cur, rules_str(rules, cur->key.value_off), tag, sizeof(tag),
+                                          false, properties_list, "tag name"))
+                                break;
                         if (assign) {
                                 r = udev_device_cleanup_tags(event->dev, event->dev_db);
                                 if (r < 0)
@@ -3431,7 +3498,9 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                                 break;
                         if (cur->key.op == OP_ASSIGN_FINAL)
                                 event->name_final = true;
-                        udev_event_apply_format(event, name, name_str, sizeof(name_str), false, properties_list);
+                        if (!apply_format(event, rules, rule, cur, name, name_str, sizeof(name_str), false, properties_list,
+                                          udev_device_get_ifindex(event->dev) > 0 ? "network interface name" : "device name"))
+                                break;
                         if (esc == ESCAPE_UNSET || esc == ESCAPE_REPLACE) {
                                 if (udev_device_get_ifindex(event->dev) > 0) {
                                         count = udev_replace_ifname(event->udev, name_str);
@@ -3477,7 +3546,9 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                                 udev_device_cleanup_devlinks_list(event->dev);
 
                         /* allow  multiple symlinks separated by spaces */
-                        udev_event_apply_format(event, rules_str(rules, cur->key.value_off), temp, sizeof(temp), esc != ESCAPE_NONE, properties_list);
+                        if (!apply_format(event, rules, rule, cur, rules_str(rules, cur->key.value_off), temp, sizeof(temp),
+                                          esc != ESCAPE_NONE, properties_list, "symbolic link path"))
+                                break;
                         if (esc == ESCAPE_UNSET)
                                 count = util_replace_chars(temp, "/ ");
                         else if (esc == ESCAPE_REPLACE)
@@ -3528,7 +3599,12 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                                 }
 
                                 /* Resolve '*' in the path. */
-                                attr_subst_subdir(attr, sizeof(attr));
+                                r = attr_subst_subdir(attr);
+                                if (r < 0) {
+                                        log_event_error_errno(event, rules, rule, r,
+                                                              "Could not find file matches \"%s\", ignoring: %m", attr);
+                                        break;
+                                }
                         }
 
                         /* Then, make the path relative again. This also checks if the path being inside of the sysfs. */
@@ -3552,7 +3628,9 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                         }
 
                         /* Apply formatting to the value. */
-                        udev_event_apply_format(event, rules_str(rules, cur->key.value_off), value, sizeof(value), false, properties_list);
+                        if (!apply_format(event, rules, rule, cur, rules_str(rules, cur->key.value_off), value, sizeof(value),
+                                          false, properties_list, "attribute value"))
+                                break;
 
                         if (EVENT_MODE_DESTRUCTIVE(event)) {
                                 log_event_debug(event, rules, rule, "Writing \"%s\" to sysfs attribute \"%s\".", value, resolved);
@@ -3592,9 +3670,13 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                         char value[UTIL_NAME_SIZE];
                         int r;
 
-                        udev_event_apply_format(event, rules_str(rules, cur->key.attr_off), filename, sizeof(filename), false, properties_list);
+                        if (!apply_format(event, rules, rule, cur, rules_str(rules, cur->key.attr_off), filename, sizeof(filename),
+                                          false, properties_list, "sysctl entry name"))
+                                break;
+                        if (!apply_format(event, rules, rule, cur, rules_str(rules, cur->key.value_off), value, sizeof(value),
+                                          false, properties_list, "sysctl value"))
+                                break;
                         sysctl_normalize(filename);
-                        udev_event_apply_format(event, rules_str(rules, cur->key.value_off), value, sizeof(value), false, properties_list);
                         if (!EVENT_MODE_DESTRUCTIVE(event)) {
                                 char path[UTIL_PATH_SIZE];
 
@@ -3634,7 +3716,9 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                         if (cur->key.op == OP_ASSIGN || cur->key.op == OP_ASSIGN_FINAL)
                                 udev_list_cleanup(&event->run_list);
 
-                        udev_event_apply_format(event, rules_str(rules, cur->key.value_off), cmd, sizeof(cmd), false, properties_list);
+                        if (!apply_format(event, rules, rule, cur, rules_str(rules, cur->key.value_off), cmd, sizeof(cmd),
+                                          false, properties_list, "command"))
+                                break;
 
                         log_event_debug(event, rules, rule, "Set command: %s", cmd);
                         entry = udev_list_entry_add(&event->run_list, cmd, NULL);

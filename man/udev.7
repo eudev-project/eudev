@@ -740,7 +740,12 @@ The
 \fIMODE\fR,
 \fISECLABEL\fR, and
 \fIRUN\fR
-fields support simple string substitutions\&. The substitutions are performed while the individual rule is being processed, so they use the device properties set by the preceding rules\&. The available substitutions are:
+fields support simple string substitutions\&. The substitutions are performed while the individual rule is being processed, so they use the device properties set by the preceding rules\&. Like in systemd, when the result does not fit into the buffer of the key (for example 512 bytes for
+\fIENV\fR, 1024 bytes for
+\fISYMLINK\fR, 16384 bytes for
+\fIPROGRAM\fR
+and
+\fIRUN\fR), a match key fails, with a debug message, and an assignment key is not applied, with a warning; an invalid substitution, e\&.g\&. one with a missing closing brace, ends the result there, with a warning\&. The available substitutions are:
 .PP
 \fB$kernel\fR, \fB%k\fR
 .RS 4

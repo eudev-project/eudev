@@ -119,7 +119,8 @@ const char *udev_event_get_property_value_with_fallback(struct udev_device *dev,
 int safe_atou_optional_plus(const char *s, unsigned *ret);
 size_t udev_event_apply_format(struct udev_event *event,
                                const char *src, char *dest, size_t size,
-                               bool replace_whitespace, struct udev_list *global_props);
+                               bool replace_whitespace, struct udev_list *global_props,
+                               bool *ret_truncated);
 int udev_event_apply_subsys_kernel(struct udev_event *event, const char *string,
                                    char *result, size_t maxsize, int read_value);
 int udev_event_spawn(struct udev_event *event,

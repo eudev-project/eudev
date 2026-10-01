@@ -108,6 +108,125 @@ const char *udev_event_get_property_value_with_fallback(struct udev_device *dev,
         return udev_list_entry_get_value(entry);
 }
 
+enum subst_type {
+        SUBST_DEVNODE,
+        SUBST_ATTR,
+        SUBST_ENV,
+        SUBST_KERNEL,
+        SUBST_KERNEL_NUMBER,
+        SUBST_DRIVER,
+        SUBST_DEVPATH,
+        SUBST_ID,
+        SUBST_MAJOR,
+        SUBST_MINOR,
+        SUBST_RESULT,
+        SUBST_PARENT,
+        SUBST_NAME,
+        SUBST_LINKS,
+        SUBST_ROOT,
+        SUBST_SYS,
+};
+
+static const struct subst_map {
+        const char *name;
+        const char fmt;
+        enum subst_type type;
+} map[] = {
+        { .name = "devnode",  .fmt = 'N', .type = SUBST_DEVNODE },
+        { .name = "tempnode", .fmt = 'N', .type = SUBST_DEVNODE },
+        { .name = "attr",     .fmt = 's', .type = SUBST_ATTR },
+        { .name = "sysfs",    .fmt = 's', .type = SUBST_ATTR },
+        { .name = "env",      .fmt = 'E', .type = SUBST_ENV },
+        { .name = "kernel",   .fmt = 'k', .type = SUBST_KERNEL },
+        { .name = "number",   .fmt = 'n', .type = SUBST_KERNEL_NUMBER },
+        { .name = "driver",   .fmt = 'd', .type = SUBST_DRIVER },
+        { .name = "devpath",  .fmt = 'p', .type = SUBST_DEVPATH },
+        { .name = "id",       .fmt = 'b', .type = SUBST_ID },
+        { .name = "major",    .fmt = 'M', .type = SUBST_MAJOR },
+        { .name = "minor",    .fmt = 'm', .type = SUBST_MINOR },
+        { .name = "result",   .fmt = 'c', .type = SUBST_RESULT },
+        { .name = "parent",   .fmt = 'P', .type = SUBST_PARENT },
+        { .name = "name",     .fmt = 'D', .type = SUBST_NAME },
+        { .name = "links",    .fmt = 'L', .type = SUBST_LINKS },
+        { .name = "root",     .fmt = 'r', .type = SUBST_ROOT },
+        { .name = "sys",      .fmt = 'S', .type = SUBST_SYS },
+};
+
+static const char *format_type_to_string(enum subst_type t) {
+        unsigned int i;
+
+        for (i = 0; i < ELEMENTSOF(map); i++)
+                if (map[i].type == t)
+                        return map[i].name;
+        return NULL;
+}
+
+static char format_type_to_char(enum subst_type t) {
+        unsigned int i;
+
+        for (i = 0; i < ELEMENTSOF(map); i++)
+                if (map[i].type == t)
+                        return map[i].fmt;
+        return '\0';
+}
+
+/* Like get_subst_type() of systemd, without its strict mode: returns 0 when *str does not start a
+ * substitution, "$$" or "%%" (then *str is moved to the second character, which is copied), 1 for a
+ * substitution, with *str moved behind it, and -EINVAL for a substitution with a missing closing brace or
+ * an empty or too long attribute. */
+static int get_subst_type(const char **str, enum subst_type *ret_type, char ret_attr[static UTIL_PATH_SIZE]) {
+        const char *p = *str, *q = NULL;
+        size_t i = 0;
+
+        if (*p == '$') {
+                p++;
+                if (*p == '$') {
+                        *str = p;
+                        return 0;
+                }
+                for (i = 0; i < ELEMENTSOF(map); i++)
+                        if ((q = startswith(p, map[i].name)))
+                                break;
+        } else if (*p == '%') {
+                p++;
+                if (*p == '%') {
+                        *str = p;
+                        return 0;
+                }
+
+                for (i = 0; i < ELEMENTSOF(map); i++)
+                        if (*p == map[i].fmt) {
+                                q = p + 1;
+                                break;
+                        }
+        } else
+                return 0;
+        if (!q)
+                return 0;
+
+        if (*q == '{') {
+                const char *start, *end;
+                size_t len;
+
+                start = q + 1;
+                end = strchr(start, '}');
+                if (!end)
+                        return -EINVAL;
+
+                len = end - start;
+                if (len == 0 || len >= UTIL_PATH_SIZE)
+                        return -EINVAL;
+
+                strnscpy(ret_attr, UTIL_PATH_SIZE, start, len);
+                q = end + 1;
+        } else
+                *ret_attr = '\0';
+
+        *str = q;
+        *ret_type = map[i].type;
+        return 1;
+}
+
 /* Like safe_atou_optional_plus() of systemd: parses the index of $result{N} and %c{N}, which may be followed
  * by '+'. Returns 1 with '+', 0 without, and a negative error for an invalid index. */
 int safe_atou_optional_plus(const char *s, unsigned *ret) {
@@ -128,360 +247,289 @@ int safe_atou_optional_plus(const char *s, unsigned *ret) {
         return !!p;
 }
 
-size_t udev_event_apply_format(struct udev_event *event,
-                               const char *src, char *dest, size_t size,
-                               bool replace_whitespace, struct udev_list *global_props) {
+/* Like udev_event_subst_format() of systemd: writes the value of the substitution to dest, of size l, and
+ * returns its length, or a negative error. ret_truncated says whether the value was truncated. */
+static ssize_t udev_event_subst_format(struct udev_event *event, enum subst_type type, const char *attr,
+                                       char *dest, size_t l, bool *ret_truncated,
+                                       struct udev_list *global_props) {
         struct udev_device *dev = event->dev;
-        enum subst_type {
-                SUBST_UNKNOWN,
-                SUBST_DEVNODE,
-                SUBST_ATTR,
-                SUBST_ENV,
-                SUBST_KERNEL,
-                SUBST_KERNEL_NUMBER,
-                SUBST_DRIVER,
-                SUBST_DEVPATH,
-                SUBST_ID,
-                SUBST_MAJOR,
-                SUBST_MINOR,
-                SUBST_RESULT,
-                SUBST_PARENT,
-                SUBST_NAME,
-                SUBST_LINKS,
-                SUBST_ROOT,
-                SUBST_SYS,
-        };
-        static const struct subst_map {
-                const char *name;
-                const char fmt;
-                enum subst_type type;
-        } map[] = {
-                { .name = "devnode",  .fmt = 'N', .type = SUBST_DEVNODE },
-                { .name = "tempnode", .fmt = 'N', .type = SUBST_DEVNODE },
-                { .name = "attr",     .fmt = 's', .type = SUBST_ATTR },
-                { .name = "sysfs",    .fmt = 's', .type = SUBST_ATTR },
-                { .name = "env",      .fmt = 'E', .type = SUBST_ENV },
-                { .name = "kernel",   .fmt = 'k', .type = SUBST_KERNEL },
-                { .name = "number",   .fmt = 'n', .type = SUBST_KERNEL_NUMBER },
-                { .name = "driver",   .fmt = 'd', .type = SUBST_DRIVER },
-                { .name = "devpath",  .fmt = 'p', .type = SUBST_DEVPATH },
-                { .name = "id",       .fmt = 'b', .type = SUBST_ID },
-                { .name = "major",    .fmt = 'M', .type = SUBST_MAJOR },
-                { .name = "minor",    .fmt = 'm', .type = SUBST_MINOR },
-                { .name = "result",   .fmt = 'c', .type = SUBST_RESULT },
-                { .name = "parent",   .fmt = 'P', .type = SUBST_PARENT },
-                { .name = "name",     .fmt = 'D', .type = SUBST_NAME },
-                { .name = "links",    .fmt = 'L', .type = SUBST_LINKS },
-                { .name = "root",     .fmt = 'r', .type = SUBST_ROOT },
-                { .name = "sys",      .fmt = 'S', .type = SUBST_SYS },
-        };
-        const char *from;
-        char *s;
-        size_t l;
+        const char *val = NULL;
+        bool truncated = false;
+        char *s = dest;
+        int r;
 
-        from = src;
-        s = dest;
-        l = size;
+        switch (type) {
+        case SUBST_DEVPATH:
+                val = udev_device_get_devpath(dev);
+                if (!val)
+                        return -ENOENT;
+                strpcpy_full(&s, l, val, &truncated);
+                break;
+        case SUBST_KERNEL:
+                val = udev_device_get_sysname(dev);
+                if (!val)
+                        return -ENOENT;
+                strpcpy_full(&s, l, val, &truncated);
+                break;
+        case SUBST_KERNEL_NUMBER:
+                val = udev_device_get_sysnum(dev);
+                if (!val)
+                        goto null_terminate;
+                strpcpy_full(&s, l, val, &truncated);
+                break;
+        case SUBST_ID:
+                if (!event->dev_parent)
+                        goto null_terminate;
+                val = udev_device_get_sysname(event->dev_parent);
+                if (!val)
+                        return -ENOENT;
+                strpcpy_full(&s, l, val, &truncated);
+                break;
+        case SUBST_DRIVER:
+                if (!event->dev_parent)
+                        goto null_terminate;
+                val = udev_device_get_driver(event->dev_parent);
+                if (!val)
+                        goto null_terminate;
+                strpcpy_full(&s, l, val, &truncated);
+                break;
+        case SUBST_MAJOR:
+        case SUBST_MINOR: {
+                dev_t devnum = udev_device_get_devnum(dev);
 
-        for (;;) {
-                enum subst_type type = SUBST_UNKNOWN;
-                char attrbuf[UTIL_PATH_SIZE], sbuf[UTIL_PATH_SIZE];
-                char *attr = NULL, *_s;
-                size_t _l;
-                bool replws = replace_whitespace;
+                strpcpyf_full(&s, l, &truncated, "%u", type == SUBST_MAJOR ? major(devnum) : minor(devnum));
+                break;
+        }
+        case SUBST_RESULT: {
+                unsigned index = 0; /* 0 means whole string */
+                bool has_plus = false;
 
-                while (from[0] != '\0') {
-                        if (from[0] == '$') {
-                                /* substitute named variable */
-                                unsigned int i;
+                if (!event->program_result)
+                        goto null_terminate;
 
-                                if (from[1] == '$') {
-                                        from++;
-                                        goto copy;
-                                }
+                if (!isempty(attr)) {
+                        r = safe_atou_optional_plus(attr, &index);
+                        if (r < 0)
+                                return r;
 
-                                for (i = 0; i < ELEMENTSOF(map); i++) {
-                                        if (startswith(&from[1], map[i].name)) {
-                                                type = map[i].type;
-                                                from += strlen(map[i].name)+1;
-                                                goto subst;
-                                        }
-                                }
-                        } else if (from[0] == '%') {
-                                /* substitute format char */
-                                unsigned int i;
+                        has_plus = r;
+                }
 
-                                if (from[1] == '%') {
-                                        from++;
-                                        goto copy;
-                                }
+                if (index == 0)
+                        strpcpy_full(&s, l, event->program_result, &truncated);
+                else {
+                        const char *start, *p;
+                        unsigned i;
 
-                                for (i = 0; i < ELEMENTSOF(map); i++) {
-                                        if (from[1] == map[i].fmt) {
-                                                type = map[i].type;
-                                                from += 2;
-                                                goto subst;
-                                        }
-                                }
+                        p = event->program_result + strspn(event->program_result, WHITESPACE);
+
+                        for (i = 1; i < index; i++) {
+                                while (*p && !strchr(WHITESPACE, *p))
+                                        p++;
+                                p += strspn(p, WHITESPACE);
+                                if (*p == '\0')
+                                        break;
                         }
-copy:
-                        /* copy char */
-                        if (l == 0)
-                                goto out;
-                        s[0] = from[0];
-                        from++;
-                        s++;
-                        l--;
-                }
-
-                goto out;
-subst:
-                /* extract possible $format{attr} */
-                if (from[0] == '{') {
-                        unsigned int i;
-
-                        from++;
-                        for (i = 0; from[i] != '}'; i++) {
-                                if (from[i] == '\0') {
-                                        log_error("missing closing brace for format '%s'", src);
-                                        goto out;
-                                }
-                        }
-                        if (i >= sizeof(attrbuf))
-                                goto out;
-                        memcpy(attrbuf, from, i);
-                        attrbuf[i] = '\0';
-                        from += i+1;
-                        attr = attrbuf;
-                } else {
-                        attr = NULL;
-                }
-
-                /* result subst handles space as field separator */
-                if (type == SUBST_RESULT)
-                        replws = false;
-
-                if (replws) {
-                        /* store dest string ptr and remaining len */
-                        _s = s;
-                        _l = l;
-                        /* temporarily use sbuf */
-                        s = sbuf;
-                        l = UTIL_PATH_SIZE;
-                }
-
-                switch (type) {
-                case SUBST_DEVPATH:
-                        l = strpcpy(&s, l, udev_device_get_devpath(dev));
-                        break;
-                case SUBST_KERNEL:
-                        l = strpcpy(&s, l, udev_device_get_sysname(dev));
-                        break;
-                case SUBST_KERNEL_NUMBER:
-                        if (udev_device_get_sysnum(dev) == NULL)
-                                break;
-                        l = strpcpy(&s, l, udev_device_get_sysnum(dev));
-                        break;
-                case SUBST_ID:
-                        if (event->dev_parent == NULL)
-                                break;
-                        l = strpcpy(&s, l, udev_device_get_sysname(event->dev_parent));
-                        break;
-                case SUBST_DRIVER: {
-                        const char *driver;
-
-                        if (event->dev_parent == NULL)
-                                break;
-
-                        driver = udev_device_get_driver(event->dev_parent);
-                        if (driver == NULL)
-                                break;
-                        l = strpcpy(&s, l, driver);
-                        break;
-                }
-                case SUBST_MAJOR: {
-                        char num[UTIL_PATH_SIZE];
-
-                        sprintf(num, "%u", major(udev_device_get_devnum(dev)));
-                        l = strpcpy(&s, l, num);
-                        break;
-                }
-                case SUBST_MINOR: {
-                        char num[UTIL_PATH_SIZE];
-
-                        sprintf(num, "%u", minor(udev_device_get_devnum(dev)));
-                        l = strpcpy(&s, l, num);
-                        break;
-                }
-                case SUBST_RESULT: {
-                        unsigned index = 0; /* 0 means whole string */
-                        bool has_plus = false;
-
-                        if (event->program_result == NULL)
-                                break;
-
-                        /* Like systemd, the index must be a number, optionally followed by '+'. */
-                        if (!isempty(attr)) {
-                                int r;
-
-                                r = safe_atou_optional_plus(attr, &index);
-                                if (r < 0) {
-                                        log_warning_errno(r, "%s: Failed to substitute variable '$result' or apply format '%%c', ignoring: %m",
-                                                          udev_device_get_sysname(dev) ?: "n/a");
-                                        goto out;
-                                }
-                                has_plus = r;
+                        if (i != index) {
+                                log_debug("%s: requested part of result string not found",
+                                          udev_device_get_sysname(dev) ?: "n/a");
+                                goto null_terminate;
                         }
 
-                        if (index == 0)
-                                l = strpcpy(&s, l, event->program_result);
+                        start = p;
+                        /* %c{2+} copies the whole string from the second part on */
+                        if (has_plus)
+                                strpcpy_full(&s, l, start, &truncated);
                         else {
-                                /* Like systemd: the words are separated by any whitespace, and leading
-                                 * whitespace is skipped. */
-                                const char *start, *p;
-                                unsigned i;
-
-                                p = event->program_result + strspn(event->program_result, WHITESPACE);
-
-                                for (i = 1; i < index; i++) {
-                                        while (*p && !strchr(WHITESPACE, *p))
-                                                p++;
-                                        p += strspn(p, WHITESPACE);
-                                        if (*p == '\0')
-                                                break;
-                                }
-                                if (i != index) {
-                                        log_debug("%s: requested part of result string not found",
-                                                  udev_device_get_sysname(dev) ?: "n/a");
-                                        break;
-                                }
-
-                                start = p;
-                                /* %c{2+} copies the whole string from the second part on */
-                                if (has_plus)
-                                        l = strpcpy(&s, l, start);
-                                else {
-                                        while (*p && !strchr(WHITESPACE, *p))
-                                                p++;
-                                        l = strnpcpy(&s, l, start, p - start);
-                                }
+                                while (*p && !strchr(WHITESPACE, *p))
+                                        p++;
+                                strnpcpy_full(&s, l, start, p - start, &truncated);
                         }
-                        break;
                 }
-                case SUBST_ATTR: {
-                        const char *value = NULL;
-                        char vbuf[UTIL_NAME_SIZE];
-                        size_t len;
-                        int count;
+                break;
+        }
+        case SUBST_ATTR: {
+                char vbuf[UTIL_NAME_SIZE];
+                size_t len;
+                int count;
+                bool t;
 
-                        if (attr == NULL) {
-                                log_error("missing file parameter for attr");
-                                break;
-                        }
+                if (isempty(attr))
+                        return -EINVAL;
 
-                        /* try to read the value specified by "[dmi/id]product_name" */
-                        if (util_resolve_subsys_kernel(event->udev, attr, vbuf, sizeof(vbuf), 1) == 0)
-                                value = vbuf;
+                /* try to read the value specified by "[dmi/id]product_name" */
+                if (util_resolve_subsys_kernel(event->udev, attr, vbuf, sizeof(vbuf), 1) == 0)
+                        val = vbuf;
 
-                        /* try to read the attribute the device */
-                        if (value == NULL)
-                                value = udev_device_get_sysattr_value(event->dev, attr);
+                /* try to read the attribute the device */
+                if (!val)
+                        val = udev_device_get_sysattr_value(dev, attr);
 
-                        /* try to read the attribute of the parent device, other matches have selected */
-                        if (value == NULL && event->dev_parent != NULL && event->dev_parent != event->dev)
-                                value = udev_device_get_sysattr_value(event->dev_parent, attr);
+                /* try to read the attribute of the parent device, other matches have selected */
+                if (!val && event->dev_parent && event->dev_parent != dev)
+                        val = udev_device_get_sysattr_value(event->dev_parent, attr);
 
-                        if (value == NULL)
-                                break;
+                if (!val)
+                        goto null_terminate;
 
-                        /* strip trailing whitespace, and replace unwanted characters */
-                        if (value != vbuf)
-                                strscpy(vbuf, sizeof(vbuf), value);
-                        len = strlen(vbuf);
-                        while (len > 0 && isspace(vbuf[--len]))
-                                vbuf[len] = '\0';
-                        count = util_replace_chars(vbuf, UDEV_ALLOWED_CHARS_INPUT);
-                        if (count > 0)
-                                log_debug("%i character(s) replaced" , count);
-                        l = strpcpy(&s, l, vbuf);
-                        break;
+                /* strip trailing whitespace, and replace unwanted characters */
+                if (val != vbuf)
+                        strscpy_full(vbuf, sizeof(vbuf), val, &truncated);
+                len = strlen(vbuf);
+                while (len > 0 && isspace(vbuf[--len]))
+                        vbuf[len] = '\0';
+                count = util_replace_chars(vbuf, UDEV_ALLOWED_CHARS_INPUT);
+                if (count > 0)
+                        log_debug("%i character(s) replaced" , count);
+                strpcpy_full(&s, l, vbuf, &t);
+                truncated = truncated || t;
+                break;
+        }
+        case SUBST_PARENT: {
+                struct udev_device *dev_parent;
+
+                dev_parent = udev_device_get_parent(dev);
+                if (!dev_parent)
+                        goto null_terminate;
+                val = udev_device_get_devnode(dev_parent);
+                if (!val)
+                        goto null_terminate;
+                strpcpy_full(&s, l, val + strlen("/dev/"), &truncated);
+                break;
+        }
+        case SUBST_DEVNODE:
+                val = udev_device_get_devnode(dev);
+                if (!val)
+                        goto null_terminate;
+                strpcpy_full(&s, l, val, &truncated);
+                break;
+        case SUBST_NAME:
+                if (event->name)
+                        strpcpy_full(&s, l, event->name, &truncated);
+                else if ((val = udev_device_get_devnode(dev)))
+                        strpcpy_full(&s, l, val + strlen("/dev/"), &truncated);
+                else {
+                        val = udev_device_get_sysname(dev);
+                        if (!val)
+                                return -ENOENT;
+                        strpcpy_full(&s, l, val, &truncated);
                 }
-                case SUBST_PARENT: {
-                        struct udev_device *dev_parent;
-                        const char *devnode;
+                break;
+        case SUBST_LINKS: {
+                struct udev_list_entry *list_entry;
 
-                        dev_parent = udev_device_get_parent(event->dev);
-                        if (dev_parent == NULL)
-                                break;
-                        devnode = udev_device_get_devnode(dev_parent);
-                        if (devnode != NULL)
-                                l = strpcpy(&s, l, devnode + strlen("/dev/"));
-                        break;
-                }
-                case SUBST_DEVNODE:
-                        if (udev_device_get_devnode(dev) != NULL)
-                                l = strpcpy(&s, l, udev_device_get_devnode(dev));
-                        break;
-                case SUBST_NAME:
-                        if (event->name != NULL)
-                                l = strpcpy(&s, l, event->name);
-                        else if (udev_device_get_devnode(dev) != NULL)
-                                l = strpcpy(&s, l, udev_device_get_devnode(dev) + strlen("/dev/"));
+                udev_list_entry_foreach(list_entry, udev_device_get_devlinks_list_entry(dev)) {
+                        const char *link = udev_list_entry_get_name(list_entry);
+
+                        if (s == dest)
+                                l = strpcpy_full(&s, l, link + strlen("/dev/"), &truncated);
                         else
-                                l = strpcpy(&s, l, udev_device_get_sysname(dev));
-                        break;
-                case SUBST_LINKS: {
-                        struct udev_list_entry *list_entry;
-
-                        list_entry = udev_device_get_devlinks_list_entry(dev);
-                        if (list_entry == NULL)
+                                l = strpcpyl_full(&s, l, &truncated, " ", link + strlen("/dev/"), NULL);
+                        if (truncated)
                                 break;
-                        l = strpcpy(&s, l, udev_list_entry_get_name(list_entry) + strlen("/dev/"));
-                        udev_list_entry_foreach(list_entry, udev_list_entry_get_next(list_entry))
-                                l = strpcpyl(&s, l, " ", udev_list_entry_get_name(list_entry) + strlen("/dev/"), NULL);
-                        break;
                 }
-                case SUBST_ROOT:
-                        l = strpcpy(&s, l, "/dev");
-                        break;
-                case SUBST_SYS:
-                        l = strpcpy(&s, l, "/sys");
-                        break;
-                case SUBST_ENV:
-                        if (attr == NULL) {
-                                break;
-                        } else {
-                                const char *value;
-
-                                value = udev_event_get_property_value_with_fallback(event->dev, attr, global_props);
-                                if (value == NULL)
-                                        break;
-                                l = strpcpy(&s, l, value);
-                                break;
-                        }
-                default:
-                        log_error("unknown substitution type=%i", type);
-                        break;
-                }
-
-                /* replace whitespace in sbuf and copy to dest */
-                if (replws) {
-                        size_t tmplen = UTIL_PATH_SIZE - l;
-
-                        /* restore s and l to dest string values */
-                        s = _s;
-                        l = _l;
-
-                        /* copy ws-replaced value to s */
-                        tmplen = util_replace_whitespace(sbuf, s, MIN(tmplen, l));
-                        l -= tmplen;
-                        s += tmplen;
-                }
+                if (s == dest)
+                        goto null_terminate;
+                break;
+        }
+        case SUBST_ROOT:
+                strpcpy_full(&s, l, "/dev", &truncated);
+                break;
+        case SUBST_SYS:
+                strpcpy_full(&s, l, "/sys", &truncated);
+                break;
+        case SUBST_ENV:
+                if (isempty(attr))
+                        return -EINVAL;
+                val = udev_event_get_property_value_with_fallback(dev, attr, global_props);
+                if (!val)
+                        goto null_terminate;
+                strpcpy_full(&s, l, val, &truncated);
+                break;
+        default:
+                assert_not_reached("Unknown format substitution type");
         }
 
-out:
-        s[0] = '\0';
-        return l;
+        if (ret_truncated)
+                *ret_truncated = truncated;
+
+        return s - dest;
+
+null_terminate:
+        if (ret_truncated)
+                *ret_truncated = truncated;
+
+        *s = '\0';
+        return 0;
+}
+
+/* Like udev_event_apply_format() of systemd: substitutes the $name, $name{attr}, %c and %c{attr} of src into
+ * dest of size, and returns the remaining size. When a value does not fit, ret_truncated says so; the rules
+ * then do not use the result. An invalid substitution stops it, with a warning. */
+size_t udev_event_apply_format(struct udev_event *event,
+                               const char *src, char *dest, size_t size,
+                               bool replace_whitespace, struct udev_list *global_props,
+                               bool *ret_truncated) {
+        bool truncated = false;
+        const char *s = src;
+        int r;
+
+        assert(event);
+        assert(event->dev);
+        assert(src);
+        assert(dest);
+        assert(size > 0);
+
+        while (*s) {
+                enum subst_type type;
+                char attr[UTIL_PATH_SIZE];
+                ssize_t subst_len;
+                bool t;
+
+                r = get_subst_type(&s, &type, attr);
+                if (r < 0) {
+                        log_warning_errno(r, "%s: Invalid format string, ignoring: %s",
+                                          udev_device_get_sysname(event->dev) ?: "n/a", src);
+                        break;
+                } else if (r == 0) {
+                        if (size < 2) {
+                                /* need space for this char and the terminating NUL */
+                                truncated = true;
+                                break;
+                        }
+                        *dest++ = *s++;
+                        size--;
+                        continue;
+                }
+
+                subst_len = udev_event_subst_format(event, type, attr, dest, size, &t, global_props);
+                if (subst_len < 0) {
+                        log_warning_errno(subst_len,
+                                          "%s: Failed to substitute variable '$%s' or apply format '%%%c', ignoring: %m",
+                                          udev_device_get_sysname(event->dev) ?: "n/a",
+                                          format_type_to_string(type), format_type_to_char(type));
+                        break;
+                }
+
+                truncated = truncated || t;
+
+                /* SUBST_RESULT handles spaces itself */
+                if (replace_whitespace && type != SUBST_RESULT)
+                        /* util_replace_whitespace() can replace in-place,
+                         * and does nothing if subst_len == 0 */
+                        subst_len = util_replace_whitespace(dest, dest, subst_len);
+
+                dest += subst_len;
+                size -= subst_len;
+        }
+
+        assert(size >= 1);
+
+        if (ret_truncated)
+                *ret_truncated = truncated;
+
+        *dest = '\0';
+        return size;
 }
 
 static int spawn_exec(struct udev_event *event __attribute__((unused)),

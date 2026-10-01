@@ -1836,6 +1836,22 @@ KERNEL=="sda", TEST{0444}=="uevent", SYMLINK+="found"
 EOF
         },
         {
+                desc            => "values truncated by the substitutions are not used",
+                devpath         => "/devices/pci0000:00/0000:00:1f.2/host0/target0:0:0/0:0:0:0/block/sda",
+                exp_name        => "found",
+                not_exp_name    => "bad",
+                rules           => <<EOF
+KERNEL=="sda", ENV{A}="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+KERNEL=="sda", ENV{B}="\$env{A}\$env{A}"
+KERNEL=="sda", ENV{C}="\$env{A}", ENV{C}+="\$env{A}"
+KERNEL=="sda", ENV{B}=="?*", SYMLINK+="bad"
+KERNEL=="sda", ENV{C}!="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", SYMLINK+="bad"
+KERNEL=="sda", TEST!="/\$env{A}\$env{A}\$env{A}\$env{A}", SYMLINK+="bad"
+KERNEL=="sda", SYMLINK+="\$env{A}\$env{A}\$env{A}\$env{A}"
+KERNEL=="sda", SYMLINK+="found"
+EOF
+        },
+        {
                 desc            => "TEST with a mask of 0 is an error",
                 devpath         => "/devices/pci0000:00/0000:00:1f.2/host0/target0:0:0/0:0:0:0/block/sda",
                 exp_name        => "found",
