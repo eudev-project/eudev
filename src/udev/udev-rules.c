@@ -4162,9 +4162,9 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
 int udev_rules_apply_static_dev_perms(struct udev_rules *rules) {
         struct token *cur;
         struct token *rule;
-        uid_t uid = 0;
-        gid_t gid = 0;
-        mode_t mode = 0;
+        uid_t uid = UID_INVALID;
+        gid_t gid = GID_INVALID;
+        mode_t mode = MODE_INVALID;
         _cleanup_strv_free_ char **tags = NULL;
         FILE *f = NULL;
         _cleanup_free_ char *path = NULL;
@@ -4185,9 +4185,10 @@ int udev_rules_apply_static_dev_perms(struct udev_rules *rules) {
                         if (!rule->rule.has_static_node)
                                 goto next;
 
-                        uid = 0;
-                        gid = 0;
-                        mode = 0;
+                        /* like systemd, 0 is a value as any other, e.g. OWNER="root" */
+                        uid = UID_INVALID;
+                        gid = GID_INVALID;
+                        mode = MODE_INVALID;
                         strv_free(tags);
                         tags = NULL;
                         break;
@@ -4208,13 +4209,8 @@ int udev_rules_apply_static_dev_perms(struct udev_rules *rules) {
                         break;
                 case TK_A_STATIC_NODE:
                         /* we assure, that the permissions tokens are sorted before the static token */
-
-                        /* 0 means not set here, as it always did for static nodes */
                         r = static_node_apply_permissions(rules_str(rules, cur->key.value_off),
-                                                          mode != 0 ? mode : MODE_INVALID,
-                                                          uid != 0 ? uid : UID_INVALID,
-                                                          gid != 0 ? gid : GID_INVALID,
-                                                          tags);
+                                                          mode, uid, gid, tags);
                         if (r < 0)
                                 goto finish;
                         break;

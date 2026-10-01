@@ -693,7 +693,16 @@ none, no replacement is performed\&. When unset, the replacement is performed fo
 .PP
 \fBstatic_node=\fR
 .RS 4
-Apply the permissions specified in this rule to the static device node with the specified name\&. Static device node creation can be requested by kernel modules\&. These nodes might not have a corresponding kernel device at the time udevd is started; they can trigger automatic kernel module loading\&.
+Apply the permissions specified in this rule to the static device node with the specified name\&. Static device node creation can be requested by kernel modules\&. These nodes might not have a corresponding kernel device at the time udevd is started; they can trigger automatic kernel module loading\&. The values that are known when the rules are read are applied, like in systemd: an
+\fIOWNER\fR
+or
+\fIGROUP\fR
+that is a number, or a name without substitutions when names are resolved early, a
+\fIMODE\fR
+without substitutions, and the
+\fITAG\fR
+values; also the value 0, e\&.g\&.
+OWNER="root"\&.
 .RE
 .PP
 \fBnet_altnames\fR

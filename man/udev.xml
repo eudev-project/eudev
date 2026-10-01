@@ -769,7 +769,13 @@
                   static device node with the specified name.  Static device node
                   creation can be requested by kernel modules.  These nodes might
                   not have a corresponding kernel device at the time udevd is started;
-                  they can trigger automatic kernel module loading.</para>
+                  they can trigger automatic kernel module loading. The values that are
+                  known when the rules are read are applied, like in systemd: an
+                  <varname>OWNER</varname> or <varname>GROUP</varname> that is a number, or
+                  a name without substitutions when names are resolved early, a
+                  <varname>MODE</varname> without substitutions, and the
+                  <varname>TAG</varname> values; also the value 0, e.g.
+                  <literal>OWNER="root"</literal>.</para>
                 </listitem>
               </varlistentry>
               <varlistentry>
