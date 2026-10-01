@@ -634,13 +634,13 @@ static bool str_in_set(const char *s, const char *const *set)
 
 /* Parses the numbers of the properties libudev interprets, like systemd's sd-device does. */
 
-/* DEVMODE=, like safe_atou() of systemd: e.g. "0660" is octal */
+/* DEVMODE=, like device_set_devmode() of systemd: with safe_atou(), so e.g. "0660" is octal */
 static int parse_devmode(const char *s, mode_t *ret)
 {
         unsigned u;
         int r;
 
-        r = safe_atou_full(s, 0, &u);
+        r = safe_atou(s, &u);
         if (r < 0)
                 return r;
         if (u > 07777)
