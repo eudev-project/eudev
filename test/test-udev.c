@@ -134,6 +134,15 @@ static int fake_filesystems(void) {
                 goto out;
         }
 
+        /* The fake network interfaces have the ifindexes of real ones, so NAME= and the alternative names
+         * would rename the network interfaces of the host, or add names to them. In a network namespace of
+         * its own, they reach only the loopback interface of the namespace. */
+        if (unshare(CLONE_NEWNET) < 0) {
+                err = -errno;
+                fprintf(stderr, "failed to create a network namespace: %m\n");
+                goto out;
+        }
+
         /* The source and the type are ignored when changing the propagation and for bind mounts,
          * but pass strings instead of NULL, which valgrind reports as invalid. */
         if (mount("none", "/", "none", MS_PRIVATE|MS_REC, NULL) < 0) {
@@ -257,10 +266,24 @@ int main(int argc __attribute__((unused)), char *argv[]) {
                                      3 * USEC_PER_SEC, USEC_PER_SEC,
                                      NULL,
                                      rules,
-                                     &sigmask_orig) >= 0)
+                                     &sigmask_orig) >= 0) {
                 udev_event_execute_run(event,
                                        3 * USEC_PER_SEC, USEC_PER_SEC,
                                        NULL);
+
+                /* Finalize the database like the udevd worker does after RUN, so that ID_PROCESSING=1 is not
+                 * left in it. The database was removed already on remove. */
+                if (!streq(action, "remove")) {
+                        err = udev_device_add_property(dev, "ID_PROCESSING", NULL);
+                        if (err < 0)
+                                log_error_errno(err, "Failed to remove 'ID_PROCESSING' property: %m");
+                        else {
+                                err = udev_device_update_db(dev);
+                                if (err < 0)
+                                        log_error_errno(err, "Failed to update database under " UDEV_ROOT_RUN "/udev/data/: %m");
+                        }
+                }
+        }
 out:
         if (event != NULL && event->fd_signal >= 0)
                 close(event->fd_signal);
