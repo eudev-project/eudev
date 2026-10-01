@@ -1417,6 +1417,38 @@ _public_ struct udev_device *udev_device_new_from_devnum(struct udev *udev, char
         return udev_device_new_from_syspath(udev, path);
 }
 
+/* Like parse_devnum() of systemd: "MAJOR:MINOR" in decimal, the major number made of digits only, both
+ * valid for the kernel. */
+static int parse_devnum_id(const char *s, dev_t *ret)
+{
+        _cleanup_free_ char *major = NULL;
+        unsigned x, y;
+        size_t n;
+        int r;
+
+        n = strspn(s, DIGITS);
+        if (n == 0 || n > DECIMAL_STR_MAX(dev_t) || s[n] != ':')
+                return -EINVAL;
+
+        major = strndup(s, n);
+        if (!major)
+                return -ENOMEM;
+
+        r = safe_atou(major, &x);
+        if (r < 0)
+                return r;
+
+        r = safe_atou(s + n + 1, &y);
+        if (r < 0)
+                return r;
+
+        if (x > (1U << 12) - 1 || y > (1U << 20) - 1)
+                return -ERANGE;
+
+        *ret = makedev(x, y);
+        return 0;
+}
+
 /**
  * udev_device_new_from_device_id:
  * @udev: udev library context
@@ -1430,6 +1462,9 @@ _public_ struct udev_device *udev_device_new_from_devnum(struct udev *udev, char
  *   n3            - network device ifindex
  *   +sound:card29 - kernel driver core subsystem:device name
  *
+ * Like in systemd, an ID that is not valid fails with EINVAL, or ERANGE for a device
+ * number that is too large, and the ID of a device that does not exist with ENODEV.
+ *
  * The initial refcount is 1, and needs to be decremented to
  * release the resources of the udev device.
  *
@@ -1437,29 +1472,41 @@ _public_ struct udev_device *udev_device_new_from_devnum(struct udev *udev, char
  **/
 _public_ struct udev_device *udev_device_new_from_device_id(struct udev *udev, const char *id)
 {
-        char type;
-        int maj, min;
-        char subsys[UTIL_PATH_SIZE];
-        char *sysname;
+        const char *sep;
+        int r;
 
         if (id == NULL) {
                 errno = EINVAL;
                 return NULL;
         }
 
+        /* Like sd_device_new_from_device_id() of systemd, an ID that is not valid fails with EINVAL, or
+         * ERANGE for a device number that is too large, and one of a device that does not exist with
+         * ENODEV. */
         switch(id[0]) {
         case 'b':
-        case 'c':
-                if (sscanf(id, "%c%i:%i", &type, &maj, &min) != 3)
+        case 'c': {
+                dev_t devnum;
+
+                r = parse_devnum_id(id + 1, &devnum);
+                if (r < 0) {
+                        errno = -r;
                         return NULL;
-                return udev_device_new_from_devnum(udev, type, makedev(maj, min));
+                }
+                return udev_device_new_from_devnum(udev, id[0], devnum);
+        }
         case 'n': {
                 int sk;
                 struct ifreq ifr;
                 struct udev_device *dev;
                 int ifindex;
 
-                ifindex = strtoul(&id[1], NULL, 10);
+                /* like parse_ifindex() of systemd's socket-util */
+                r = safe_atoi(id + 1, &ifindex);
+                if (r < 0) {
+                        errno = -r;
+                        return NULL;
+                }
                 if (ifindex <= 0) {
                         errno = EINVAL;
                         return NULL;
@@ -1487,16 +1534,22 @@ _public_ struct udev_device *udev_device_new_from_device_id(struct udev *udev, c
                 errno = ENODEV;
                 return NULL;
         }
-        case '+':
-                strscpy(subsys, sizeof(subsys), &id[1]);
-                sysname = strchr(subsys, ':');
-                if (sysname == NULL) {
+        case '+': {
+                _cleanup_free_ char *subsys = NULL;
+
+                sep = strchr(id + 1, ':');
+                if (!sep || sep[1] == '\0') {
                         errno = EINVAL;
                         return NULL;
                 }
-                sysname[0] = '\0';
-                sysname = &sysname[1];
-                return udev_device_new_from_subsystem_sysname(udev, subsys, sysname);
+
+                subsys = strndup(id + 1, sep - id - 1);
+                if (!subsys) {
+                        errno = ENOMEM;
+                        return NULL;
+                }
+                return udev_device_new_from_subsystem_sysname(udev, subsys, sep + 1);
+        }
         default:
                 errno = EINVAL;
                 return NULL;
@@ -1587,7 +1640,8 @@ _public_ struct udev_device *udev_device_new_from_subsystem_sysname(struct udev 
 
                 strscpy(subsys, sizeof(subsys), sysname);
                 driver = strchr(subsys, ':');
-                if (driver != NULL) {
+                /* like systemd, a driver must follow the ':' */
+                if (driver != NULL && driver[1] != '\0') {
                         driver[0] = '\0';
                         driver = &driver[1];
 
@@ -1612,7 +1666,8 @@ _public_ struct udev_device *udev_device_new_from_subsystem_sysname(struct udev 
                         if (stat(path, &statbuf) == 0)
                                 goto found;
                 } else
-                        errno = EINVAL;
+                        /* like systemd, no such driver */
+                        errno = ENODEV;
 
                 goto out;
         }
@@ -1629,6 +1684,9 @@ _public_ struct udev_device *udev_device_new_from_subsystem_sysname(struct udev 
         if (stat(path, &statbuf) == 0)
                 goto found;
 out:
+        /* like systemd, a device that does not exist is ENODEV */
+        if (IN_SET(errno, ENOENT, ENOTDIR))
+                errno = ENODEV;
         return NULL;
 found:
         return udev_device_new_from_syspath(udev, path);
