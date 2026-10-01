@@ -603,7 +603,28 @@ Print help text\&.
 .RE
 .SS "udevadm control \fIcommand\fR"
 .PP
-Modify the internal state of the running udev daemon\&. All options are parsed before the commands are sent to the daemon, in the order they are given, and the timeout applies to all of them\&. Sending commands requires root privileges\&.
+Modify the internal state of the running udev daemon\&. All options are parsed before the commands are sent to the daemon, and the timeout applies to all of them\&. Like in systemd, the commands are sent in a fixed order, whatever their order on the command line:
+\fB\-\-revert\fR,
+\fB\-\-log\-level=\fR,
+\fB\-\-stop\-exec\-queue\fR
+or
+\fB\-\-start\-exec\-queue\fR,
+\fB\-\-reload\fR,
+\fB\-\-property=\fR,
+\fB\-\-children\-max=\fR,
+\fB\-\-ping\fR
+and
+\fB\-\-trace=\fR\&. When an option is given more than once, the last one counts, and so does the last one of
+\fB\-\-stop\-exec\-queue\fR
+and
+\fB\-\-start\-exec\-queue\fR; all the properties of
+\fB\-\-property=\fR
+are set\&.
+\fB\-\-exit\fR
+is sent alone, the other commands are ignored then\&. The first command that fails stops
+\fBudevadm control\fR, which then exits with status 1, also when
+\fBudevd\fR
+is too old for a command\&. Sending commands requires root privileges\&.
 .PP
 \fB\-e\fR, \fB\-\-exit\fR
 .RS 4
@@ -648,7 +669,7 @@ Set a global property for all events\&.
 .PP
 \fB\-m\fR, \fB\-\-children\-max=\fR\fIvalue\fR
 .RS 4
-Set the maximum number of events, udevd will handle at the same time\&.
+Set the maximum number of events, udevd will handle at the same time\&. When 0 is specified, then the maximum is determined based on the system resources\&.
 .RE
 .PP
 \fB\-\-ping\fR
@@ -680,7 +701,7 @@ The maximum number of seconds to wait for a reply from udevd\&. Takes a value in
 500ms
 or
 1min, which is rounded up to whole seconds, or
-infinity\&. The default is 60 seconds\&.
+infinity\&. The default is 60 seconds, which 0 selects too\&.
 .RE
 .PP
 \fB\-V\fR, \fB\-\-version\fR

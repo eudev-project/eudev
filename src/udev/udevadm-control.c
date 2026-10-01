@@ -26,6 +26,7 @@
 #include <sys/un.h>
 
 #include "pager.h"
+#include "strv.h"
 #include "udev.h"
 #include "udev-util.h"
 #include "udevadm-util.h"
@@ -53,19 +54,87 @@ static void print_help(void) {
         print_man_page_link();
 }
 
-/* A command option, which is sent to the daemon after all options are parsed. */
-struct control_command {
-        int c;
-        const char *arg;
-        int value;
-};
+/* Like send_control_commands() of systemd: the commands are sent in a fixed order, whatever their order
+ * on the command line, and the first one that fails stops it. --exit is sent alone. */
+static int send_control_commands(struct udev_ctrl *uctrl, int timeout,
+                                 bool arg_exit, bool arg_revert, int arg_log_level, int arg_start_exec_queue,
+                                 bool arg_reload, char **arg_env, int arg_max_children, bool arg_ping, int arg_trace) {
+        char **e;
+        int r;
+
+        if (arg_exit) {
+                r = udev_ctrl_send_exit(uctrl, timeout);
+                if (r < 0)
+                        return log_error_errno(r, "Failed to send exit request to udevd: %m");
+                return 0;
+        }
+
+        if (arg_revert) {
+                r = udev_ctrl_send_revert(uctrl, timeout);
+                if (r == -EOPNOTSUPP)
+                        return log_error_errno(r, "udevd does not support --revert, restart it after upgrading.");
+                if (r < 0)
+                        return log_error_errno(r, "Failed to send revert request to udevd: %m");
+        }
+
+        if (arg_log_level >= 0) {
+                r = udev_ctrl_send_set_log_level(uctrl, arg_log_level, timeout);
+                if (r < 0)
+                        return log_error_errno(r, "Failed to send request to set log level to udevd: %m");
+        }
+
+        if (arg_start_exec_queue >= 0) {
+                if (arg_start_exec_queue)
+                        r = udev_ctrl_send_start_exec_queue(uctrl, timeout);
+                else
+                        r = udev_ctrl_send_stop_exec_queue(uctrl, timeout);
+                if (r < 0)
+                        return log_error_errno(r, "Failed to send request to %s execution queue to udevd: %m",
+                                               arg_start_exec_queue ? "start" : "stop");
+        }
+
+        if (arg_reload) {
+                r = udev_ctrl_send_reload(uctrl, timeout);
+                if (r < 0)
+                        return log_error_errno(r, "Failed to send reload request to udevd: %m");
+        }
+
+        STRV_FOREACH(e, arg_env) {
+                r = udev_ctrl_send_set_env(uctrl, *e, timeout);
+                if (r < 0)
+                        return log_error_errno(r, "Failed to send request to set global property to udevd: %m");
+        }
+
+        if (arg_max_children >= 0) {
+                r = udev_ctrl_send_set_children_max(uctrl, arg_max_children, timeout);
+                if (r < 0)
+                        return log_error_errno(r, "Failed to send request to set number of children to udevd: %m");
+        }
+
+        if (arg_ping) {
+                r = udev_ctrl_send_ping(uctrl, timeout);
+                if (r < 0)
+                        return log_error_errno(r, "Failed to connect to udev daemon: %m");
+        }
+
+        if (arg_trace >= 0) {
+                r = udev_ctrl_send_set_trace(uctrl, arg_trace, timeout);
+                if (r == -EOPNOTSUPP)
+                        return log_error_errno(r, "udevd does not support --trace, restart it after upgrading.");
+                if (r < 0)
+                        return log_error_errno(r, "Failed to send request to set trace logging to udevd: %m");
+        }
+
+        return 0;
+}
 
 static int adm_control(struct udev *udev, int argc, char *argv[]) {
         _cleanup_udev_ctrl_unref_ struct udev_ctrl *uctrl = NULL;
-        _cleanup_free_ struct control_command *commands = NULL;
-        size_t n_commands = 0, i;
+        _cleanup_strv_free_ char **arg_env = NULL;
+        bool arg_exit = false, arg_revert = false, arg_reload = false, arg_ping = false;
+        int arg_log_level = -1, arg_start_exec_queue = -1, arg_max_children = -1, arg_trace = -1;
         int timeout = 60;
-        int rc = 1, c, r;
+        int c, r;
 
         enum {
                 ARG_PING = 0x100,
@@ -93,73 +162,84 @@ static int adm_control(struct udev *udev, int argc, char *argv[]) {
                 {}
         };
 
-        /* Parse all options before anything is sent, so that --help and --version work without root
-         * privileges, and an invalid option does not leave the commands before it done. */
-        commands = new0(struct control_command, argc);
-        if (!commands) {
-                log_oom();
-                return 1;
-        }
-
+        /* Like systemd, parse all options before anything is sent, so that --help and --version work without
+         * root privileges, and an invalid option sends nothing. For the options that are given more than once,
+         * the last one counts, except that all the properties of --property are set. */
         while ((c = getopt_long(argc, argv, "el:sSRp:m:t:hV", options, NULL)) >= 0)
                 switch (c) {
                 case 'e':
-                case 's':
-                case 'S':
-                case 'R':
-                case ARG_PING:
-                case ARG_REVERT:
-                        commands[n_commands++] = (struct control_command) { .c = c };
+                        arg_exit = true;
                         break;
-                case 'l': {
-                        int i;
-
-                        i = util_log_priority(optarg);
-                        if (i < 0) {
+                case 'l':
+                        arg_log_level = util_log_priority(optarg);
+                        if (arg_log_level < 0) {
                                 fprintf(stderr, "invalid log level '%s'\n", optarg);
-                                return rc;
+                                return 1;
                         }
-                        commands[n_commands++] = (struct control_command) { .c = c, .value = i };
                         break;
-                }
+                case 's':
+                        arg_start_exec_queue = false;
+                        break;
+                case 'S':
+                        arg_start_exec_queue = true;
+                        break;
+                case 'R':
+                        arg_reload = true;
+                        break;
                 case 'p':
                         if (strchr(optarg, '=') == NULL) {
                                 fprintf(stderr, "expect <KEY>=<value> instead of '%s'\n", optarg);
-                                return rc;
+                                return 1;
                         }
-                        commands[n_commands++] = (struct control_command) { .c = c, .arg = optarg };
+                        if (strv_extend(&arg_env, optarg) < 0) {
+                                log_oom();
+                                return 1;
+                        }
                         break;
                 case 'm': {
-                        char *endp;
-                        int i;
+                        unsigned i;
 
-                        i = strtoul(optarg, &endp, 0);
-                        if (endp[0] != '\0' || i < 1) {
-                                fprintf(stderr, "invalid number '%s'\n", optarg);
-                                return rc;
+                        /* Like systemd, 0 asks udevd to use its default, computed from the system resources. */
+                        r = safe_atou(optarg, &i);
+                        if (r < 0) {
+                                log_error_errno(r, "Failed to parse maximum number of children '%s': %m", optarg);
+                                return 1;
                         }
-                        commands[n_commands++] = (struct control_command) { .c = c, .value = i };
+                        if (i > INT_MAX) {
+                                log_error("Maximum number of children is too large: %s", optarg);
+                                return 1;
+                        }
+                        arg_max_children = i;
                         break;
                 }
+                case ARG_PING:
+                        arg_ping = true;
+                        break;
                 case ARG_TRACE:
                         r = parse_boolean(optarg);
                         if (r < 0) {
                                 log_error_errno(r, "Failed to parse boolean argument to --trace=: %s.", optarg);
-                                return rc;
+                                return 1;
                         }
-                        commands[n_commands++] = (struct control_command) { .c = c, .value = r };
+                        arg_trace = r;
+                        break;
+                case ARG_REVERT:
+                        arg_revert = true;
                         break;
                 case 't': {
                         usec_t timeout_usec;
 
                         /* Like systemd, units are accepted, e.g. "500ms", and the default unit is
-                         * seconds. The control socket takes the timeout in seconds, round up. */
+                         * seconds. The control socket takes the timeout in seconds, round up. 0 means
+                         * the default. */
                         r = parse_sec(optarg, &timeout_usec);
                         if (r < 0) {
                                 log_error_errno(r, "Failed to parse timeout value '%s': %m", optarg);
-                                return rc;
+                                return 1;
                         }
-                        if (timeout_usec == USEC_INFINITY || timeout_usec / USEC_PER_SEC >= INT_MAX / MSEC_PER_SEC)
+                        if (timeout_usec == 0)
+                                timeout = 60;
+                        else if (timeout_usec == USEC_INFINITY || timeout_usec / USEC_PER_SEC >= INT_MAX / MSEC_PER_SEC)
                                 timeout = -1;
                         else
                                 timeout = (timeout_usec + USEC_PER_SEC - 1) / USEC_PER_SEC;
@@ -172,18 +252,19 @@ static int adm_control(struct udev *udev, int argc, char *argv[]) {
                         printf("%s\n", UDEV_VERSION);
                         return 0;
                 case '?':
-                        return rc;
+                        return 1;
                 default:
                         assert_not_reached("Unknown option");
                 }
 
         if (optind < argc) {
                 fprintf(stderr, "Extraneous argument: %s\n", argv[optind]);
-                return rc;
+                return 1;
         }
-        if (n_commands == 0) {
+        if (!arg_exit && !arg_revert && arg_log_level < 0 && arg_start_exec_queue < 0 && !arg_reload &&
+            strv_isempty(arg_env) && arg_max_children < 0 && !arg_ping && arg_trace < 0) {
                 fprintf(stderr, "Option missing\n");
-                return rc;
+                return 1;
         }
 
         /* Unlike systemd, the options are parsed first, so that --help, --version and invalid options
@@ -199,84 +280,14 @@ static int adm_control(struct udev *udev, int argc, char *argv[]) {
         }
 
         uctrl = udev_ctrl_new(udev);
-        if (uctrl == NULL)
-                return 2;
+        if (uctrl == NULL) {
+                log_error("Failed to create the control socket of udevd.");
+                return 1;
+        }
 
-        for (i = 0; i < n_commands; i++)
-                switch (commands[i].c) {
-                case 'e':
-                        if (udev_ctrl_send_exit(uctrl, timeout) < 0)
-                                rc = 2;
-                        else
-                                rc = 0;
-                        break;
-                case 'l':
-                        if (udev_ctrl_send_set_log_level(uctrl, commands[i].value, timeout) < 0)
-                                rc = 2;
-                        else
-                                rc = 0;
-                        break;
-                case 's':
-                        if (udev_ctrl_send_stop_exec_queue(uctrl, timeout) < 0)
-                                rc = 2;
-                        else
-                                rc = 0;
-                        break;
-                case 'S':
-                        if (udev_ctrl_send_start_exec_queue(uctrl, timeout) < 0)
-                                rc = 2;
-                        else
-                                rc = 0;
-                        break;
-                case 'R':
-                        if (udev_ctrl_send_reload(uctrl, timeout) < 0)
-                                rc = 2;
-                        else
-                                rc = 0;
-                        break;
-                case 'p':
-                        if (udev_ctrl_send_set_env(uctrl, commands[i].arg, timeout) < 0)
-                                rc = 2;
-                        else
-                                rc = 0;
-                        break;
-                case 'm':
-                        if (udev_ctrl_send_set_children_max(uctrl, commands[i].value, timeout) < 0)
-                                rc = 2;
-                        else
-                                rc = 0;
-                        break;
-                case ARG_PING:
-                        r = udev_ctrl_send_ping(uctrl, timeout);
-                        if (r < 0) {
-                                log_error_errno(r, "Failed to connect to udev daemon: %m");
-                                rc = 2;
-                        } else
-                                rc = 0;
-                        break;
-                case ARG_TRACE:
-                        r = udev_ctrl_send_set_trace(uctrl, commands[i].value, timeout);
-                        if (r == -EOPNOTSUPP)
-                                log_error("udevd does not support --trace, restart it after upgrading.");
-                        if (r < 0)
-                                rc = 2;
-                        else
-                                rc = 0;
-                        break;
-                case ARG_REVERT:
-                        r = udev_ctrl_send_revert(uctrl, timeout);
-                        if (r == -EOPNOTSUPP)
-                                log_error("udevd does not support --revert, restart it after upgrading.");
-                        if (r < 0)
-                                rc = 2;
-                        else
-                                rc = 0;
-                        break;
-                default:
-                        assert_not_reached("Unknown command");
-                }
-
-        return rc;
+        r = send_control_commands(uctrl, timeout, arg_exit, arg_revert, arg_log_level, arg_start_exec_queue,
+                                  arg_reload, arg_env, arg_max_children, arg_ping, arg_trace);
+        return r < 0 ? 1 : 0;
 }
 
 const struct udevadm_cmd udevadm_control = {

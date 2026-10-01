@@ -697,8 +697,18 @@
 
     <refsect2><title>udevadm control <replaceable>command</replaceable></title>
       <para>Modify the internal state of the running udev daemon. All options are parsed before the
-      commands are sent to the daemon, in the order they are given, and the timeout applies to all of
-      them. Sending commands requires root privileges.</para>
+      commands are sent to the daemon, and the timeout applies to all of them. Like in systemd, the
+      commands are sent in a fixed order, whatever their order on the command line:
+      <option>--revert</option>, <option>--log-level=</option>,
+      <option>--stop-exec-queue</option> or <option>--start-exec-queue</option>,
+      <option>--reload</option>, <option>--property=</option>, <option>--children-max=</option>,
+      <option>--ping</option> and <option>--trace=</option>. When an option is given more than once,
+      the last one counts, and so does the last one of <option>--stop-exec-queue</option> and
+      <option>--start-exec-queue</option>; all the properties of <option>--property=</option> are set.
+      <option>--exit</option> is sent alone, the other commands are ignored then. The first command that
+      fails stops <command>udevadm control</command>, which then exits with status 1, also when
+      <command>udevd</command> is too old for a command. Sending commands requires root
+      privileges.</para>
       <variablelist>
         <varlistentry>
           <term><option>-e</option></term>
@@ -758,7 +768,8 @@
           <term><option>--children-max=</option><replaceable>value</replaceable></term>
           <listitem>
             <para>Set the maximum number of events, udevd will handle at the
-            same time.</para>
+            same time. When 0 is specified, then the maximum is determined based on the system
+            resources.</para>
           </listitem>
         </varlistentry>
         <varlistentry>
@@ -789,7 +800,7 @@
             <para>The maximum number of seconds to wait for a reply from udevd. Takes a value in
             seconds, or in the usual supported time units, e.g. <literal>500ms</literal> or
             <literal>1min</literal>, which is rounded up to whole seconds, or
-            <literal>infinity</literal>. The default is 60 seconds.</para>
+            <literal>infinity</literal>. The default is 60 seconds, which 0 selects too.</para>
           </listitem>
         </varlistentry>
         <varlistentry>
