@@ -244,30 +244,30 @@
           </listitem>
         </varlistentry>
         <varlistentry>
-          <term><option>--subsystem-match<optional>=SUBSYSTEM</optional></option></term>
-          <term><option>--subsystem-nomatch<optional>=SUBSYSTEM</optional></option></term>
+          <term><option>--subsystem-match=<replaceable>SUBSYSTEM</replaceable></option></term>
+          <term><option>--subsystem-nomatch=<replaceable>SUBSYSTEM</replaceable></option></term>
           <listitem>
             <para>When used with <option>--export-db</option>, only show devices of or not of the given
             subsystem respectively.</para>
           </listitem>
         </varlistentry>
         <varlistentry>
-          <term><option>--attr-match<optional>=FILE[=VALUE]</optional></option></term>
-          <term><option>--attr-nomatch<optional>=FILE[=VALUE]</optional></option></term>
+          <term><option>--attr-match=<replaceable>FILE</replaceable><optional>=<replaceable>VALUE</replaceable></optional></option></term>
+          <term><option>--attr-nomatch=<replaceable>FILE</replaceable><optional>=<replaceable>VALUE</replaceable></optional></option></term>
           <listitem>
             <para>When used with <option>--export-db</option>, only show devices matching or not matching the
             given attribute respectively.</para>
           </listitem>
         </varlistentry>
         <varlistentry>
-          <term><option>--property-match<optional>=KEY=VALUE</optional></option></term>
+          <term><option>--property-match=<replaceable>KEY</replaceable>=<replaceable>VALUE</replaceable></option></term>
           <listitem>
             <para>When used with <option>--export-db</option>, only show devices matching the given property
             and value.</para>
           </listitem>
         </varlistentry>
         <varlistentry>
-          <term><option>--tag-match<optional>=TAG</optional></option></term>
+          <term><option>--tag-match=<replaceable>TAG</replaceable></option></term>
           <listitem>
             <para>When used with <option>--export-db</option>, only show devices with the given tag. When
             this option is specified more than once, devices that have any of the given tags are
@@ -275,21 +275,21 @@
           </listitem>
         </varlistentry>
         <varlistentry>
-          <term><option>--sysname-match<optional>=NAME</optional></option></term>
+          <term><option>--sysname-match=<replaceable>NAME</replaceable></option></term>
           <listitem>
             <para>When used with <option>--export-db</option>, only show devices with the given
             <literal>/sys</literal> path.</para>
           </listitem>
         </varlistentry>
         <varlistentry>
-          <term><option>--name-match<optional>=NAME</optional></option></term>
+          <term><option>--name-match=<replaceable>NAME</replaceable></option></term>
           <listitem>
             <para>When used with <option>--export-db</option>, only show devices with the given name in
             <literal>/dev</literal>.</para>
           </listitem>
         </varlistentry>
         <varlistentry>
-          <term><option>--parent-match<optional>=NAME</optional></option></term>
+          <term><option>--parent-match=<replaceable>NAME</replaceable></option></term>
           <listitem>
             <para>When used with <option>--export-db</option>, only show devices with the given parent
             device.</para>
