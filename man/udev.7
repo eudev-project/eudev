@@ -149,6 +149,161 @@ Please note that
 \fBNUL\fR
 is not allowed in either string variant\&.
 .PP
+The keys of a rule line are not evaluated in the order in which they are written, but, like in systemd, in a fixed order by their kind: all match keys before all assignment keys, and within these as listed below\&. Keys of the same kind are evaluated in the order in which they are written, and the evaluation stops at the first match key that does not match\&. So a key cannot use the result of a key of the same line that comes later in this order: e\&.g\&. an
+\fIENV{}\fR
+match does not see the properties that an
+\fIIMPORT\fR
+of the same line imports, and
+OWNER="$env{X}"
+or
+TAG+="$env{X}"
+does not see the value that
+ENV{X}=
+of the same line assigns; such keys must be written on separate lines\&. The order is:
+.sp
+.RS 4
+.ie n \{\
+\h'-04' 1.\h'+01'\c
+.\}
+.el \{\
+.sp -1
+.IP "  1." 4.2
+.\}
+\fIACTION\fR,
+\fIDEVPATH\fR,
+\fIKERNEL\fR,
+\fISYMLINK\fR,
+\fINAME\fR,
+\fIENV{}\fR,
+\fITAG\fR,
+\fISUBSYSTEM\fR,
+\fIDRIVER\fR,
+\fIATTR{}\fR
+and
+\fISYSCTL{}\fR
+as match keys;
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04' 2.\h'+01'\c
+.\}
+.el \{\
+.sp -1
+.IP "  2." 4.2
+.\}
+\fIKERNELS\fR,
+\fISUBSYSTEMS\fR,
+\fIDRIVERS\fR,
+\fIATTRS{}\fR
+and
+\fITAGS\fR, which are checked together, against the device and then against one parent device after the other;
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04' 3.\h'+01'\c
+.\}
+.el \{\
+.sp -1
+.IP "  3." 4.2
+.\}
+\fITEST\fR,
+\fIPROGRAM\fR,
+\fIIMPORT{file}\fR,
+\fIIMPORT{program}\fR,
+\fIIMPORT{builtin}\fR
+(also an
+\fIIMPORT{program}\fR
+that names a built\-in command),
+\fIIMPORT{db}\fR,
+\fIIMPORT{cmdline}\fR,
+\fIIMPORT{parent}\fR
+and
+\fIRESULT\fR;
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04' 4.\h'+01'\c
+.\}
+.el \{\
+.sp -1
+.IP "  4." 4.2
+.\}
+the
+\fIOPTIONS\fR
+\fBdump\fR
+and
+\fBdump\-json\fR,
+\fBstring_escape=none\fR,
+\fBstring_escape=replace\fR,
+\fBdb_persist\fR,
+\fBnet_altnames\fR,
+\fBwatch\fR
+and
+\fBnowatch\fR,
+\fBlink_priority=\fR
+and
+\fBlog_level=\fR;
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04' 5.\h'+01'\c
+.\}
+.el \{\
+.sp -1
+.IP "  5." 4.2
+.\}
+\fIOWNER\fR,
+\fIGROUP\fR
+and
+\fIMODE\fR, first the ones whose value is resolved only when the rule is applied (see below), then the others;
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04' 6.\h'+01'\c
+.\}
+.el \{\
+.sp -1
+.IP "  6." 4.2
+.\}
+\fITAG\fR,
+\fISECLABEL{}\fR,
+\fIENV{}\fR,
+\fINAME\fR,
+\fISYMLINK\fR,
+\fIATTR{}\fR
+and
+\fISYSCTL{}\fR
+as assignment keys;
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04' 7.\h'+01'\c
+.\}
+.el \{\
+.sp -1
+.IP "  7." 4.2
+.\}
+\fIRUN{builtin}\fR, then
+\fIRUN{program}\fR;
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04' 8.\h'+01'\c
+.\}
+.el \{\
+.sp -1
+.IP "  8." 4.2
+.\}
+\fIGOTO\fR\&.
+.RE
+.PP
 Rules written for systemd\-udevd may use features which udev does not provide: the
 \fICONST{arch}\fR,
 \fICONST{virt}\fR

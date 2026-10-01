@@ -185,6 +185,49 @@
 
       <para>Please note that <constant>NUL</constant> is not allowed in either string variant.</para>
 
+      <para>The keys of a rule line are not evaluated in the order in which they are written, but,
+      like in systemd, in a fixed order by their kind: all match keys before all assignment keys,
+      and within these as listed below. Keys of the same kind are evaluated in the order in which
+      they are written, and the evaluation stops at the first match key that does not match. So a
+      key cannot use the result of a key of the same line that comes later in this order: e.g. an
+      <varname>ENV{}</varname> match does not see the properties that an
+      <varname>IMPORT</varname> of the same line imports, and
+      <literal>OWNER="$env{X}"</literal> or <literal>TAG+="$env{X}"</literal> does not see the
+      value that <literal>ENV{X}=</literal> of the same line assigns; such keys must be written
+      on separate lines. The order is:</para>
+      <orderedlist>
+        <listitem><para><varname>ACTION</varname>, <varname>DEVPATH</varname>,
+        <varname>KERNEL</varname>, <varname>SYMLINK</varname>, <varname>NAME</varname>,
+        <varname>ENV{}</varname>, <varname>TAG</varname>, <varname>SUBSYSTEM</varname>,
+        <varname>DRIVER</varname>, <varname>ATTR{}</varname> and <varname>SYSCTL{}</varname>
+        as match keys;</para></listitem>
+        <listitem><para><varname>KERNELS</varname>, <varname>SUBSYSTEMS</varname>,
+        <varname>DRIVERS</varname>, <varname>ATTRS{}</varname> and <varname>TAGS</varname>,
+        which are checked together, against the device and then against one parent device after
+        the other;</para></listitem>
+        <listitem><para><varname>TEST</varname>, <varname>PROGRAM</varname>,
+        <varname>IMPORT{file}</varname>, <varname>IMPORT{program}</varname>,
+        <varname>IMPORT{builtin}</varname> (also an <varname>IMPORT{program}</varname> that
+        names a built-in command), <varname>IMPORT{db}</varname>,
+        <varname>IMPORT{cmdline}</varname>, <varname>IMPORT{parent}</varname> and
+        <varname>RESULT</varname>;</para></listitem>
+        <listitem><para>the <varname>OPTIONS</varname> <option>dump</option> and
+        <option>dump-json</option>, <option>string_escape=none</option>,
+        <option>string_escape=replace</option>, <option>db_persist</option>,
+        <option>net_altnames</option>, <option>watch</option> and <option>nowatch</option>,
+        <option>link_priority=</option> and <option>log_level=</option>;</para></listitem>
+        <listitem><para><varname>OWNER</varname>, <varname>GROUP</varname> and
+        <varname>MODE</varname>, first the ones whose value is resolved only when the rule is
+        applied (see below), then the others;</para></listitem>
+        <listitem><para><varname>TAG</varname>, <varname>SECLABEL{}</varname>,
+        <varname>ENV{}</varname>, <varname>NAME</varname>, <varname>SYMLINK</varname>,
+        <varname>ATTR{}</varname> and <varname>SYSCTL{}</varname> as assignment
+        keys;</para></listitem>
+        <listitem><para><varname>RUN{builtin}</varname>, then <varname>RUN{program}</varname>;
+        </para></listitem>
+        <listitem><para><varname>GOTO</varname>.</para></listitem>
+      </orderedlist>
+
       <para>Rules written for systemd-udevd may use features which udev does not provide: the
       <varname>CONST{arch}</varname>, <varname>CONST{virt}</varname> and
       <varname>CONST{cvm}</varname> match keys, and the <literal>dissect_image</literal>,
