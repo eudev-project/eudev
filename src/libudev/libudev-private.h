@@ -133,6 +133,9 @@ int uevent_trigger_with_uuid(struct udev *udev, const char *syspath, const char 
 int uevent_trigger_with_args(struct udev *udev, const char *syspath, const char *action, char * const *args,
                              char *ret_uuid);
 int device_trigger_with_args(struct udev_device *device, const char *action, char * const *args, char *ret_uuid);
+int device_build_default_trigger_args(bool with_timestamp, char ***ret);
+int device_trigger_with_timestamp(struct udev_device *device, const char *action, char * const *args,
+                                  char *ret_uuid);
 int device_get_sysnum_unsigned(struct udev_device *device, unsigned *ret);
 
 /* libudev-monitor.c - netlink/unix socket communication  */

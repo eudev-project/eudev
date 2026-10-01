@@ -36,7 +36,9 @@
 #include "id128-util.h"
 #include "log.h"
 #include "path-util.h"
+#include "process-util.h"
 #include "strv.h"
+#include "time-util.h"
 #include "utf8.h"
 
 static int udev_device_tag(struct udev_device *dev, const char *tag, bool add)
@@ -861,6 +863,144 @@ int device_trigger_with_args(struct udev_device *device, const char *action, cha
                 return -ENODEV;
 
         return uevent_trigger_with_args(udev_device_get_udev(device), syspath, action, args, ret_uuid);
+}
+
+static int strv_extend_pair(char ***l, const char *key, const char *value)
+{
+        int r;
+
+        r = strv_extend(l, key);
+        if (r < 0)
+                return r;
+
+        return strv_extend(l, value);
+}
+
+/* Like get_arg0_or_comm() of systemd b1df918307: the name of the program, argv[0] without its directory, or
+ * the comm of the process if that is empty, with the characters that are not alphanumerical removed, as the
+ * kernel only accepts those, e.g. "systemd-udevd" becomes "systemdudevd". Unlike systemd, which reads argv[0]
+ * from /proc/self/cmdline, it is program_invocation_short_name, which is the same as eudev does not change its
+ * argv. */
+static int get_arg0_or_comm(char **ret)
+{
+        _cleanup_free_ char *comm = NULL;
+        char *p, *q;
+        int r;
+
+        assert(ret);
+
+        /* comm may be truncated, let's use argv[0] if possible. */
+        if (!isempty(program_invocation_short_name)) {
+                comm = strdup(program_invocation_short_name);
+                if (!comm)
+                        return -ENOMEM;
+        } else {
+                r = get_process_comm(0, &comm);
+                if (r < 0)
+                        return r;
+        }
+
+        /* The kernel only accepts alphanumerical. Drop unsupported characters. */
+        for (p = q = comm; *p != '\0'; p++)
+                if (strchr(ALPHANUMERICAL, *p))
+                        *q++ = *p;
+        *q = '\0';
+
+        if (isempty(comm))
+                return -ENOENT;
+
+        *ret = TAKE_PTR(comm);
+        return 0;
+}
+
+/* Like append_timestamp() of systemd b1df918307: appends TimestampRealtime, TimestampMonotonic and
+ * TimestampBoottime with the current times in microseconds to the KEY VALUE pairs of args. On failure, args
+ * may be left with a part of them, so the callers discard it then. */
+static int append_timestamp(char ***args)
+{
+        char buf[DECIMAL_STR_MAX(usec_t)];
+        usec_t realtime, monotonic, boottime;
+        int r;
+
+        assert(args);
+
+        if (strv_length(*args) % 2 != 0)
+                return -EINVAL;
+
+        realtime = now(CLOCK_REALTIME);
+        monotonic = now(CLOCK_MONOTONIC);
+        boottime = now(CLOCK_BOOTTIME);
+
+        xsprintf(buf, USEC_FMT, realtime);
+        r = strv_extend_pair(args, "TimestampRealtime", buf);
+        if (r < 0)
+                return r;
+
+        xsprintf(buf, USEC_FMT, monotonic);
+        r = strv_extend_pair(args, "TimestampMonotonic", buf);
+        if (r < 0)
+                return r;
+
+        xsprintf(buf, USEC_FMT, boottime);
+        return strv_extend_pair(args, "TimestampBoottime", buf);
+}
+
+/* Like device_build_default_trigger_args() of systemd b1df918307: the arguments for uevent_trigger_with_args()
+ * that tell which process triggered the uevent: its PID, its name (Comm), unless it has none, and, with
+ * with_timestamp, the current time. Unlike systemd, there is no PIDFDID, the inode number of the pidfd of the
+ * process, as eudev has no helpers for pidfds, and no InvocationID, the ID of the service of systemd that runs
+ * the process, which means nothing without systemd. */
+int device_build_default_trigger_args(bool with_timestamp, char ***ret)
+{
+        _cleanup_strv_free_ char **args = NULL;
+        _cleanup_free_ char *comm = NULL;
+        char buf[DECIMAL_STR_MAX(pid_t)];
+        int r;
+
+        assert(ret);
+
+        xsprintf(buf, PID_FMT, getpid());
+        r = strv_extend_pair(&args, "PID", buf);
+        if (r < 0)
+                return r;
+
+        if (get_arg0_or_comm(&comm) >= 0) {
+                r = strv_extend_pair(&args, "Comm", comm);
+                if (r < 0)
+                        return r;
+        }
+
+        if (with_timestamp) {
+                r = append_timestamp(&args);
+                if (r < 0)
+                        return r;
+        }
+
+        *ret = TAKE_PTR(args);
+        return 0;
+}
+
+/* Like device_trigger_with_timestamp() of systemd b1df918307: device_trigger_with_args() with args, which
+ * must not contain timestamps, and the current time appended to them. */
+int device_trigger_with_timestamp(struct udev_device *device, const char *action, char * const *args,
+                                  char *ret_uuid)
+{
+        _cleanup_strv_free_ char **copy = NULL;
+        int r;
+
+        assert(device);
+
+        /* This assumes the input args does not contain timestamps. */
+
+        copy = strv_copy(args);
+        if (!copy)
+                return -ENOMEM;
+
+        r = append_timestamp(&copy);
+        if (r < 0)
+                return r;
+
+        return device_trigger_with_args(device, action, copy, ret_uuid);
 }
 
 int device_get_sysnum_unsigned(struct udev_device *device, unsigned *ret)
