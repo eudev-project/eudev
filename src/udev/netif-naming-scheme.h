@@ -99,6 +99,8 @@ typedef struct NamingScheme {
 const NamingScheme* naming_scheme_from_name(const char *name);
 const NamingScheme* naming_scheme_init(struct udev *udev);
 const NamingScheme* naming_scheme(void);
+/* The level of the message that says which naming scheme is used, LOG_INFO by default. */
+void naming_scheme_set_log_level(int level);
 
 static inline bool naming_scheme_has(NamingSchemeFlags flags) {
         return FLAGS_SET(naming_scheme()->flags, flags);

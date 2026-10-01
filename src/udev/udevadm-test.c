@@ -28,6 +28,7 @@
 #include <getopt.h>
 #include <sys/signalfd.h>
 
+#include "netif-naming-scheme.h"
 #include "pager.h"
 #include "path-util.h"
 #include "strv.h"
@@ -163,6 +164,9 @@ static int adm_test(struct udev *udev, int argc, char *argv[]) {
         sigprocmask(SIG_SETMASK, NULL, &sigmask_orig);
 
         udev_event_check_config(udev);
+
+        /* not in the middle of the output when NAME= or net_id selects it */
+        naming_scheme_set_log_level(LOG_DEBUG);
 
         maybe_insert_empty_line();
         log_info("Loading builtins...");

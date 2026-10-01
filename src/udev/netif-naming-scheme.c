@@ -71,6 +71,13 @@ static int parse_proc_cmdline_item(const char *key, const char *value) {
 }
 
 static const NamingScheme *cache = NULL;
+static int log_level = LOG_INFO;
+
+/* udevd logs the naming scheme at info level, once when it starts; udevadm test and test-udev, where it
+ * would be in the middle of the output whenever a network interface is renamed, at debug level. */
+void naming_scheme_set_log_level(int level) {
+        log_level = level;
+}
 
 /* eudev: the scheme is also read from net_naming_scheme= in udev.conf. The precedence is:
  * $NET_NAMING_SCHEME, the kernel command line, udev.conf, $NET_NAMING_SCHEME prefixed with ':',
@@ -104,7 +111,7 @@ const NamingScheme* naming_scheme_init(struct udev *udev) {
 
                 cache = naming_scheme_from_name(k[i]);
                 if (cache) {
-                        log_info("Using interface naming scheme '%s'.", cache->name);
+                        log_full(log_level, "Using interface naming scheme '%s'.", cache->name);
                         goto finish;
                 }
 
@@ -113,7 +120,7 @@ const NamingScheme* naming_scheme_init(struct udev *udev) {
 
         cache = naming_scheme_from_name(DEFAULT_NET_NAMING_SCHEME);
         assert_se(cache);
-        log_info("Using default interface naming scheme '%s'.", cache->name);
+        log_full(log_level, "Using default interface naming scheme '%s'.", cache->name);
 
 finish:
         free(cmdline_naming_scheme);
