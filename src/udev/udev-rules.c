@@ -1068,7 +1068,7 @@ static void trace_parent_tokens(struct udev_event *event, struct udev_rules *rul
                 joined = n;
         }
 
-        trace_line(event, rules, rule, "Checking conditions for parent devices: %s", strna(joined));
+        trace_line(event, rules, rule, "Checking conditions for parent devices (including self): %s", strna(joined));
 }
 
 static int add_token(struct udev_rules *rules, struct token *token) {
