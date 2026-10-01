@@ -2720,8 +2720,10 @@ static int match_attr(struct udev_rules *rules, struct udev_device *dev, struct 
                 klen = strlen(key_value);
                 if (klen > 0 && !isspace(key_value[klen-1])) {
                         if (value != vbuf) {
+                                /* like systemd, a longer value is cut, then the length changes */
                                 strscpy(vbuf, sizeof(vbuf), value);
                                 value = vbuf;
+                                len = strlen(vbuf);
                         }
                         while (len > 0 && isspace(vbuf[--len]))
                                 vbuf[len] = '\0';
