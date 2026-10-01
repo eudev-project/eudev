@@ -1366,7 +1366,7 @@ static void event_assign_altnames(struct udev_event *event) {
         if (strv_isempty(event->altnames))
                 return;
 
-        if (!EVENT_MODE_DESTRUCTIVE(event)) {
+        if (!EVENT_MODE_NETIF_DESTRUCTIVE(event)) {
                 /* systemd shows the names unfiltered, see udevadm test; here the ones that would be requested */
                 const char *newname = event->name ?: ifname;
                 char names[UTIL_LINE_SIZE] = "";
@@ -1510,7 +1510,7 @@ int udev_event_execute_rules(struct udev_event *event,
                 /* rename a new network interface, if needed; like systemd, assign the alternative names unless
                  * that failed, but also when the interface is up (EBUSY) or the name is ignored */
                 int rename_r = 0;
-                if (!EVENT_MODE_DESTRUCTIVE(event) &&
+                if (!EVENT_MODE_NETIF_DESTRUCTIVE(event) &&
                     udev_device_get_ifindex(dev) > 0 && streq(udev_device_get_action(dev), "add")) {
                         const char *sysname = udev_device_get_sysname(dev);
 #ifdef ENABLE_RULE_GENERATOR
@@ -1547,7 +1547,7 @@ int udev_event_execute_rules(struct udev_event *event,
                  */
 
 #ifdef ENABLE_RULE_GENERATOR
-                if (EVENT_MODE_DESTRUCTIVE(event) &&
+                if (EVENT_MODE_NETIF_DESTRUCTIVE(event) &&
                     udev_device_get_ifindex(dev) > 0 && streq(udev_device_get_action(dev), "add")) {
                         const char *name = netif_new_name(event);
                         int r = 0;
@@ -1587,7 +1587,7 @@ int udev_event_execute_rules(struct udev_event *event,
                         }
                 }
 #else
-                if (EVENT_MODE_DESTRUCTIVE(event) &&
+                if (EVENT_MODE_NETIF_DESTRUCTIVE(event) &&
                     udev_device_get_ifindex(dev) > 0 && streq(udev_device_get_action(dev), "add") &&
                     event->name != NULL && !streq(event->name, udev_device_get_sysname(dev))) {
                         const char *name = netif_new_name(event);

@@ -89,6 +89,9 @@ struct udev_event {
         bool log_level_was_debug;
         int default_log_level;
         bool net_altnames;
+        /* do not rename network interfaces and do not assign alternative names to them, like in the test
+         * modes, see EVENT_MODE_NETIF_DESTRUCTIVE() */
+        bool keep_netifs;
         enum udev_event_mode event_mode;
 };
 
@@ -97,6 +100,12 @@ void udev_event_check_config(struct udev *udev);
 static inline bool EVENT_MODE_DESTRUCTIVE(struct udev_event *event) {
         assert(event);
         return IN_SET(event->event_mode, EVENT_UDEV_WORKER, EVENT_TEST_RULE_RUNNER);
+}
+
+/* Whether network interfaces are renamed and get their alternative names: by udevd, and by test-udev unless it
+ * has no network namespace of its own, where it would change the network interfaces of the host. */
+static inline bool EVENT_MODE_NETIF_DESTRUCTIVE(struct udev_event *event) {
+        return EVENT_MODE_DESTRUCTIVE(event) && !event->keep_netifs;
 }
 
 struct udev_watch {

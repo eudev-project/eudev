@@ -114,6 +114,9 @@ static int mask_rules_dirs(void) {
         return 0;
 }
 
+/* see fake_filesystems() */
+static bool keep_netifs = false;
+
 static int fake_filesystems(void) {
         static const struct fakefs {
                 const char *src;
@@ -136,11 +139,12 @@ static int fake_filesystems(void) {
 
         /* The fake network interfaces have the ifindexes of real ones, so NAME= and the alternative names
          * would rename the network interfaces of the host, or add names to them. In a network namespace of
-         * its own, they reach only the loopback interface of the namespace. */
+         * its own, they reach only the loopback interface of the namespace. Where that is not permitted or
+         * not available, e.g. in a container or without CONFIG_NET_NS, do not rename network interfaces
+         * and do not assign alternative names, like 'udevadm test', instead of failing. */
         if (unshare(CLONE_NEWNET) < 0) {
-                err = -errno;
-                fprintf(stderr, "failed to create a network namespace: %m\n");
-                goto out;
+                fprintf(stderr, "failed to create a network namespace, not renaming network interfaces: %m\n");
+                keep_netifs = true;
         }
 
         /* The source and the type are ignored when changing the propagation and for bind mounts,
@@ -228,6 +232,11 @@ int main(int argc __attribute__((unused)), char *argv[]) {
         udev_device_set_info_loaded(dev);
 
         event = udev_event_new(dev, EVENT_TEST_RULE_RUNNER);
+        if (event == NULL) {
+                err = log_oom();
+                goto out;
+        }
+        event->keep_netifs = keep_netifs;
 
         sigfillset(&mask);
         sigprocmask(SIG_SETMASK, &mask, &sigmask_orig);
