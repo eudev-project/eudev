@@ -132,7 +132,7 @@ static int udev_builtin_hwdb_search(struct udev_device *dev, struct udev_device 
                 if (!modalias)
                         continue;
 
-                log_debug("hwdb modalias key: \"%s\"", modalias);
+                log_device_debug(dev, "hwdb modalias key: \"%s\"", modalias);
 
                 r = udev_builtin_hwdb_lookup(dev, prefix, modalias, filter, mode);
                 if (r > 0)
@@ -191,9 +191,9 @@ static int builtin_hwdb(struct udev_device *dev, int argc, char *argv[], enum ud
         if (argv[optind]) {
                 r = udev_builtin_hwdb_lookup(dev, prefix, argv[optind], filter, mode);
                 if (r < 0)
-                        return log_debug_errno(r, "%s: Failed to look up hwdb: %m", udev_device_get_sysname(dev));
+                        return log_device_debug_errno(dev, r, "Failed to look up hwdb: %m");
                 if (r == 0)
-                        return log_debug_errno(ENODATA, "%s: No entry found from hwdb.", udev_device_get_sysname(dev));
+                        return log_device_debug_errno(dev, ENODATA, "No entry found from hwdb.");
                 return EXIT_SUCCESS;
         }
 
@@ -202,15 +202,14 @@ static int builtin_hwdb(struct udev_device *dev, int argc, char *argv[], enum ud
                 errno = 0;
                 srcdev = udev_device_new_from_device_id(udev_device_get_udev(dev), device);
                 if (!srcdev)
-                        return log_debug_errno(errno > 0 ? errno : ENODEV, "%s: Failed to create device object '%s': %m",
-                                               udev_device_get_sysname(dev), device);
+                        return log_device_debug_errno(dev, errno > 0 ? errno : ENODEV, "Failed to create device object '%s': %m", device);
         }
 
         r = udev_builtin_hwdb_search(dev, srcdev, subsystem, prefix, filter, mode);
         if (r < 0)
-                return log_debug_errno(r, "%s: Failed to look up hwdb: %m", udev_device_get_sysname(dev));
+                return log_device_debug_errno(dev, r, "Failed to look up hwdb: %m");
         if (r == 0)
-                return log_debug_errno(ENODATA, "%s: No entry found from hwdb.", udev_device_get_sysname(dev));
+                return log_device_debug_errno(dev, ENODATA, "No entry found from hwdb.");
         return EXIT_SUCCESS;
 }
 

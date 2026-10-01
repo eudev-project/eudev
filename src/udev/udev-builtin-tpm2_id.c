@@ -832,28 +832,28 @@ static int builtin_tpm2_id(struct udev_device *dev, int argc, char *argv[], enum
 
         /* Like systemd, the errors are returned as negative error codes, with the reason. */
         if (argc != 2 || !streq(argv[1], "identify"))
-                return log_error_errno(EINVAL, "%s: expected: identify", argv[0]);
+                return log_device_error_errno(dev, EINVAL, "%s: expected: identify", argv[0]);
 
         dn = udev_device_get_devnode(dev);
         if (!dn)
-                return log_error_errno(ENOENT, "%s: Failed to get device node for device: %m", udev_device_get_sysname(dev));
+                return log_device_error_errno(dev, ENOENT, "Failed to get device node for device: %m");
 
         d.path = dn;
         d.fd = tpm2_open(dn);
         if (d.fd < 0)
-                return log_error_errno(errno, "Failed to open device node '%s': %m", dn);
+                return log_device_error_errno(dev, errno, "Failed to open device node '%s': %m", dn);
 
         r = tpm2_context_new(&d);
         if (errno_is_not_supported(r)) {
-                log_debug_errno(r, "Full TPM2 support is not available, skipping identification of TPM2 device '%s'.", dn);
+                log_device_debug_errno(dev, r, "Full TPM2 support is not available, skipping identification of TPM2 device '%s'.", dn);
                 return EXIT_SUCCESS;
         }
         if (r < 0)
-                return log_error_errno(r, "Failed to open device node '%s': %m", dn);
+                return log_device_error_errno(dev, r, "Failed to open device node '%s': %m", dn);
 
         r = tpm2_get_vendor_info(&d, &info);
         if (r < 0)
-                return log_error_errno(r, "%s: Failed to acquire TPM2 vendor information: %m", dn);
+                return log_device_error_errno(dev, r, "Failed to acquire TPM2 vendor information: %m");
 
         if (!isempty(info.manufacturer)) {
                 r = udev_builtin_add_property(dev, mode, "ID_TPM2_MANUFACTURER", info.manufacturer);
@@ -869,7 +869,7 @@ static int builtin_tpm2_id(struct udev_device *dev, int argc, char *argv[], enum
 
         r = tpm2_vendor_info_to_modalias(&info, &m);
         if (r < 0)
-                return log_error_errno(r, "%s: Failed to get modalias string for TPM2 device: %m", dn);
+                return log_device_error_errno(dev, r, "Failed to get modalias string for TPM2 device: %m");
 
         r = udev_builtin_add_property(dev, mode, "ID_TPM2_MODALIAS", m);
         if (r == -ENOMEM)

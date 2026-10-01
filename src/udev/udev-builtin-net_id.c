@@ -67,11 +67,6 @@ struct hw_addr_data {
 #define ONBOARD_14BIT_INDEX_MAX ((1U << 14) - 1)
 #define ONBOARD_16BIT_INDEX_MAX ((1U << 16) - 1)
 
-#define log_device_debug(dev, fmt, ...) \
-        log_debug("%s: " fmt, udev_device_get_sysname(dev), ##__VA_ARGS__)
-#define log_device_debug_errno(dev, error, fmt, ...) \
-        log_debug_errno(error, "%s: " fmt, udev_device_get_sysname(dev), ##__VA_ARGS__)
-
 static inline const char *strempty(const char *s) {
         return s ?: "";
 }
@@ -684,8 +679,7 @@ static int get_pci_slot_specifiers(
         r = device_get_property_bool(dev, "ID_NET_NAME_INCLUDE_DOMAIN");
         if (r < 0) {
                 if (r != -ENOENT)
-                        log_warning_errno(r, "%s: Failed to read property \"ID_NET_NAME_INCLUDE_DOMAIN\", ignoring: %m",
-                                          sysname);
+                        log_device_warning_errno(dev, r, "Failed to read property \"ID_NET_NAME_INCLUDE_DOMAIN\", ignoring: %m");
 
                 r = domain > 0;
         }

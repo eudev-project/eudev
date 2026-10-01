@@ -140,9 +140,8 @@ int udev_builtin_add_property(struct udev_device *dev, enum udev_event_mode mode
 
         r = udev_device_add_property(dev, key, val);
         if (r < 0)
-                return log_debug_errno(r, "%s: Failed to %s property '%s%s%s': %m",
-                                       udev_device_get_sysname(dev), val ? "add" : "remove",
-                                       key, val ? "=" : "", val ?: "");
+                return log_device_debug_errno(dev, r, "Failed to %s property '%s%s%s': %m",
+                                              val ? "add" : "remove", key, val ? "=" : "", val ?: "");
 
         if (mode == EVENT_UDEVADM_TEST_BUILTIN) {
                 if (val)

@@ -35,11 +35,6 @@
 
 #define ERRNO_IS_DEVICE_ABSENT(r) IN_SET(abs(r), ENODEV, ENXIO, ENOENT)
 
-#define log_device_debug(d, fmt, ...) \
-        log_debug("%s: " fmt, strna(udev_device_get_sysname(d)), ##__VA_ARGS__)
-#define log_device_debug_errno(d, error, fmt, ...) \
-        log_debug_errno(error, "%s: " fmt, strna(udev_device_get_sysname(d)), ##__VA_ARGS__)
-
 /* Like sd_device_open() of systemd: opens the device node of the block device, and checks that it is the
  * block device node with the device number of the device. */
 static int device_open(struct udev_device *dev, int flags) {

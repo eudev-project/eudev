@@ -72,7 +72,7 @@ static int builtin_kmod(struct udev_device *dev, int argc, char *argv[], enum ud
         int i;
 
         if (mode != EVENT_UDEV_WORKER) {
-                log_debug("Running in test mode, skipping execution of 'kmod' builtin command.");
+                log_device_debug(dev, "Running in test mode, skipping execution of 'kmod' builtin command.");
                 return EXIT_SUCCESS;
         }
 
@@ -81,14 +81,14 @@ static int builtin_kmod(struct udev_device *dev, int argc, char *argv[], enum ud
 
         /* Like systemd, the errors are returned as negative error codes, with the reason. */
         if (argc < 2 || !streq(argv[1], "load"))
-                return log_error_errno(EINVAL, "expect: %s load [module...]", argv[0]);
+                return log_device_error_errno(dev, EINVAL, "expect: %s load [module...]", argv[0]);
 
         if (!argv[2]) {
                 const char *modalias;
 
                 modalias = udev_device_get_property_value(dev, "MODALIAS");
                 if (!modalias)
-                        return log_warning_errno(ENOENT, "Failed to read property \"MODALIAS\": %m");
+                        return log_device_warning_errno(dev, ENOENT, "Failed to read property \"MODALIAS\": %m");
 
                 log_debug("Execute '%s' '%s'", argv[1], modalias);
                 load_module(udev, modalias);

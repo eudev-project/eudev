@@ -180,21 +180,21 @@ static int find_gpt_root(struct udev_device *dev, blkid_probe pr, const char *lo
 
         devnode = udev_device_get_devnode(dev);
         if (!devnode)
-                return log_debug_errno(ENODEV, "%s: Failed to get device node.", udev_device_get_sysname(dev));
+                return log_device_debug_errno(dev, ENODEV, "Failed to get device node: %m");
 
         r = block_device_is_whole_disk(dev);
         if (r < 0)
-                return log_debug_errno(r, "Unable to determine if device '%s' is a whole-block device: %m", devnode);
+                return log_device_debug_errno(dev, r, "Unable to determine if device '%s' is a whole-block device: %m", devnode);
         if (r == 0) {
-                log_debug("Invoked on device '%s' which is not a whole-disk block device, ignoring.", devnode);
+                log_device_debug(dev, "Invoked on device '%s' which is not a whole-disk block device, ignoring.", devnode);
                 return 0;
         }
 
         r = blockdev_partscan_enabled(dev);
         if (r < 0)
-                return log_debug_errno(r, "Failed to determine if block device '%s' supports partitions: %m", devnode);
+                return log_device_debug_errno(dev, r, "Failed to determine if block device '%s' supports partitions: %m", devnode);
         if (r == 0) {
-                log_debug("Invoked on block device '%s' that lacks partition scanning, ignoring.", devnode);
+                log_device_debug(dev, "Invoked on block device '%s' that lacks partition scanning, ignoring.", devnode);
                 return 0;
         }
 
@@ -207,12 +207,12 @@ static int find_gpt_root(struct udev_device *dev, blkid_probe pr, const char *lo
                         if (r != -ENOENT && !IN_SET(r, -EOPNOTSUPP, -ENOTTY, -ENOSYS))
                                 return log_debug_errno(r, "Unable to determine loader partition UUID: %m");
 
-                        log_debug("No loader partition UUID EFI variable set, not using partition data to search for default root block device.");
+                        log_device_debug(dev, "No loader partition UUID EFI variable set, not using partition data to search for default root block device.");
 
                         /* NB: if an ESP/xbootldr field is set, we always use that. We do this in order to guarantee
                          * systematic behaviour. */
                         if (!streq_ptr(loop_backing_fname, "rootdisk") && !streq_ptr(loop_backing_fname, "rootdisk.raw")) {
-                                log_debug("Device is not a loopback block device with reference string 'root', not considering block device as default root block device.");
+                                log_device_debug(dev, "Device is not a loopback block device with reference string 'root', not considering block device as default root block device.");
                                 return 0;
                         }
 
@@ -230,20 +230,20 @@ static int find_gpt_root(struct udev_device *dev, blkid_probe pr, const char *lo
 
                 r = blockdev_get_root(LOG_DEBUG, &root_devno);
                 if (r < 0) {
-                        log_debug_errno(r, "Unable to determine current root block device, skipping gpt-auto probing: %m");
+                        log_device_debug_errno(dev, r, "Unable to determine current root block device, skipping gpt-auto probing: %m");
                         return 0;
                 }
                 if (r == 0) {
-                        log_debug("Root block device not backed by a (single) whole block device, skipping gpt-auto probing.");
+                        log_device_debug(dev, "Root block device not backed by a (single) whole block device, skipping gpt-auto probing.");
                         return 0;
                 }
 
                 r = block_get_whole_disk(root_devno, &whole_devno);
                 if (r < 0)
-                        return log_debug_errno(r, "Failed to find whole block device for root block device: %m");
+                        return log_device_debug_errno(dev, r, "Failed to find whole block device for root block device: %m");
 
                 if (whole_devno != udev_device_get_devnum(dev)) {
-                        log_debug("This device is not the current root block device.");
+                        log_device_debug(dev, "This device is not the current root block device.");
                         return 0;
                 }
 
@@ -254,7 +254,7 @@ static int find_gpt_root(struct udev_device *dev, blkid_probe pr, const char *lo
         errno = 0;
         pl = blkid_probe_get_partitions(pr);
         if (!pl)
-                return log_debug_errno(errno_or_else(ENOMEM), "Failed to probe partitions: %m");
+                return log_device_debug_errno(dev, errno_or_else(ENOMEM), "Failed to probe partitions: %m");
 
         if (root_devno != 0) {
                 blkid_partition root_partition;
@@ -268,11 +268,11 @@ static int find_gpt_root(struct udev_device *dev, blkid_probe pr, const char *lo
 
                         r = blkid_partition_get_type_id128(root_partition, &type);
                         if (r < 0)
-                                log_debug_errno(r, "Failed to get root partition type UUID, ignoring: %m");
+                                log_device_debug_errno(dev, r, "Failed to get root partition type UUID, ignoring: %m");
                         else if (id128_equal(type, GPT_ROOT_NATIVE)) {
                                 r = blkid_partition_get_uuid_id128(root_partition, &root_id);
                                 if (r < 0)
-                                        log_debug_errno(r, "Failed to get partition UUID, ignoring: %m");
+                                        log_device_debug_errno(dev, r, "Failed to get partition UUID, ignoring: %m");
                         }
                 }
         } else {
@@ -292,13 +292,13 @@ static int find_gpt_root(struct udev_device *dev, blkid_probe pr, const char *lo
 
                         r = blkid_partition_get_uuid_id128(pp, &id);
                         if (r < 0) {
-                                log_debug_errno(r, "Failed to get partition UUID, ignoring: %m");
+                                log_device_debug_errno(dev, r, "Failed to get partition UUID, ignoring: %m");
                                 continue;
                         }
 
                         r = blkid_partition_get_type_id128(pp, &type);
                         if (r < 0) {
-                                log_debug_errno(r, "Failed to get partition type UUID, ignoring: %m");
+                                log_device_debug_errno(dev, r, "Failed to get partition type UUID, ignoring: %m");
                                 continue;
                         }
 
@@ -490,8 +490,7 @@ static int builtin_blkid(struct udev_device *dev, int argc, char *argv[], enum u
         errno = 0;
         pr = blkid_new_probe();
         if (!pr)
-                return log_debug_errno(errno_or_else(ENOMEM), "%s: Failed to create blkid prober: %m",
-                                       udev_device_get_sysname(dev));
+                return log_device_debug_errno(dev, errno_or_else(ENOMEM), "Failed to create blkid prober: %m");
 
         for (;;) {
                 int option;
@@ -505,7 +504,7 @@ static int builtin_blkid(struct udev_device *dev, int argc, char *argv[], enum u
 #ifdef HAVE_BLKID_PROBE_SET_HINT
                         errno = 0;
                         if (blkid_probe_set_hint(pr, optarg, 0) < 0)
-                                return log_error_errno(errno_or_else(ENOMEM), "Failed to use '%s' probing hint: %m", optarg);
+                                return log_device_error_errno(dev, errno_or_else(ENOMEM), "Failed to use '%s' probing hint: %m", optarg);
                         break;
 #else
                         /* Use the hint <name>=<offset> as probing offset for old versions */
@@ -519,9 +518,9 @@ static int builtin_blkid(struct udev_device *dev, int argc, char *argv[], enum u
                 case 'o':
                         r = safe_atoi64(optarg, &offset);
                         if (r < 0)
-                                return log_error_errno(r, "Failed to parse '%s' as an integer: %m", optarg);
+                                return log_device_error_errno(dev, r, "Failed to parse '%s' as an integer: %m", optarg);
                         if (offset < 0)
-                                return log_error_errno(EINVAL, "Invalid offset %"PRIi64".", offset);
+                                return log_device_error_errno(dev, EINVAL, "Invalid offset %"PRIi64".", offset);
                         break;
                 case 'R':
                         noraid = true;
@@ -542,30 +541,27 @@ static int builtin_blkid(struct udev_device *dev, int argc, char *argv[], enum u
 
         devnode = udev_device_get_devnode(dev);
         if (!devnode)
-                return log_debug_errno(ENOENT, "%s: Failed to get device name: %m", udev_device_get_sysname(dev));
+                return log_device_debug_errno(dev, ENOENT, "Failed to get device name: %m");
 
         fd = open(devnode, O_RDONLY|O_CLOEXEC|O_NONBLOCK|O_NOCTTY);
         if (fd < 0) {
                 bool ignore = IN_SET(errno, ENODEV, ENXIO, ENOENT, ENOMEDIUM);
 
-                r = log_debug_errno(errno, "Failed to open block device %s%s: %m",
-                                    devnode, ignore ? ", ignoring" : "");
+                r = log_device_debug_errno(dev, errno, "Failed to open block device %s%s: %m",
+                                           devnode, ignore ? ", ignoring" : "");
                 return ignore ? EXIT_SUCCESS : r;
         }
 
         errno = 0;
         err = blkid_probe_set_device(pr, fd, offset, 0);
         if (err < 0)
-                return log_debug_errno(errno_or_else(ENOMEM), "%s: Failed to set device to blkid prober: %m",
-                                       udev_device_get_sysname(dev));
+                return log_device_debug_errno(dev, errno_or_else(ENOMEM), "Failed to set device to blkid prober: %m");
 
-        log_debug("probe %s %sraid offset=%"PRIi64,
-                  devnode,
-                  noraid ? "no" : "", offset);
+        log_device_debug(dev, "Probe %s with %sraid and offset=%"PRIi64, devnode, noraid ? "no" : "", offset);
 
         err = probe_superblocks(pr);
         if (err < 0)
-                return log_debug_errno(err, "Failed to probe superblocks of %s: %m", devnode);
+                return log_device_debug_errno(dev, err, "Failed to probe superblocks: %m");
 
         /* If the device is a partition then its parent passed the root partition UUID to the device */
         root_partition = udev_device_get_property_value(dev, "ID_PART_GPT_AUTO_ROOT_UUID");
@@ -573,8 +569,7 @@ static int builtin_blkid(struct udev_device *dev, int argc, char *argv[], enum u
         errno = 0;
         nvals = blkid_probe_numof_values(pr);
         if (nvals < 0)
-                return log_debug_errno(errno_or_else(ENOMEM), "%s: Failed to get number of probed values: %m",
-                                       udev_device_get_sysname(dev));
+                return log_device_debug_errno(dev, errno_or_else(ENOMEM), "Failed to get number of probed values: %m");
 
         for (i = 0; i < nvals; i++) {
                 if (blkid_probe_get_value(pr, i, &name, &data, NULL))
@@ -599,7 +594,7 @@ static int builtin_blkid(struct udev_device *dev, int argc, char *argv[], enum u
                         &backing_inode,
                         &backing_fname);
         if (r < 0)
-                log_debug_errno(r, "Failed to read loopback backing inode, ignoring: %m");
+                log_device_debug_errno(dev, r, "Failed to read loopback backing inode, ignoring: %m");
         else if (r > 0) {
                 char buf[DECIMAL_STR_MAX(uint64_t)*2 + 2];
 

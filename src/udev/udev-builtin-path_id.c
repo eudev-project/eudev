@@ -668,7 +668,7 @@ static struct udev_device *handle_usb(struct udev_device *parent, char **path) {
          * See issue https://github.com/systemd/systemd/issues/19406 for more details. */
         r = get_usb_revision(parent);
         if (r < 0) {
-                log_debug_errno(r, "Failed to get the USB revision number, ignoring: %m");
+                log_device_debug_errno(parent, r, "Failed to get the USB revision number, ignoring: %m");
                 path_prepend(path, "usb-0:%s", port);
         } else {
                 assert(r > 0);

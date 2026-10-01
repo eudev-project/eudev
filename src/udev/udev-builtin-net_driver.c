@@ -60,21 +60,20 @@ static int builtin_net_driver_set_driver(struct udev_device *dev, int argc __att
                 ifname = udev_device_get_sysname(dev);
         /* Like systemd, the errors are returned as negative error codes, with the reason. */
         if (!ifname)
-                return log_warning_errno(ENOENT, "Failed to get network interface name of '%s': %m",
-                                         udev_device_get_syspath(dev));
+                return log_device_warning_errno(dev, ENOENT, "Failed to get network interface name: %m");
 
         r = ethtool_get_driver(ifname, &driver);
         if (IN_SET(r, -EOPNOTSUPP, -ENOTTY, -ENOSYS, -EAFNOSUPPORT, -EPFNOSUPPORT,
                       -EPROTONOSUPPORT, -ESOCKTNOSUPPORT, -ENOPROTOOPT)) {
-                log_debug_errno(r, "Querying driver name via ethtool API is not supported by device '%s', ignoring: %m", ifname);
+                log_device_debug_errno(dev, r, "Querying driver name via ethtool API is not supported by device '%s', ignoring: %m", ifname);
                 return EXIT_SUCCESS;
         }
         if (r == -ENODEV) {
-                log_debug_errno(r, "Device '%s' already vanished, ignoring.", ifname);
+                log_device_debug_errno(dev, r, "Device already vanished, ignoring.");
                 return EXIT_SUCCESS;
         }
         if (r < 0)
-                return log_warning_errno(r, "Failed to get driver for '%s': %m", ifname);
+                return log_device_warning_errno(dev, r, "Failed to get driver for '%s': %m", ifname);
 
         return udev_builtin_add_property(dev, mode, "ID_NET_DRIVER", driver);
 }

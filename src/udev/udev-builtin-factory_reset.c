@@ -15,13 +15,12 @@ static int builtin_factory_reset(struct udev_device *dev, int argc, char *argv[]
 
         /* Like systemd, the errors are returned as negative error codes, with the reason. */
         if (argc != 2 || !streq(argv[1], "status"))
-                return log_warning_errno(EINVAL, "%s: expected: status", argv[0]);
+                return log_device_warning_errno(dev, EINVAL, "%s: expected: status", argv[0]);
 
         /* Report factory reset mode at the moment of probing a device. */
         f = factory_reset_mode();
         if (f < 0) {
-                log_debug_errno(f, "%s: Unable to detect factory reset mode, ignoring: %m",
-                                udev_device_get_sysname(dev));
+                log_device_debug_errno(dev, f, "Unable to detect factory reset mode, ignoring: %m");
                 return EXIT_SUCCESS;
         }
 

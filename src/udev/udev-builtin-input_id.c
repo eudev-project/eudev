@@ -102,43 +102,41 @@ static void get_cap_mask(struct udev_device *dev __attribute__((unused)),
                 v = "";
 
         snprintf(text, sizeof(text), "%s", v);
-        log_debug("%s raw kernel attribute: %s", attr, text);
+        log_device_debug(pdev, "%s raw kernel attribute: %s", attr, text);
 
         memzero(bitmask, bitmask_size);
         i = 0;
         while ((word = strrchr(text, ' ')) != NULL) {
                 r = safe_atolu_full(word+1, 16, &val);
                 if (r < 0)
-                        log_debug_errno(r, "Ignoring %s block which failed to parse: %m", attr);
+                        log_device_debug_errno(pdev, r, "Ignoring %s block which failed to parse: %m", attr);
                 else if (i < bitmask_size/sizeof(unsigned long))
                         bitmask[i] = val;
                 else
-                        log_debug("ignoring %s block %lX which is larger than maximum size", attr, val);
+                        log_device_debug(pdev, "Ignoring %s block %lX which is larger than maximum size", attr, val);
                 *word = '\0';
                 ++i;
         }
         r = safe_atolu_full(text, 16, &val);
         if (r < 0)
-                log_debug_errno(r, "Ignoring %s block which failed to parse: %m", attr);
+                log_device_debug_errno(pdev, r, "Ignoring %s block which failed to parse: %m", attr);
         else if (i < bitmask_size / sizeof(unsigned long))
                 bitmask[i] = val;
         else
-                log_debug("ignoring %s block %lX which is larger than maximum size", attr, val);
+                log_device_debug(pdev, "Ignoring %s block %lX which is larger than maximum size", attr, val);
 
         if (mode == EVENT_UDEVADM_TEST_BUILTIN) {
-                /* printf pattern with the right unsigned long number of hex chars */
-                snprintf(text, sizeof(text), "  bit %%4u: %%0%zulX\n",
-                         2 * sizeof(unsigned long));
-                log_debug("%s decoded bit map:", attr);
+                log_device_debug(pdev, "%s decoded bit map:", attr);
                 val = bitmask_size / sizeof (unsigned long);
                 /* skip over leading zeros */
                 while (val > 0 && bitmask[val-1] == 0)
                         --val;
-                for (i = 0; i < val; ++i) {
-                        DISABLE_WARNING_FORMAT_NONLITERAL;
-                        log_debug(text, i * BITS_PER_LONG, bitmask[i]);
-                        REENABLE_WARNING;
-                }
+                /* with the right unsigned long number of hex chars */
+                for (i = 0; i < val; ++i)
+                        if (sizeof(unsigned long) == 4)
+                                log_device_debug(pdev, "  bit %4zu: %08lX\n", i * BITS_PER_LONG, bitmask[i]);
+                        else
+                                log_device_debug(pdev, "  bit %4zu: %016lX\n", i * BITS_PER_LONG, bitmask[i]);
         }
 }
 
@@ -324,15 +322,15 @@ static bool test_pointers(struct udev_device *dev,
                                         num_well_known_keys++;
 
                 if (num_well_known_keys >= 4 || num_joystick_buttons + num_joystick_axes < 2) {
-                        log_debug("Input device has %zu joystick buttons and %zu axes but also %zu keyboard key sets, "
-                                  "assuming this is a keyboard, not a joystick.",
-                                  num_joystick_buttons, num_joystick_axes, num_well_known_keys);
+                        log_device_debug(dev, "Input device has %zu joystick buttons and %zu axes but also %zu keyboard key sets, "
+                                         "assuming this is a keyboard, not a joystick.",
+                                         num_joystick_buttons, num_joystick_axes, num_well_known_keys);
                         is_joystick = false;
                 }
 
                 if (has_wheel && has_pad_buttons) {
-                        log_debug("Input device has %zu joystick buttons as well as tablet pad buttons, "
-                                  "assuming this is a tablet pad, not a joystick.", num_joystick_buttons);
+                        log_device_debug(dev, "Input device has %zu joystick buttons as well as tablet pad buttons, "
+                                         "assuming this is a tablet pad, not a joystick.", num_joystick_buttons);
 
                         is_joystick = false;
                 }
@@ -368,7 +366,7 @@ static bool test_key(struct udev_device *dev,
 
         /* do we have any KEY_* capability? */
         if (!test_bit(EV_KEY, bitmask_ev)) {
-                log_debug("test_key: no EV_KEY capability");
+                log_device_debug(dev, "test_key: no EV_KEY capability");
                 return false;
         }
 
@@ -376,7 +374,7 @@ static bool test_key(struct udev_device *dev,
         found = 0;
         for (i = 0; i < BTN_MISC/BITS_PER_LONG; ++i) {
                 found |= bitmask_key[i];
-                log_debug("test_key: checking bit block %lu for any keys; found=%i", (unsigned long)i*BITS_PER_LONG, found > 0);
+                log_device_debug(dev, "test_key: checking bit block %lu for any keys; found=%s", (unsigned long)i*BITS_PER_LONG, found > 0 ? "yes" : "no");
         }
         /* If there are no keys in the lower block, check the higher blocks */
         if (!found) {
@@ -384,7 +382,7 @@ static bool test_key(struct udev_device *dev,
                 for (block = 0; block < (sizeof(high_key_blocks) / sizeof(struct range)); ++block) {
                         for (i = high_key_blocks[block].start; i < high_key_blocks[block].end; ++i) {
                                 if (test_bit(i, bitmask_key)) {
-                                        log_debug("test_key: Found key %x in high block", i);
+                                        log_device_debug(dev, "test_key: Found key %x in high block", i);
                                         found = 1;
                                         break;
                                 }

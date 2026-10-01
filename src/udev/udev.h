@@ -212,6 +212,28 @@ int udev_ctrl_get_set_children_max(struct udev_ctrl_msg *ctrl_msg, int *ret);
 int udev_ctrl_get_set_trace(struct udev_ctrl_msg *ctrl_msg);
 int udev_ctrl_get_revert(struct udev_ctrl_msg *ctrl_msg);
 
+/* Like log_device_*() of systemd: the message is prefixed with the sysname of the device and ": ", e.g.
+ * "sda: ", or with nothing if there is no device or it has no sysname. */
+#define log_device_full_errno(device, level, error, format, ...)                                        \
+        ({                                                                                              \
+                struct udev_device *_dev = (device);                                                    \
+                const char *_sys = _dev ? udev_device_get_sysname(_dev) : NULL;                         \
+                log_full_errno(level, error, "%s%s" format, _sys ?: "", _sys ? ": " : "", ##__VA_ARGS__); \
+        })
+#define log_device_full(device, level, ...) log_device_full_errno(device, level, 0, __VA_ARGS__)
+
+#define log_device_debug(device, ...)   log_device_full(device, LOG_DEBUG, __VA_ARGS__)
+#define log_device_info(device, ...)    log_device_full(device, LOG_INFO, __VA_ARGS__)
+#define log_device_notice(device, ...)  log_device_full(device, LOG_NOTICE, __VA_ARGS__)
+#define log_device_warning(device, ...) log_device_full(device, LOG_WARNING, __VA_ARGS__)
+#define log_device_error(device, ...)   log_device_full(device, LOG_ERR, __VA_ARGS__)
+
+#define log_device_debug_errno(device, error, ...)   log_device_full_errno(device, LOG_DEBUG, error, __VA_ARGS__)
+#define log_device_info_errno(device, error, ...)    log_device_full_errno(device, LOG_INFO, error, __VA_ARGS__)
+#define log_device_notice_errno(device, error, ...)  log_device_full_errno(device, LOG_NOTICE, error, __VA_ARGS__)
+#define log_device_warning_errno(device, error, ...) log_device_full_errno(device, LOG_WARNING, error, __VA_ARGS__)
+#define log_device_error_errno(device, error, ...)   log_device_full_errno(device, LOG_ERR, error, __VA_ARGS__)
+
 /* built-in commands */
 enum udev_builtin_cmd {
 #ifdef HAVE_BLKID
