@@ -316,6 +316,22 @@ static const char *root_prefix(const char *root) {
         return isempty(root) || path_equal(root, "/") ? "" : root;
 }
 
+/* The name of a rules file in the messages, like the original_path of the ConfFile of systemd: the path as
+ * given or found, without resolving symlinks, with the root prefixed or else made absolute, and
+ * simplified. */
+static char *rules_file_name(const char *root, const char *path) {
+        char *name;
+
+        if (!isempty(root_prefix(root)))
+                name = strjoin(root_prefix(root), "/", path, NULL);
+        else
+                name = path_make_absolute_cwd(path);
+        if (!name)
+                return NULL;
+
+        return path_simplify(name);
+}
+
 static int search_rules_file_in_dirs(const char *s, const char *root, char ***names, char ***paths) {
         _cleanup_free_ char *with_suffix = NULL;
         const char* const* dir;
@@ -336,9 +352,12 @@ static int search_rules_file_in_dirs(const char *s, const char *root, char ***na
                 return 0;
 
         for (dir = udev_rules_get_dirs(); *dir; dir++) {
-                _cleanup_free_ char *name = NULL, *path = NULL;
+                _cleanup_free_ char *name = NULL, *path = NULL, *p = NULL;
 
-                name = strjoin(root_prefix(root), *dir, "/", s, NULL);
+                p = strjoin(*dir, "/", s, NULL);
+                if (!p)
+                        return log_oom();
+                name = rules_file_name(root, p);
                 if (!name)
                         return log_oom();
 
@@ -350,7 +369,7 @@ static int search_rules_file_in_dirs(const char *s, const char *root, char ***na
                         return 1; /* Found masked file. */
                 }
 
-                r = chase_below_root(root, name + strlen(root_prefix(root)), &path);
+                r = chase_below_root(root, p, &path);
                 if (r < 0)
                         return log_error_errno(r, "Failed to chase '%s': %m", name);
 
@@ -375,7 +394,7 @@ static int search_rules_file(const char *s, const char *root, char ***names, cha
                 return r < 0 ? r : 0;
 
         /* If not found, or if it is a path, then chase it. */
-        name = strjoin(root_prefix(root), !isempty(root_prefix(root)) && s[0] != '/' ? "/" : "", s, NULL);
+        name = rules_file_name(root, s);
         if (!name)
                 return log_oom();
 
@@ -413,11 +432,16 @@ static int search_rules_file(const char *s, const char *root, char ***names, cha
                         return log_error_errno(r, "Failed to enumerate rules files in '%s': %m", name);
 
                 STRV_FOREACH(f, files) {
-                        _cleanup_free_ char *resolved = NULL;
+                        _cleanup_free_ char *resolved = NULL, *file_name = NULL;
+
+                        /* named in the directory as given, like systemd */
+                        file_name = strjoin(name, "/", eudev_basename(*f), NULL);
+                        if (!file_name)
+                                return log_oom();
 
                         r = chase_below_root(root, *f + strlen(root_prefix(root)), &resolved);
                         if (r < 0) {
-                                log_warning_errno(r, "Failed to chase '%s': %m", *f);
+                                log_warning_errno(r, "Failed to chase '%s': %m", file_name);
                                 continue;
                         }
 
@@ -425,7 +449,7 @@ static int search_rules_file(const char *s, const char *root, char ***names, cha
                         if (stat(resolved, &st) < 0 || !S_ISREG(st.st_mode))
                                 continue;
 
-                        r = add_rules_file(names, paths, *f, resolved);
+                        r = add_rules_file(names, paths, file_name, resolved);
                         if (r < 0)
                                 return log_oom();
                 }
