@@ -513,33 +513,44 @@ AC_CONFIG_FILES([Makefile
 AC_OUTPUT
 
 # ------------------------------------------------------------------------------
+# The summary shows the directories fully expanded, as make uses them, e.g. /usr/lib/udev for
+# ${exec_prefix}/lib/udev.
+expand_dir() {
+	expand_dir_value=$1
+	for expand_dir_i in 1 2 3 4 5 6 7 8 9 10; do
+		eval "expand_dir_next=\"$expand_dir_value\""
+		test "x$expand_dir_next" = "x$expand_dir_value" && break
+		expand_dir_value=$expand_dir_next
+	done
+	echo "$expand_dir_value"
+}
 
 AC_MSG_RESULT([
-	prefix:                  ${prefix}
-	exec_prefix:             ${exec_prefix}
-	sysconfdir:              ${sysconfdir}
-	datadir:                 ${datadir}
-	includedir:              ${includedir}
-	bindir:                  ${bindir}
-	libdir:                  ${libdir}
+	prefix:                  $(expand_dir "$prefix")
+	exec_prefix:             $(expand_dir "$exec_prefix")
+	sysconfdir:              $(expand_dir "$sysconfdir")
+	datadir:                 $(expand_dir "$datadir")
+	includedir:              $(expand_dir "$includedir")
+	bindir:                  $(expand_dir "$bindir")
+	libdir:                  $(expand_dir "$libdir")
 
-	rootprefix:              ${rootprefix}
-	rootlibdir:              ${rootlibdir}
-	rootlibexecdir:          ${rootlibexecdir}
-	datarootdir:             ${datarootdir}
-	rootrundir:              ${rootrundir}
+	rootprefix:              $(expand_dir "$rootprefix")
+	rootlibdir:              $(expand_dir "$rootlibdir")
+	rootlibexecdir:          $(expand_dir "$rootlibexecdir")
+	datarootdir:             $(expand_dir "$datarootdir")
+	rootrundir:              $(expand_dir "$rootrundir")
 
-	udevconfdir:             ${udevconfdir}
-	udevconffile:            ${udevconffile}
-	udevhwdbdir:             ${udevhwdbdir}
-	udevhwdbbin:             ${udevhwdbbin}
-	udevlibexecdir:          ${udevlibexecdir}
-	udevkeymapdir:           ${udevkeymapdir}
-	udevkeymapforceredir:    ${udevkeymapforceredir}
-	udevrulesdir:            ${udevrulesdir}
+	udevconfdir:             $(expand_dir "$udevconfdir")
+	udevconffile:            $(expand_dir "$udevconffile")
+	udevhwdbdir:             $(expand_dir "$udevhwdbdir")
+	udevhwdbbin:             $(expand_dir "$udevhwdbbin")
+	udevlibexecdir:          $(expand_dir "$udevlibexecdir")
+	udevkeymapdir:           $(expand_dir "$udevkeymapdir")
+	udevkeymapforceredir:    $(expand_dir "$udevkeymapforceredir")
+	udevrulesdir:            $(expand_dir "$udevrulesdir")
 
-	pkgconfiglibdir:         ${libdir}/pkgconfig
-	sharepkgconfigdir        ${datadir}/pkgconfig
+	pkgconfiglibdir:         $(expand_dir "$pkgconfiglibdir")
+	sharepkgconfigdir:       $(expand_dir "$sharepkgconfigdir")
 
 	system UIDs:             <=${with_system_uid_max}
 	system GIDs:             <=${with_system_gid_max}
@@ -552,8 +563,8 @@ AC_MSG_RESULT([
 	man pages:               ${install_manpages}
 	hwdb.d files:            ${enable_hwdb}
 	systemd-hwdb:            ${enable_systemd_hwdb}
-	bashcompletiondir:       ${with_bashcompletiondir}
-	zshcompletiondir:        ${with_zshcompletiondir}
+	bashcompletiondir:       $(expand_dir "$with_bashcompletiondir")
+	zshcompletiondir:        $(expand_dir "$with_zshcompletiondir")
 ])
 
 # ------------------------------------------------------------------------------
