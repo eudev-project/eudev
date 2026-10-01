@@ -2243,17 +2243,19 @@ static int add_rule(struct udev_rules *rules, char *line,
                                 goto invalid;
                         }
 
-                        /* Like systemd, a value that is not a mode, e.g. one with a substitution, is
-                         * parsed whenever the rule is applied; an empty value is an error, but the key
-                         * is kept, and fails whenever the rule is applied. */
-                        if (parse_mode(value, &mode) >= 0)
+                        /* Like systemd, a value with substitutions is parsed whenever the rule is applied.
+                         * Unlike systemd, which keeps the key, and fails whenever the rule is applied, or
+                         * makes the mode final with ':=' without setting it, a value without substitutions
+                         * that is not a valid mode, also an empty one, drops only this key, like an unknown
+                         * user or group: the rest of the line still applies. */
+                        r = parse_mode(value, &mode);
+                        if (r >= 0)
                                 rule_add_key(&rule_tmp, TK_A_MODE_ID, op, NULL, &mode);
-                        else {
-                                if (isempty(value))
-                                        log_rule_error("Invalid value \"%s\" for %s (char %zu: %s), ignoring.",
-                                                       value, key, (size_t) 0, "empty value");
+                        else if (value_is_plain(value)) {
+                                log_rule_error_errno(r, "Failed to parse mode \"%s\", ignoring: %m", value);
+                                continue;
+                        } else
                                 rule_add_key(&rule_tmp, TK_A_MODE, op, value, NULL);
-                        }
                         rule_tmp.rule.rule.can_set_name = true;
                         continue;
                 }

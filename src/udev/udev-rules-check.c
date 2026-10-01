@@ -735,12 +735,15 @@ void udev_rules_check_token(struct udev_rules_check *c, const char *base, const 
                         op = CHECK_OP_ASSIGN;
                 }
 
-                /* An empty value, and a user or group that cannot be resolved while the rules are
-                 * read, are reported by the parser. An empty MODE is kept, and fails whenever the
-                 * rule is applied. */
+                /* An empty value, a user or group that cannot be resolved while the rules are read,
+                 * and a MODE without substitutions that is not valid, also an empty one, are reported
+                 * by the parser, which ignores the MODE key then. */
                 if (streq(base, "MODE")) {
-                        if (!isempty(value) && parse_mode(value, &mode) < 0)
+                        if (parse_mode(value, &mode) < 0) {
+                                if (get_substitution_type(value) == SUBST_TYPE_PLAIN)
+                                        return;
                                 check_value_format(c, base, value, true);
+                        }
                 } else if (!in_charset(value, DIGITS)) {
                         /* Like the parser: names without substitutions are resolved when the rules are
                          * read, if names are resolved early, other names whenever the rule is applied,

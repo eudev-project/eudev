@@ -396,11 +396,9 @@ is empty, or not a valid user or group name or ID, e\&.g\&. a number with leadin
 .sp
 A
 \fIMODE\fR
-is an octal number of at most
-7777; an empty one is an error\&. A
-\fIMODE\fR
-that is not valid, also after substitutions, fails with an error message whenever the rule is applied, and the mode is left as it is; with
-:=, it is still made final\&.
+must be an octal number of at most
+7777\&. A value without substitutions that is not valid, also an empty one, is an error when the rules are read, and only this key is ignored, like for an unknown user or group: the rest of the rule line still applies\&. A value with substitutions that is not valid after the substitutions fails with an error message whenever the rule is applied, and the mode is left as it is; with
+:=, it is still made final, like in systemd\&.
 .RE
 .PP
 \fISECLABEL{\fR\fI\fImodule\fR\fR\fI}\fR

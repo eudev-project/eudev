@@ -481,11 +481,13 @@
             applied; if that fails, an error is logged, and the owner or group is left as it
             is. With <option>--resolve-names=never</option>, they are ignored.</para>
             <para>A
-            <varname>MODE</varname> is an octal number of at most <literal>7777</literal>;
-            an empty one is an error. A <varname>MODE</varname> that is not valid, also
-            after substitutions, fails with an error message whenever the rule is applied,
+            <varname>MODE</varname> must be an octal number of at most <literal>7777</literal>.
+            A value without substitutions that is not valid, also an empty one, is an error when
+            the rules are read, and only this key is ignored, like for an unknown user or group:
+            the rest of the rule line still applies. A value with substitutions that is not valid
+            after the substitutions fails with an error message whenever the rule is applied,
             and the mode is left as it is; with <literal>:=</literal>, it is still made
-            final.</para>
+            final, like in systemd.</para>
           </listitem>
         </varlistentry>
 
