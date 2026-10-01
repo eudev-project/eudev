@@ -120,6 +120,9 @@ static unsigned parse_line_nr = 0;
         log_event_full_errno(event, rules, rule, tok, LOG_WARNING, error, __VA_ARGS__)
 #define log_event_error_errno(event, rules, rule, tok, error, ...)    \
         log_event_full_errno(event, rules, rule, tok, LOG_ERR, error, __VA_ARGS__)
+/* Like log_event_trace() of systemd: a debug message only in trace mode, see struct udev_event. */
+#define log_event_trace(event, rules, rule, tok, ...)                                             \
+        ((event)->trace ? log_event_debug(event, rules, rule, tok, __VA_ARGS__) : 0)
 
 #define PREALLOC_TOKEN          2048
 #define IMPORT_PROGRAM_SIZE     (128 * 1024)
@@ -3403,7 +3406,7 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                                 if (esc == ESCAPE_UNSET || esc == ESCAPE_REPLACE) {
                                         count = util_replace_chars(result, UDEV_ALLOWED_CHARS_INPUT);
                                         if (count > 0)
-                                                log_event_debug(event, rules, rule, cur,
+                                                log_event_trace(event, rules, rule, cur,
                                                                 "Replaced %i character(s) from command output, results to \"%s\"",
                                                                 count, result);
                                 }
@@ -3774,7 +3777,7 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                         if (esc == ESCAPE_REPLACE) {
                                 int count = util_replace_chars(p, NULL);
                                 if (count > 0)
-                                        log_event_debug(event, rules, rule, cur,
+                                        log_event_trace(event, rules, rule, cur,
                                                         "Replaced %i character(s) from property value, results to \"%s\"",
                                                         count, p);
                         }
@@ -3833,13 +3836,13 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                                 if (udev_device_get_ifindex(event->dev) > 0) {
                                         count = udev_replace_ifname(event->udev, name_str);
                                         if (count > 0)
-                                                log_event_debug(event, rules, rule, cur,
+                                                log_event_trace(event, rules, rule, cur,
                                                                 "Replaced %i character(s) from network interface name, results to \"%s\"",
                                                                 count, name_str);
                                 } else {
                                         count = util_replace_chars(name_str, "/");
                                         if (count > 0)
-                                                log_event_debug(event, rules, rule, cur,
+                                                log_event_trace(event, rules, rule, cur,
                                                                 "Replaced %i character(s) from device name, results to \"%s\"",
                                                                 count, name_str);
                                 }
@@ -3884,7 +3887,7 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                         else if (esc == ESCAPE_REPLACE)
                                 count = util_replace_chars(temp, "/");
                         if (count > 0)
-                                log_event_debug(event, rules, rule, cur,
+                                log_event_trace(event, rules, rule, cur,
                                                 "Replaced %i character(s) from device node symlink, results to \"%s\"",
                                                 count, temp);
                         pos = temp;
