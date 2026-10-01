@@ -32,6 +32,8 @@
                 (ret);                          \
         })
 
+#define ERRNO_IS_DEVICE_ABSENT(r) IN_SET(abs(r), ENODEV, ENXIO, ENOENT)
+
 #define log_device_debug(d, fmt, ...) \
         log_debug("%s: " fmt, strna(udev_device_get_sysname(d)), ##__VA_ARGS__)
 #define log_device_debug_errno(d, error, fmt, ...) \
@@ -127,8 +129,6 @@ enum {
 };
 
 DEFINE_TRIVIAL_CLEANUP_FUNC(blkid_probe, blkid_free_probe);
-
-#define ERRNO_IS_DEVICE_ABSENT(r) IN_SET(abs(r), ENODEV, ENXIO, ENOENT)
 
 /* Like sd_device_new_from_devname() of systemd for a block device node, -ENODEV if it does not exist. */
 static int device_new_from_devname(struct udev *udev, const char *devname, struct udev_device **ret) {
@@ -332,13 +332,17 @@ static int remove_partitions(struct udev_device *d, int fd, struct udev_enumerat
 }
 #endif
 
-static int reread_partition_table_full(struct udev_device *dev, int fd, RereadPartitionTableFlags flags) {
+/* *ret_triggered is set when uevents for the disk and its partitions were triggered, or the kernel sent them,
+ * also when an error is returned. */
+static int reread_partition_table_full(struct udev_device *dev, int fd, RereadPartitionTableFlags flags,
+                                       bool *ret_triggered) {
         _cleanup_close_ int lock_fd = -1;
         const char *p;
         int r;
 
         assert(dev);
         assert(fd >= 0);
+        assert(ret_triggered);
 
         p = udev_device_get_devnode(dev);
         if (!p)
@@ -355,6 +359,7 @@ static int reread_partition_table_full(struct udev_device *dev, int fd, RereadPa
                         if (r == -EAGAIN && FLAGS_SET(flags, REREADPT_FORCE_UEVENT)) {
                                 log_device_debug(dev, "Giving up rereading partition table of '%s'. Triggering change events for the device and its partitions.", p);
                                 (void) trigger_partitions(dev, /* blkrrpart_success= */ false);
+                                *ret_triggered = true;
                         }
 
                         return r;
@@ -367,6 +372,7 @@ static int reread_partition_table_full(struct udev_device *dev, int fd, RereadPa
         if (r == 0) {
                 /* No partition scanning? Generate a uevent at least, if that's requested */
                 if (FLAGS_SET(flags, REREADPT_FORCE_UEVENT)) {
+                        *ret_triggered = true;
                         r = device_trigger(dev, "change", NULL);
                         if (r < 0)
                                 return log_device_debug_errno(dev, r, "Failed to trigger 'change' uevent, proceeding: %m");
@@ -404,6 +410,7 @@ static int reread_partition_table_full(struct udev_device *dev, int fd, RereadPa
                 return log_device_debug_errno(dev, errno_or_else(EIO), "Unable to probe for partition table of '%s': %m", p);
         if (IN_SET(r, _BLKID_SAFEPROBE_AMBIGUOUS, _BLKID_SAFEPROBE_NOT_FOUND)) {
                 log_device_debug(dev, "Didn't find partition table on block device '%s', falling back to BLKRRPART.", p);
+                *ret_triggered = true;
                 return fallback_ioctl(dev, fd, flags);
         }
 
@@ -412,6 +419,7 @@ static int reread_partition_table_full(struct udev_device *dev, int fd, RereadPa
         (void) blkid_probe_lookup_value(b, "PTTYPE", &pttype, NULL);
         if (!streq_ptr(pttype, "gpt")) {
                 log_device_debug(dev, "Didn't find a GPT partition table on '%s', falling back to BLKRRPART.", p);
+                *ret_triggered = true;
                 return fallback_ioctl(dev, fd, flags);
         }
 
@@ -457,6 +465,7 @@ static int reread_partition_table_full(struct udev_device *dev, int fd, RereadPa
 
         if (FLAGS_SET(flags, REREADPT_FORCE_UEVENT)) {
                 /* No change? Then trigger an event manually if we were told to */
+                *ret_triggered = true;
                 r = device_trigger(dev, "change", NULL);
                 if (r < 0)
                         return log_device_debug_errno(dev, r, "Failed to issue 'change' uevent on device '%s': %m", p);
@@ -465,18 +474,38 @@ static int reread_partition_table_full(struct udev_device *dev, int fd, RereadPa
         return 0;
 #else
         log_device_debug(dev, "We don't have libblkid, falling back to BLKRRPART on '%s'.", p);
+        *ret_triggered = true;
         return fallback_ioctl(dev, fd, flags);
 #endif
 }
 
 int reread_partition_table(struct udev_device *dev, RereadPartitionTableFlags flags) {
         _cleanup_close_ int fd = -1;
+        bool triggered = false;
+        int r;
 
         assert(dev);
 
         fd = device_open(dev, O_RDONLY|O_CLOEXEC|O_NONBLOCK|O_NOCTTY);
         if (fd < 0)
-                return log_debug_errno(fd, "Failed to open block device: %m");
+                r = log_debug_errno(fd, "Failed to open block device: %m");
+        else
+                r = reread_partition_table_full(dev, fd, flags, &triggered);
 
-        return reread_partition_table_full(dev, fd, flags);
+        /* eudev: when the partition table could not be re-read or the kernel's partitions could not be
+         * updated, e.g. as a partition that is in use cannot be moved, or the disk cannot be opened or
+         * probed, systemd a446e8ff2c triggers no uevent at all and logs the failure at debug level only.
+         * Like udevd did before it re-read GPT partition tables in userspace, trigger a change event for
+         * the disk and all its partitions then, so that listeners learn that they may have changed, and
+         * warn. When the kernel sent the events, or they were triggered already, e.g. when another process
+         * holds the lock of the disk, or BLKRRPART failed, do not trigger them again. Do not warn when the
+         * disk or its medium is gone. */
+        if (r < 0 && !triggered && FLAGS_SET(flags, REREADPT_FORCE_UEVENT)) {
+                log_full_errno(ERRNO_IS_DEVICE_ABSENT(r) || r == -ENOMEDIUM ? LOG_DEBUG : LOG_WARNING, r,
+                               "%s: Failed to re-read the partition table, triggering 'change' events for the disk and its partitions instead: %m",
+                               strna(udev_device_get_sysname(dev)));
+                (void) trigger_partitions(dev, /* blkrrpart_success= */ false);
+        }
+
+        return r;
 }
