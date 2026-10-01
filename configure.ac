@@ -23,6 +23,9 @@ AC_PROG_LN_S
 AC_PROG_SED
 AC_PROG_GREP
 AC_PROG_AWK
+# Look for pkg-config here, unconditionally: otherwise the first PKG_* macro expands the check, and when
+# that one is in a branch that is skipped, e.g. with --disable-blkid, the later checks find no pkg-config.
+PKG_PROG_PKG_CONFIG
 
 AC_PROG_CC
 AS_IF([test "x$ac_cv_prog_cc_c99" = "xno"], [
