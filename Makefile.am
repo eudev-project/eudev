@@ -24,6 +24,12 @@ SUBDIRS += \
 	rule_generator
 endif
 
+# the targets that regenerate and check the hwdb files, see hwdb/README
+regenerate-hwdb parse-hwdb:
+	cd hwdb && $(MAKE) $(AM_MAKEFLAGS) $@
+
+.PHONY: regenerate-hwdb parse-hwdb
+
 # ------------------------------------------------------------------------------
 # shell completion of udevadm
 

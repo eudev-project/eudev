@@ -1,0 +1,53 @@
+Files in this directory specify a description of hardware devices, in the form
+of mappings from modalias-like keys (which identify specific hardware devices)
+to udev properties.
+
+Files in this directory are not read by udev directly. Instead,
+'udevadm hwdb --update' (man:udevadm(8)) or 'systemd-hwdb update'
+(man:systemd-hwdb(8)) compiles them into a binary database. The hwdb files
+are installed into the udev libexec directory, e.g. /usr/lib/udev/hwdb.d, and
+files of the same name in /etc/udev/hwdb.d override them.
+
+See man:hwdb(7) for an overview of the configuration file format, and
+man:udevd(8) for a description of the udev daemon.
+
+
+Generated files
+---------------
+
+Some of the files are generated from data files in this directory. The data
+files and the tools that convert them come from the hwdb.d directory of
+systemd:
+
+  20-usb-vendor-model.hwdb   usb.ids, by ids_parser.py
+  20-usb-classes.hwdb
+  20-pci-vendor-model.hwdb   pci.ids, by ids_parser.py
+  20-pci-classes.hwdb
+  20-sdio-vendor-model.hwdb  sdio.ids, by ids_parser.py
+  20-sdio-classes.hwdb
+  20-OUI.hwdb                ma-large.txt, ma-medium.txt and ma-small.txt,
+                             by ids_parser.py
+  20-acpi-vendor.hwdb        acpi_id_registry.csv and pnp_id_registry.csv, by
+                             acpi-update.py, with the additions of
+                             20-acpi-vendor.hwdb.patch
+
+'make regenerate-hwdb' in the build tree generates them again in this
+directory, which needs python3 with pyparsing, and patch. Unlike systemd,
+eudev then drops the registry entries of the ids that
+20-acpi-vendor.hwdb.patch adds again (dedup-hwdb.py), as the later entries of
+the patch override them anyway, so that no id is listed twice. The patch
+itself is not changed.
+
+To update the data, copy the data files and the tools from the hwdb.d directory
+of systemd, or download new data files from the addresses in
+tools/update-hwdb.sh of systemd, run 'make regenerate-hwdb', and check the
+differences with git diff.
+
+'make parse-hwdb' checks the hwdb files with parse_hwdb.py, as the parse-hwdb
+test of systemd does: 20-dmi-id.hwdb, 20-net-ifname.hwdb and the 60-*, 70-*
+and 80-* files. With the Python module evdev, it also checks the key codes.
+
+The other files are maintained by hand, also 20-bluetooth-vendor-product.hwdb,
+which systemd imported from the list of the Bluetooth SIG, and
+60-autosuspend-chromiumos.hwdb, which systemd generates at build time with
+tools/make-autosuspend-rules.py.
