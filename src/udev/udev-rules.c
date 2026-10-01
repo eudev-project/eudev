@@ -767,14 +767,16 @@ static int add_token(struct udev_rules *rules, struct token *token) {
 }
 
 /* The ID of the nobody user and group, and the range of the IDs of the foreign users and groups of
- * systemd, with its default base, which systemd synthesizes when the database does not know them. */
+ * systemd, with the base of the --with-foreign-uid-base option of configure, which systemd synthesizes
+ * when the database does not know them. */
 #define UID_NOBODY              ((uid_t) 65534U)
 #define GID_NOBODY              ((gid_t) 65534U)
-#define FOREIGN_UID_BASE        ((uid_t) 0x7FFE0000U)
-#define FOREIGN_UID_MAX         (FOREIGN_UID_BASE + 0xFFFFU)
+assert_cc((FOREIGN_UID_BASE & 0xFFFFU) == 0);
+#define FOREIGN_UID_MIN         ((uid_t) FOREIGN_UID_BASE + 0U)
+#define FOREIGN_UID_MAX         ((uid_t) FOREIGN_UID_BASE + 0xFFFFU)
 
 static bool uid_is_foreign(uid_t uid) {
-        return uid >= FOREIGN_UID_BASE && uid <= FOREIGN_UID_MAX;
+        return uid >= FOREIGN_UID_MIN && uid <= FOREIGN_UID_MAX;
 }
 
 /* Like synthesize_nobody() of systemd: the nobody user and group are synthesized, unless the file
@@ -829,7 +831,7 @@ static bool name_is_foreign(const char *name, uid_t *ret) {
         if (!e || parse_uid(e, &id) < 0 || id > 0xFFFF)
                 return false;
 
-        *ret = FOREIGN_UID_BASE + id;
+        *ret = FOREIGN_UID_MIN + id;
         return true;
 }
 

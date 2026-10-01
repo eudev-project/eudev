@@ -367,7 +367,10 @@ and
 \fISYS_GID_MAX\fR
 of
 /etc/login\&.defs
-of the build system, or 999), and the IDs and names (foreign\-\fIN\fR) of the range of foreign users and groups of systemd are taken as they are\&. Like systemd, a warning is logged for a user or group that is not a system account, as device nodes owned by other accounts are deprecated\&.
+of the build system, or 999), and the IDs and names (foreign\-\fIN\fR) of the range of foreign users and groups of systemd (65536 IDs from the one set with the
+\fB\-\-with\-foreign\-uid\-base\fR
+option of configure, by default
+0x7FFE0000) are taken as they are\&. Like systemd, a warning is logged for a user or group that is not a system account, as device nodes owned by other accounts are deprecated\&.
 .sp
 A number, and a name without substitutions, unless
 \fBudevd\fR
