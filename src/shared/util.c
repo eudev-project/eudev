@@ -307,6 +307,121 @@ int parse_mode(const char *s, mode_t *ret) {
         return 0;
 }
 
+/* Like first_word() of systemd: if s starts with the word, followed by the end of s or by whitespace, returns
+ * the position after the whitespace, else NULL. */
+static const char *first_word(const char *s, const char *word) {
+        const char *p, *nw;
+
+        p = startswith(s, word);
+        if (!p)
+                return NULL;
+        if (*p == '\0')
+                return p;
+
+        nw = p + strspn(p, WHITESPACE);
+        if (nw == p)
+                return NULL;
+
+        return nw;
+}
+
+/* The highest IDs of system users and groups, like the UGIDAllocationRange of systemd, without the lowest IDs
+ * for allocating them, which eudev does not need. */
+typedef struct UGIDAllocationRange {
+        uid_t system_uid_max;
+        gid_t system_gid_max;
+} UGIDAllocationRange;
+
+/* The ones of --with-system-uid-max and --with-system-gid-max of configure */
+static const UGIDAllocationRange default_ugid_allocation_range = {
+        .system_uid_max = SYSTEM_UID_MAX,
+        .system_gid_max = SYSTEM_GID_MAX,
+};
+
+static int parse_alloc_uid(const char *path, const char *name, const char *t, uid_t *ret_uid) {
+        uid_t uid;
+        int r;
+
+        assert(ret_uid);
+
+        r = parse_uid(t, &uid);
+        if (r < 0)
+                return log_debug_errno(r, "%s: failed to parse %s %s, ignoring: %m", path, name, t);
+        if (uid == 0)
+                uid = 1;
+
+        *ret_uid = uid;
+        return 0;
+}
+
+/* Like read_login_defs() of systemd, built with compat-mutable-uid-boundaries: reads SYS_UID_MAX and
+ * SYS_GID_MAX of /etc/login.defs, the last of each that parses as a user or group ID counts. Without
+ * the file, or for the settings that it does not have, the values of configure are taken. */
+static int read_login_defs(UGIDAllocationRange *ret_defs, const char *path) {
+        _cleanup_fclose_ FILE *f = NULL;
+        UGIDAllocationRange defs;
+        int r;
+
+        assert(ret_defs);
+
+        if (!path)
+                path = "/etc/login.defs";
+
+        f = fopen(path, "re");
+        if (!f) {
+                if (errno == ENOENT) {
+                        *ret_defs = default_ugid_allocation_range;
+                        return 0;
+                }
+                return log_debug_errno(errno, "Failed to open %s: %m", path);
+        }
+
+        defs = default_ugid_allocation_range;
+
+        for (;;) {
+                _cleanup_free_ char *line = NULL;
+                const char *t;
+
+                r = read_line(f, LINE_MAX, &line);
+                if (r < 0)
+                        return log_debug_errno(r, "Failed to read %s: %m", path);
+                if (r == 0)
+                        break;
+
+                if ((t = first_word(line, "SYS_UID_MAX")))
+                        (void) parse_alloc_uid(path, "SYS_UID_MAX", t, &defs.system_uid_max);
+                else if ((t = first_word(line, "SYS_GID_MAX")))
+                        (void) parse_alloc_uid(path, "SYS_GID_MAX", t, &defs.system_gid_max);
+        }
+
+        *ret_defs = defs;
+        return 1;
+}
+
+/* Like acquire_ugid_allocation_range() of systemd: the file is read once per thread, and when it cannot be
+ * read, the values of configure are taken. */
+static const UGIDAllocationRange *acquire_ugid_allocation_range(void) {
+        static thread_local UGIDAllocationRange defs;
+        static thread_local int initialized = 0; /* == 0 → not initialized yet
+                                                  * < 0 → failure
+                                                  * > 0 → success */
+
+        if (initialized == 0)
+                initialized = read_login_defs(&defs, NULL) < 0 ? -1 : 1;
+        if (initialized < 0)
+                return &default_ugid_allocation_range;
+
+        return &defs;
+}
+
+bool uid_is_system(uid_t uid) {
+        return uid <= acquire_ugid_allocation_range()->system_uid_max;
+}
+
+bool gid_is_system(gid_t gid) {
+        return gid <= acquire_ugid_allocation_range()->system_gid_max;
+}
+
 int safe_atou(const char *s, unsigned *ret_u) {
         char *x = NULL;
         unsigned long l;

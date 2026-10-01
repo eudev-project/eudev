@@ -108,15 +108,11 @@ void close_many(const int fds[], unsigned n_fd);
 int parse_uid(const char *s, uid_t* ret_uid);
 #define parse_gid(s, ret_uid) parse_uid(s, ret_uid)
 
-/* Like uid_is_system() and gid_is_system() of systemd: the IDs of system accounts are those up to
- * --with-system-uid-max and --with-system-gid-max of configure. */
-static inline bool uid_is_system(uid_t uid) {
-        return uid <= SYSTEM_UID_MAX;
-}
-
-static inline bool gid_is_system(gid_t gid) {
-        return gid <= SYSTEM_GID_MAX;
-}
+/* Like uid_is_system() and gid_is_system() of systemd, built with compat-mutable-uid-boundaries: the IDs
+ * of system accounts are those up to SYS_UID_MAX and SYS_GID_MAX of /etc/login.defs, or when it does not
+ * set them, up to --with-system-uid-max and --with-system-gid-max of configure. */
+bool uid_is_system(uid_t uid);
+bool gid_is_system(gid_t gid);
 int parse_mode(const char *s, mode_t *ret);
 
 int safe_atou(const char *s, unsigned *ret_u);

@@ -453,8 +453,10 @@
             <literal>nogroup</literal>), unless one of the files
             <filename>/etc/systemd/dont-synthesize-nobody</filename> (like in systemd) and
             <filename>/etc/udev/dont-synthesize-nobody</filename> exists, the IDs of system users
-            and groups (up to the ones
-            set with the <option>--with-system-uid-max</option> and
+            and groups (up to <varname>SYS_UID_MAX</varname> and <varname>SYS_GID_MAX</varname>
+            of <filename>/etc/login.defs</filename>, which every process reads once, like systemd
+            built with its compat-mutable-uid-boundaries option; for the ones that the file does
+            not set, up to the ones set with the <option>--with-system-uid-max</option> and
             <option>--with-system-gid-max</option> options of configure, by default
             <varname>SYS_UID_MAX</varname> and <varname>SYS_GID_MAX</varname> of
             <filename>/etc/login.defs</filename> of the build system, or 999), and the IDs and names (<literal>foreign-</literal><replaceable>N</replaceable>) of the range of

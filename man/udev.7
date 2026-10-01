@@ -357,7 +357,12 @@ nogroup), unless one of the files
 /etc/systemd/dont\-synthesize\-nobody
 (like in systemd) and
 /etc/udev/dont\-synthesize\-nobody
-exists, the IDs of system users and groups (up to the ones set with the
+exists, the IDs of system users and groups (up to
+\fISYS_UID_MAX\fR
+and
+\fISYS_GID_MAX\fR
+of
+/etc/login\&.defs, which every process reads once, like systemd built with its compat\-mutable\-uid\-boundaries option; for the ones that the file does not set, up to the ones set with the
 \fB\-\-with\-system\-uid\-max\fR
 and
 \fB\-\-with\-system\-gid\-max\fR

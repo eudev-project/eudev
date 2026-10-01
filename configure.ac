@@ -343,7 +343,8 @@ AM_CONDITIONAL([ENABLE_TPM2], [test "x$enable_tpm2" != xno])
 # ------------------------------------------------------------------------------
 # system-uid-max, system-gid-max - the highest user and group IDs of system accounts, like the meson
 # options of systemd: by default, or with 0, SYS_UID_MAX and SYS_GID_MAX of /etc/login.defs of the
-# build system, and 999 if it does not set them
+# build system, and 999 if it does not set them; like systemd built with compat-mutable-uid-boundaries,
+# these are the defaults for the values that /etc/login.defs of the running system does not set
 # ------------------------------------------------------------------------------
 AC_ARG_WITH([system-uid-max],
 	AS_HELP_STRING([--with-system-uid-max=UID],
