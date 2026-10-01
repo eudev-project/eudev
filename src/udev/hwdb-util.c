@@ -725,12 +725,14 @@ int hwdb_update(struct udev *udev, const char *root, const char *hwdb_bin, bool 
 
         /* Like systemd, masks, i.e. symlinks to /dev/null and empty files, and files that are not regular
          * files are not listed, so that they do not count as hwdb files. The files are resolved below
-         * root. */
+         * root. Unlike systemd, which ignores a directory that cannot be read, and then writes a database
+         * without its files, or removes hwdb.bin, if there are no other files, keep the old hwdb.bin. */
         err = conf_files_list_strv_full(".hwdb", root,
-                                        CONF_FILES_REGULAR | CONF_FILES_FILTER_MASKED | CONF_FILES_WARN,
+                                        CONF_FILES_REGULAR | CONF_FILES_FILTER_MASKED | CONF_FILES_WARN |
+                                        CONF_FILES_FAIL_ON_UNREADABLE_DIR,
                                         (const char * const *) dirs, &files, &n_files);
         if (err < 0) {
-                log_error_errno(err, "failed to enumerate hwdb files: %m");
+                log_error_errno(err, "Failed to enumerate hwdb files, not updating %s: %m", hwdb_bin);
                 goto out;
         }
 

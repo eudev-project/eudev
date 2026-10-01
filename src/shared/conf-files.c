@@ -320,17 +320,19 @@ static int conf_file_cmp(const void *a, const void *b) {
 
 /* Like systemd's conf_files_list_impl() and dump_files(): the files of dirs, below root, sorted by
  * their names. A directory that is missing is ignored, as is one that cannot be read, after a
- * message. */
+ * message, unless CONF_FILES_FAIL_ON_UNREADABLE_DIR is set: then the error is returned, after all
+ * directories are read. */
 static int conf_files_list_impl(const char *suffix, const char *root, ConfFilesFlags flags,
                                 const char * const *dirs, ConfFile ***ret_files, size_t *ret_n_files) {
         _cleanup_strv_free_ char **resolved_dirs = NULL;
         _cleanup_set_free_free_ Set *masked = NULL;
         int log_level = conf_files_log_level(flags);
         const char * const *d;
+        bool fail = FLAGS_SET(flags, CONF_FILES_FAIL_ON_UNREADABLE_DIR);
         Hashmap *h;
         ConfFile **files, *c;
         size_t n = 0;
-        int r = 0;
+        int r = 0, dir_error = 0;
 
         assert(suffix);
         assert(ret_files);
@@ -382,8 +384,10 @@ static int conf_files_list_impl(const char *suffix, const char *root, ConfFilesF
                 if (r == -ENOENT)
                         continue;
                 if (r < 0) {
-                        log_full_errno(log_level, r, "Failed to chase and open directory '%s', ignoring: %m",
-                                       original_dirpath);
+                        log_full_errno(log_level, r, "Failed to chase and open directory '%s'%s: %m",
+                                       original_dirpath, fail ? "" : ", ignoring");
+                        if (dir_error == 0)
+                                dir_error = r;
                         continue;
                 }
 
@@ -394,6 +398,13 @@ static int conf_files_list_impl(const char *suffix, const char *root, ConfFilesF
                 r = files_add(h, masked, dir, root, original_dirpath, resolved_dirpath, suffix, flags);
                 if (r == -ENOMEM)
                         goto finish;
+                if (r < 0 && dir_error == 0)
+                        dir_error = r;
+        }
+
+        if (fail && dir_error < 0) {
+                r = dir_error;
+                goto finish;
         }
 
         files = new(ConfFile*, hashmap_size(h) + 1);
