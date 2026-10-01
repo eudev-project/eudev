@@ -308,8 +308,15 @@ AM_CONDITIONAL(HAVE_KMOD, [test "$have_kmod" = "yes"])
 
 # ------------------------------------------------------------------------------
 
-AC_ARG_ENABLE([hwdb], AS_HELP_STRING([--disable-hwdb], [do not install the hwdb.d files]), [], [enable_hwdb=yes])
-AM_CONDITIONAL(ENABLE_HWDB, [test "x$enable_hwdb" = "xyes"])
+# The hwdb files are installed only with the programs, which compile them into hwdb.bin (udevadm hwdb --update,
+# systemd-hwdb update); libudev only reads hwdb.bin.
+AC_ARG_ENABLE([hwdb],
+	AS_HELP_STRING([--disable-hwdb], [do not install the hwdb.d files, which are never installed with --disable-programs]),
+	[], [enable_hwdb=yes])
+install_hwdb=$enable_hwdb
+AS_IF([test "x$enable_hwdb" = "xyes" && test "x$enable_programs" != "xyes"],
+	[install_hwdb="no (--disable-programs)"])
+AM_CONDITIONAL(ENABLE_HWDB, [test "x$install_hwdb" = "xyes"])
 
 # ------------------------------------------------------------------------------
 # systemd-hwdb - the hwdb tool of systemd, for the scripts and packages that call it
@@ -561,7 +568,7 @@ AC_MSG_RESULT([
 	SELinux:                 ${have_selinux}
 	SMACK:                   ${enable_smack}
 	man pages:               ${install_manpages}
-	hwdb.d files:            ${enable_hwdb}
+	hwdb.d files:            ${install_hwdb}
 	systemd-hwdb:            ${enable_systemd_hwdb}
 	bashcompletiondir:       $(expand_dir "$with_bashcompletiondir")
 	zshcompletiondir:        $(expand_dir "$with_zshcompletiondir")
