@@ -464,7 +464,9 @@ AC_DEFINE_UNQUOTED([NOBODY_GROUP_NAME], ["$with_nobody_group"], [The name of the
 
 # ------------------------------------------------------------------------------
 # foreign-uid-base - the first ID of the range of the 65536 foreign users and groups of systemd, like
-# its meson option: decimal, or hexadecimal with 0x, and the lower 16 bits must be zero
+# its meson option: a number, also 0 like in systemd, in decimal, or hexadecimal with 0x, which meson
+# does not take; the lower 16 bits must be zero, which systemd checks when it is compiled, and the range
+# must end below 0xFFFFFFFF
 # ------------------------------------------------------------------------------
 AC_ARG_WITH([foreign-uid-base],
 	AS_HELP_STRING([--with-foreign-uid-base=UID],
@@ -482,11 +484,12 @@ case "$with_foreign_uid_base" in
 	foreign_uid_base= ;;
 @<:@1-9@:>@*)
 	foreign_uid_base=$(( with_foreign_uid_base )) ;;
+0)
+	foreign_uid_base=0 ;;
 *)
 	foreign_uid_base= ;;
 esac
 AS_IF([test -z "$foreign_uid_base" ||
-       test "$foreign_uid_base" -eq 0 ||
        test $(( foreign_uid_base % 65536 )) -ne 0 ||
        test "$foreign_uid_base" -gt 4294836224],
 	[AC_MSG_ERROR([*** invalid base of the foreign user and group IDs: $with_foreign_uid_base])])
