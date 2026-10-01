@@ -638,8 +638,10 @@ static int import_file(struct udev *udev, struct trie *trie, const char *filenam
                 };
         }
 
-        if (state == HW_MATCH)
+        if (state == HW_MATCH) {
                 log_error("Warning, property expected, ignoring record with no properties");
+                syntax_errors = true;
+        }
 
         r = syntax_errors;
 
