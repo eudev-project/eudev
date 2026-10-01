@@ -3086,8 +3086,10 @@ static bool apply_format(struct udev_event *event, struct udev_rules *rules, str
         return false;
 }
 
+/* Returns 0 when the attribute matches, -1 when not, and -ENOMEM when out of memory. */
 static int match_attr(struct udev_rules *rules, struct udev_device *dev, struct udev_event *event,
                       struct token *rule, struct token *cur, struct udev_list *properties_list) {
+        _cleanup_free_ char *stripped = NULL;
         const char *name;
         char nbuf[UTIL_NAME_SIZE];
         const char *value;
@@ -3125,14 +3127,19 @@ static int match_attr(struct udev_rules *rules, struct udev_device *dev, struct 
                 key_value = rules_str(rules, cur->key.value_off);
                 klen = strlen(key_value);
                 if (klen > 0 && !isspace((unsigned char) key_value[klen-1])) {
-                        if (value != vbuf) {
-                                /* like systemd, a longer value is cut, then the length changes */
-                                strscpy(vbuf, sizeof(vbuf), value);
-                                value = vbuf;
-                                len = strlen(vbuf);
-                        }
-                        while (len > 0 && isspace((unsigned char) vbuf[--len]))
+                        while (len > 0 && isspace((unsigned char) value[len - 1]))
+                                len--;
+
+                        /* Unlike systemd, which copies the value into a buffer of UDEV_NAME_SIZE, a
+                         * longer value is not cut at 511 bytes. */
+                        if (value == vbuf)
                                 vbuf[len] = '\0';
+                        else {
+                                stripped = strndup(value, len);
+                                if (!stripped)
+                                        return log_oom();
+                                value = stripped;
+                        }
                 }
         }
 
@@ -3310,7 +3317,10 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                                 goto nomatch;
                         break;
                 case TK_M_ATTR:
-                        if (match_attr(rules, event->dev, event, rule, cur, properties_list) != 0)
+                        r = match_attr(rules, event->dev, event, rule, cur, properties_list);
+                        if (r == -ENOMEM)
+                                return r;
+                        if (r != 0)
                                 goto nomatch;
                         break;
                 case TK_M_SYSCTL: {
@@ -3369,7 +3379,10 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                                                         goto try_parent;
                                                 break;
                                         case TK_M_ATTRS:
-                                                if (match_attr(rules, event->dev_parent, event, rule, key, properties_list) != 0)
+                                                r = match_attr(rules, event->dev_parent, event, rule, key, properties_list);
+                                                if (r == -ENOMEM)
+                                                        return r;
+                                                if (r != 0)
                                                         goto try_parent;
                                                 break;
                                         case TK_M_TAGS: {
