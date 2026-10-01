@@ -225,7 +225,16 @@ will send on worker timeouts\&. Note that both workers and spawned processes wil
 option of
 \fBudevd\fR(8)\&. An invalid value is ignored, with a warning when
 \fBudevd\fR
-starts\&.
+starts\&. This includes the signals whose default action does not terminate a process, with which the timeout would not stop anything:
+\fBSIGCHLD\fR,
+\fBSIGCONT\fR,
+\fBSIGSTOP\fR,
+\fBSIGTSTP\fR,
+\fBSIGTTIN\fR,
+\fBSIGTTOU\fR,
+\fBSIGURG\fR
+and
+\fBSIGWINCH\fR\&.
 .RE
 .PP
 In addition,

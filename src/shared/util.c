@@ -2580,6 +2580,14 @@ int signal_from_string(const char *s) {
         return -EINVAL;
 }
 
+/* Whether the default action of the signal terminates a process, with or without a core dump, i.e. it is
+ * not one that is ignored (SIGCHLD, SIGURG, SIGWINCH), stops (SIGSTOP, SIGTSTP, SIGTTIN, SIGTTOU) or continues
+ * (SIGCONT) a process. */
+bool signal_terminates(int signo) {
+        return SIGNAL_VALID(signo) &&
+               !IN_SET(signo, SIGCHLD, SIGURG, SIGWINCH, SIGSTOP, SIGTSTP, SIGTTIN, SIGTTOU, SIGCONT);
+}
+
 int kill_and_sigcont(pid_t pid, int sig) {
         int r;
 

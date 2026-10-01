@@ -391,6 +391,7 @@ const char *signal_to_string(int i) _const_;
 int signal_from_string(const char *s);
 
 #define SIGNAL_VALID(signo) ((signo) > 0 && (signo) < _NSIG)
+bool signal_terminates(int signo) _const_;
 
 int kill_and_sigcont(pid_t pid, int sig);
 

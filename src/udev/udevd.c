@@ -575,8 +575,9 @@ static void worker_spawn(struct event *event) {
 
                 /* The worker blocks all signals, and reads SIGTERM and SIGCHLD from the signalfd. Like the
                  * workers of systemd, let another signal that udevd sends on a timeout take its default
-                 * action, e.g. dump core with SIGABRT. */
-                if (!IN_SET(arg_timeout_signal, SIGTERM, SIGCHLD)) {
+                 * action, e.g. dump core with SIGABRT. SIGCHLD cannot be the timeout signal, as it does not
+                 * terminate a process, see signal_terminates(). */
+                if (arg_timeout_signal != SIGTERM) {
                         sigset_t timeout_mask;
 
                         (void) signal(arg_timeout_signal, SIG_DFL);
@@ -1747,6 +1748,11 @@ static int parse_proc_cmdline_item(const char *key, const char *value) {
                         return 0;
 
                 r = signal_from_string(value);
+                if (r > 0 && !signal_terminates(r)) {
+                        /* e.g. SIGCHLD, with which the timeout would not stop anything */
+                        log_warning("%s=%s cannot terminate a process, ignoring.", key, value);
+                        return 0;
+                }
                 if (r > 0)
                         config_by_kernel.timeout_signal = r;
 
@@ -1857,6 +1863,9 @@ static int parse_argv(int argc, char *argv[]) {
                         r = signal_from_string(optarg);
                         if (r <= 0)
                                 log_warning_errno(r, "Failed to parse --timeout-signal= value '%s', ignoring: %m", optarg);
+                        else if (!signal_terminates(r))
+                                /* e.g. SIGCHLD, with which the timeout would not stop anything */
+                                log_warning("--timeout-signal=%s cannot terminate a process, ignoring.", optarg);
                         else
                                 config_by_command.timeout_signal = r;
                         break;
@@ -1912,7 +1921,6 @@ int main(int argc, char *argv[]) {
         struct epoll_event ep_netlink = { .events = EPOLLIN };
         struct epoll_event ep_worker = { .events = EPOLLIN };
         int r = 0, one = 1;
-        bool invalid;
         char **w;
 
         /*
@@ -1948,14 +1956,11 @@ int main(int argc, char *argv[]) {
         config_by_udev_conf.exec_delay_usec = udev_get_exec_delay_usec(udev);
         config_by_udev_conf.timeout_usec = udev_get_event_timeout_usec(udev);
         (void) udev_get_resolve_names(udev, &config_by_udev_conf.resolve_names);
+        config_by_udev_conf.timeout_signal = udev_get_timeout_signal(udev);
 
         r = parse_proc_cmdline(parse_proc_cmdline_item);
         if (r < 0)
                 log_warning_errno(r, "failed to parse kernel command line, ignoring: %m");
-
-        config_by_udev_conf.timeout_signal = udev_get_timeout_signal(udev, &invalid);
-        if (invalid)
-                log_warning("Invalid timeout_signal= in udev.conf, ignoring.");
 
         manager_merge_config();
         log_set_max_level(manager_merge_config_log_level());

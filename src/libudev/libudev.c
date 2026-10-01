@@ -49,12 +49,9 @@ struct udev {
         int refcount;
         /* format of hwdb.bin created by 'udevadm hwdb', hwdb_format= in udev.conf, negative if invalid */
         int hwdb_format;
-        /* timeout_signal= in udev.conf for udevd, 0 if it is not set; an invalid value is ignored, and
-         * remembered, so that udevd warns about it */
+        /* timeout_signal=, children_max=, exec_delay= and event_timeout= in udev.conf for udevd, 0 if they
+         * are not set; an invalid value is ignored, and a message about it is added to conf_warnings */
         int timeout_signal;
-        bool timeout_signal_invalid;
-        /* children_max=, exec_delay= and event_timeout= in udev.conf for udevd, 0 if they are not set; an
-         * invalid value is ignored, and a message about it is added to conf_warnings */
         unsigned children_max;
         usec_t exec_delay_usec;
         usec_t event_timeout_usec;
@@ -111,15 +108,21 @@ int udev_parse_hwdb_format(const char *s) {
 
 /* Like log_syntax_parse_error() of systemd, but the message is only logged at debug level here, and
  * remembered, so that udevd can warn about it, while the other users of libudev do not complain about the
- * settings of udevd. */
+ * settings of udevd. With error 0, the reason is that the signal of timeout_signal= cannot terminate a
+ * process. */
 static void udev_conf_parse_error(struct udev *udev, const char *filename, unsigned line,
                                   const char *key, const char *value, int error) {
         _cleanup_free_ char *escaped = NULL;
         char *m;
+        int r;
 
         escaped = cescape(value);
         errno = abs(error);
-        if (asprintf(&m, "%s:%u: Failed to parse %s=%s, ignoring: %m", filename, line, key, escaped ?: value) < 0)
+        if (error == 0)
+                r = asprintf(&m, "%s:%u: %s=%s cannot terminate a process, ignoring.", filename, line, key, escaped ?: value);
+        else
+                r = asprintf(&m, "%s:%u: Failed to parse %s=%s, ignoring: %m", filename, line, key, escaped ?: value);
+        if (r < 0)
                 return;
 
         log_debug("%s", m);
@@ -196,7 +199,8 @@ static void udev_read_conf(struct udev *udev, const char *filename) {
                                         free(udev->net_altnames_invalid);
                                         udev->net_altnames_invalid = strdup("");
                                 } else if (streq(key, "children_max") || streq(key, "exec_delay") ||
-                                           streq(key, "event_timeout") || streq(key, "resolve_names"))
+                                           streq(key, "event_timeout") || streq(key, "resolve_names") ||
+                                           streq(key, "timeout_signal"))
                                         /* like systemd's parsers of these values */
                                         udev_conf_parse_error(udev, filename, line_nr, key, val, -EINVAL);
                                 continue;
@@ -308,11 +312,14 @@ static void udev_read_conf(struct udev *udev, const char *filename) {
                         if (streq(key, "timeout_signal")) {
                                 int sig;
 
+                                /* refuse signals like SIGCHLD, with which the timeout would not stop
+                                 * anything */
                                 sig = signal_from_string(val);
-                                if (sig < 0) {
-                                        log_debug("%s:%u: invalid signal '%s' for timeout_signal, ignoring.", filename, line_nr, val);
-                                        udev->timeout_signal_invalid = true;
-                                } else
+                                if (sig < 0)
+                                        udev_conf_parse_error(udev, filename, line_nr, key, val, sig);
+                                else if (!signal_terminates(sig))
+                                        udev_conf_parse_error(udev, filename, line_nr, key, val, 0);
+                                else
                                         udev->timeout_signal = sig;
                                 continue;
                         }
@@ -384,10 +391,8 @@ char **udev_get_conf_warnings(struct udev *udev) {
 }
 
 /* Not part of the public API, used by udevd. Returns the signal of timeout_signal= in udev.conf, or 0 if it is
- * not set, and whether an invalid value was ignored. */
-int udev_get_timeout_signal(struct udev *udev, bool *ret_invalid) {
-        if (ret_invalid)
-                *ret_invalid = udev && udev->timeout_signal_invalid;
+ * not set. */
+int udev_get_timeout_signal(struct udev *udev) {
         if (udev == NULL)
                 return 0;
         return udev->timeout_signal;

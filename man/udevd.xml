@@ -150,7 +150,13 @@
           <constant>SIGKILL</constant>. Note that setting the option on the command line
           overrides the setting from the configuration file. The signal is
           given as a number or a name, with or without the
-          <literal>SIG</literal> prefix.</para>
+          <literal>SIG</literal> prefix. Signals whose default action does not
+          terminate a process, with which the timeout would not stop anything,
+          are ignored with a warning: <constant>SIGCHLD</constant>,
+          <constant>SIGCONT</constant>, <constant>SIGSTOP</constant>,
+          <constant>SIGTSTP</constant>, <constant>SIGTTIN</constant>,
+          <constant>SIGTTOU</constant>, <constant>SIGURG</constant> and
+          <constant>SIGWINCH</constant>.</para>
         </listitem>
       </varlistentry>
 
@@ -257,7 +263,9 @@
         <listitem>
           <para>Specifies a signal that <command>udevd</command> will send to
           workers on timeout. Note that kernel command line option overrides both the
-          setting in the configuration file and the one on the program command line.</para>
+          setting in the configuration file and the one on the program command line.
+          As with <option>--timeout-signal=</option>, signals that do not terminate a
+          process are ignored with a warning.</para>
         </listitem>
       </varlistentry>
       <varlistentry>

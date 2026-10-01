@@ -105,7 +105,16 @@ will send to forked off processes after reaching event timeout\&. The setting ca
 may be helpful in order to debug worker timeouts\&. Defaults to
 \fBSIGKILL\fR\&. Note that setting the option on the command line overrides the setting from the configuration file\&. The signal is given as a number or a name, with or without the
 SIG
-prefix\&.
+prefix\&. Signals whose default action does not terminate a process, with which the timeout would not stop anything, are ignored with a warning:
+\fBSIGCHLD\fR,
+\fBSIGCONT\fR,
+\fBSIGSTOP\fR,
+\fBSIGTSTP\fR,
+\fBSIGTTIN\fR,
+\fBSIGTTOU\fR,
+\fBSIGURG\fR
+and
+\fBSIGWINCH\fR\&.
 .RE
 .PP
 \fB\-N\fR, \fB\-\-resolve\-names=\fR
@@ -208,7 +217,8 @@ Wait for events to finish up to the given number of seconds, or a time span with
 .RS 4
 Specifies a signal that
 \fBudevd\fR
-will send to workers on timeout\&. Note that kernel command line option overrides both the setting in the configuration file and the one on the program command line\&.
+will send to workers on timeout\&. Note that kernel command line option overrides both the setting in the configuration file and the one on the program command line\&. As with
+\fB\-\-timeout\-signal=\fR, signals that do not terminate a process are ignored with a warning\&.
 .RE
 .PP
 \fIudev\&.blockdev_read_only[=\fR\fI\fIBOOL\fR\fR\fI]\fR, \fIrd\&.udev\&.blockdev_read_only[=\fR\fI\fIBOOL\fR\fR\fI]\fR

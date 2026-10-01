@@ -268,7 +268,12 @@
           <option>--timeout-signal=</option> option of
           <citerefentry><refentrytitle>udevd</refentrytitle><manvolnum>8</manvolnum></citerefentry>.
           An invalid value is ignored, with a warning when <command>udevd</command>
-          starts.</para>
+          starts. This includes the signals whose default action does not
+          terminate a process, with which the timeout would not stop anything:
+          <constant>SIGCHLD</constant>, <constant>SIGCONT</constant>,
+          <constant>SIGSTOP</constant>, <constant>SIGTSTP</constant>,
+          <constant>SIGTTIN</constant>, <constant>SIGTTOU</constant>,
+          <constant>SIGURG</constant> and <constant>SIGWINCH</constant>.</para>
         </listitem>
       </varlistentry>
     </variablelist>
