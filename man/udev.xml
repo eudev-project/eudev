@@ -450,7 +450,10 @@
             the name of the nobody user or group (set with the <option>--with-nobody-user</option>
             and <option>--with-nobody-group</option> options of configure, by default
             <literal>nobody</literal>; Debian, for example, calls the group
-            <literal>nogroup</literal>), the IDs of system users and groups (up to the ones
+            <literal>nogroup</literal>), unless one of the files
+            <filename>/etc/systemd/dont-synthesize-nobody</filename> (like in systemd) and
+            <filename>/etc/udev/dont-synthesize-nobody</filename> exists, the IDs of system users
+            and groups (up to the ones
             set with the <option>--with-system-uid-max</option> and
             <option>--with-system-gid-max</option> options of configure, by default
             <varname>SYS_UID_MAX</varname> and <varname>SYS_GID_MAX</varname> of

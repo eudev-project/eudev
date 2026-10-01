@@ -777,6 +777,22 @@ static bool uid_is_foreign(uid_t uid) {
         return uid >= FOREIGN_UID_BASE && uid <= FOREIGN_UID_MAX;
 }
 
+/* Like synthesize_nobody() of systemd: the nobody user and group are synthesized, unless the file
+ * /etc/systemd/dont-synthesize-nobody, or eudev's own UDEV_CONF_DIR "/dont-synthesize-nobody", exists, for
+ * the compatibility with systems that use the name of the nobody user or group for another ID than 65534.
+ *
+ * Like in systemd, the cache is not synchronized: in the worst case, threads find it out twice, with the
+ * same result. */
+static bool synthesize_nobody(void) {
+        static int cache = -1;
+
+        if (cache < 0)
+                cache = access("/etc/systemd/dont-synthesize-nobody", F_OK) < 0 &&
+                        access(UDEV_CONF_DIR "/dont-synthesize-nobody", F_OK) < 0;
+
+        return cache;
+}
+
 /* Like valid_user_group_name(u, VALID_USER_RELAX) of systemd. */
 static bool valid_user_group_name_relaxed(const char *u) {
         if (isempty(u))
@@ -821,9 +837,9 @@ static bool name_is_foreign(const char *name, uid_t *ret) {
  * and USERDB_SYNTHESIZE_NUMERIC do it, from the user and group database of NSS: a name that is a valid ID is
  * looked up by the ID, any other name must be valid. When the database does not know it, like systemd
  * synthesizes them, the ID 0 and the name "root", the ID 65534 and the name of the nobody user or group of
- * configure, "nobody" by default, the IDs of the foreign range of systemd and the names "foreign-N", and the
- * IDs of system accounts are taken as they are. Returns -EINVAL for a name that is not valid, and -ESRCH for
- * an unknown one. */
+ * configure, "nobody" by default, unless synthesize_nobody() says no, the IDs of the foreign range of systemd
+ * and the names "foreign-N", and the IDs of system accounts are taken as they are. Returns -EINVAL for a name
+ * that is not valid, and -ESRCH for an unknown one. */
 static int resolve_user_or_group(const char *name, bool group, uid_t *ret) {
         uid_t id;
 
@@ -847,7 +863,9 @@ static int resolve_user_or_group(const char *name, bool group, uid_t *ret) {
                         }
                 }
 
-                if (id == 0 || id == (group ? GID_NOBODY : UID_NOBODY) || uid_is_foreign(id) ||
+                if (id == 0 ||
+                    (id == (group ? GID_NOBODY : UID_NOBODY) && synthesize_nobody()) ||
+                    uid_is_foreign(id) ||
                     (group ? gid_is_system(id) : uid_is_system(id))) {
                         *ret = id;
                         return 0;
@@ -878,7 +896,7 @@ static int resolve_user_or_group(const char *name, bool group, uid_t *ret) {
                 *ret = 0;
                 return 0;
         }
-        if (streq(name, group ? NOBODY_GROUP_NAME : NOBODY_USER_NAME)) {
+        if (streq(name, group ? NOBODY_GROUP_NAME : NOBODY_USER_NAME) && synthesize_nobody()) {
                 *ret = group ? GID_NOBODY : UID_NOBODY;
                 return 0;
         }
