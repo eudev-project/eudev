@@ -87,6 +87,19 @@ static inline bool isempty(const char *p) {
         return !p || !p[0];
 }
 
+/* Like ascii_isdigit() and ascii_isalpha() of systemd: independent of the locale and of the sign of char. */
+static inline bool ascii_isdigit(char a) {
+        return a >= '0' && a <= '9';
+}
+
+static inline bool ascii_isalpha(char a) {
+        return (a >= 'a' && a <= 'z') || (a >= 'A' && a <= 'Z');
+}
+
+/* Like ascii_tolower() and ascii_strlower() of systemd: only the ASCII letters A-Z are converted. */
+char ascii_tolower(char x) _const_;
+char *ascii_strlower(char *s);
+
 /* Checks that all characters of s are in charset, like systemd's in_charset(). */
 static inline bool in_charset(const char *s, const char *charset) {
         assert(s);

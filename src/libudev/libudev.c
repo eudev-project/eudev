@@ -115,7 +115,7 @@ static void udev_read_conf(struct udev *udev, const char *filename) {
 
                         /* find key */
                         key = line;
-                        while (isspace(key[0]))
+                        while (isspace((unsigned char) key[0]))
                                 key++;
 
                         /* comment or empty line */
@@ -132,14 +132,14 @@ static void udev_read_conf(struct udev *udev, const char *filename) {
                         val++;
 
                         /* find value */
-                        while (isspace(val[0]))
+                        while (isspace((unsigned char) val[0]))
                                 val++;
 
                         /* terminate key */
                         len = strlen(key);
                         if (len == 0)
                                 continue;
-                        while (isspace(key[len-1]))
+                        while (isspace((unsigned char) key[len-1]))
                                 len--;
                         key[len] = '\0';
 
@@ -155,7 +155,7 @@ static void udev_read_conf(struct udev *udev, const char *filename) {
                                 }
                                 continue;
                         }
-                        while (isspace(val[len-1]))
+                        while (isspace((unsigned char) val[len-1]))
                                 len--;
                         val[len] = '\0';
 

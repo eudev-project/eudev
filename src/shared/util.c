@@ -738,14 +738,6 @@ static bool is_valid_version_char(char a) {
                 IN_SET(a, '~', '-', '^', '.');
 }
 
-static bool ascii_isdigit(char a) {
-        return a >= '0' && a <= '9';
-}
-
-static bool ascii_isalpha(char a) {
-        return (a >= 'a' && a <= 'z') || (a >= 'A' && a <= 'Z');
-}
-
 int strverscmp_improved(const char *a, const char *b) {
         /* This function is similar to strverscmp(3), but it treats '-' and '.' as separators.
          *
@@ -893,6 +885,25 @@ int strverscmp_improved(const char *a, const char *b) {
                 a = aa;
                 b = bb;
         }
+}
+
+char ascii_tolower(char x) {
+
+        if (x >= 'A' && x <= 'Z')
+                return x - 'A' + 'a';
+
+        return x;
+}
+
+char *ascii_strlower(char *s) {
+        char *p;
+
+        assert(s);
+
+        for (p = s; *p; p++)
+                *p = ascii_tolower(*p);
+
+        return s;
 }
 
 int getenv_bool(const char *name) {

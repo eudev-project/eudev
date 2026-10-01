@@ -473,7 +473,7 @@ static void add_token(struct udev_rules_check *c, const char *type, bool is_matc
                 if (is_attr) {
                         size_t len = strlen(value);
 
-                        if (len > 0 && !isspace(value[len - 1]))
+                        if (len > 0 && !isspace((unsigned char) value[len - 1]))
                                 t.match_type |= MATCH_REMOVE_TRAILING_WHITESPACE;
 
                         t.attr_subst_type = get_substitution_type(data);

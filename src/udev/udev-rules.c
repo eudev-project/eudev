@@ -1325,7 +1325,7 @@ static int import_property_from_string(struct udev_event *event, struct udev_rul
 
         /* find key */
         key = line;
-        while (isspace(key[0]))
+        while (isspace((unsigned char) key[0]))
                 key++;
 
         /* comment or empty line */
@@ -1340,14 +1340,14 @@ static int import_property_from_string(struct udev_event *event, struct udev_rul
         val++;
 
         /* find value */
-        while (isspace(val[0]))
+        while (isspace((unsigned char) val[0]))
                 val++;
 
         /* terminate key */
         len = strlen(key);
         if (len == 0)
                 return 0;
-        while (isspace(key[len-1]))
+        while (isspace((unsigned char) key[len-1]))
                 len--;
         key[len] = '\0';
 
@@ -1355,7 +1355,7 @@ static int import_property_from_string(struct udev_event *event, struct udev_rul
         len = strlen(val);
         if (len == 0)
                 return 0;
-        while (isspace(val[len-1]))
+        while (isspace((unsigned char) val[len-1]))
                 len--;
         val[len] = '\0';
 
@@ -3053,20 +3053,20 @@ static int match_attr(struct udev_rules *rules, struct udev_device *dev, struct 
 
         /* remove trailing whitespace, if not asked to match for it */
         len = strlen(value);
-        if (len > 0 && isspace(value[len-1])) {
+        if (len > 0 && isspace((unsigned char) value[len-1])) {
                 const char *key_value;
                 size_t klen;
 
                 key_value = rules_str(rules, cur->key.value_off);
                 klen = strlen(key_value);
-                if (klen > 0 && !isspace(key_value[klen-1])) {
+                if (klen > 0 && !isspace((unsigned char) key_value[klen-1])) {
                         if (value != vbuf) {
                                 /* like systemd, a longer value is cut, then the length changes */
                                 strscpy(vbuf, sizeof(vbuf), value);
                                 value = vbuf;
                                 len = strlen(vbuf);
                         }
-                        while (len > 0 && isspace(vbuf[--len]))
+                        while (len > 0 && isspace((unsigned char) vbuf[--len]))
                                 vbuf[len] = '\0';
                 }
         }
@@ -3891,7 +3891,7 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                                                 "Replaced %i character(s) from device node symlink, results to \"%s\"",
                                                 count, temp);
                         pos = temp;
-                        while (isspace(pos[0]))
+                        while (isspace((unsigned char) pos[0]))
                                 pos++;
                         next = strchr(pos, ' ');
                         while (next != NULL) {
@@ -3899,7 +3899,7 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                                 r = apply_devlink(event, rules, rule, cur, cur->key.op, pos);
                                 if (r < 0)
                                         return r;
-                                while (isspace(next[1]))
+                                while (isspace((unsigned char) next[1]))
                                         next++;
                                 pos = &next[1];
                                 next = strchr(pos, ' ');

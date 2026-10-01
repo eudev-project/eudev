@@ -585,7 +585,7 @@ static int udev_device_set_syspath(struct udev_device *udev_device, const char *
 
         /* trailing number */
         n = 0;
-        while (n < len && isdigit(udev_device->sysname[len - n - 1]))
+        while (n < len && ascii_isdigit(udev_device->sysname[len - n - 1]))
                 n++;
 
         /* do not set sysnum for number only sysname */

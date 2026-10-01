@@ -377,7 +377,7 @@ static ssize_t udev_event_subst_format(struct udev_event *event, enum subst_type
                 if (val != vbuf)
                         strscpy_full(vbuf, sizeof(vbuf), val, &truncated);
                 len = strlen(vbuf);
-                while (len > 0 && isspace(vbuf[--len]))
+                while (len > 0 && isspace((unsigned char) vbuf[--len]))
                         vbuf[len] = '\0';
                 count = util_replace_chars(vbuf, UDEV_ALLOWED_CHARS_INPUT);
                 if (count > 0)

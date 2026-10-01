@@ -807,7 +807,6 @@ static int names_platform(struct udev_device *dev, const char *prefix, enum udev
         char vendor[5], model_str[5], instance_str[3];
         unsigned model, instance;
         char str[ALTIFNAMSIZ];
-        char *c;
         int r;
 
         assert(dev);
@@ -846,8 +845,7 @@ static int names_platform(struct udev_device *dev, const char *prefix, enum udev
         if (!in_charset(vendor, validchars))
                 return log_device_debug_errno(dev, EINVAL, "Platform vendor contains invalid characters: '%s'", vendor);
 
-        for (c = vendor; *c; c++)
-                *c = tolower(*c);
+        ascii_strlower(vendor);
 
         r = safe_atou_full(model_str, 16, &model);
         if (r < 0)

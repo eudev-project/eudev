@@ -144,7 +144,7 @@ static char *get_value(char **buffer)
                  */
                 (*buffer)++;
 
-        while (*buffer && isspace(**buffer))
+        while (*buffer && isspace((unsigned char) **buffer))
                 (*buffer)++;
 
         return val;
@@ -214,7 +214,7 @@ static int get_file_options(struct udev *udev __attribute__((unused)),
                         break;
                 }
 
-                while (isspace(*buf))
+                while (isspace((unsigned char) *buf))
                         buf++;
 
                 /* blank or all whitespace line */

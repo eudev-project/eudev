@@ -136,7 +136,7 @@ int util_log_priority(const char *priority)
         int prio;
 
         prio = strtoul(priority, &endptr, 10);
-        if (endptr[0] == '\0' || isspace(endptr[0])) {
+        if (endptr[0] == '\0' || isspace((unsigned char) endptr[0])) {
                 if (prio >= 0 && prio <= 7)
                         return prio;
                 else
@@ -163,19 +163,19 @@ int util_replace_whitespace(const char *str, char *to, size_t len)
 
         /* strip trailing whitespace */
         len = strnlen(str, len);
-        while (len && isspace(str[len-1]))
+        while (len && isspace((unsigned char) str[len-1]))
                 len--;
 
         /* strip leading whitespace */
         i = 0;
-        while ((i < len) && isspace(str[i]))
+        while ((i < len) && isspace((unsigned char) str[i]))
                 i++;
 
         j = 0;
         while (i < len) {
                 /* substitute multiple whitespace with a single '_' */
-                if (isspace(str[i])) {
-                        while (isspace(str[i]))
+                if (isspace((unsigned char) str[i])) {
+                        while (isspace((unsigned char) str[i]))
                                 i++;
                         to[j++] = '_';
                 }
@@ -213,7 +213,7 @@ int util_replace_chars(char *str, const char *white)
                 }
 
                 /* if space is allowed, replace whitespace with ordinary space */
-                if (isspace(str[i]) && white != NULL && strchr(white, ' ') != NULL) {
+                if (isspace((unsigned char) str[i]) && white != NULL && strchr(white, ' ') != NULL) {
                         str[i] = ' ';
                         i++;
                         replaced++;
