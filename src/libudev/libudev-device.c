@@ -297,6 +297,10 @@ _public_ const char *udev_device_get_subsystem(struct udev_device *udev_device)
 
         if (udev_device == NULL)
                 return NULL;
+        /* Like sd_device_get_subsystem() of systemd, read the uevent file first, so that the property
+         * SUBSYSTEM follows its properties. */
+        if (!udev_device->subsystem_set && !udev_device->info_loaded)
+                udev_device_read_uevent_file(udev_device);
         if (!udev_device->subsystem_set) {
                 udev_device->subsystem_set = true;
                 /* read "subsystem" link */
@@ -418,7 +422,9 @@ static int udev_device_add_property_internal_full(struct udev_device *udev_devic
 
         udev_device->envp_uptodate = false;
         if (isempty(value)) {
-                list_entry = udev_device_get_properties_list_entry(udev_device);
+                /* Look at the list as it is: like sd-device, removing a property must not read the uevent
+                 * file or the database, which would add their properties in the middle. */
+                list_entry = udev_list_get_entry(&udev_device->properties_list);
                 list_entry = udev_list_entry_get_by_name(list_entry, key);
                 if (list_entry != NULL)
                         udev_list_entry_delete(list_entry);
@@ -1208,6 +1214,10 @@ static int udev_device_read_uevent_file(struct udev_device *udev_device)
         free(udev_device->parse_minor);
         udev_device->parse_major = udev_device->parse_minor = NULL;
 
+        /* Like device_read_uevent_file() of systemd, which looks up the subsystem at the end, the property
+         * SUBSYSTEM follows the properties of the uevent file. */
+        (void) udev_device_get_subsystem(udev_device);
+
         return 0;
 }
 
@@ -1233,7 +1243,8 @@ static struct udev_device *udev_device_new(struct udev *udev)
         udev_device->refcount = 1;
         udev_device->udev = udev;
         udev_list_init(udev, &udev_device->devlinks_list, true);
-        udev_list_init(udev, &udev_device->properties_list, true);
+        /* like the properties of sd-device, in the order in which they are added */
+        udev_list_init_ordered(udev, &udev_device->properties_list);
         udev_list_init(udev, &udev_device->sysattr_value_list, true);
         udev_list_init(udev, &udev_device->sysattr_list, false);
         udev_list_init(udev, &udev_device->tags_list, true);
@@ -1996,6 +2007,12 @@ static void udev_device_set_tags_property(struct udev_device *udev_device, const
  * which returns #NULL if no more entries exist. The property name
  * can be retrieved from the list entry by udev_list_entry_get_name(),
  * the property value by udev_list_entry_get_value().
+ *
+ * Like the properties of sd-device of systemd, they are listed in the order in which
+ * they were added, not sorted: e.g. for a device read from sys, DEVPATH, the properties
+ * of the uevent file, SUBSYSTEM, then the ones of the udev database, and DEVLINKS, TAGS
+ * and CURRENT_TAGS last; for a device received from a monitor, in the order of the
+ * message.
  *
  * Returns: the first entry of the property list
  **/

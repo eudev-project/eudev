@@ -118,6 +118,7 @@ struct udev_list {
         unsigned int entries_cur;
         unsigned int entries_max;
         bool unique;
+        bool insertion_order;   /* a unique list in the order of insertion, not sorted */
 };
 #define UDEV_LIST(list) struct udev_list_node list = { &(list), &(list) }
 void udev_list_node_init(struct udev_list_node *list);
@@ -133,6 +134,7 @@ void udev_list_node_remove(struct udev_list_node *entry);
              node != list; \
              node = tmp, tmp = (tmp)->next)
 void udev_list_init(struct udev *udev, struct udev_list *list, bool unique);
+void udev_list_init_ordered(struct udev *udev, struct udev_list *list);
 void udev_list_cleanup(struct udev_list *list);
 struct udev_list_entry *udev_list_get_entry(struct udev_list *list);
 struct udev_list_entry *udev_list_entry_add(struct udev_list *list, const char *name, const char *value);

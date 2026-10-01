@@ -101,6 +101,15 @@ void udev_list_init(struct udev *udev, struct udev_list *list, bool unique)
         udev_list_node_init(&list->node);
 }
 
+/* A unique list, whose entries are iterated in the order in which they were added, like the
+ * OrderedHashmap of systemd: replacing the value of an entry keeps its place, a new entry is
+ * appended. The entries are still looked up by name in a sorted array. */
+void udev_list_init_ordered(struct udev *udev, struct udev_list *list)
+{
+        udev_list_init(udev, list, true);
+        list->insertion_order = true;
+}
+
 /* insert entry into a list as the last element  */
 static void udev_list_entry_append(struct udev_list_entry *new, struct udev_list *list)
 {
@@ -207,8 +216,8 @@ struct udev_list_entry *udev_list_entry_add(struct udev_list *list, const char *
                 /* the negative i returned the insertion index */
                 i = (-i)-1;
 
-                /* insert into sorted list */
-                if ((unsigned int)i < list->entries_cur)
+                /* insert into sorted list, or append to a list in insertion order */
+                if (!list->insertion_order && (unsigned int)i < list->entries_cur)
                         udev_list_entry_insert_before(entry, list->entries[i]);
                 else
                         udev_list_entry_append(entry, list);
