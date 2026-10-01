@@ -136,8 +136,11 @@ struct uid_gid {
 };
 
 /* The directories of the rules files, in the order of precedence, like CONF_PATHS("udev/rules.d") of
- * systemd: a file in an earlier directory overrides the files with the same name in the later ones. */
-static const char* const rules_dirs[] = {
+ * systemd: a file in an earlier directory overrides the files with the same name in the later ones. Some
+ * of them can be the same directory, e.g. UDEV_RULES_DIR is UDEV_LIBEXEC_DIR "/rules.d", and with
+ * split-usr one of /lib/udev/rules.d and /usr/lib/udev/rules.d is usually one of them too; see
+ * udev_rules_get_dirs(). */
+static const char* const rules_dirs_all[] = {
         UDEV_CONF_DIR "/rules.d",
         UDEV_ROOT_RUN "/udev/rules.d",
         "/usr/local/lib/udev/rules.d",
@@ -149,8 +152,26 @@ static const char* const rules_dirs[] = {
 #endif
         NULL};
 
+/* The directories of rules_dirs_all, each one only once, where it comes first. */
 const char* const* udev_rules_get_dirs(void) {
-        return rules_dirs;
+        static const char *dirs[ELEMENTSOF(rules_dirs_all)];
+        static bool initialized = false;
+        size_t i, j, n = 0;
+
+        if (initialized)
+                return dirs;
+
+        for (i = 0; rules_dirs_all[i]; i++) {
+                for (j = 0; j < n; j++)
+                        if (path_equal(dirs[j], rules_dirs_all[i]))
+                                break;
+                if (j == n)
+                        dirs[n++] = rules_dirs_all[i];
+        }
+        dirs[n] = NULL;
+        initialized = true;
+
+        return dirs;
 }
 
 struct udev_rules {
@@ -2842,7 +2863,7 @@ struct udev_rules *udev_rules_new_full(struct udev *udev, int resolve_names, cha
                         return udev_rules_unref(rules);
         }
 
-        for (d = rules_dirs; *d; d++)
+        for (d = udev_rules_get_dirs(); *d; d++)
                 if (strv_extend(&dirs, *d) < 0)
                         return udev_rules_unref(rules);
 
@@ -2901,7 +2922,7 @@ bool udev_rules_check_timestamp(struct udev_rules *rules) {
         if (!rules)
                 return false;
 
-        return paths_check_timestamp(rules_dirs, &rules->dirs_ts_usec, true);
+        return paths_check_timestamp(udev_rules_get_dirs(), &rules->dirs_ts_usec, true);
 }
 
 /* returns whether the value matches the token's pattern, regardless of the operator */
