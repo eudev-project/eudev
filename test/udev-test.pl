@@ -1852,6 +1852,16 @@ KERNEL=="sda", SYMLINK+="found"
 EOF
         },
         {
+                desc            => "SYSCTL{} of a missing kernel parameter is empty",
+                devpath         => "/devices/pci0000:00/0000:00:1f.2/host0/target0:0:0/0:0:0:0/block/sda",
+                exp_name        => "found",
+                not_exp_name    => "bad",
+                rules           => <<EOF
+KERNEL=="sda", SYSCTL{nonexistent/parameter}=="?*", SYMLINK+="bad"
+KERNEL=="sda", SYSCTL{nonexistent/parameter}!="x", SYSCTL{nonexistent/parameter}=="", SYMLINK+="found"
+EOF
+        },
+        {
                 desc            => "TEST with a mask of 0 is an error",
                 devpath         => "/devices/pci0000:00/0000:00:1f.2/host0/target0:0:0/0:0:0:0/block/sda",
                 exp_name        => "found",

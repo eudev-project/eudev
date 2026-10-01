@@ -241,7 +241,8 @@
           </listitem>
           <term><varname>SYSCTL{<replaceable>kernel parameter</replaceable>}</varname></term>
           <listitem>
-            <para>Match a kernel parameter value.
+            <para>Match a kernel parameter value. Like in systemd, the whitespace around the value
+            is removed, and a kernel parameter that does not exist has an empty value.
             </para>
           </listitem>
         </varlistentry>

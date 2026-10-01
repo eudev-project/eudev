@@ -2941,7 +2941,6 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                 case TK_M_SYSCTL: {
                         char filename[UTIL_PATH_SIZE];
                         _cleanup_free_ char *value = NULL;
-                        size_t len;
 
                         if (!apply_format(event, rules, rule, cur, rules_str(rules, cur->key.attr_off), filename, sizeof(filename),
                                           false, properties_list, "sysctl entry name"))
@@ -2949,16 +2948,13 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                         sysctl_normalize(filename);
                         /* Like systemd, an error other than a missing entry stops the processing of the event. */
                         r = sysctl_read(filename, &value);
-                        if (r == -ENOENT)
-                                goto nomatch;
-                        if (r < 0)
+                        if (r < 0 && r != -ENOENT)
                                 return log_event_error_errno(event, rules, rule, r, "Failed to read sysctl \"%s\": %m",
                                                              filename);
 
-                        len = strlen(value);
-                        while (len > 0 && isspace(value[--len]))
-                                value[len] = '\0';
-                        if (match_key(rules, cur, value) != 0)
+                        /* Like systemd, a missing entry is compared as an empty value, and the whitespace around
+                         * the value is removed. */
+                        if (match_key(rules, cur, value ? strstrip(value) : "") != 0)
                                 goto nomatch;
                         break;
                 }

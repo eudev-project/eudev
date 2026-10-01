@@ -171,7 +171,7 @@ Match the driver name of the event device\&. Only set this key for devices which
 \fIATTR{\fR\fI\fIfilename\fR\fR\fI}\fR, \fISYSCTL{\fR\fI\fIkernel parameter\fR\fR\fI}\fR
 .RS 4
 Match sysfs attribute values of the event device\&. Trailing whitespace in the attribute values is ignored unless the specified match value itself contains trailing whitespace\&.
-Match a kernel parameter value\&.
+Match a kernel parameter value\&. Like in systemd, the whitespace around the value is removed, and a kernel parameter that does not exist has an empty value\&.
 .RE
 .PP
 \fIKERNELS\fR
