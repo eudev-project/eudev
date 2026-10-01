@@ -103,6 +103,35 @@ int udev_device_tag_index(struct udev_device *dev, bool add)
         return r;
 }
 
+/* Restores the tag index after a failed event of the device: removes the entries of the tags that the device
+ * has and the previous state old, e.g. as read from the database before the event, does not have, and adds
+ * the entries of the tags of old again, unless it is NULL. Like udev_device_tag_index(), handles every tag,
+ * and returns the first error. */
+int udev_device_tag_index_restore(struct udev_device *dev, struct udev_device *old)
+{
+        struct udev_list_entry *list_entry;
+        int r = 0, k;
+
+        udev_list_entry_foreach(list_entry, udev_device_get_tags_list_entry(dev)) {
+                const char *tag = udev_list_entry_get_name(list_entry);
+
+                if (old && udev_device_has_tag(old, tag))
+                        continue;
+
+                k = udev_device_tag(dev, tag, false);
+                if (k < 0 && r >= 0)
+                        r = k;
+        }
+
+        if (old) {
+                k = udev_device_tag_index(old, true);
+                if (k < 0 && r >= 0)
+                        r = k;
+        }
+
+        return r;
+}
+
 static bool device_has_info(struct udev_device *udev_device)
 {
         struct udev_list_entry *list_entry;

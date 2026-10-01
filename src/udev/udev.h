@@ -83,6 +83,8 @@ struct udev_event {
         bool run_final;
         /* the database entry was written with ID_PROCESSING=1 before the rules, see event_restore_db() */
         bool dev_db_written;
+        /* the tag index was updated with the tags of the device, see event_restore_db() */
+        bool tags_indexed;
         /* trace logging, i.e. log the processing of each rule: udevd's trace mode (udev.trace,
          * udevadm control --trace=) and 'udevadm test --verbose' */
         bool trace;
