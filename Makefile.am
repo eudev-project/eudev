@@ -37,6 +37,14 @@ bashcompletiondir = @bashcompletiondir@
 zshcompletiondir = @zshcompletiondir@
 
 EXTRA_DIST = \
+	LICENSES/README.md \
+	LICENSES/BSD-3-Clause.txt \
+	LICENSES/CC0-1.0.txt \
+	LICENSES/GPL-2.0-or-later.txt \
+	LICENSES/LGPL-2.0-or-later.txt \
+	LICENSES/LGPL-2.1-or-later.txt \
+	LICENSES/MIT.txt \
+	LICENSES/murmurhash2-public-domain.txt \
 	shell-completion/bash/udevadm \
 	shell-completion/zsh/_udevadm \
 	tools/gen-80-net-name-slot.py
