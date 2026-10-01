@@ -78,22 +78,28 @@ out:
 }
 
 /*
-** Linux only supports 32 bit luns.
-** See drivers/scsi/scsi_scan.c::scsilun_to_int() for more details.
+** The LUN is 64 bits since Linux 3.17: the 1st and 2nd level are in the lower, the 3rd and 4th level in
+** the upper 32 bits. See scsilun_to_int() in drivers/scsi/scsi_common.c.
 */
 static int format_lun_number(struct udev_device *dev, char **path) {
-        unsigned lun;
+        const char *sysnum;
+        uint64_t lun;
         int r;
 
-        r = device_get_sysnum_unsigned(dev, &lun);
+        sysnum = udev_device_get_sysnum(dev);
+        if (!sysnum)
+                return -ENOENT;
+
+        r = safe_atou64_full(sysnum, SAFE_ATO_REFUSE_PLUS_MINUS | SAFE_ATO_REFUSE_LEADING_WHITESPACE | 10, &lun);
         if (r < 0)
                 return r;
 
         /* address method 0, peripheral device addressing with bus id of zero */
         if (lun < 256)
-                return path_prepend(path, "lun-%u", lun);
-        /* handle all other lun addressing methods by using a variant of the original lun format */
-        return path_prepend(path, "lun-0x%04x%04x00000000", lun & 0xffff, (lun >> 16) & 0xffff);
+                return path_prepend(path, "lun-%" PRIu64, lun);
+        /* all other addressing methods: the 8-byte LUN */
+        return path_prepend(path, "lun-0x%04" PRIx64 "%04" PRIx64 "%04" PRIx64 "%04" PRIx64,
+                            lun & 0xffff, (lun >> 16) & 0xffff, (lun >> 32) & 0xffff, lun >> 48);
 }
 
 static struct udev_device *skip_subsystem(struct udev_device *dev, const char *subsys) {
@@ -130,7 +136,10 @@ static struct udev_device *handle_scsi_fibre_channel(struct udev_device *parent,
                 goto out;
         }
 
-        format_lun_number(parent, &lun);
+        if (format_lun_number(parent, &lun) < 0) {
+                parent = NULL;
+                goto out;
+        }
         path_prepend(path, "fc-%s-%s", port, lun);
         if (lun)
                 free(lun);
@@ -165,7 +174,10 @@ static struct udev_device *handle_scsi_sas_wide_port(struct udev_device *parent,
                 goto out;
         }
 
-        format_lun_number(parent, &lun);
+        if (format_lun_number(parent, &lun) < 0) {
+                parent = NULL;
+                goto out;
+        }
         path_prepend(path, "sas-%s-%s", sas_address, lun);
         if (lun)
                 free(lun);
@@ -265,7 +277,10 @@ static struct udev_device *handle_scsi_sas(struct udev_device *parent, char **pa
                  }
         }
 
-        format_lun_number(parent, &lun);
+        if (format_lun_number(parent, &lun) < 0) {
+                parent = NULL;
+                goto out;
+        }
         if (sas_address)
                  path_prepend(path, "sas-exp%s-phy%s-%s", sas_address, phy_id, lun);
         else
@@ -332,7 +347,10 @@ static struct udev_device *handle_scsi_iscsi(struct udev_device *parent, char **
                 goto out;
         }
 
-        format_lun_number(parent, &lun);
+        if (format_lun_number(parent, &lun) < 0) {
+                parent = NULL;
+                goto out;
+        }
         path_prepend(path, "ip-%s:%s-iscsi-%s-%s", addr, port, target, lun);
         if (lun)
                 free(lun);
@@ -506,7 +524,8 @@ static struct udev_device *handle_scsi_hyperv(struct udev_device *parent, char *
         }
         guid[k] = '\0';
 
-        format_lun_number(parent, &lun);
+        if (format_lun_number(parent, &lun) < 0)
+                return NULL;
         path_prepend(path, "vmbus-%s-%s", guid, lun);
         free(lun);
         return parent;
