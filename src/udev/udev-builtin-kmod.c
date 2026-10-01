@@ -81,7 +81,7 @@ static int builtin_kmod(struct udev_device *dev, int argc, char *argv[], enum ud
 
         /* Like systemd, the errors are returned as negative error codes, with the reason. */
         if (argc < 2 || !streq(argv[1], "load"))
-                return log_device_error_errno(dev, EINVAL, "expect: %s load [module...]", argv[0]);
+                return log_device_warning_errno(dev, EINVAL, "%s: expected: load [module…]", argv[0]);
 
         if (!argv[2]) {
                 const char *modalias;
