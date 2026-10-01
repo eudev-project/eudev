@@ -37,196 +37,408 @@
 #include "set.h"
 #include "conf-files.h"
 
-/* Like conf_file_chase_and_verify() of systemd, for the flags that are implemented here: returns
- * -ERFKILL if the file is a mask, another negative error if it is skipped, and 0 if it is listed. */
-static int conf_file_verify(const char *path, ConfFilesFlags flags) {
-        int log_level = FLAGS_SET(flags, CONF_FILES_WARN) ? LOG_WARNING : LOG_DEBUG;
-        struct stat st;
+ConfFile *conf_file_free(ConfFile *c) {
+        if (!c)
+                return NULL;
 
-        if (stat(path, &st) < 0) {
-                int r = -errno;
+        free(c->filename);
+        free(c->result);
+        free(c->original_path);
+        free(c->resolved_path);
+        free(c);
+        return NULL;
+}
 
-                /* A symlink to /dev/null masks the file, also where /dev/null does not exist, e.g.
-                 * below the root directory. */
-                if (r == -ENOENT && FLAGS_SET(flags, CONF_FILES_FILTER_MASKED_BY_SYMLINK)) {
-                        _cleanup_free_ char *target = NULL;
+void conf_file_free_array(ConfFile **files, size_t n_files) {
+        size_t i;
 
-                        if (readlink_malloc(path, &target) >= 0 && path_equal(target, "/dev/null")) {
-                                log_debug("File '%s' is a mask (symlink to /dev/null).", path);
-                                return -ERFKILL;
-                        }
-                }
+        for (i = 0; i < n_files; i++)
+                conf_file_free(files[i]);
+        free(files);
+}
 
-                return log_full_errno(log_level, r, "Failed to chase '%s': %m", path);
-        }
+static int conf_files_log_level(ConfFilesFlags flags) {
+        return FLAGS_SET(flags, CONF_FILES_WARN) ? LOG_WARNING : LOG_DEBUG;
+}
 
-        if (FLAGS_SET(flags, CONF_FILES_FILTER_MASKED_BY_SYMLINK) &&
-            S_ISCHR(st.st_mode) && st.st_rdev == makedev(1, 3)) {
-                log_debug("File '%s' is a mask (symlink to /dev/null).", path);
-                return -ERFKILL;
-        }
+static bool conf_files_need_stat(ConfFilesFlags flags) {
+        return (flags & (CONF_FILES_FILTER_MASKED | CONF_FILES_REGULAR)) != 0;
+}
 
-        if (FLAGS_SET(flags, CONF_FILES_FILTER_MASKED_BY_EMPTY) &&
-            S_ISREG(st.st_mode) && st.st_size <= 0) {
-                log_debug("File '%s' is a mask (an empty file).", path);
-                return -ERFKILL;
-        }
-
-        if (FLAGS_SET(flags, CONF_FILES_REGULAR) && !S_ISREG(st.st_mode))
-                return log_debug_errno(S_ISDIR(st.st_mode) ? EISDIR : EBADFD,
-                                       "File '%s' is not a regular file: %m", path);
+static ChaseFlags conf_files_chase_flags(ConfFilesFlags flags) {
+        /* Like systemd: a file that is not checked may be missing, and a symlink to /dev/null is a
+         * mask also where /dev/null does not exist, e.g. below the root directory. */
+        if (!conf_files_need_stat(flags) || FLAGS_SET(flags, CONF_FILES_FILTER_MASKED_BY_SYMLINK))
+                return CHASE_NONEXISTENT;
 
         return 0;
 }
 
-static int files_add(Hashmap *h, Set *masked, const char *root, const char *path, const char *suffix, ConfFilesFlags flags) {
-        _cleanup_closedir_ DIR *dir = NULL;
-        char *dirpath;
+/* The absolute path below root of path, which is prefixed with root. */
+static const char *skip_root(const char *root, const char *path) {
+        const char *p = root ? path_startswith(path, root) : NULL;
 
-        assert(path);
-        assert(suffix);
+        if (!p)
+                return path;
 
-        dirpath = strjoina(root ? root : "", path);
+        /* path_startswith() returns the rest after the slash, keep the slash */
+        return p > path && p[-1] == '/' ? p - 1 : p;
+}
 
-        dir = opendir(dirpath);
-        if (!dir) {
-                if (errno == ENOENT)
-                        return 0;
-                return -errno;
+static int conf_file_mask(Set *masked, const char *name, const char *original_path, const char *what) {
+        int r;
+
+        /* the files with this name in the later directories are masked too */
+        if (masked) {
+                r = set_put_strdup(masked, name);
+                if (r < 0)
+                        return r;
         }
 
+        log_debug("File '%s' is a mask (%s).", original_path, what);
+        return -ERFKILL;
+}
+
+/* Like systemd's conf_file_chase_and_verify(): resolves the symlinks of path below root, and checks the
+ * file as flags ask. Returns 0 and the resolved path, prefixed with root, if the file is listed,
+ * -ERFKILL if it is a mask, after adding name to masked, or another negative errno if it is skipped.
+ * original_path is the path as found, prefixed with root, for the messages. */
+static int conf_file_chase_and_verify(const char *root, const char *original_path, const char *path,
+                                      const char *name, Set *masked, ConfFilesFlags flags,
+                                      char **ret_resolved) {
+        _cleanup_free_ char *resolved = NULL;
+        int log_level = conf_files_log_level(flags);
+        struct stat st;
+        int r;
+
+        r = chase(path, root, conf_files_chase_flags(flags), &resolved);
+        if (r < 0)
+                return log_full_errno(log_level, r, "Failed to chase '%s': %m", original_path);
+        if (r == 0) {
+                if (FLAGS_SET(flags, CONF_FILES_FILTER_MASKED_BY_SYMLINK) &&
+                    path_equal(skip_root(root, resolved), "/dev/null"))
+                        return conf_file_mask(masked, name, original_path, "symlink to /dev/null");
+
+                if (conf_files_need_stat(flags))
+                        return log_full_errno(log_level, ENOENT, "Failed to chase '%s': %m", original_path);
+        } else if (conf_files_need_stat(flags)) {
+                if (stat(resolved, &st) < 0)
+                        return log_full_errno(log_level, errno, "Failed to stat '%s': %m", original_path);
+
+                if (FLAGS_SET(flags, CONF_FILES_FILTER_MASKED_BY_SYMLINK) &&
+                    S_ISCHR(st.st_mode) && st.st_rdev == makedev(1, 3))
+                        return conf_file_mask(masked, name, original_path, "symlink to /dev/null");
+
+                if (FLAGS_SET(flags, CONF_FILES_FILTER_MASKED_BY_EMPTY) &&
+                    S_ISREG(st.st_mode) && st.st_size <= 0)
+                        return conf_file_mask(masked, name, original_path, "an empty file");
+
+                if (FLAGS_SET(flags, CONF_FILES_REGULAR) && !S_ISREG(st.st_mode))
+                        return log_debug_errno(S_ISDIR(st.st_mode) ? EISDIR : EBADFD,
+                                               "File '%s' is not a regular file: %m", original_path);
+        }
+
+        if (ret_resolved)
+                *ret_resolved = TAKE_PTR(resolved);
+        return 0;
+}
+
+static ConfFile *conf_file_make(const char *filename, char **result, char **original_path, char **resolved_path) {
+        ConfFile *c;
+
+        c = new0(ConfFile, 1);
+        if (!c)
+                return NULL;
+
+        c->filename = strdup(filename);
+        if (!c->filename)
+                return conf_file_free(c);
+
+        c->result = TAKE_PTR(*result);
+        c->original_path = TAKE_PTR(*original_path);
+        c->resolved_path = TAKE_PTR(*resolved_path);
+        return c;
+}
+
+int conf_file_new(const char *path, const char *root, ConfFilesFlags flags, ConfFile **ret) {
+        _cleanup_free_ char *path_abs = NULL, *p = NULL, *dirpath = NULL, *resolved_dirpath = NULL,
+                *original_path = NULL, *result = NULL, *resolved_path = NULL;
+        int log_level = conf_files_log_level(flags);
+        const char *filename, *e;
+        ConfFile *c;
+        int r;
+
+        assert(path);
+        assert(ret);
+
+        if (empty_or_root(root))
+                root = NULL;
+
+        /* Like systemd: without root, a relative path is relative to the current directory, with root
+         * relative to root. */
+        if (!root && !path_is_absolute(path)) {
+                path_abs = path_make_absolute_cwd(path);
+                if (!path_abs)
+                        return log_oom();
+                path = path_abs;
+        }
+
+        p = strdup(path);
+        original_path = prefix_root(root, path);
+        if (!p || !original_path)
+                return log_oom();
+        path_simplify(p);
+        path_simplify(original_path);
+
+        e = strrchr(p, '/');
+        filename = e ? e + 1 : p;
+        dirpath = e ? strndup(p, e - p) : strdup("");
+        if (!dirpath)
+                return log_oom();
+
+        /* "/" and "..", which have no file name, are directories */
+        if (isempty(filename) || streq(filename, ".."))
+                return log_debug_errno(EISDIR, "File '%s' is not a regular file: %m", original_path);
+
+        r = chase(dirpath, root, conf_files_chase_flags(flags), &resolved_dirpath);
+        if (r < 0) {
+                _cleanup_free_ char *d = prefix_root(root, isempty(dirpath) ? "/" : dirpath);
+
+                return log_full_errno(log_level, r, "Failed to chase '%s': %m", d ? path_simplify(d) : dirpath);
+        }
+
+        result = strjoin(resolved_dirpath, "/", filename, NULL);
+        if (!result)
+                return log_oom();
+        path_simplify(result);
+
+        r = conf_file_chase_and_verify(root, original_path, skip_root(root, result), filename,
+                                       NULL, flags, &resolved_path);
+        if (r < 0)
+                return r;
+
+        c = conf_file_make(filename, &result, &original_path, &resolved_path);
+        if (!c)
+                return log_oom();
+
+        *ret = c;
+        return 0;
+}
+
+static void conf_file_hashmap_free(Hashmap *h) {
+        ConfFile *c;
+
+        while ((c = hashmap_steal_first(h)))
+                conf_file_free(c);
+        hashmap_free(h);
+}
+
+/* original_dirpath is the directory as given and resolved_dirpath with symlinks resolved, both prefixed
+ * with root. */
+static int files_add(Hashmap *h, Set *masked, DIR *dir, const char *root, const char *original_dirpath,
+                     const char *resolved_dirpath, const char *suffix, ConfFilesFlags flags) {
+        int log_level = conf_files_log_level(flags);
+
         for (;;) {
+                _cleanup_free_ char *original_path = NULL, *result = NULL, *resolved_path = NULL;
                 struct dirent *de;
-                char *p;
+                ConfFile *c;
                 int r;
 
                 errno = 0;
                 de = readdir(dir);
-                if (!de && errno != 0)
-                        return -errno;
-
-                if (!de)
+                if (!de) {
+                        if (errno != 0)
+                                return log_full_errno(log_level, errno, "Failed to read directory '%s': %m",
+                                                      original_dirpath);
                         break;
+                }
 
-                if (!dirent_is_file_with_suffix(de, suffix))
+                /* Without checks, only regular files and symlinks are listed, as before. With checks,
+                 * all files, so that e.g. a FIFO is skipped with a message, like systemd. */
+                if (flags == 0 ? !dirent_is_file_with_suffix(de, suffix) :
+                                 hidden_file(de->d_name) || !endswith(de->d_name, suffix))
                         continue;
 
-                p = strjoin(dirpath, "/", de->d_name, NULL);
-                if (!p)
+                original_path = strjoin(original_dirpath, "/", de->d_name, NULL);
+                result = strjoin(resolved_dirpath, "/", de->d_name, NULL);
+                if (!original_path || !result)
                         return -ENOMEM;
 
                 /* Like systemd: a file of an earlier directory overrides the files with the same name, a
                  * mask masks them, and a file that is neither listed nor a mask, e.g. one that is not a
                  * regular file, does not hide them. */
-                if (flags & (CONF_FILES_FILTER_MASKED | CONF_FILES_REGULAR)) {
-                        if (hashmap_contains(h, de->d_name)) {
-                                log_debug("Skipping overridden file: %s.", p);
-                                free(p);
-                                continue;
-                        }
-
-                        if (set_contains(masked, de->d_name)) {
-                                log_debug("File '%s' is masked by previous entry.", p);
-                                free(p);
-                                continue;
-                        }
-
-                        r = conf_file_verify(p, flags);
-                        if (r < 0) {
-                                free(p);
-
-                                if (r == -ERFKILL) {
-                                        r = set_put_strdup(masked, de->d_name);
-                                        if (r < 0)
-                                                return r;
-                                }
-                                continue;
-                        }
+                if (hashmap_contains(h, de->d_name)) {
+                        log_debug("Skipping overridden file '%s'.", original_path);
+                        continue;
                 }
 
-                r = hashmap_put(h, eudev_basename(p), p);
-                if (r == -EEXIST) {
-                        log_debug("Skipping overridden file: %s.", p);
-                        free(p);
-                } else if (r < 0) {
-                        free(p);
+                if (masked && set_contains(masked, de->d_name)) {
+                        log_debug("File '%s' is masked by previous entry.", original_path);
+                        continue;
+                }
+
+                if (flags != 0) {
+                        r = conf_file_chase_and_verify(root, original_path, skip_root(root, result),
+                                                       de->d_name, masked, flags, &resolved_path);
+                        if (r == -ENOMEM)
+                                return r;
+                        if (r < 0)
+                                continue;
+                } else {
+                        resolved_path = strdup(result);
+                        if (!resolved_path)
+                                return -ENOMEM;
+                }
+
+                c = conf_file_make(de->d_name, &result, &original_path, &resolved_path);
+                if (!c)
+                        return -ENOMEM;
+
+                r = hashmap_put(h, c->filename, c);
+                if (r < 0) {
+                        conf_file_free(c);
                         return r;
-                } else if (r == 0) {
-                        log_debug("Duplicate file %s", p);
-                        free(p);
                 }
         }
 
         return 0;
 }
 
-static int base_cmp(const void *a, const void *b) {
-        const char *s1, *s2;
+static int conf_file_cmp(const void *a, const void *b) {
+        const ConfFile *c1 = *(ConfFile * const *) a, *c2 = *(ConfFile * const *) b;
 
-        s1 = *(char * const *)a;
-        s2 = *(char * const *)b;
-        return strcmp(eudev_basename(s1), eudev_basename(s2));
+        return strcmp(c1->filename, c2->filename);
 }
 
-static int conf_files_list_strv_internal(char ***strv, const char *suffix, const char *root, ConfFilesFlags flags, char **dirs) {
-        _cleanup_hashmap_free_ Hashmap *fh = NULL;
+/* Like systemd's conf_files_list_impl() and dump_files(): the files of dirs, below root, sorted by
+ * their names. A directory that is missing is ignored, as is one that cannot be read, after a
+ * message. */
+static int conf_files_list_impl(const char *suffix, const char *root, ConfFilesFlags flags,
+                                const char * const *dirs, ConfFile ***ret_files, size_t *ret_n_files) {
+        _cleanup_strv_free_ char **resolved_dirs = NULL;
         _cleanup_set_free_free_ Set *masked = NULL;
-        char **files, **p;
-        int r;
+        int log_level = conf_files_log_level(flags);
+        const char * const *d;
+        Hashmap *h;
+        ConfFile **files, *c;
+        size_t n = 0;
+        int r = 0;
 
-        assert(strv);
         assert(suffix);
+        assert(ret_files);
+        assert(ret_n_files);
 
-        /* This alters the dirs string array */
-        if (!path_strv_resolve_uniq(dirs, root))
-                return -ENOMEM;
+        if (empty_or_root(root))
+                root = NULL;
 
-        fh = hashmap_new(&string_hash_ops);
-        if (!fh)
+        h = hashmap_new(&string_hash_ops);
+        if (!h)
                 return -ENOMEM;
 
         /* the names of the masked files */
         if (flags & CONF_FILES_FILTER_MASKED) {
                 masked = set_new(&string_hash_ops);
-                if (!masked)
-                        return -ENOMEM;
+                if (!masked) {
+                        r = -ENOMEM;
+                        goto finish;
+                }
         }
 
-        STRV_FOREACH(p, dirs) {
-                r = files_add(fh, masked, root, *p, suffix, flags);
-                if (r == -ENOMEM) {
-                        return r;
-                } else if (r < 0)
-                        log_debug("Failed to search for files in %s: %s",
-                                  *p, strerror(-r));
+        STRV_FOREACH(d, dirs) {
+                _cleanup_free_ char *resolved_dirpath = NULL, *original_dirpath = NULL;
+                _cleanup_closedir_ DIR *dir = NULL;
+
+                /* like path_strv_resolve() before, relative directories are ignored */
+                if (!path_is_absolute(*d))
+                        continue;
+
+                original_dirpath = prefix_root(root, *d);
+                if (!original_dirpath) {
+                        r = -ENOMEM;
+                        goto finish;
+                }
+                path_simplify(original_dirpath);
+
+                /* The directory is resolved below root, like the files in it. A directory that is the same
+                 * as an earlier one, e.g. through a symlink, is read only once. */
+                r = chase(*d, root, 0, &resolved_dirpath);
+                if (r >= 0 && strv_contains(resolved_dirs, resolved_dirpath))
+                        continue;
+                if (r >= 0) {
+                        dir = opendir(resolved_dirpath);
+                        if (!dir)
+                                r = -errno;
+                }
+                if (r == -ENOMEM)
+                        goto finish;
+                if (r == -ENOENT)
+                        continue;
+                if (r < 0) {
+                        log_full_errno(log_level, r, "Failed to chase and open directory '%s', ignoring: %m",
+                                       original_dirpath);
+                        continue;
+                }
+
+                r = strv_extend(&resolved_dirs, resolved_dirpath);
+                if (r < 0)
+                        goto finish;
+
+                r = files_add(h, masked, dir, root, original_dirpath, resolved_dirpath, suffix, flags);
+                if (r == -ENOMEM)
+                        goto finish;
         }
 
-        files = hashmap_get_strv(fh);
-        if (files == NULL) {
+        files = new(ConfFile*, hashmap_size(h) + 1);
+        if (!files) {
+                r = -ENOMEM;
+                goto finish;
+        }
+
+        while ((c = hashmap_steal_first(h)))
+                files[n++] = c;
+
+        qsort_safe(files, n, sizeof(ConfFile*), conf_file_cmp);
+        *ret_files = files;
+        *ret_n_files = n;
+        r = 0;
+
+finish:
+        conf_file_hashmap_free(h);
+        return r;
+}
+
+int conf_files_list_strv_full(const char *suffix, const char *root, ConfFilesFlags flags,
+                              const char * const *dirs, ConfFile ***ret_files, size_t *ret_n_files) {
+        return conf_files_list_impl(suffix, root, flags, dirs, ret_files, ret_n_files);
+}
+
+int conf_files_list_strv(char ***ret, const char *suffix, const char *root, ConfFilesFlags flags,
+                         const char * const *dirs) {
+        ConfFile **files = NULL;
+        char **l;
+        size_t n = 0, i;
+        int r;
+
+        assert(ret);
+
+        r = conf_files_list_impl(suffix, root, flags, dirs, &files, &n);
+        if (r < 0)
+                return r;
+
+        l = new0(char*, n + 1);
+        if (!l) {
+                conf_file_free_array(files, n);
                 return -ENOMEM;
         }
 
-        qsort_safe(files, hashmap_size(fh), sizeof(char *), base_cmp);
-        *strv = files;
+        /* like systemd, the path in the directory with the symlinks of the directory resolved */
+        for (i = 0; i < n; i++)
+                l[i] = TAKE_PTR(files[i]->result);
 
+        conf_file_free_array(files, n);
+        *ret = l;
         return 0;
-}
-
-int conf_files_list_strv_full(char ***strv, const char *suffix, const char *root, ConfFilesFlags flags, const char* const* dirs) {
-        _cleanup_strv_free_ char **copy = NULL;
-
-        assert(strv);
-        assert(suffix);
-
-        copy = strv_copy((char**) dirs);
-        if (!copy)
-                return -ENOMEM;
-
-        return conf_files_list_strv_internal(strv, suffix, root, flags, copy);
-}
-
-int conf_files_list_strv(char ***strv, const char *suffix, const char *root, const char* const* dirs) {
-        return conf_files_list_strv_full(strv, suffix, root, 0, dirs);
 }
 
 /* Copy every non-empty path element from path_variable to
@@ -287,5 +499,5 @@ int conf_files_list_strv_path(char ***strv, const char *suffix, const char *root
 
         assert (error == path_length);
 
-        return conf_files_list_strv_internal(strv, suffix, root, flags, copy);
+        return conf_files_list_strv(strv, suffix, root, flags, (const char * const *) copy);
 }

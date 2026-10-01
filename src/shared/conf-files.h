@@ -20,6 +20,8 @@
 
 #pragma once
 
+#include <stddef.h>
+
 #include "macro.h"
 
 /* The flags of systemd's conf_files_list_strv_full(), as far as they are implemented. */
@@ -31,6 +33,28 @@ typedef enum ConfFilesFlags {
         CONF_FILES_WARN                     = 1 << 7, /* warn on some errors */
 } ConfFilesFlags;
 
-int conf_files_list_strv(char ***strv, const char *suffix, const char *root, const char* const* dirs);
-int conf_files_list_strv_full(char ***strv, const char *suffix, const char *root, ConfFilesFlags flags, const char* const* dirs);
+/* Like systemd's ConfFile, without the file descriptor: a file found in a configuration directory. The
+ * paths are prefixed with the root directory, if one is given. */
+typedef struct ConfFile {
+        char *filename;      /* the name of the file, which orders the files and overrides the same name */
+        char *result;        /* the path with the symlinks of the directory resolved */
+        char *original_path; /* the path as found in the directory, without resolving symlinks */
+        char *resolved_path; /* the path with all symlinks resolved */
+} ConfFile;
+
+ConfFile *conf_file_free(ConfFile *c);
+void conf_file_free_array(ConfFile **files, size_t n_files);
+
+/* Like systemd's conf_file_new(): the file path, below root, checked as flags ask. Returns -ERFKILL
+ * for a mask, -ENOENT if it does not exist, -EISDIR for a directory, -EBADFD for another file that is
+ * not a regular file, with CONF_FILES_REGULAR, or another negative errno. */
+int conf_file_new(const char *path, const char *root, ConfFilesFlags flags, ConfFile **ret);
+
+/* Like systemd's conf_files_list_strv() and conf_files_list_strv_full(): the files with the suffix in
+ * the directories dirs, below root, sorted by name, where a file overrides the files with the same
+ * name in later directories, and with CONF_FILES_FILTER_MASKED a mask, i.e. a symlink to /dev/null or
+ * an empty file, masks them. conf_files_list_strv() returns the paths in ConfFile.result. */
+int conf_files_list_strv(char ***ret, const char *suffix, const char *root, ConfFilesFlags flags, const char * const *dirs);
+int conf_files_list_strv_full(const char *suffix, const char *root, ConfFilesFlags flags, const char * const *dirs,
+                              ConfFile ***ret_files, size_t *ret_n_files);
 int conf_files_list_strv_path(char ***strv, const char *suffix, const char *root, ConfFilesFlags flags, const char* path);

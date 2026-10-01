@@ -403,7 +403,7 @@ static int search_rules_file(const char *s, const char *root, char ***names, cha
                 const char *dirs[] = { path, NULL };
                 char **f;
 
-                r = conf_files_list_strv(&files, ".rules", NULL, dirs);
+                r = conf_files_list_strv(&files, ".rules", NULL, 0, dirs);
                 if (r < 0)
                         return log_error_errno(r, "Failed to enumerate rules files in '%s': %m", name);
 
@@ -446,7 +446,7 @@ int search_rules_files(char * const *args, const char *root, char ***ret_names, 
                 _cleanup_strv_free_ char **files = NULL;
                 char **f;
 
-                r = conf_files_list_strv(&files, ".rules", isempty(root_prefix(root)) ? NULL : root, udev_rules_get_dirs());
+                r = conf_files_list_strv(&files, ".rules", isempty(root_prefix(root)) ? NULL : root, 0, udev_rules_get_dirs());
                 if (r < 0)
                         return log_error_errno(r, "Failed to enumerate rules files: %m");
 

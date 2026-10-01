@@ -2958,8 +2958,8 @@ struct udev_rules *udev_rules_new_full(struct udev *udev, int resolve_names, cha
         /* Like udev_rules_load() of systemd: only regular files are read, and masks, i.e. empty files and
          * symlinks to /dev/null, hide the files with the same name in the later directories; anything
          * else, e.g. a directory, a dangling symlink or a FIFO, is skipped and does not hide them. */
-        r = conf_files_list_strv_full(&files, ".rules", NULL, CONF_FILES_REGULAR | CONF_FILES_FILTER_MASKED,
-                                      (const char* const*) dirs);
+        r = conf_files_list_strv(&files, ".rules", NULL, CONF_FILES_REGULAR | CONF_FILES_FILTER_MASKED,
+                                 (const char* const*) dirs);
         if (r < 0) {
                 log_error_errno(r, "failed to enumerate rules files: %m");
                 return udev_rules_unref(rules);
