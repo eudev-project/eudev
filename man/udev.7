@@ -63,7 +63,16 @@ A line that ends with a backslash (\e) is continued on the next line: the backsl
 #
 are ignored also between the lines of a continued rule\&. A rule that is still continued at the end of the file, or that is longer than 16383 characters, is ignored with an error message; the other rules of the file are still read\&. The messages about a rule name the rules file and the first line of the rule\&.
 .PP
-A matching rule may rename a network interface, add symlinks pointing to the device node, or run a specified program as part of the event handling\&.
+A matching rule may rename a network interface, add symlinks pointing to the device node, or run a specified program as part of the event handling\&. Like in systemd,
+\fINAME\fR
+is ignored with a warning for a device that is neither a network interface nor has a device node, and
+\fISYMLINK\fR
+is ignored for a device without a device node; the other keys of the rule line still apply\&.
+\fIOWNER\fR,
+\fIGROUP\fR
+and
+\fIMODE\fR
+have no effect on such a device\&.
 .PP
 A rule consists of a comma\-separated list of one or more key\-value pairs\&. Each key has a distinct operation, depending on the used operator\&. Some keys take an attribute in braces right after the key name, like
 \fIATTR{\fR\fI\fIfilename\fR\fR\fI}\fR; the attribute may contain any character except

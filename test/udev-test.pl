@@ -1894,6 +1894,16 @@ KERNEL=="sda", OWNER="\$env{NOSUCH}", GROUP="\$env{NOSUCH}"
 EOF
         },
         {
+                desc            => "keys that do not apply to the device are ignored, the rest of the rule line applies",
+                devpath         => "/devices/pci0000:00/0000:00:1f.2",
+                exp_name        => "found",
+                exp_rem_error   => "yes",
+                option          => "clean",
+                rules           => <<EOF
+KERNEL=="0000:00:1f.2", ACTION=="add", NAME="x", SYMLINK+="y", OWNER="1", GROUP="1", MODE="0666", RUN+="/bin/ln -s null /dev/found"
+EOF
+        },
+        {
                 desc            => "an IMPORT{file} error stops the processing of the event",
                 devpath         => "/devices/pci0000:00/0000:00:1f.2/host0/target0:0:0/0:0:0:0/block/sda",
                 exp_name        => "sda",

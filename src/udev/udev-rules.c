@@ -3165,16 +3165,11 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
         struct token *cur;
         struct token *rule;
         enum escape_type esc = ESCAPE_UNSET;
-        bool can_set_name;
         bool ok;
         int r;
 
         if (rules->tokens == NULL)
                 return 0;
-
-        can_set_name = ((!streq(udev_device_get_action(event->dev), "remove")) &&
-                        (major(udev_device_get_devnum(event->dev)) > 0 ||
-                         udev_device_get_ifindex(event->dev) > 0));
 
         /* loop through token list, match, run actions or forward to next rule */
         cur = &rules->tokens[0];
@@ -3185,9 +3180,6 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                 case TK_RULE:
                         /* current rule */
                         rule = cur;
-                        /* possibly skip rules which want to set NAME, SYMLINK, OWNER, GROUP, MODE */
-                        if (!can_set_name && rule->rule.can_set_name)
-                                goto nomatch;
                         esc = ESCAPE_UNSET;
                         break;
                 case TK_M_ACTION:
@@ -3850,6 +3842,12 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                                 break;
                         if (cur->key.op == OP_ASSIGN_FINAL)
                                 event->name_final = true;
+                        /* Like systemd, ignore NAME for a device that is neither a network interface nor has a
+                         * device node; the name of a device node is checked below. */
+                        if (udev_device_get_ifindex(event->dev) <= 0 && major(udev_device_get_devnum(event->dev)) == 0) {
+                                log_event_warning(event, rules, rule, cur, "Only network interfaces can be renamed, ignoring.");
+                                break;
+                        }
                         if (!apply_format(event, rules, rule, cur, name, name_str, sizeof(name_str), false, properties_list,
                                           udev_device_get_ifindex(event->dev) > 0 ? "network interface name" : "device name"))
                                 break;
@@ -3892,8 +3890,11 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
 
                         if (event->devlink_final)
                                 break;
-                        if (major(udev_device_get_devnum(event->dev)) == 0)
+                        if (major(udev_device_get_devnum(event->dev)) == 0) {
+                                log_event_debug(event, rules, rule, cur,
+                                                "Device does not have device node, ignoring to manage device node symlink.");
                                 break;
+                        }
                         if (cur->key.op == OP_ASSIGN_FINAL)
                                 event->devlink_final = true;
                         if (cur->key.op == OP_ASSIGN || cur->key.op == OP_ASSIGN_FINAL)
