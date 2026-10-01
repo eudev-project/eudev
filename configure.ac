@@ -193,8 +193,6 @@ AC_SUBST([udevhwdbbin],[${udevconfdir}/hwdb.bin])
 # udevlibexecdir paths
 # the shipped hwdb files, like in systemd; ${udevconfdir}/hwdb.d is the directory of the administrator
 AC_SUBST([udevhwdbdir],[${udevlibexecdir}/hwdb.d])
-AC_SUBST([udevkeymapdir],[${udevlibexecdir}/keymaps])
-AC_SUBST([udevkeymapforceredir],[${udevkeymapdir}/force-release])
 AC_SUBST([udevrulesdir],[${udevlibexecdir}/rules.d])
 
 # pkgconfigdir paths
@@ -556,8 +554,6 @@ summary_udevconffile=`expand_dir "$udevconffile"`
 summary_udevhwdbdir=`expand_dir "$udevhwdbdir"`
 summary_udevhwdbbin=`expand_dir "$udevhwdbbin"`
 summary_udevlibexecdir=`expand_dir "$udevlibexecdir"`
-summary_udevkeymapdir=`expand_dir "$udevkeymapdir"`
-summary_udevkeymapforceredir=`expand_dir "$udevkeymapforceredir"`
 summary_udevrulesdir=`expand_dir "$udevrulesdir"`
 summary_pkgconfiglibdir=`expand_dir "$pkgconfiglibdir"`
 summary_sharepkgconfigdir=`expand_dir "$sharepkgconfigdir"`
@@ -584,8 +580,6 @@ AC_MSG_RESULT([
 	udevhwdbdir:             ${summary_udevhwdbdir}
 	udevhwdbbin:             ${summary_udevhwdbbin}
 	udevlibexecdir:          ${summary_udevlibexecdir}
-	udevkeymapdir:           ${summary_udevkeymapdir}
-	udevkeymapforceredir:    ${summary_udevkeymapforceredir}
 	udevrulesdir:            ${summary_udevrulesdir}
 
 	pkgconfiglibdir:         ${summary_pkgconfiglibdir}
@@ -605,15 +599,3 @@ AC_MSG_RESULT([
 	bashcompletiondir:       ${summary_bashcompletiondir}
 	zshcompletiondir:        ${summary_zshcompletiondir}
 ])
-
-# ------------------------------------------------------------------------------
-
-dnl Set configured scripts executable
-if test -f  src/keymap/check-keymaps.sh; then
-	chmod +x src/keymap/check-keymaps.sh
-fi
-
-if test -f src/keymap/keyboard-force-release.sh; then
-	chmod +x src/keymap/keyboard-force-release.sh
-fi
-
