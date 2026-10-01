@@ -24,6 +24,7 @@
 #include <unistd.h>
 #include <errno.h>
 #include <dirent.h>
+#include <limits.h>
 #include <fcntl.h>
 #include <getopt.h>
 #include <signal.h>
@@ -46,7 +47,7 @@ static void help(void) {
                "Wait for pending udev events.\n\n"
                "  -h --help                 Show this help\n"
                "  -V --version              Show package version\n"
-               "  -t --timeout=SECONDS      Maximum time to wait for events\n"
+               "  -t --timeout=SEC          Maximum time to wait for events\n"
                "  -E --exit-if-exists=FILE  Stop waiting if file exists\n"
                , program_invocation_short_name);
         print_man_page_link();
@@ -63,9 +64,8 @@ static int adm_settle(struct udev *udev, int argc, char *argv[]) {
                 { "quiet",          no_argument,       NULL, 'q' }, /* removed */
                 {}
         };
-        usec_t deadline;
+        usec_t deadline, timeout_usec = 120 * USEC_PER_SEC;
         const char *exists = NULL;
-        unsigned int timeout = 120;
         struct pollfd pfd[1] = { {.fd = -1}, };
         int c;
         struct udev_queue *queue;
@@ -77,12 +77,13 @@ static int adm_settle(struct udev *udev, int argc, char *argv[]) {
                 case 't': {
                         int r;
 
-                        r = safe_atou(optarg, &timeout);
+                        /* Like systemd, units are accepted, e.g. "500ms", the default unit is seconds,
+                         * and "infinity" waits without a limit. */
+                        r = parse_sec(optarg, &timeout_usec);
                         if (r < 0) {
-                                fprintf(stderr, "Invalid timeout value '%s': %s\n",
-                                        optarg, strerror(-r));
-                                exit(EXIT_FAILURE);
-                        };
+                                log_error_errno(r, "Failed to parse timeout value '%s': %m", optarg);
+                                return EXIT_FAILURE;
+                        }
                         break;
                 }
 
@@ -121,7 +122,7 @@ static int adm_settle(struct udev *udev, int argc, char *argv[]) {
                 return 0;
         }
 
-        deadline = now(CLOCK_MONOTONIC) + timeout * USEC_PER_SEC;
+        deadline = usec_add(now(CLOCK_MONOTONIC), timeout_usec);
 
         /* guarantee that the udev daemon isn't pre-processing */
         if (getuid() == 0) {
@@ -129,7 +130,17 @@ static int adm_settle(struct udev *udev, int argc, char *argv[]) {
 
                 uctrl = udev_ctrl_new(udev);
                 if (uctrl != NULL) {
-                        if (udev_ctrl_send_ping(uctrl, MAX(5U, timeout)) < 0) {
+                        usec_t ping_usec = MAX(5 * USEC_PER_SEC, timeout_usec);
+                        int ping_timeout;
+
+                        /* The control socket takes the timeout in seconds, round up, and -1 waits
+                         * without a limit. */
+                        if (ping_usec == USEC_INFINITY || ping_usec / USEC_PER_SEC >= INT_MAX / MSEC_PER_SEC)
+                                ping_timeout = -1;
+                        else
+                                ping_timeout = (ping_usec + USEC_PER_SEC - 1) / USEC_PER_SEC;
+
+                        if (udev_ctrl_send_ping(uctrl, ping_timeout) < 0) {
                                 log_debug("no connection to daemon");
                                 udev_ctrl_unref(uctrl);
                                 return EXIT_SUCCESS;
@@ -153,6 +164,8 @@ static int adm_settle(struct udev *udev, int argc, char *argv[]) {
         }
 
         for (;;) {
+                usec_t n;
+
                 if (exists && access(exists, F_OK) >= 0) {
                         rc = EXIT_SUCCESS;
                         break;
@@ -164,11 +177,14 @@ static int adm_settle(struct udev *udev, int argc, char *argv[]) {
                         break;
                 }
 
-                if (now(CLOCK_MONOTONIC) >= deadline)
+                n = now(CLOCK_MONOTONIC);
+                if (n >= deadline)
                         break;
 
-                /* wake up when queue is empty */
-                if (poll(pfd, 1, MSEC_PER_SEC) > 0 && pfd[0].revents & POLLIN)
+                /* wake up when queue is empty, at least every second, and at the deadline, which may
+                 * be less than a second away */
+                if (poll(pfd, 1, (int) MIN(MSEC_PER_SEC, (deadline - n + USEC_PER_MSEC - 1) / USEC_PER_MSEC)) > 0 &&
+                    pfd[0].revents & POLLIN)
                         udev_queue_flush(queue);
         }
 
