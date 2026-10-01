@@ -367,21 +367,14 @@ static int check_format(const char *value, size_t *ret_offset, const char **ret_
                 }
 
                 if (subst_map[i].fmt == 'c' && !isempty(attr)) {
-                        _cleanup_free_ char *n = strdup(attr);
                         unsigned u;
-                        size_t len;
 
-                        if (!n)
-                                return log_oom();
-
-                        /* a number, optionally followed by '+' */
-                        len = strlen(n);
-                        if (len > 0 && n[len - 1] == '+')
-                                n[len - 1] = '\0';
-                        if (safe_atou(n, &u) < 0) {
+                        /* a number, optionally followed by '+', like the substitution takes it */
+                        r = safe_atou_optional_plus(attr, &u);
+                        if (r < 0) {
                                 *ret_offset = s - value;
                                 *ret_hint = "attribute value not a valid number";
-                                return -EINVAL;
+                                return r;
                         }
                 }
         }

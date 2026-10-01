@@ -809,11 +809,13 @@ The kernel minor number for the device\&.
 \fB$result\fR, \fB%c\fR
 .RS 4
 The string returned by the external program requested with
-\fIPROGRAM\fR\&. A single part of the string, separated by a space character, may be selected by specifying the part number as an attribute:
+\fIPROGRAM\fR\&. A single part of the string, separated by whitespace, may be selected by specifying the part number as an attribute:
 %c{N}\&. If the number is followed by the
 +
 character, this part plus all remaining parts of the result string are substituted:
-%c{N+}\&.
+%c{N+}\&. Like in systemd, the parts are counted from 1, after leading whitespace, and 0 selects the whole string; a part number that is not a number is an error, which stops the substitution with a warning, and which
+\fBudevadm verify\fR
+reports\&.
 .RE
 .PP
 \fB$parent\fR, \fB%P\fR

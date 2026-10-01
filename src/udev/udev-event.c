@@ -108,6 +108,26 @@ const char *udev_event_get_property_value_with_fallback(struct udev_device *dev,
         return udev_list_entry_get_value(entry);
 }
 
+/* Like safe_atou_optional_plus() of systemd: parses the index of $result{N} and %c{N}, which may be followed
+ * by '+'. Returns 1 with '+', 0 without, and a negative error for an invalid index. */
+int safe_atou_optional_plus(const char *s, unsigned *ret) {
+        const char *p;
+        int r;
+
+        assert(s);
+        assert(ret);
+
+        p = endswith(s, "+");
+        if (p)
+                s = strndupa_safe(s, p - s);
+
+        r = safe_atou(s, ret);
+        if (r < 0)
+                return r;
+
+        return !!p;
+}
+
 size_t udev_event_apply_format(struct udev_event *event,
                                const char *src, char *dest, size_t size,
                                bool replace_whitespace, struct udev_list *global_props) {
@@ -294,44 +314,57 @@ subst:
                         break;
                 }
                 case SUBST_RESULT: {
-                        char *rest;
-                        int i;
+                        unsigned index = 0; /* 0 means whole string */
+                        bool has_plus = false;
 
                         if (event->program_result == NULL)
                                 break;
-                        /* get part part of the result string */
-                        i = 0;
-                        if (attr != NULL)
-                                i = strtoul(attr, &rest, 10);
-                        if (i > 0) {
-                                char result[UTIL_PATH_SIZE];
-                                char tmp[UTIL_PATH_SIZE];
-                                char *cpos;
 
-                                strscpy(result, sizeof(result), event->program_result);
-                                cpos = result;
-                                while (--i) {
-                                        while (cpos[0] != '\0' && !isspace(cpos[0]))
-                                                cpos++;
-                                        while (isspace(cpos[0]))
-                                                cpos++;
-                                        if (cpos[0] == '\0')
+                        /* Like systemd, the index must be a number, optionally followed by '+'. */
+                        if (!isempty(attr)) {
+                                int r;
+
+                                r = safe_atou_optional_plus(attr, &index);
+                                if (r < 0) {
+                                        log_warning_errno(r, "%s: Failed to substitute variable '$result' or apply format '%%c', ignoring: %m",
+                                                          udev_device_get_sysname(dev) ?: "n/a");
+                                        goto out;
+                                }
+                                has_plus = r;
+                        }
+
+                        if (index == 0)
+                                l = strpcpy(&s, l, event->program_result);
+                        else {
+                                /* Like systemd: the words are separated by any whitespace, and leading
+                                 * whitespace is skipped. */
+                                const char *start, *p;
+                                unsigned i;
+
+                                p = event->program_result + strspn(event->program_result, WHITESPACE);
+
+                                for (i = 1; i < index; i++) {
+                                        while (*p && !strchr(WHITESPACE, *p))
+                                                p++;
+                                        p += strspn(p, WHITESPACE);
+                                        if (*p == '\0')
                                                 break;
                                 }
-                                if (i > 0) {
-                                        log_error("requested part of result string not found");
+                                if (i != index) {
+                                        log_debug("%s: requested part of result string not found",
+                                                  udev_device_get_sysname(dev) ?: "n/a");
                                         break;
                                 }
-                                strscpy(tmp, sizeof(tmp), cpos);
-                                /* %{2+}c copies the whole string from the second part on */
-                                if (rest[0] != '+') {
-                                        cpos = strchr(tmp, ' ');
-                                        if (cpos)
-                                                cpos[0] = '\0';
+
+                                start = p;
+                                /* %c{2+} copies the whole string from the second part on */
+                                if (has_plus)
+                                        l = strpcpy(&s, l, start);
+                                else {
+                                        while (*p && !strchr(WHITESPACE, *p))
+                                                p++;
+                                        l = strnpcpy(&s, l, start, p - start);
                                 }
-                                l = strpcpy(&s, l, tmp);
-                        } else {
-                                l = strpcpy(&s, l, event->program_result);
                         }
                         break;
                 }

@@ -311,6 +311,23 @@ SUBSYSTEMS=="scsi", PROGRAM=="/bin/echo -n foo3 foo4 foo5 foo6 foo7 foo8 foo9", 
 EOF
         },
         {
+                desc            => "program result parts are separated by any whitespace, like systemd",
+                devpath         => "/devices/pci0000:00/0000:00:1f.2/host0/target0:0:0/0:0:0:0/block/sda/sda5",
+                exp_name        => "r-one-two" ,
+                rules           => <<EOF
+SUBSYSTEMS=="scsi", PROGRAM=="/bin/echo -n '  one' 'two\tthree'", KERNEL=="sda5", SYMLINK+="r-%c{1}-%c{2}"
+EOF
+        },
+        {
+                desc            => "program result part with an invalid index",
+                devpath         => "/devices/pci0000:00/0000:00:1f.2/host0/target0:0:0/0:0:0:0/block/sda/sda5",
+                exp_name        => "r2-" ,
+                not_exp_name    => "r2-one-t" ,
+                rules           => <<EOF
+SUBSYSTEMS=="scsi", PROGRAM=="/bin/echo -n one two", KERNEL=="sda5", SYMLINK+="r2-%c{1x}-t"
+EOF
+        },
+        {
                 desc            => "program with subshell",
                 devpath         => "/devices/pci0000:00/0000:00:1f.2/host0/target0:0:0/0:0:0:0/block/sda/sda5",
                 exp_name        => "bar9" ,

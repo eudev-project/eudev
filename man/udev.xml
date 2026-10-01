@@ -929,10 +929,13 @@ SUBSYSTEM=="net", OPTIONS="log_level=debug"</programlisting></para>
           <listitem>
             <para>The string returned by the external program requested with
             <varname>PROGRAM</varname>.
-            A single part of the string, separated by a space character, may be selected
+            A single part of the string, separated by whitespace, may be selected
             by specifying the part number as an attribute: <literal>%c{N}</literal>.
             If the number is followed by the <literal>+</literal> character, this part plus all remaining parts
-            of the result string are substituted: <literal>%c{N+}</literal>.</para>
+            of the result string are substituted: <literal>%c{N+}</literal>. Like in systemd, the
+            parts are counted from 1, after leading whitespace, and 0 selects the whole string;
+            a part number that is not a number is an error, which stops the substitution with a
+            warning, and which <command>udevadm verify</command> reports.</para>
           </listitem>
         </varlistentry>
 
