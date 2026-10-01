@@ -55,9 +55,13 @@ expects a command and command specific options\&. It controls the runtime behavi
 \fBudev\fR, requests kernel events, manages the event queue, and provides simple debugging mechanisms\&.
 .SH "OPTIONS"
 .PP
-\fB\-\-debug\fR
+\fB\-d\fR, \fB\-\-debug\fR
 .RS 4
-Print debug messages to standard error\&.
+Print debug messages to standard error\&. This option is implied in
+\fBudevadm test\fR
+and
+\fBudevadm test\-builtin\fR
+commands\&.
 .RE
 .PP
 \fB\-V\fR, \fB\-\-version\fR
