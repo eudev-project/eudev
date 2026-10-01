@@ -1619,6 +1619,12 @@ static int synthesize_change(struct udev_device *dev) {
                         (void) close_all_fds();
                         log_open();
 
+                        /* Like the workers, do not keep the OOM protection of the main process, which
+                         * systemd's child does. */
+                        r = write_string_file("/proc/self/oom_score_adj", "0");
+                        if (r < 0)
+                                log_debug_errno(r, "Failed to reset OOM score, ignoring: %m");
+
                         (void) reread_partition_table(dev, REREADPT_FORCE_UEVENT|REREADPT_BSD_LOCK);
                         _exit(EXIT_SUCCESS);
                 }
