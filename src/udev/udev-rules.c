@@ -3521,25 +3521,28 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                 case TK_M_IMPORT_BUILTIN: {
                         char command[UTIL_LINE_SIZE];
 
-                        if (udev_builtin_run_once(cur->key.builtin_cmd)) {
-                                /* check if we ran already */
-                                if (event->builtin_run & (1 << cur->key.builtin_cmd)) {
-                                        log_event_debug(event, rules, rule, cur,
-                                                        "Builtin command \"%s\" has already run, skipping.",
-                                                        udev_builtin_name(cur->key.builtin_cmd));
-                                        /* return the result from earlier run */
-                                        ok = !(event->builtin_ret & (1 << cur->key.builtin_cmd));
-                                        if (ok == (cur->key.op == OP_NOMATCH))
-                                                goto nomatch;
-                                        break;
-                                }
-                                /* mark as ran */
-                                event->builtin_run |= (1 << cur->key.builtin_cmd);
+                        /* check if we ran already */
+                        if (udev_builtin_run_once(cur->key.builtin_cmd) &&
+                            (event->builtin_run & (1 << cur->key.builtin_cmd))) {
+                                log_event_debug(event, rules, rule, cur,
+                                                "Builtin command \"%s\" has already run, skipping.",
+                                                udev_builtin_name(cur->key.builtin_cmd));
+                                /* return the result from earlier run */
+                                ok = !(event->builtin_ret & (1 << cur->key.builtin_cmd));
+                                if (ok == (cur->key.op == OP_NOMATCH))
+                                        goto nomatch;
+                                break;
                         }
 
                         if (!apply_format(event, rules, rule, cur, rules_str(rules, cur->key.value_off), command, sizeof(command),
                                           false, properties_list, "builtin command"))
                                 goto nomatch;
+
+                        /* Mark as ran. Unlike systemd, only when the builtin really runs: a command that does not
+                         * fit is not run, and a later IMPORT{builtin} of the same builtin must not take the
+                         * result of a run that did not happen. */
+                        if (udev_builtin_run_once(cur->key.builtin_cmd))
+                                event->builtin_run |= (1 << cur->key.builtin_cmd);
                         log_event_debug(event, rules, rule, cur,
                                         "Importing properties from results of builtin command \"%s\".", command);
 

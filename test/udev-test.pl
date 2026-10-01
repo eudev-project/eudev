@@ -1927,6 +1927,17 @@ KERNEL=="0000:00:1f.2", ACTION=="add", RUN+="/bin/ln -s null /dev/found"
 EOF
         },
         {
+                desc            => "a builtin command that does not fit is not run, and can run later",
+                devpath         => "/devices/pci0000:00/0000:00:1f.2/host0/target0:0:0/0:0:0:0/block/sda",
+                exp_name        => "found",
+                rules           => <<EOF
+KERNEL=="sda", ENV{A}="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+KERNEL=="sda", IMPORT{builtin}="path_id \$env{A}\$env{A}\$env{A}\$env{A}\$env{A}\$env{A}\$env{A}\$env{A}\$env{A}\$env{A}\$env{A}\$env{A}\$env{A}\$env{A}\$env{A}\$env{A}\$env{A}\$env{A}\$env{A}\$env{A}\$env{A}\$env{A}\$env{A}\$env{A}\$env{A}\$env{A}\$env{A}\$env{A}\$env{A}\$env{A}\$env{A}\$env{A}\$env{A}\$env{A}\$env{A}\$env{A}\$env{A}\$env{A}\$env{A}\$env{A}", ENV{X}="1"
+KERNEL=="sda", IMPORT{builtin}="path_id"
+KERNEL=="sda", ENV{ID_PATH}=="?*", SYMLINK+="found"
+EOF
+        },
+        {
                 desc            => "an IMPORT{file} error stops the processing of the event",
                 devpath         => "/devices/pci0000:00/0000:00:1f.2/host0/target0:0:0/0:0:0:0/block/sda",
                 exp_name        => "sda",
