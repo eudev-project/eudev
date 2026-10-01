@@ -582,9 +582,29 @@ static int poll_timeout(usec_t usec) {
         return msec > INT_MAX ? -1 : (int) msec;
 }
 
+/* Like the timeout warning timer of systemd's spawn_wait(): warns about a slow program once, when the event is
+ * older than its warning time. Returns the timeout for poll() and epoll_wait() until the warning, or after
+ * it, until the timeout of the event, which must not have passed yet. */
+static int spawn_warn(usec_t age_usec, usec_t timeout_usec, usec_t timeout_warn_usec,
+                      const char *cmd, pid_t pid, bool *warned) {
+        assert(age_usec < timeout_usec);
+
+        if (!*warned && timeout_warn_usec < timeout_usec && age_usec >= timeout_warn_usec) {
+                log_warning("slow: '%s' ["PID_FMT"]", cmd, pid);
+                *warned = true;
+        }
+
+        /* wait until the warning is due, then until the timeout */
+        if (!*warned && timeout_warn_usec < timeout_usec)
+                return poll_timeout(timeout_warn_usec - age_usec);
+
+        return poll_timeout(timeout_usec - age_usec);
+}
+
 static void spawn_read(struct udev_event *event,
                        usec_t timeout_usec,
-                       const char *cmd,
+                       usec_t timeout_warn_usec,
+                       const char *cmd, pid_t pid, bool *warned,
                        int fd_stdout, int fd_stderr,
                        char *result, size_t ressize, bool *ret_truncated) {
         _cleanup_close_ int fd_ep = -1;
@@ -641,7 +661,7 @@ static void spawn_read(struct udev_event *event,
                                 log_error("timeout '%s'", cmd);
                                 return;
                         }
-                        timeout = poll_timeout(timeout_usec - age_usec);
+                        timeout = spawn_warn(age_usec, timeout_usec, timeout_warn_usec, cmd, pid, warned);
                 } else {
                         timeout = -1;
                 }
@@ -652,10 +672,9 @@ static void spawn_read(struct udev_event *event,
                                 continue;
                         log_error_errno(errno, "failed to poll: %m");
                         return;
-                } else if (fdcount == 0) {
-                        log_error("timeout '%s'", cmd);
-                        return;
-                }
+                } else if (fdcount == 0)
+                        /* the warning or the timeout is due, see above */
+                        continue;
 
                 for (i = 0; i < fdcount; i++) {
                         int *fd = (int *)ev[i].data.ptr;
@@ -719,36 +738,33 @@ static void spawn_read(struct udev_event *event,
 static int spawn_wait(struct udev_event *event,
                       usec_t timeout_usec,
                       usec_t timeout_warn_usec,
-                      const char *cmd, pid_t pid) {
+                      const char *cmd, pid_t pid, bool *warned) {
         struct pollfd pfd[1];
+        bool killed = false;
         int err = 0;
 
         pfd[0].events = POLLIN;
         pfd[0].fd = event->fd_signal;
 
         while (pid > 0) {
-                int timeout;
-                int timeout_warn = 0;
+                int timeout = -1;
                 int fdcount;
 
-                if (timeout_usec > 0) {
+                /* Like the timers of systemd's spawn_wait(), warn about a slow program once, and send it the
+                 * timeout signal once, then wait for it to exit. */
+                if (timeout_usec > 0 && !killed) {
                         usec_t age_usec;
 
                         age_usec = now(CLOCK_MONOTONIC) - event->birth_usec;
-                        if (age_usec >= timeout_usec)
-                                timeout = 1000;
-                        else {
-                                /* wait until the warning is due, then until the timeout */
-                                if (timeout_warn_usec > age_usec)
-                                        timeout_warn = poll_timeout(timeout_warn_usec - age_usec);
-
-                                timeout = poll_timeout(timeout_usec - MAX(timeout_warn_usec, age_usec));
-                        }
-                } else {
-                        timeout = -1;
+                        if (age_usec >= timeout_usec) {
+                                log_error("timeout: killing '%s' ["PID_FMT"]", cmd, pid);
+                                (void) kill_and_sigcont(pid, event->timeout_signal);
+                                killed = true;
+                        } else
+                                timeout = spawn_warn(age_usec, timeout_usec, timeout_warn_usec, cmd, pid, warned);
                 }
 
-                fdcount = poll(pfd, 1, timeout_warn);
+                fdcount = poll(pfd, 1, timeout);
                 if (fdcount < 0) {
                         if (errno == EINTR)
                                 continue;
@@ -756,22 +772,8 @@ static int spawn_wait(struct udev_event *event,
                         log_error_errno(errno, "failed to poll: %m");
                         goto out;
                 }
-                if (fdcount == 0) {
-                        log_warning("slow: '%s' ["PID_FMT"]", cmd, pid);
-
-                        fdcount = poll(pfd, 1, timeout);
-                        if (fdcount < 0) {
-                                if (errno == EINTR)
-                                        continue;
-                                err = -errno;
-                                log_error_errno(errno, "failed to poll: %m");
-                                goto out;
-                        }
-                        if (fdcount == 0) {
-                                log_error("timeout: killing '%s' ["PID_FMT"]", cmd, pid);
-                                (void) kill_and_sigcont(pid, event->timeout_signal);
-                        }
-                }
+                if (fdcount == 0)
+                        continue;
 
                 if (pfd[0].revents & POLLIN) {
                         struct signalfd_siginfo fdsi;
@@ -929,6 +931,7 @@ int udev_event_spawn(struct udev_event *event,
         char *argv[UDEV_ARGV_MAX];
         char program[UTIL_PATH_SIZE];
         const char *helper = NULL;
+        bool warned = false;
         int argc, err = 0;
 
         assert(event);
@@ -1040,12 +1043,12 @@ int udev_event_spawn(struct udev_event *event,
                 }
 
                 spawn_read(event,
-                           timeout_usec,
-                           cmd,
+                           timeout_usec, timeout_warn_usec,
+                           cmd, pid, &warned,
                            outpipe[READ_END], errpipe[READ_END],
                            result, ressize, ret_truncated);
 
-                err = spawn_wait(event, timeout_usec, timeout_warn_usec, cmd, pid);
+                err = spawn_wait(event, timeout_usec, timeout_warn_usec, cmd, pid, &warned);
         }
 
 out:
