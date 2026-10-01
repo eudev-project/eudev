@@ -48,6 +48,7 @@
 #define TPM2_ALG_CFB                    UINT16_C(0x0043)
 #define TPM2_CC_FIRST                   UINT32_C(0x0000011F)
 #define TPMA_CC_COMMANDINDEX_MASK       UINT32_C(0x0000FFFF)
+#define TPMA_CC_V                       UINT32_C(0x20000000)
 #define TPM2_ECC_NONE                   UINT16_C(0x0000)
 
 #define TPM2_RC_SUCCESS                 UINT32_C(0x000)
@@ -483,6 +484,13 @@ static int tpm2_startup(Tpm2Device *d) {
         return 0;
 }
 
+/* The command code (TPM_CC) of a command listed as TPMA_CC: the command index and the vendor bit V, which is
+ * at the same position in both. Unlike TPMA_CC_TO_TPM2_CC() of systemd, which keeps only the command index,
+ * so that its paging of the command list starts over after a page that ends with a vendor command. */
+static uint32_t tpma_cc_to_tpm2_cc(uint32_t cca) {
+        return (cca & TPMA_CC_COMMANDINDEX_MASK) | (cca & TPMA_CC_V);
+}
+
 /* Queries the same capabilities as tpm2_cache_capabilities() of systemd, which fails if the TPM does not
  * answer these queries, and returns whether the TPM supports the AES and CFB algorithms. Where systemd would
  * trip over an assertion or loop forever on a TPM that lists no entries or does not advance through its
@@ -548,7 +556,7 @@ static int tpm2_cache_capabilities(Tpm2Device *d, bool *ret_aes, bool *ret_cfb) 
                 if (r == 0)
                         break;
 
-                next_cc = (unaligned_read_be32(e + (n - 1) * 4) & TPMA_CC_COMMANDINDEX_MASK) + 1;
+                next_cc = tpma_cc_to_tpm2_cc(unaligned_read_be32(e + (n - 1) * 4)) + 1;
                 if (next_cc <= current_cc)
                         return log_debug_errno(EBADMSG, "TPM does not advance through its list of commands.");
                 current_cc = next_cc;
