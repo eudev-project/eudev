@@ -1389,8 +1389,14 @@ int udev_event_execute_rules(struct udev_event *event,
                 udev_device_read_db(dev);
 
                 if (EVENT_MODE_DESTRUCTIVE(event)) {
-                        udev_device_tag_index(dev, false);
-                        udev_device_delete_db(dev);
+                        r = udev_device_tag_index(dev, false);
+                        if (r < 0)
+                                log_debug_errno(r, "%s: Failed to remove corresponding tag files under " UDEV_ROOT_RUN "/udev/tags/, ignoring: %m",
+                                                udev_device_get_sysname(dev));
+                        r = udev_device_delete_db(dev);
+                        if (r < 0)
+                                log_debug_errno(r, "%s: Failed to delete database under " UDEV_ROOT_RUN "/udev/data/, ignoring: %m",
+                                                udev_device_get_sysname(dev));
 
                         if (major(udev_device_get_devnum(dev)) != 0)
                                 udev_watch_end(event->udev, dev);
@@ -1593,8 +1599,21 @@ int udev_event_execute_rules(struct udev_event *event,
 
                 if (EVENT_MODE_DESTRUCTIVE(event)) {
                         /* (re)write database file */
-                        udev_device_tag_index(dev, true);
-                        udev_device_update_db(dev);
+                        r = udev_device_tag_index(dev, true);
+                        if (r < 0) {
+                                log_debug_errno(r, "%s: Failed to update tags under " UDEV_ROOT_RUN "/udev/tags/: %m",
+                                                udev_device_get_sysname(dev));
+                                event->dev_db = udev_device_unref(event->dev_db);
+                                return r;
+                        }
+
+                        r = udev_device_update_db(dev);
+                        if (r < 0) {
+                                log_debug_errno(r, "%s: Failed to update database under " UDEV_ROOT_RUN "/udev/data/: %m",
+                                                udev_device_get_sysname(dev));
+                                event->dev_db = udev_device_unref(event->dev_db);
+                                return r;
+                        }
                 }
                 udev_device_set_is_initialized(dev);
 

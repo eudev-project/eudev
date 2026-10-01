@@ -34,18 +34,19 @@
 #include "log.h"
 #include "utf8.h"
 
-static void udev_device_tag(struct udev_device *dev, const char *tag, bool add)
+static int udev_device_tag(struct udev_device *dev, const char *tag, bool add)
 {
         const char *id;
         char filename[UTIL_PATH_SIZE];
 
         id = udev_device_get_id_filename(dev);
         if (id == NULL)
-                return;
+                return -ENODEV;
         strscpyl(filename, sizeof(filename), UDEV_ROOT_RUN "/udev/tags/", tag, "/", id, NULL);
 
         if (add) {
                 unsigned int i;
+                int r = -ENOENT;
 
                 /* A worker removing the last device of the tag may remove the directory of the tag
                  * right after it is created here, then create it again. */
@@ -56,16 +57,19 @@ static void udev_device_tag(struct udev_device *dev, const char *tag, bool add)
                         fd = open(filename, O_WRONLY|O_CREAT|O_CLOEXEC|O_TRUNC|O_NOFOLLOW, 0444);
                         if (fd >= 0) {
                                 close(fd);
-                                break;
+                                return 0;
                         }
-                        if (errno != ENOENT)
+                        r = -errno;
+                        if (r != -ENOENT)
                                 break;
                 }
+
+                return r;
         } else {
                 char *slash;
 
                 if (unlink(filename) < 0)
-                        return;
+                        return errno == ENOENT ? 0 : -errno;
 
                 /* Unlike systemd, remove the directory of the tag when it is empty now, so that
                  * /run/udev/tags/ does not keep a directory for every tag that was ever used. This
@@ -76,17 +80,26 @@ static void udev_device_tag(struct udev_device *dev, const char *tag, bool add)
                         *slash = '\0';
                         (void) rmdir(filename);
                 }
+
+                return 0;
         }
 }
 
 int udev_device_tag_index(struct udev_device *dev, bool add)
 {
         struct udev_list_entry *list_entry;
+        int r = 0;
 
-        udev_list_entry_foreach(list_entry, udev_device_get_tags_list_entry(dev))
-                udev_device_tag(dev, udev_list_entry_get_name(list_entry), add);
+        /* Like systemd, handle every tag, and return the first error. */
+        udev_list_entry_foreach(list_entry, udev_device_get_tags_list_entry(dev)) {
+                int k;
 
-        return 0;
+                k = udev_device_tag(dev, udev_list_entry_get_name(list_entry), add);
+                if (k < 0 && r >= 0)
+                        r = k;
+        }
+
+        return r;
 }
 
 static bool device_has_info(struct udev_device *udev_device)
@@ -136,12 +149,12 @@ int udev_device_update_db(struct udev_device *udev_device)
         const char *id;
         char filename[UTIL_PATH_SIZE];
         char filename_tmp[UTIL_PATH_SIZE];
-        FILE *f;
+        FILE *f = NULL;
         int r;
 
         id = udev_device_get_id_filename(udev_device);
         if (id == NULL)
-                return -1;
+                return -ENODEV;
 
         has_info = device_has_info(udev_device);
         strscpyl(filename, sizeof(filename), UDEV_ROOT_RUN "/udev/data/", id, NULL);
@@ -150,23 +163,32 @@ int udev_device_update_db(struct udev_device *udev_device)
         if (!has_info &&
             major(udev_device_get_devnum(udev_device)) == 0 &&
             udev_device_get_ifindex(udev_device) == 0) {
-                unlink(filename);
+                if (unlink(filename) < 0 && errno != ENOENT)
+                        return -errno;
                 return 0;
         }
 
         /* write a database file */
         strscpyl(filename_tmp, sizeof(filename_tmp), filename, ".tmp", NULL);
-        mkdir_parents(filename_tmp, 0755);
+        r = mkdir_parents(filename_tmp, 0755);
+        if (r < 0) {
+                log_debug_errno(r, "unable to create the parent directories of '%s': %m", filename_tmp);
+                goto fail;
+        }
         f = fopen(filename_tmp, "we");
-        if (f == NULL)
-                return log_debug_errno(errno, "unable to create temporary db file '%s': %m", filename_tmp);
+        if (f == NULL) {
+                r = log_debug_errno(errno, "unable to create temporary db file '%s': %m", filename_tmp);
+                goto fail;
+        }
 
         /*
          * set 'sticky' bit to indicate that we should not clean the
          * database when we transition from initramfs to the real root
          */
-        if (udev_device_get_db_persist(udev_device))
-                fchmod(fileno(f), 01644);
+        if (udev_device_get_db_persist(udev_device) && fchmod(fileno(f), 01644) < 0) {
+                r = log_debug_errno(errno, "unable to chmod temporary db file '%s': %m", filename_tmp);
+                goto fail;
+        }
 
         if (has_info) {
                 struct udev_list_entry *list_entry;
@@ -210,13 +232,32 @@ int udev_device_update_db(struct udev_device *udev_device)
                 fprintf(f, "V:%u\n", LATEST_UDEV_DATABASE_VERSION);
         }
 
-        fclose(f);
-        r = rename(filename_tmp, filename);
-        if (r < 0)
-                return -1;
+        errno = 0;
+        if (fflush(f) != 0 || ferror(f)) {
+                r = log_debug_errno(errno > 0 ? errno : EIO, "unable to write temporary db file '%s': %m", filename_tmp);
+                goto fail;
+        }
+        r = fclose(f);
+        f = NULL;
+        if (r != 0) {
+                r = log_debug_errno(errno, "unable to write temporary db file '%s': %m", filename_tmp);
+                goto fail;
+        }
+        if (rename(filename_tmp, filename) < 0) {
+                r = log_debug_errno(errno, "unable to rename temporary db file '%s' to '%s': %m", filename_tmp, filename);
+                goto fail;
+        }
         log_debug("created %s file '%s' for '%s'", has_info ? "db" : "empty",
              filename, udev_device_get_devpath(udev_device));
         return 0;
+
+fail:
+        /* Like systemd, do not leave the old database file behind when it cannot be updated. */
+        if (f != NULL)
+                fclose(f);
+        (void) unlink(filename_tmp);
+        (void) unlink(filename);
+        return r;
 }
 
 int udev_device_delete_db(struct udev_device *udev_device)
@@ -226,10 +267,11 @@ int udev_device_delete_db(struct udev_device *udev_device)
 
         id = udev_device_get_id_filename(udev_device);
         if (id == NULL)
-                return -1;
+                return -ENODEV;
         strscpyl(filename, sizeof(filename), UDEV_ROOT_RUN "/udev/data/", id, NULL);
 
-        unlink(filename);
+        if (unlink(filename) < 0 && errno != ENOENT)
+                return -errno;
         return 0;
 }
 
