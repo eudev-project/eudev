@@ -859,12 +859,16 @@ static int builtin_tpm2_id(struct udev_device *dev, int argc, char *argv[], enum
                 r = udev_builtin_add_property(dev, mode, "ID_TPM2_MANUFACTURER", info.manufacturer);
                 if (r == -ENOMEM)
                         return log_oom();
+                if (r < 0)
+                        log_device_warning_errno(dev, r, "Failed to set ID_TPM2_MANUFACTURER property, ignoring: %m");
         }
 
         if (!isempty(info.vendor_string)) {
                 r = udev_builtin_add_property(dev, mode, "ID_TPM2_VENDOR_STRING", info.vendor_string);
                 if (r == -ENOMEM)
                         return log_oom();
+                if (r < 0)
+                        log_device_warning_errno(dev, r, "Failed to set ID_TPM2_VENDOR_STRING property, ignoring: %m");
         }
 
         r = tpm2_vendor_info_to_modalias(&info, &m);
@@ -874,6 +878,8 @@ static int builtin_tpm2_id(struct udev_device *dev, int argc, char *argv[], enum
         r = udev_builtin_add_property(dev, mode, "ID_TPM2_MODALIAS", m);
         if (r == -ENOMEM)
                 return log_oom();
+        if (r < 0)
+                log_device_warning_errno(dev, r, "Failed to set ID_TPM2_MODALIAS property, ignoring: %m");
 
         return EXIT_SUCCESS;
 }
