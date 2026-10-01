@@ -573,6 +573,14 @@ static int spawn_exec(struct udev_event *event __attribute__((unused)),
         return -errno;
 }
 
+/* Returns the timeout in milliseconds for poll() and epoll_wait() for the given time, plus a second, or -1
+ * (no timeout) if it does not fit into their int. */
+static int poll_timeout(usec_t usec) {
+        usec_t msec = usec / USEC_PER_MSEC + MSEC_PER_SEC;
+
+        return msec > INT_MAX ? -1 : (int) msec;
+}
+
 static void spawn_read(struct udev_event *event,
                        usec_t timeout_usec,
                        const char *cmd,
@@ -632,7 +640,7 @@ static void spawn_read(struct udev_event *event,
                                 log_error("timeout '%s'", cmd);
                                 return;
                         }
-                        timeout = ((timeout_usec - age_usec) / USEC_PER_MSEC) + MSEC_PER_SEC;
+                        timeout = poll_timeout(timeout_usec - age_usec);
                 } else {
                         timeout = -1;
                 }
@@ -729,10 +737,11 @@ static int spawn_wait(struct udev_event *event,
                         if (age_usec >= timeout_usec)
                                 timeout = 1000;
                         else {
-                                if (timeout_warn_usec > 0)
-                                        timeout_warn = ((timeout_warn_usec - age_usec) / USEC_PER_MSEC) + MSEC_PER_SEC;
+                                /* wait until the warning is due, then until the timeout */
+                                if (timeout_warn_usec > age_usec)
+                                        timeout_warn = poll_timeout(timeout_warn_usec - age_usec);
 
-                                timeout = ((timeout_usec - timeout_warn_usec - age_usec) / USEC_PER_MSEC) + MSEC_PER_SEC;
+                                timeout = poll_timeout(timeout_usec - MAX(timeout_warn_usec, age_usec));
                         }
                 } else {
                         timeout = -1;
