@@ -323,9 +323,12 @@ AM_CONDITIONAL(ENABLE_HWDB, [test "x$install_hwdb" = "xyes"])
 # systemd-hwdb - the hwdb tool of systemd, for the scripts and packages that call it
 # ------------------------------------------------------------------------------
 AC_ARG_ENABLE([systemd-hwdb],
-	AS_HELP_STRING([--disable-systemd-hwdb], [do not install the systemd-hwdb tool]),
+	AS_HELP_STRING([--disable-systemd-hwdb], [do not install the systemd-hwdb tool, which is never installed with --disable-programs]),
 	[], [enable_systemd_hwdb=yes])
-AM_CONDITIONAL([ENABLE_SYSTEMD_HWDB], [test "x$enable_systemd_hwdb" = xyes])
+install_systemd_hwdb=$enable_systemd_hwdb
+AS_IF([test "x$enable_systemd_hwdb" = xyes && test "x$enable_programs" != "xyes"],
+	[install_systemd_hwdb="no (--disable-programs)"])
+AM_CONDITIONAL([ENABLE_SYSTEMD_HWDB], [test "x$install_systemd_hwdb" = xyes])
 
 # ------------------------------------------------------------------------------
 # shell completion of udevadm, installed like systemd's meson options do it
@@ -352,15 +355,19 @@ AM_CONDITIONAL([ENABLE_ZSH_COMPLETION], [test "x$with_zshcompletiondir" != xno])
 # ------------------------------------------------------------------------------
 # rule-generator - persistent network and optical device rule generator
 # ------------------------------------------------------------------------------
+# It consists of rules, a script for them and support in udevd, so it is never enabled with --disable-programs.
 AC_ARG_ENABLE([rule-generator],
-	AS_HELP_STRING([--enable-rule-generator], [enable legacy persistent network, cdrom support]),
+	AS_HELP_STRING([--enable-rule-generator], [enable legacy persistent network, cdrom support, not with --disable-programs]),
 	[], [enable_rule_generator=no])
+install_rule_generator=$enable_rule_generator
+AS_IF([test "x$enable_rule_generator" != xno && test "x$enable_programs" != "xyes"],
+	[install_rule_generator="no (--disable-programs)"])
 
-if test "x${enable_rule_generator}" != xno; then
+if test "x${install_rule_generator}" != xno && test "x$enable_programs" = "xyes"; then
 	AC_DEFINE([ENABLE_RULE_GENERATOR], [1], [Define if we are enabling rule generator])
 fi
 
-AM_CONDITIONAL([ENABLE_RULE_GENERATOR], [test "x$enable_rule_generator" = xyes])
+AM_CONDITIONAL([ENABLE_RULE_GENERATOR], [test "x$install_rule_generator" = xyes])
 
 # ------------------------------------------------------------------------------
 # mtd_probe - autoloads FTL module for mtd devices
@@ -559,6 +566,11 @@ summary_pkgconfiglibdir=`expand_dir "$pkgconfiglibdir"`
 summary_sharepkgconfigdir=`expand_dir "$sharepkgconfigdir"`
 summary_bashcompletiondir=`expand_dir "$with_bashcompletiondir"`
 summary_zshcompletiondir=`expand_dir "$with_zshcompletiondir"`
+# the completions are installed only with the programs
+AS_IF([test "x$enable_programs" != "xyes"], [
+	AS_IF([test "x$with_bashcompletiondir" != xno], [summary_bashcompletiondir="no (--disable-programs)"])
+	AS_IF([test "x$with_zshcompletiondir" != xno], [summary_zshcompletiondir="no (--disable-programs)"])
+])
 
 AC_MSG_RESULT([
 	prefix:                  ${summary_prefix}
@@ -595,7 +607,8 @@ AC_MSG_RESULT([
 	SMACK:                   ${enable_smack}
 	man pages:               ${install_manpages}
 	hwdb.d files:            ${install_hwdb}
-	systemd-hwdb:            ${enable_systemd_hwdb}
+	systemd-hwdb:            ${install_systemd_hwdb}
 	bashcompletiondir:       ${summary_bashcompletiondir}
 	zshcompletiondir:        ${summary_zshcompletiondir}
+	rule generator:          ${install_rule_generator}
 ])
