@@ -789,7 +789,9 @@ static int spawn_wait(struct udev_event *event,
                                 event->sigterm = true;
                                 break;
                         case SIGCHLD:
-                                if (waitpid(pid, &status, WNOHANG) < 0)
+                                /* 0: the program has not exited, the signal was about something else, e.g.
+                                 * sent with kill(), so keep waiting, instead of reading an unset status */
+                                if (waitpid(pid, &status, WNOHANG) <= 0)
                                         break;
                                 if (WIFEXITED(status)) {
                                         log_debug("'%s' ["PID_FMT"] exit with return code %i", cmd, pid, WEXITSTATUS(status));
