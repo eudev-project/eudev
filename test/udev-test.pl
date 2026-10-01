@@ -1795,10 +1795,9 @@ LABEL="end"
 EOF
         },
         {
-                desc            => "invalid MODE, empty OWNER and GROUP, and invalid IDs are errors",
+                desc            => "invalid MODE values are errors",
                 devpath         => "/devices/pci0000:00/0000:00:1f.2/host0/target0:0:0/0:0:0:0/block/sda",
                 exp_name        => "found",
-                not_exp_name    => "bad",
                 exp_perms       => "0:0:0600",
                 rules           => <<EOF
 KERNEL=="sda", MODE="0640"
@@ -1808,11 +1807,6 @@ KERNEL=="sda", MODE="0600"
 KERNEL=="sda", ENV{M}="0999"
 KERNEL=="sda", MODE:="\$env{M}"
 KERNEL=="sda", MODE="0644"
-KERNEL=="sda", OWNER="", SYMLINK+="bad"
-KERNEL=="sda", GROUP="", SYMLINK+="bad"
-KERNEL=="sda", OWNER="01", SYMLINK+="bad"
-KERNEL=="sda", GROUP="65535", SYMLINK+="bad"
-KERNEL=="sda", OWNER="4294967296", SYMLINK+="bad"
 EOF
         },
         {
@@ -1887,15 +1881,14 @@ KERNEL=="sda", SYMLINK+="found"
 EOF
         },
         {
-                desc            => "unknown users and groups are ignored, invalid ones are errors",
+                desc            => "unknown and invalid users and groups are errors, only these keys are ignored",
                 devpath         => "/devices/pci0000:00/0000:00:1f.2/host0/target0:0:0/0:0:0:0/block/sda",
                 exp_name        => "found",
-                not_exp_name    => "bad",
-                exp_perms       => "1:2:0640",
+                exp_perms       => "1:2:0644",
                 rules           => <<EOF
 KERNEL=="sda", OWNER="1", GROUP="2", MODE="0600"
 KERNEL=="sda", OWNER="nosuchuser", GROUP="nosuchgroup", OWNER="+1", OWNER="4294967294", MODE="0640", SYMLINK+="found"
-KERNEL=="sda", GROUP=" 1", SYMLINK+="bad"
+KERNEL=="sda", OWNER="", GROUP="", OWNER="01", GROUP="65535", OWNER="4294967296", GROUP=" 1", MODE="0644"
 KERNEL=="sda", ENV{NOSUCH}="nosuchuser"
 KERNEL=="sda", OWNER="\$env{NOSUCH}", GROUP="\$env{NOSUCH}"
 EOF

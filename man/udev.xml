@@ -478,10 +478,10 @@
             logged, and only this key is ignored: the rest of the rule line, e.g.
             <varname>MODE</varname> or <varname>SYMLINK</varname>, still applies, also with
             <option>static_node=</option>. Unlike systemd, which ignores the whole rule line
-            then, the rules keep working on a system that lacks a group they use. If
-            <varname>OWNER</varname> or <varname>GROUP</varname> is empty, or not a valid user or
-            group name or ID, e.g. a number with leading zeros, the rule line is ignored with an
-            error message. The other values are resolved whenever the rule is
+            then, the rules keep working on a system that lacks a group they use. The same
+            applies if <varname>OWNER</varname> or <varname>GROUP</varname> is empty, or not a
+            valid user or group name or ID, e.g. a number with leading zeros: an error is logged,
+            and only this key is ignored. The other values are resolved whenever the rule is
             applied; if that fails, an error is logged, and the owner or group is left as it
             is. With <option>--resolve-names=never</option>, they are ignored.</para>
             <para>A

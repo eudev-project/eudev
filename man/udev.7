@@ -397,11 +397,11 @@ or
 \fIMODE\fR
 or
 \fISYMLINK\fR, still applies, also with
-\fBstatic_node=\fR\&. Unlike systemd, which ignores the whole rule line then, the rules keep working on a system that lacks a group they use\&. If
+\fBstatic_node=\fR\&. Unlike systemd, which ignores the whole rule line then, the rules keep working on a system that lacks a group they use\&. The same applies if
 \fIOWNER\fR
 or
 \fIGROUP\fR
-is empty, or not a valid user or group name or ID, e\&.g\&. a number with leading zeros, the rule line is ignored with an error message\&. The other values are resolved whenever the rule is applied; if that fails, an error is logged, and the owner or group is left as it is\&. With
+is empty, or not a valid user or group name or ID, e\&.g\&. a number with leading zeros: an error is logged, and only this key is ignored\&. The other values are resolved whenever the rule is applied; if that fails, an error is logged, and the owner or group is left as it is\&. With
 \fB\-\-resolve\-names=never\fR, they are ignored\&.
 .sp
 A

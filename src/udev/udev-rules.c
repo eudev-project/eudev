@@ -1257,8 +1257,8 @@ static const char *strerror_user_group(int error, bool group, char *buf, size_t 
 
 /* Like rule_resolve_user() and rule_resolve_group() of systemd: resolves a user or group of a rule while the
  * rules are read, and remembers it for the next rules. A user or group that cannot be resolved is an error:
- * -ESRCH for one that does not exist, and the caller drops the key, -EINVAL for an invalid value, and the
- * caller drops the rule line. */
+ * -ESRCH for one that does not exist, and -EINVAL for an invalid value; the caller drops the key then. Other
+ * errors, e.g. -ENOMEM, make the caller drop the rule line. */
 static int rule_resolve_user_or_group(struct udev_rules *rules, const char *name, bool group, uid_t *ret) {
         struct uid_gid **cache = group ? &rules->gids : &rules->uids;
         unsigned int *cur = group ? &rules->gids_cur : &rules->uids_cur;
@@ -2516,13 +2516,13 @@ static int add_rule(struct udev_rules *rules, char *line,
                         /* Like systemd: a number, which must be a valid ID, also an empty value, and a name
                          * without substitutions when names are resolved early, are resolved now. Other values
                          * are resolved whenever the rule is applied, and ignored when names are never
-                         * resolved. An invalid value drops the line, like systemd. Unlike systemd, which
-                         * drops the line too, a user or group that does not exist drops only this key, so
-                         * that the rest of the line, e.g. MODE or SYMLINK, still applies on a system that
-                         * lacks a user or group of the rules. */
+                         * resolved. Unlike systemd, which drops the line, a user or group that does not
+                         * exist, and an invalid value, e.g. an empty one or a number with leading zeros, drop
+                         * only this key, like an invalid MODE, so that the rest of the line, e.g. MODE or
+                         * SYMLINK, still applies on a system that lacks a user or group of the rules. */
                         if (in_charset(value, DIGITS) || (rules->resolve_names > 0 && value_is_plain(value))) {
                                 r = rule_resolve_user_or_group(rules, value, group, &id);
-                                if (r == -ESRCH)
+                                if (IN_SET(r, -ESRCH, -EINVAL))
                                         continue;
                                 if (r < 0)
                                         goto invalid;
