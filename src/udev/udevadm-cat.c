@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "conf-files.h"
 #include "pager.h"
 #include "path-util.h"
 #include "strv.h"
@@ -153,24 +154,22 @@ static int cat_file(const char *name, const char *path, bool *newline) {
 }
 
 static int cat_config(bool *newline) {
-        _cleanup_free_ char *name = NULL, *path = NULL;
+        ConfFile *c = NULL;
         int r;
 
-        /* eudev reads only this file, there are no drop-ins. */
-        name = strjoin(isempty(arg_root) ? "" : arg_root, UDEV_CONF_DIR "/udev.conf", NULL);
-        if (!name)
-                return log_oom();
-
-        r = chase(UDEV_CONF_DIR "/udev.conf", arg_root, 0, &path);
+        /* eudev reads only this file, there are no drop-ins. Like systemd, a mask, i.e. an empty file or a
+         * symlink to /dev/null, and a file that is not a regular file count as not found. */
+        r = conf_file_new(UDEV_CONF_DIR "/udev.conf", arg_root, CONF_FILES_REGULAR | CONF_FILES_FILTER_MASKED, &c);
         if (r < 0) {
-                printf("%s# Main configuration file %s not found%s\n",
+                printf("%s# Main configuration file udev/udev.conf not found%s\n",
                        ansi_highlight_magenta(),
-                       name,
                        ansi_normal());
                 return 0;
         }
 
-        return cat_file(name, path, newline);
+        r = cat_file(c->original_path, c->resolved_path, newline);
+        conf_file_free(c);
+        return r;
 }
 
 static int adm_cat(struct udev *udev __attribute__((unused)), int argc, char *argv[]) {
