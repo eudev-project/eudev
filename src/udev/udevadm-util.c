@@ -264,28 +264,15 @@ int parse_root_argument(const char *s, char **ret) {
         return 0;
 }
 
-static bool path_is_masked(const char *path) {
-        _cleanup_free_ char *target = NULL;
-        struct stat st;
-
-        /* Like systemd, empty files and symlinks to /dev/null mask a file. */
-        if (lstat(path, &st) < 0)
-                return false;
-
-        if (S_ISLNK(st.st_mode))
-                return readlink_malloc(path, &target) >= 0 && path_equal(target, "/dev/null");
-
-        return S_ISREG(st.st_mode) && st.st_size == 0;
-}
-
-static int add_rules_file(char ***names, char ***paths, const char *name, const char *path) {
+static int add_rules_file(char ***names, char ***paths, const ConfFile *c) {
         int r;
 
-        r = strv_extend(names, name);
+        /* like cat_file() of systemd, the path as found, and the one with symlinks resolved */
+        r = strv_extend(names, c->original_path);
         if (r < 0)
                 return r;
 
-        return strv_extend(paths, path);
+        return strv_extend(paths, c->resolved_path);
 }
 
 static const char *root_prefix(const char *root) {
@@ -308,6 +295,14 @@ static char *rules_file_name(const char *root, const char *path) {
         return path_simplify(name);
 }
 
+static int log_chase_error(int r, const char *name) {
+        /* systemd logs the text of EBADFD, "File descriptor in bad state", for e.g. a FIFO */
+        if (r == -EBADFD)
+                return log_error_errno(r, "Failed to chase '%s': not a regular file", name);
+
+        return log_error_errno(r, "Failed to chase '%s': %m", name);
+}
+
 static int search_rules_file_in_dirs(const char *s, const char *root, char ***names, char ***paths) {
         _cleanup_free_ char *with_suffix = NULL;
         const char* const* dir;
@@ -328,7 +323,8 @@ static int search_rules_file_in_dirs(const char *s, const char *root, char ***na
                 return 0;
 
         for (dir = udev_rules_get_dirs(); *dir; dir++) {
-                _cleanup_free_ char *name = NULL, *path = NULL, *p = NULL;
+                _cleanup_free_ char *name = NULL, *p = NULL;
+                ConfFile *c = NULL;
 
                 p = strjoin(*dir, "/", s, NULL);
                 if (!p)
@@ -337,31 +333,33 @@ static int search_rules_file_in_dirs(const char *s, const char *root, char ***na
                 if (!name)
                         return log_oom();
 
-                if (access(name, F_OK) < 0)
-                        continue;
-
-                if (path_is_masked(name)) {
+                /* Like systemd, a missing file, also a dangling symlink, is searched in the next
+                 * directory. */
+                r = conf_file_new(p, root, CONF_FILES_REGULAR | CONF_FILES_FILTER_MASKED, &c);
+                if (r == -ERFKILL) {
                         log_warning("File '%s' is a mask, ignoring.", name);
                         return 1; /* Found masked file. */
                 }
-
-                r = chase(p, root, 0, &path);
+                if (r == -ENOENT)
+                        continue;
                 if (r < 0)
-                        return log_error_errno(r, "Failed to chase '%s': %m", name);
+                        return log_chase_error(r, name);
 
-                r = add_rules_file(names, paths, name, path);
+                r = add_rules_file(names, paths, c);
+                conf_file_free(c);
                 if (r < 0)
                         return log_oom();
 
-                return 1;
+                return 1; /* found */
         }
 
         return 0;
 }
 
 static int search_rules_file(const char *s, const char *root, char ***names, char ***paths) {
-        _cleanup_free_ char *name = NULL, *path = NULL;
-        struct stat st;
+        _cleanup_free_ char *name = NULL, *dir = NULL;
+        ConfFile *c = NULL, **files = NULL;
+        size_t n_files = 0, i;
         int r;
 
         /* If the input is a file name (e.g. 99-systemd.rules), then try to find it in udev/rules.d directories. */
@@ -374,64 +372,38 @@ static int search_rules_file(const char *s, const char *root, char ***names, cha
         if (!name)
                 return log_oom();
 
-        r = chase(s, root, 0, &path);
+        r = conf_file_new(s, root, CONF_FILES_REGULAR | CONF_FILES_FILTER_MASKED, &c);
+        if (r == -ERFKILL) {
+                log_warning("File '%s' is a mask, ignoring.", name);
+                return 0; /* Found masked file. */
+        }
+        if (r >= 0) {
+                r = add_rules_file(names, paths, c);
+                conf_file_free(c);
+                return r < 0 ? log_oom() : 0;
+        }
+        if (r != -EISDIR)
+                return log_chase_error(r, name);
+
+        /* If a directory is specified, then find all rules file in the directory. Like systemd, without
+         * masks, and relative to the current directory or to root. */
+        dir = isempty(root_prefix(root)) ? path_make_absolute_cwd(s) : strjoin("/", s, NULL);
+        if (!dir)
+                return log_oom();
+
+        r = conf_files_list_strv_full(".rules", root, CONF_FILES_REGULAR | CONF_FILES_WARN,
+                                      (const char * const *) STRV_MAKE(dir), &files, &n_files);
         if (r < 0)
-                return log_error_errno(r, "Failed to chase '%s': %m", name);
+                return log_error_errno(r, "Failed to enumerate rules files in '%s': %m", name);
 
-        if (stat(path, &st) < 0)
-                return log_error_errno(errno, "Failed to chase '%s': %m", name);
-
-        if (!S_ISDIR(st.st_mode)) {
-                if (path_is_masked(name)) {
-                        log_warning("File '%s' is a mask, ignoring.", name);
-                        return 0; /* Found masked file. */
-                }
-
-                if (!S_ISREG(st.st_mode))
-                        return log_error_errno(EBADF, "Failed to chase '%s': %s", name, "not a regular file");
-
-                r = add_rules_file(names, paths, name, path);
+        for (i = 0; i < n_files; i++) {
+                r = add_rules_file(names, paths, files[i]);
                 if (r < 0)
-                        return log_oom();
-
-                return 0;
+                        break;
         }
+        conf_file_free_array(files, n_files);
 
-        /* If a directory is specified, then find all rules file in the directory. */
-        {
-                _cleanup_strv_free_ char **files = NULL;
-                const char *dirs[] = { path, NULL };
-                char **f;
-
-                r = conf_files_list_strv(&files, ".rules", NULL, 0, dirs);
-                if (r < 0)
-                        return log_error_errno(r, "Failed to enumerate rules files in '%s': %m", name);
-
-                STRV_FOREACH(f, files) {
-                        _cleanup_free_ char *resolved = NULL, *file_name = NULL;
-
-                        /* named in the directory as given, like systemd */
-                        file_name = strjoin(name, "/", eudev_basename(*f), NULL);
-                        if (!file_name)
-                                return log_oom();
-
-                        r = chase(*f + strlen(root_prefix(root)), root, 0, &resolved);
-                        if (r < 0) {
-                                log_warning_errno(r, "Failed to chase '%s': %m", file_name);
-                                continue;
-                        }
-
-                        /* only regular files, like CONF_FILES_REGULAR */
-                        if (stat(resolved, &st) < 0 || !S_ISREG(st.st_mode))
-                                continue;
-
-                        r = add_rules_file(names, paths, file_name, resolved);
-                        if (r < 0)
-                                return log_oom();
-                }
-        }
-
-        return 0;
+        return r < 0 ? log_oom() : 0;
 }
 
 int search_rules_files(char * const *args, const char *root, char ***ret_names, char ***ret_paths) {
@@ -443,29 +415,25 @@ int search_rules_files(char * const *args, const char *root, char ***ret_names, 
         assert(ret_paths);
 
         if (strv_isempty(args)) {
-                _cleanup_strv_free_ char **files = NULL;
-                char **f;
+                ConfFile **files = NULL;
+                size_t n_files = 0, i;
 
-                r = conf_files_list_strv(&files, ".rules", isempty(root_prefix(root)) ? NULL : root, 0, udev_rules_get_dirs());
+                /* Like systemd, a dangling symlink is skipped with a warning, and a file that is not a
+                 * regular file, e.g. a directory, too, and then the file in the next directory is used. */
+                r = conf_files_list_strv_full(".rules", root,
+                                              CONF_FILES_REGULAR | CONF_FILES_FILTER_MASKED | CONF_FILES_WARN,
+                                              udev_rules_get_dirs(), &files, &n_files);
                 if (r < 0)
                         return log_error_errno(r, "Failed to enumerate rules files: %m");
 
-                STRV_FOREACH(f, files) {
-                        _cleanup_free_ char *resolved = NULL;
-
-                        if (path_is_masked(*f))
-                                continue;
-
-                        r = chase(*f + strlen(root_prefix(root)), root, 0, &resolved);
-                        if (r < 0) {
-                                log_warning_errno(r, "Failed to chase '%s', ignoring: %m", *f);
-                                continue;
-                        }
-
-                        r = add_rules_file(&names, &paths, *f, resolved);
+                for (i = 0; i < n_files; i++) {
+                        r = add_rules_file(&names, &paths, files[i]);
                         if (r < 0)
-                                return log_oom();
+                                break;
                 }
+                conf_file_free_array(files, n_files);
+                if (r < 0)
+                        return log_oom();
 
                 if (!isempty(root_prefix(root)) && strv_isempty(names)) {
                         log_error("No rules files found in '%s'.", root);
