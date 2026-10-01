@@ -81,7 +81,6 @@ static int fd_inotify = -1;
 static int fd_ready = -1;
 static bool stop_exec_queue;
 static bool reload;
-static bool arg_debug = false;
 static int arg_daemonize = false;
 static int arg_resolve_names = 1;
 /* udev.trace on the kernel command line */
@@ -1849,8 +1848,11 @@ static int parse_argv(int argc, char *argv[]) {
                                 config_by_command.timeout_signal = r;
                         break;
                 case 'D':
-                        arg_debug = true;
+                        /* Unlike systemd, which does this after parsing the kernel command line, log to
+                         * the console right away, so that the warnings about the following options, udev.conf
+                         * and the kernel command line go there too, and not to /dev/kmsg. */
                         config_by_command.log_level = LOG_DEBUG;
+                        log_set_target(LOG_TARGET_CONSOLE);
                         break;
                 case 'N':
                         if (streq(optarg, "early")) {
@@ -1940,9 +1942,6 @@ int main(int argc, char *argv[]) {
         config_by_udev_conf.timeout_signal = udev_get_timeout_signal(udev, &invalid);
         if (invalid)
                 log_warning("Invalid timeout_signal= in udev.conf, ignoring.");
-
-        if (arg_debug)
-                log_set_target(LOG_TARGET_CONSOLE);
 
         manager_merge_config();
         log_set_max_level(manager_merge_config_log_level());
