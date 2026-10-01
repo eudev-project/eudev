@@ -1,2 +1,5 @@
 /*.txt     -whitespace
 /pci.ids   -whitespace
+# eudev: the other imported sources with trailing whitespace
+/usb.ids   -whitespace
+/20-acpi-vendor.hwdb.patch -whitespace
