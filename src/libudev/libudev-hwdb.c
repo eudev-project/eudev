@@ -257,7 +257,7 @@ static int hwdb_add_property(struct udev_hwdb *hwdb, const struct trie_value_ent
                          * full paths, and e.g. /usr/lib would sort after /etc, even
                          * though it has lower priority. This is not reliable because of
                          * suffix compression, but should work for the most common case of
-                         * /usr/lib/udev/hwbd.d and /etc/udev/hwdb.d, and is better than
+                         * /usr/lib/udev/hwdb.d and /etc/udev/hwdb.d, and is better than
                          * not doing the comparison at all.
                          */
                         bool lower;
