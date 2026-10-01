@@ -108,7 +108,6 @@ static int adm_test(struct udev *udev, int argc, char *argv[]) {
                         } else if (streq (optarg, "never")) {
                                 resolve_names = -1;
                         } else {
-                                fprintf(stderr, "resolve-names must be early, late or never\n");
                                 log_error("resolve-names must be early, late or never");
                                 exit(EXIT_FAILURE);
                         }
@@ -152,8 +151,8 @@ static int adm_test(struct udev *udev, int argc, char *argv[]) {
 
         syspath = argv[optind];
         if (syspath == NULL) {
-                fprintf(stderr, "syspath parameter missing\n");
-                rc = 2;
+                log_error("syspath parameter missing.");
+                rc = EXIT_FAILURE;
                 goto out;
         }
 
@@ -174,8 +173,8 @@ static int adm_test(struct udev *udev, int argc, char *argv[]) {
         log_info("Loading udev rules files...");
         rules = udev_rules_new_full(udev, resolve_names, extra_rules_dir);
         if (rules == NULL) {
-                fprintf(stderr, "error reading rules\n");
-                rc = 3;
+                log_error("Failed to read udev rules.");
+                rc = EXIT_FAILURE;
                 goto out;
         }
         log_info("Loading udev rules files done.");
@@ -183,7 +182,7 @@ static int adm_test(struct udev *udev, int argc, char *argv[]) {
         dev = find_device_with_action(udev, syspath, action);
         if (dev == NULL) {
                 log_error_errno(errno > 0 ? errno : ENODEV, "Failed to open device '%s': %m", syspath);
-                rc = 4;
+                rc = EXIT_FAILURE;
                 goto out;
         }
 
@@ -193,7 +192,7 @@ static int adm_test(struct udev *udev, int argc, char *argv[]) {
         event = udev_event_new(dev, EVENT_UDEVADM_TEST);
         if (!event) {
                 log_oom();
-                rc = 1;
+                rc = EXIT_FAILURE;
                 goto out;
         }
         event->trace = verbose;
@@ -202,8 +201,8 @@ static int adm_test(struct udev *udev, int argc, char *argv[]) {
         sigprocmask(SIG_SETMASK, &mask, &sigmask_orig);
         event->fd_signal = signalfd(-1, &mask, SFD_NONBLOCK|SFD_CLOEXEC);
         if (event->fd_signal < 0) {
-                fprintf(stderr, "error creating signalfd\n");
-                rc = 5;
+                log_error_errno(errno, "Failed to create signalfd: %m");
+                rc = EXIT_FAILURE;
                 goto out;
         }
 
@@ -222,7 +221,7 @@ static int adm_test(struct udev *udev, int argc, char *argv[]) {
         r = dump_event(event, json_format_flags, NULL);
         if (r < 0) {
                 log_error_errno(r, "Failed to dump result: %m");
-                rc = 1;
+                rc = EXIT_FAILURE;
         }
         maybe_insert_empty_line();
 out:
