@@ -501,6 +501,11 @@ static int sysfs_resolve(const char *path, char **ret)
                 return 0;
         }
 
+        if (path_equal(resolved, "/sys")) {
+                log_debug("%s resolves to /sys itself", path);
+                return -ENODEV;
+        }
+
         real_sys = realpath("/sys", NULL);
         if (!real_sys)
                 return -errno;
@@ -1269,6 +1274,12 @@ static struct udev_device *udev_device_new(struct udev *udev)
  * device and the udev database entry. The syspath is the absolute
  * path to the device, including the sys mount point.
  *
+ * Like in systemd, a device below /sys/devices, and /sys/devices itself, must have a
+ * "uevent" file, and any other directory below /sys, e.g. /sys/class/net or /sys/class,
+ * is taken as a pseudo-device; otherwise, and for /sys itself and a path that does not
+ * exist, the call fails with ENODEV. A path that does not start with /sys/ fails with
+ * EINVAL.
+ *
  * Like in systemd, the device must be on sysfs, otherwise the call fails with ENODEV,
  * unless the environment variable UDEV_DEVICE_VERIFY_SYSFS, or SYSTEMD_DEVICE_VERIFY_SYSFS
  * when it is not set, is false, e.g. "0", to allow tests with a directory as /sys. The
@@ -1282,8 +1293,6 @@ static struct udev_device *udev_device_new(struct udev *udev)
 _public_ struct udev_device *udev_device_new_from_syspath(struct udev *udev, const char *syspath)
 {
         _cleanup_free_ char *path = NULL;
-        const char *subdir;
-        const char *pos;
         struct stat statbuf;
         struct udev_device *udev_device;
         int r;
@@ -1298,47 +1307,55 @@ _public_ struct udev_device *udev_device_new_from_syspath(struct udev *udev, con
                 return NULL;
         }
 
-        /* path is below /sys, e.g. not /sysfoo */
-        if (isempty(path_startswith(syspath, "/sys/"))) {
+        /* path is below /sys, e.g. not /sysfoo; like systemd, /sys itself is refused below with ENODEV */
+        if (!path_startswith(syspath, "/sys/")) {
                 log_debug("not in sys :%s", syspath);
                 errno = EINVAL;
                 return NULL;
         }
 
-        /* resolve symlinks, "." and "..", and check that the device is still below /sys */
+        /* resolve symlinks, "." and "..", and check that the device is still below /sys; like
+         * device_set_syspath() of systemd, a path that does not exist is no device */
         r = sysfs_resolve(syspath, &path);
+        if (r == -ENOENT)
+                r = -ENODEV;
         if (r < 0) {
                 log_debug_errno(r, "failed to resolve %s: %m", syspath);
                 errno = -r;
                 return NULL;
         }
 
-        /* path is not a root directory */
-        subdir = path + strlen("/sys");
-        pos = strrchr(subdir, '/');
-        if (pos == NULL || pos[1] == '\0' || pos < &subdir[2]) {
-                errno = EINVAL;
+        /* like systemd, /sys alone is no device; sysfs_resolve() refuses it already */
+        if (path_equal(path, "/sys")) {
+                errno = ENODEV;
                 return NULL;
         }
 
-        if (startswith(path + strlen("/sys"), "/devices/")) {
+        /* Like device_set_syspath() of systemd: the devices in /sys/devices, also /sys/devices itself,
+         * must have a "uevent" file; everything else just needs to be a directory, e.g. /sys/class/net
+         * or /sys/class, which are pseudo-devices then. */
+        if (path_startswith(path, "/sys/devices")) {
                 _cleanup_free_ char *file = NULL;
 
-                /* all "devices" require a "uevent" file */
                 file = strjoin(path, "/uevent", NULL);
                 if (!file) {
                         errno = ENOMEM;
                         return NULL;
                 }
-                if (stat(file, &statbuf) != 0)
+                if (stat(file, &statbuf) != 0) {
+                        if (IN_SET(errno, ENOENT, ENOTDIR))
+                                errno = ENODEV;
                         return NULL;
+                }
         } else {
-                /* everything else just needs to be a directory */
-                if (stat(path, &statbuf) != 0)
+                if (stat(path, &statbuf) != 0) {
+                        if (errno == ENOENT)
+                                errno = ENODEV;
                         return NULL;
+                }
 
                 if (!S_ISDIR(statbuf.st_mode)) {
-                        errno = EISDIR;
+                        errno = ENODEV;
                         return NULL;
                 }
         }
