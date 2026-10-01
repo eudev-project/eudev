@@ -1149,6 +1149,23 @@ root, that device gets
 /dev/gpt\-auto\-root\-ignore\-factory\-reset
 while a factory reset is in progress or complete\&.
 .RE
+.PP
+\fIID_PART_GPT_SECTOR_SIZE=\fR
+.RS 4
+The sector size, 512, 1024, 2048 or 4096, for which the GPT partition table of the device was written, as found by looking for the GPT header in the second sector for each of these sizes\&. Set on every device with a GPT partition table that
+\fBblkid\fR
+is run on without
+\fB\-\-offset=\fR\&.
+.RE
+.PP
+\fIID_PART_GPT_AUTO_ROOT_DISK_NEEDS_LOOP=1\fR
+.RS 4
+Set on a disk whose GPT partitions the kernel cannot expose itself, because the partition table was written for another sector size than the one of the device (e\&.g\&. a GPT for 512\-byte sectors on a CD\-ROM with 2048\-byte blocks that was booted via El Torito) or because partition scanning is not enabled on the device, if it carries the EFI System Partition or the XBOOTLDR partition whose partition UUID the boot loader reports in the
+\fILoaderDevicePartUUID\-4a67b082\-0a4c\-41cf\-b6c7\-440b29bb8c4f\fR
+EFI variable\&. systemd then sets up a loop device with the sector size of
+\fIID_PART_GPT_SECTOR_SIZE=\fR
+to expose the partitions; eudev only sets the property, and ships no rule that sets up the loop device\&.
+.RE
 .SS "factory_reset"
 .PP
 \fBfactory_reset status\fR
