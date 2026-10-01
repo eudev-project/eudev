@@ -2082,7 +2082,7 @@ int main(int argc, char *argv[]) {
 
         f = fopen("/dev/kmsg", "w");
         if (f != NULL) {
-                fprintf(f, "<30>udevd[%u]: starting eudev-" VERSION "\n", getpid());
+                fprintf(f, "<30>udevd[%u]: starting eudev-" VERSION " (udev " UDEV_VERSION ")\n", getpid());
                 fclose(f);
         }
 
