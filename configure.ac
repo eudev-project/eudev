@@ -538,32 +538,58 @@ expand_dir() {
 	echo "$expand_dir_value"
 }
 
+# command substitution with backticks rather than $(...), which shells before POSIX do not know
+summary_prefix=`expand_dir "$prefix"`
+summary_exec_prefix=`expand_dir "$exec_prefix"`
+summary_sysconfdir=`expand_dir "$sysconfdir"`
+summary_datadir=`expand_dir "$datadir"`
+summary_includedir=`expand_dir "$includedir"`
+summary_bindir=`expand_dir "$bindir"`
+summary_libdir=`expand_dir "$libdir"`
+summary_rootprefix=`expand_dir "$rootprefix"`
+summary_rootlibdir=`expand_dir "$rootlibdir"`
+summary_rootlibexecdir=`expand_dir "$rootlibexecdir"`
+summary_datarootdir=`expand_dir "$datarootdir"`
+summary_rootrundir=`expand_dir "$rootrundir"`
+summary_udevconfdir=`expand_dir "$udevconfdir"`
+summary_udevconffile=`expand_dir "$udevconffile"`
+summary_udevhwdbdir=`expand_dir "$udevhwdbdir"`
+summary_udevhwdbbin=`expand_dir "$udevhwdbbin"`
+summary_udevlibexecdir=`expand_dir "$udevlibexecdir"`
+summary_udevkeymapdir=`expand_dir "$udevkeymapdir"`
+summary_udevkeymapforceredir=`expand_dir "$udevkeymapforceredir"`
+summary_udevrulesdir=`expand_dir "$udevrulesdir"`
+summary_pkgconfiglibdir=`expand_dir "$pkgconfiglibdir"`
+summary_sharepkgconfigdir=`expand_dir "$sharepkgconfigdir"`
+summary_bashcompletiondir=`expand_dir "$with_bashcompletiondir"`
+summary_zshcompletiondir=`expand_dir "$with_zshcompletiondir"`
+
 AC_MSG_RESULT([
-	prefix:                  $(expand_dir "$prefix")
-	exec_prefix:             $(expand_dir "$exec_prefix")
-	sysconfdir:              $(expand_dir "$sysconfdir")
-	datadir:                 $(expand_dir "$datadir")
-	includedir:              $(expand_dir "$includedir")
-	bindir:                  $(expand_dir "$bindir")
-	libdir:                  $(expand_dir "$libdir")
+	prefix:                  ${summary_prefix}
+	exec_prefix:             ${summary_exec_prefix}
+	sysconfdir:              ${summary_sysconfdir}
+	datadir:                 ${summary_datadir}
+	includedir:              ${summary_includedir}
+	bindir:                  ${summary_bindir}
+	libdir:                  ${summary_libdir}
 
-	rootprefix:              $(expand_dir "$rootprefix")
-	rootlibdir:              $(expand_dir "$rootlibdir")
-	rootlibexecdir:          $(expand_dir "$rootlibexecdir")
-	datarootdir:             $(expand_dir "$datarootdir")
-	rootrundir:              $(expand_dir "$rootrundir")
+	rootprefix:              ${summary_rootprefix}
+	rootlibdir:              ${summary_rootlibdir}
+	rootlibexecdir:          ${summary_rootlibexecdir}
+	datarootdir:             ${summary_datarootdir}
+	rootrundir:              ${summary_rootrundir}
 
-	udevconfdir:             $(expand_dir "$udevconfdir")
-	udevconffile:            $(expand_dir "$udevconffile")
-	udevhwdbdir:             $(expand_dir "$udevhwdbdir")
-	udevhwdbbin:             $(expand_dir "$udevhwdbbin")
-	udevlibexecdir:          $(expand_dir "$udevlibexecdir")
-	udevkeymapdir:           $(expand_dir "$udevkeymapdir")
-	udevkeymapforceredir:    $(expand_dir "$udevkeymapforceredir")
-	udevrulesdir:            $(expand_dir "$udevrulesdir")
+	udevconfdir:             ${summary_udevconfdir}
+	udevconffile:            ${summary_udevconffile}
+	udevhwdbdir:             ${summary_udevhwdbdir}
+	udevhwdbbin:             ${summary_udevhwdbbin}
+	udevlibexecdir:          ${summary_udevlibexecdir}
+	udevkeymapdir:           ${summary_udevkeymapdir}
+	udevkeymapforceredir:    ${summary_udevkeymapforceredir}
+	udevrulesdir:            ${summary_udevrulesdir}
 
-	pkgconfiglibdir:         $(expand_dir "$pkgconfiglibdir")
-	sharepkgconfigdir:       $(expand_dir "$sharepkgconfigdir")
+	pkgconfiglibdir:         ${summary_pkgconfiglibdir}
+	sharepkgconfigdir:       ${summary_sharepkgconfigdir}
 
 	system UIDs:             <=${with_system_uid_max}
 	system GIDs:             <=${with_system_gid_max}
@@ -576,8 +602,8 @@ AC_MSG_RESULT([
 	man pages:               ${install_manpages}
 	hwdb.d files:            ${install_hwdb}
 	systemd-hwdb:            ${enable_systemd_hwdb}
-	bashcompletiondir:       $(expand_dir "$with_bashcompletiondir")
-	zshcompletiondir:        $(expand_dir "$with_zshcompletiondir")
+	bashcompletiondir:       ${summary_bashcompletiondir}
+	zshcompletiondir:        ${summary_zshcompletiondir}
 ])
 
 # ------------------------------------------------------------------------------
