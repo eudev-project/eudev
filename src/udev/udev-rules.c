@@ -68,6 +68,10 @@ static unsigned parse_line_nr = 0;
                 : -abs(_e);                                                       \
         })
 
+/* systemd's text, also noted while checking a rules file */
+#undef log_oom
+#define log_oom()                               log_full_errno(LOG_ERR, ENOMEM, "Out of memory.")
+
 #define log_rule_full_errno(level, error, fmt, ...)                               \
         log_full_errno(level, error, "%s:%u " fmt, strna(parse_filename), parse_line_nr, ##__VA_ARGS__)
 #define log_rule_full(level, ...)               log_rule_full_errno(level, 0, __VA_ARGS__)
@@ -1307,6 +1311,8 @@ static int rule_resolve_user_or_group(struct udev_rules *rules, const char *name
         }
 
         r = rules_add_string(rules, name, &(*cache)[*cur].name_off);
+        if (r == -ENOMEM)
+                return log_oom();
         if (r < 0)
                 return log_rule_error_errno(r, "Failed to remember %s '%s': %m", group ? "group" : "user", name);
 
@@ -1872,6 +1878,8 @@ static int rule_add_key(struct rule_tmp *rule_tmp, enum token_type type,
          * add_rule(). */
         if (r < 0) {
                 rule_tmp->failed = true;
+                if (r == -ENOMEM)
+                        return log_oom();
                 return log_rule_error_errno(r, "Failed to add the key: %m");
         }
 
@@ -2477,6 +2485,10 @@ static int add_rule(struct udev_rules *rules, char *line,
                                                  rules_str(rules, rule_tmp.rule.rule.label_off));
                         rule_tmp.has_label = true;
                         r = rules_add_string(rules, value, &rule_tmp.rule.rule.label_off);
+                        if (r == -ENOMEM) {
+                                log_oom();
+                                goto invalid;
+                        }
                         if (r < 0) {
                                 log_rule_error_errno(r, "Failed to add the key: %m");
                                 goto invalid;
@@ -2679,6 +2691,8 @@ static int parse_file(struct udev_rules *rules, const char *filename) {
         /* Without the name, no rule of the file can be added. Like systemd, which skips the file when out of
          * memory, see udev_rules_new(). */
         r = rules_add_string(rules, filename, &filename_off);
+        if (r == -ENOMEM)
+                return log_oom();
         if (r < 0)
                 return log_error_errno(r, "Failed to add the name of the rules file %s: %m", filename);
 
