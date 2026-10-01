@@ -165,8 +165,19 @@ static char *rules_str(struct udev_rules *rules, unsigned int off) {
         return rules->strbuf->buf + off;
 }
 
-static unsigned int rules_add_string(struct udev_rules *rules, const char *s) {
-        return strbuf_add_string(rules->strbuf, s, strlen(s));
+/* Adds a string to the string buffer, and returns its offset in ret_off. Returns -ENOMEM when out of
+ * memory, and -E2BIG when the buffer would be larger than the offsets can be. */
+static int rules_add_string(struct udev_rules *rules, const char *s, unsigned int *ret_off) {
+        ssize_t off;
+
+        off = strbuf_add_string(rules->strbuf, s, strlen(s));
+        if (off < 0)
+                return off;
+        if ((size_t) off > UINT_MAX)
+                return -E2BIG;
+
+        *ret_off = off;
+        return 0;
 }
 
 /* KEY=="", KEY!="", KEY+="", KEY-="", KEY="", KEY:="" */
@@ -949,7 +960,6 @@ static int rule_resolve_user_or_group(struct udev_rules *rules, const char *name
         unsigned int *cur = group ? &rules->gids_cur : &rules->uids_cur;
         unsigned int *max = group ? &rules->gids_max : &rules->uids_max;
         unsigned int i;
-        ssize_t off;
         uid_t id;
         int r;
 
@@ -986,11 +996,10 @@ static int rule_resolve_user_or_group(struct udev_rules *rules, const char *name
                 *max += add;
         }
 
-        off = strbuf_add_string(rules->strbuf, name, strlen(name));
-        if (off < 0)
-                return log_oom();
+        r = rules_add_string(rules, name, &(*cache)[*cur].name_off);
+        if (r < 0)
+                return log_rule_error_errno(r, "Failed to remember %s '%s': %m", group ? "group" : "user", name);
 
-        (*cache)[*cur].name_off = off;
         (*cache)[*cur].uid = id;
         (*cur)++;
 
@@ -1425,6 +1434,7 @@ static int rule_add_key(struct rule_tmp *rule_tmp, enum token_type type,
                         const char *value, const void *data) {
         struct token *token;
         const char *attr = NULL;
+        int r = 0;
 
         /* Most callers do not check the result, add_rule() drops the rule then. */
         if (rule_tmp->failed)
@@ -1473,10 +1483,10 @@ static int rule_add_key(struct rule_tmp *rule_tmp, enum token_type type,
         case TK_M_TAG:
         case TK_A_TAG:
         case TK_A_STATIC_NODE:
-                token->key.value_off = rules_add_string(rule_tmp->rules, value);
+                r = rules_add_string(rule_tmp->rules, value, &token->key.value_off);
                 break;
         case TK_M_IMPORT_BUILTIN:
-                token->key.value_off = rules_add_string(rule_tmp->rules, value);
+                r = rules_add_string(rule_tmp->rules, value, &token->key.value_off);
                 token->key.builtin_cmd = *(enum udev_builtin_cmd *)data;
                 break;
         case TK_M_ENV:
@@ -1488,11 +1498,12 @@ static int rule_add_key(struct rule_tmp *rule_tmp, enum token_type type,
         case TK_A_ENV:
         case TK_A_SECLABEL:
                 attr = data;
-                token->key.value_off = rules_add_string(rule_tmp->rules, value);
-                token->key.attr_off = rules_add_string(rule_tmp->rules, attr);
+                r = rules_add_string(rule_tmp->rules, value, &token->key.value_off);
+                if (r >= 0)
+                        r = rules_add_string(rule_tmp->rules, attr, &token->key.attr_off);
                 break;
         case TK_M_TEST:
-                token->key.value_off = rules_add_string(rule_tmp->rules, value);
+                r = rules_add_string(rule_tmp->rules, value, &token->key.value_off);
                 /* like systemd, TEST{} without a mode checks only whether the file exists */
                 token->key.mode = data ? *(mode_t *)data : MODE_INVALID;
                 break;
@@ -1507,7 +1518,7 @@ static int rule_add_key(struct rule_tmp *rule_tmp, enum token_type type,
         case TK_A_RUN_BUILTIN:
         case TK_A_RUN_PROGRAM:
                 token->key.builtin_cmd = *(enum udev_builtin_cmd *)data;
-                token->key.value_off = rules_add_string(rule_tmp->rules, value);
+                r = rules_add_string(rule_tmp->rules, value, &token->key.value_off);
                 break;
         case TK_A_INOTIFY_WATCH:
         case TK_A_DEVLINK_PRIO:
@@ -1533,6 +1544,13 @@ static int rule_add_key(struct rule_tmp *rule_tmp, enum token_type type,
         case TK_UNSET:
                 log_rule_error("wrong type %u", type);
                 return -1;
+        }
+
+        /* Like systemd, which drops the rule line when it cannot add a token, drop the rule, see
+         * add_rule(). */
+        if (r < 0) {
+                rule_tmp->failed = true;
+                return log_rule_error_errno(r, "Failed to add the key: %m");
         }
 
         if (value != NULL && type < TK_M_MAX) {
@@ -2115,7 +2133,11 @@ static int add_rule(struct udev_rules *rules, char *line,
                                 log_rule_invalid_op("LABEL");
                                 goto invalid;
                         }
-                        rule_tmp.rule.rule.label_off = rules_add_string(rules, value);
+                        r = rules_add_string(rules, value, &rule_tmp.rule.rule.label_off);
+                        if (r < 0) {
+                                log_rule_error_errno(r, "Failed to add the key: %m");
+                                goto invalid;
+                        }
                         continue;
                 }
 
@@ -2290,10 +2312,11 @@ static int parse_file(struct udev_rules *rules, const char *filename) {
         _cleanup_fclose_ FILE *f = NULL;
         _cleanup_free_ char *continuation = NULL;
         unsigned int first_token;
-        unsigned int filename_off;
+        unsigned int filename_off = 0;  /* avoid false maybe-uninitialized warning */
         unsigned line_nr = 0, first_line_nr = 0, too_long_line_nr = 0;
         bool ignore_line = false;
         unsigned int i;
+        int r;
 
         f = fopen(filename, "re");
         if (!f) {
@@ -2309,8 +2332,13 @@ static int parse_file(struct udev_rules *rules, const char *filename) {
         } else
                 log_debug("Reading rules file: %s", filename);
 
+        /* Without the name, no rule of the file can be added. Like systemd, which skips the file when out of
+         * memory, see udev_rules_new(). */
+        r = rules_add_string(rules, filename, &filename_off);
+        if (r < 0)
+                return log_error_errno(r, "Failed to add the name of the rules file %s: %m", filename);
+
         first_token = rules->token_cur;
-        filename_off = rules_add_string(rules, filename);
         parse_filename = filename;
 
         /* Like udev_rules_parse_file() of systemd: a line ending with a backslash is continued on the next
@@ -2509,8 +2537,11 @@ struct udev_rules *udev_rules_new(struct udev *udev, int resolve_names) {
                 return udev_rules_unref(rules);
         }
 
-        STRV_FOREACH(f, files)
-                parse_file(rules, *f);
+        STRV_FOREACH(f, files) {
+                r = parse_file(rules, *f);
+                if (r < 0)
+                        log_debug_errno(r, "Failed to read rules file %s, ignoring: %m", *f);
+        }
 
         strv_free(files);
 
