@@ -264,117 +264,6 @@ int parse_root_argument(const char *s, char **ret) {
         return 0;
 }
 
-int chase_below_root(const char *root, const char *path, char **ret) {
-        _cleanup_free_ char *done = NULL, *todo = NULL;
-        unsigned max_follow = 32;
-        char *p;
-
-        assert(path);
-        assert(ret);
-
-        if (isempty(root) || path_equal(root, "/")) {
-                p = realpath(path, NULL);
-                if (!p)
-                        return -errno;
-                *ret = p;
-                return 0;
-        }
-
-        /* the part of the path that is resolved, below root, empty for the root directory */
-        done = strdup("");
-        todo = strdup(path);
-        if (!done || !todo)
-                return -ENOMEM;
-
-        p = todo;
-        for (;;) {
-                _cleanup_free_ char *full = NULL, *target = NULL, *rest = NULL;
-                struct stat st;
-                size_t n;
-                char *c;
-
-                p += strspn(p, "/");
-                if (*p == '\0')
-                        break;
-
-                n = strcspn(p, "/");
-                c = strndup(p, n);
-                if (!c)
-                        return -ENOMEM;
-                p += n;
-
-                if (streq(c, ".")) {
-                        free(c);
-                        continue;
-                }
-
-                if (streq(c, "..")) {
-                        /* never above root */
-                        char *slash = strrchr(done, '/');
-
-                        if (slash)
-                                *slash = '\0';
-                        free(c);
-                        continue;
-                }
-
-                full = strjoin(root, done, "/", c, NULL);
-                if (!full) {
-                        free(c);
-                        return -ENOMEM;
-                }
-
-                if (lstat(full, &st) < 0) {
-                        free(c);
-                        return -errno;
-                }
-
-                if (S_ISLNK(st.st_mode)) {
-                        int r;
-
-                        free(c);
-
-                        if (--max_follow == 0)
-                                return -ELOOP;
-
-                        r = readlink_malloc(full, &target);
-                        if (r < 0)
-                                return r;
-
-                        /* continue with the target, followed by the rest of the path */
-                        rest = strjoin(target, "/", p, NULL);
-                        if (!rest)
-                                return -ENOMEM;
-
-                        if (path_is_absolute(target))
-                                done[0] = '\0';
-
-                        free(todo);
-                        todo = rest;
-                        rest = NULL;
-                        p = todo;
-                        continue;
-                }
-
-                {
-                        char *d = strjoin(done, "/", c, NULL);
-
-                        free(c);
-                        if (!d)
-                                return -ENOMEM;
-                        free(done);
-                        done = d;
-                }
-        }
-
-        p = strjoin(root, isempty(done) ? "/" : done, NULL);
-        if (!p)
-                return -ENOMEM;
-
-        *ret = path_kill_slashes(p);
-        return 0;
-}
-
 static bool path_is_masked(const char *path) {
         _cleanup_free_ char *target = NULL;
         struct stat st;
@@ -456,7 +345,7 @@ static int search_rules_file_in_dirs(const char *s, const char *root, char ***na
                         return 1; /* Found masked file. */
                 }
 
-                r = chase_below_root(root, p, &path);
+                r = chase(p, root, 0, &path);
                 if (r < 0)
                         return log_error_errno(r, "Failed to chase '%s': %m", name);
 
@@ -485,7 +374,7 @@ static int search_rules_file(const char *s, const char *root, char ***names, cha
         if (!name)
                 return log_oom();
 
-        r = chase_below_root(root, s, &path);
+        r = chase(s, root, 0, &path);
         if (r < 0)
                 return log_error_errno(r, "Failed to chase '%s': %m", name);
 
@@ -526,7 +415,7 @@ static int search_rules_file(const char *s, const char *root, char ***names, cha
                         if (!file_name)
                                 return log_oom();
 
-                        r = chase_below_root(root, *f + strlen(root_prefix(root)), &resolved);
+                        r = chase(*f + strlen(root_prefix(root)), root, 0, &resolved);
                         if (r < 0) {
                                 log_warning_errno(r, "Failed to chase '%s': %m", file_name);
                                 continue;
@@ -567,7 +456,7 @@ int search_rules_files(char * const *args, const char *root, char ***ret_names, 
                         if (path_is_masked(*f))
                                 continue;
 
-                        r = chase_below_root(root, *f + strlen(root_prefix(root)), &resolved);
+                        r = chase(*f + strlen(root_prefix(root)), root, 0, &resolved);
                         if (r < 0) {
                                 log_warning_errno(r, "Failed to chase '%s', ignoring: %m", *f);
                                 continue;

@@ -26,6 +26,7 @@
 #include <stdio.h>
 #include <fcntl.h>
 #include <dirent.h>
+#include <sys/stat.h>
 #include <sys/statvfs.h>
 
 #include "macro.h"
@@ -572,6 +573,119 @@ char *prefix_root(const char *root, const char *path) {
 
         strcpy(p, path);
         return n;
+}
+
+int chase(const char *path, const char *root, ChaseFlags flags, char **ret_path) {
+        _cleanup_free_ char *path_abs = NULL, *done = NULL, *todo = NULL;
+        unsigned max_follow = 32; /* like systemd's CHASE_MAX */
+        const char *p;
+        char *result;
+        bool exists = true;
+
+        assert(path);
+        assert(ret_path);
+
+        if (empty_or_root(root))
+                root = NULL;
+
+        if (!root && !path_is_absolute(path)) {
+                path_abs = path_make_absolute_cwd(path);
+                if (!path_abs)
+                        return -ENOMEM;
+                path = path_abs;
+        }
+
+        /* the part of the path that is resolved, below root, empty for root itself */
+        done = strdup("");
+        todo = strdup(path);
+        if (!done || !todo)
+                return -ENOMEM;
+
+        p = todo;
+        for (;;) {
+                _cleanup_free_ char *c = NULL, *full = NULL, *target = NULL;
+                struct stat st;
+                size_t n;
+                char *d;
+                int r;
+
+                p += strspn(p, "/");
+                if (*p == '\0')
+                        break;
+
+                n = strcspn(p, "/");
+                c = strndup(p, n);
+                if (!c)
+                        return -ENOMEM;
+                p += n;
+
+                if (streq(c, "."))
+                        continue;
+
+                if (streq(c, "..")) {
+                        /* never above root */
+                        char *slash = strrchr(done, '/');
+
+                        if (slash)
+                                *slash = '\0';
+                        continue;
+                }
+
+                full = strjoin(root ?: "", done, "/", c, NULL);
+                if (!full)
+                        return -ENOMEM;
+
+                if (lstat(full, &st) < 0) {
+                        if (errno != ENOENT || !(flags & CHASE_NONEXISTENT))
+                                return -errno;
+
+                        /* the rest of the path as given */
+                        d = strjoin(done, "/", c, p, NULL);
+                        if (!d)
+                                return -ENOMEM;
+                        free(done);
+                        done = d;
+                        exists = false;
+                        break;
+                }
+
+                if (S_ISLNK(st.st_mode)) {
+                        char *rest;
+
+                        if (--max_follow == 0)
+                                return -ELOOP;
+
+                        r = readlink_malloc(full, &target);
+                        if (r < 0)
+                                return r;
+
+                        /* continue with the target, followed by the rest of the path */
+                        rest = strjoin(target, "/", p, NULL);
+                        if (!rest)
+                                return -ENOMEM;
+
+                        if (path_is_absolute(target))
+                                done[0] = '\0';
+
+                        free(todo);
+                        todo = rest;
+                        p = todo;
+                        continue;
+                }
+
+                d = strjoin(done, "/", c, NULL);
+                if (!d)
+                        return -ENOMEM;
+                free(done);
+                done = d;
+        }
+
+        result = strjoin(root ?: "", "/", done, NULL);
+        if (!result)
+                return -ENOMEM;
+
+        *ret_path = path_simplify(result);
+        return exists;
 }
 
 char* path_extend_internal(char **x, ...) {

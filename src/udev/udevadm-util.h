@@ -42,11 +42,6 @@ int device_wait_for_initialization(struct udev_device *device, usec_t timeout_us
  * it, and returns NULL for an empty path or "/". */
 int parse_root_argument(const char *s, char **ret);
 
-/* Resolves path below root, like systemd's chase() with CHASE_PREFIX_ROOT: absolute symlinks
- * are resolved relative to root, and ".." does not leave it. The result starts with root.
- * Without root, this is realpath(3). */
-int chase_below_root(const char *root, const char *path, char **ret);
-
 /* Like systemd's search_rules_files(): without arguments, all rules files in the rules
  * directories below root, a file overriding the ones with the same name in later directories,
  * except masked files, i.e. empty ones or symlinks to /dev/null. Otherwise, each argument is

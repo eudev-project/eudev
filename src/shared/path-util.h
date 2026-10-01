@@ -42,6 +42,19 @@ bool paths_check_timestamp(const char* const* paths, usec_t *paths_ts_usec, bool
 
 char *prefix_root(const char *root, const char *path);
 
+typedef enum ChaseFlags {
+        CHASE_NONEXISTENT = 1 << 0, /* it is OK if the path does not exist */
+} ChaseFlags;
+
+/* Like systemd's chase(): resolves the symlinks, "." and ".." of path below root, i.e. absolute
+ * symlinks are resolved relative to root, and ".." does not leave it. root may be NULL, empty or "/"
+ * for the host, and then a relative path is relative to the current directory; with a root, the
+ * path is relative to root. Returns 1 and the resolved path, prefixed with root, if it exists. If a
+ * component does not exist, returns 0 and the path resolved as far as possible, followed by the
+ * rest as given, with CHASE_NONEXISTENT, and -ENOENT without. Other errors are returned as a
+ * negative errno, e.g. -ELOOP for too many symlinks. */
+int chase(const char *path, const char *root, ChaseFlags flags, char **ret_path);
+
 char* path_extend_internal(char **x, ...);
 
 int path_find_first_component(const char **p, bool accept_dot_dot, const char **ret);

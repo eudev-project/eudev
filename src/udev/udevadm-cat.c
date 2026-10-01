@@ -161,7 +161,7 @@ static int cat_config(bool *newline) {
         if (!name)
                 return log_oom();
 
-        r = chase_below_root(arg_root, UDEV_CONF_DIR "/udev.conf", &path);
+        r = chase(UDEV_CONF_DIR "/udev.conf", arg_root, 0, &path);
         if (r < 0) {
                 printf("%s# Main configuration file %s not found%s\n",
                        ansi_highlight_magenta(),
