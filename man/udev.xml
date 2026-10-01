@@ -312,8 +312,10 @@
           <term><varname>TEST{<replaceable>octal mode mask</replaceable>}</varname></term>
           <listitem>
             <para>Test the existence of a file. An octal mode mask can be specified
-            if needed. A mode mask that is not an octal number of at most
-            <literal>7777</literal> is an error, and the rule line is ignored.</para>
+            if needed; then the file must also have at least one of the bits of the mask set in
+            its mode, e.g. <literal>TEST{0111}</literal> is true for a file that anyone may
+            execute. A mode mask that is zero, or that is not an octal number of at most
+            <literal>7777</literal>, is an error, and the rule line is ignored.</para>
           </listitem>
         </varlistentry>
 

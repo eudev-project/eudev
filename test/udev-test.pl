@@ -1819,6 +1819,17 @@ KERNEL=="sda", TEST{0444}=="uevent", SYMLINK+="found"
 EOF
         },
         {
+                desc            => "TEST with a mask of 0 is an error",
+                devpath         => "/devices/pci0000:00/0000:00:1f.2/host0/target0:0:0/0:0:0:0/block/sda",
+                exp_name        => "found",
+                not_exp_name    => "bad",
+                rules           => <<EOF
+KERNEL=="sda", TEST{0}!="uevent", SYMLINK+="bad"
+KERNEL=="sda", TEST{0000}!="/nonexistent", SYMLINK+="bad"
+KERNEL=="sda", TEST{0200}=="uevent", TEST{0111}!="uevent", TEST{}=="uevent", SYMLINK+="found"
+EOF
+        },
+        {
                 desc            => "NAME=\"%k\" and NAME=\"\" are errors",
                 devpath         => "/devices/pci0000:00/0000:00:1f.2/host0/target0:0:0/0:0:0:0/block/sda",
                 exp_name        => "found",

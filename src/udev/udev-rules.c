@@ -1493,8 +1493,8 @@ static int rule_add_key(struct rule_tmp *rule_tmp, enum token_type type,
                 break;
         case TK_M_TEST:
                 token->key.value_off = rules_add_string(rule_tmp->rules, value);
-                if (data != NULL)
-                        token->key.mode = *(mode_t *)data;
+                /* like systemd, TEST{} without a mode checks only whether the file exists */
+                token->key.mode = data ? *(mode_t *)data : MODE_INVALID;
                 break;
         case TK_A_DUMP:
                 token->key.dump_flags = *(JsonFormatFlags *)data;
@@ -2057,11 +2057,16 @@ static int add_rule(struct udev_rules *rules, char *line,
                                 log_rule_invalid_prefix("TEST");
                                 goto invalid;
                         }
-                        /* like systemd, an invalid mode is an error, TEST{} has no mode */
+                        /* like systemd, an invalid mode is an error, and TEST{} has no mode; unlike systemd,
+                         * where TEST{0} never matches, a mask of 0 is an error too */
                         if (!isempty(attr)) {
                                 r = parse_mode(attr, &mode);
                                 if (r < 0) {
                                         log_rule_error_errno(r, "Failed to parse mode '%s': %m", attr);
+                                        goto invalid;
+                                }
+                                if (mode == 0) {
+                                        log_rule_error("Mode mask of TEST must not be zero, ignoring.");
                                         goto invalid;
                                 }
                                 rule_add_key(&rule_tmp, TK_M_TEST, op, value, &mode);
@@ -2964,8 +2969,9 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                         }
                         attr_subst_subdir(filename, sizeof(filename));
 
+                        /* like systemd, with a mode mask, at least one of its bits must be set */
                         match = (stat(filename, &statbuf) == 0);
-                        if (match && cur->key.mode > 0)
+                        if (match && cur->key.mode != MODE_INVALID)
                                 match = ((statbuf.st_mode & cur->key.mode) > 0);
                         if (match && cur->key.op == OP_NOMATCH)
                                 goto nomatch;
