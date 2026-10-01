@@ -67,7 +67,7 @@ static int adm_help(struct udev *udev __attribute__((unused)), int argc __attrib
 
         pager_open(0);
 
-        printf("%s [--help] [--version] [--debug] COMMAND [COMMAND OPTIONS]\n\n"
+        printf("%s [OPTIONS] COMMAND [COMMAND OPTIONS]\n\n"
                "Send control commands or test the device manager.\n\n"
                "Commands:\n"
                , program_invocation_short_name);
@@ -75,6 +75,11 @@ static int adm_help(struct udev *udev __attribute__((unused)), int argc __attrib
         for (i = 0; i < ELEMENTSOF(udevadm_cmds); i++)
                 if (udevadm_cmds[i]->help != NULL)
                         printf("  %-12s  %s\n", udevadm_cmds[i]->name, udevadm_cmds[i]->help);
+
+        printf("\nOptions:\n"
+               "  -h --help     Show this help\n"
+               "  -V --version  Show package version\n"
+               "  -d --debug    Enable debug logging\n");
         print_man_page_link();
         return 0;
 }

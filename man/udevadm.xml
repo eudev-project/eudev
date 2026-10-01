@@ -87,6 +87,7 @@
         </listitem>
       </varlistentry>
       <varlistentry>
+        <term><option>-V</option></term>
         <term><option>--version</option></term>
         <listitem>
           <para>Print version number.</para>
