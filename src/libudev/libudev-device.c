@@ -2119,6 +2119,23 @@ static const char *sysattr_cache_error(struct udev_device *udev_device, const ch
         return NULL;
 }
 
+/* Looks up the cached value or error of an attribute. Returns true when it is cached, with the value in
+ * ret, or NULL and errno set. */
+static bool sysattr_cache_get(struct udev_device *udev_device, const char *sysattr, const char **ret)
+{
+        struct udev_list_entry *list_entry;
+
+        list_entry = udev_list_get_entry(&udev_device->sysattr_value_list);
+        list_entry = udev_list_entry_get_by_name(list_entry, sysattr);
+        if (!list_entry)
+                return false;
+
+        *ret = udev_list_entry_get_value(list_entry);
+        if (!*ret)
+                errno = udev_list_entry_get_num(list_entry) ?: ENOENT;
+        return true;
+}
+
 /**
  * udev_device_get_sysattr_value:
  * @udev_device: udev device
@@ -2127,14 +2144,18 @@ static const char *sysattr_cache_error(struct udev_device *udev_device, const ch
  * The retrieved value is cached in the device. Repeated calls will return the same
  * value and not open the attribute again. So is the error, when it cannot be read.
  *
+ * Like in systemd, symlinks are followed, also an attribute that is a symlink, as long as the
+ * attribute stays below /sys, except "driver", "subsystem" and "module", whose value is the
+ * last element of the target of the symlink.
+ *
  * Returns: the content of a sys attribute file, or #NULL if there is no sys attribute value,
- * with errno set, e.g. to EACCES for an attribute that is not readable.
+ * with errno set, e.g. to EACCES for an attribute that is not readable, EISDIR for a
+ * directory, or EINVAL for an attribute outside of /sys.
  **/
 _public_ const char *udev_device_get_sysattr_value(struct udev_device *udev_device, const char *sysattr)
 {
-        _cleanup_free_ char *buf = NULL;
+        _cleanup_free_ char *buf = NULL, *path = NULL, *resolved = NULL, *relative = NULL;
         struct udev_list_entry *list_entry;
-        char path[UTIL_PATH_SIZE];
         char link_value[UTIL_PATH_SIZE];
         const char *value;
         struct stat statbuf;
@@ -2151,53 +2172,60 @@ _public_ const char *udev_device_get_sysattr_value(struct udev_device *udev_devi
         }
 
         /* look for possibly already cached result, also a failure */
-        list_entry = udev_list_get_entry(&udev_device->sysattr_value_list);
-        list_entry = udev_list_entry_get_by_name(list_entry, sysattr);
-        if (list_entry != NULL) {
-                const char *val = udev_list_entry_get_value(list_entry);
+        if (sysattr_cache_get(udev_device, sysattr, &value))
+                return value;
 
-                if (!val)
-                        errno = udev_list_entry_get_num(list_entry) ?: ENOENT;
-                return val;
+        path = strjoin(udev_device_get_syspath(udev_device), "/", sysattr, NULL);
+        if (!path) {
+                errno = ENOMEM;
+                return NULL;
         }
 
-        strscpyl(path, sizeof(path), udev_device_get_syspath(udev_device), "/", sysattr, NULL);
-        if (lstat(path, &statbuf) != 0)
-                return sysattr_cache_error(udev_device, sysattr, errno);
+        /*
+         * Some core links return only the last element of the target path,
+         * these are just values, the paths should not be exposed. Like in
+         * systemd, they are read like other attributes when they are no
+         * symlinks.
+         */
+        if (streq(sysattr, "driver") ||
+            streq(sysattr, "subsystem") ||
+            streq(sysattr, "module")) {
+                if (lstat(path, &statbuf) != 0)
+                        return sysattr_cache_error(udev_device, sysattr, errno);
 
-        if (S_ISLNK(statbuf.st_mode)) {
-                /*
-                 * Some core links return only the last element of the target path,
-                 * these are just values, the paths should not be exposed.
-                 */
-                if (streq(sysattr, "driver") ||
-                    streq(sysattr, "subsystem") ||
-                    streq(sysattr, "module")) {
+                if (S_ISLNK(statbuf.st_mode)) {
                         if (util_get_sys_core_link_value(udev_device->udev, sysattr,
                                                          udev_device->syspath, link_value, sizeof(link_value)) < 0)
                                 return sysattr_cache_error(udev_device, sysattr, ENOENT);
                         value = link_value;
                         goto cache;
                 }
-
-                /* other symlinks are not values */
-                return sysattr_cache_error(udev_device, sysattr, ENOENT);
         }
 
-        /* skip directories */
-        if (S_ISDIR(statbuf.st_mode))
-                return sysattr_cache_error(udev_device, sysattr, EISDIR);
-
-        /* do not read outside of sysfs */
-        r = sysattr_check_path(path, NULL);
+        /* Like systemd, follow the symlinks of the path, also of its last component, but do not read
+         * outside of sysfs. When the path cannot be resolved, the error is cached under the name as
+         * given, else under the resolved path relative to the device. */
+        r = sysattr_check_path(path, &resolved);
         if (r < 0)
                 return sysattr_cache_error(udev_device, sysattr, r);
+
+        r = path_make_relative(udev_device_get_syspath(udev_device), resolved, &relative);
+        if (r < 0)
+                return sysattr_cache_error(udev_device, sysattr, r);
+
+        /* look for a cached result of the resolved path */
+        if (sysattr_cache_get(udev_device, relative, &value))
+                return value;
 
         /* Like systemd, read the whole value, of up to READ_VIRTUAL_BYTES_MAX (4 MiB). Some attributes contain
-         * NUL bytes; the value ends at the first one, as it is a string. */
-        r = read_virtual_file(path, SIZE_MAX, &buf, &size);
+         * NUL bytes; the value ends at the first one, as it is a string. Unlike systemd, which says EBADF for
+         * any file that is not a regular file, a directory fails with EISDIR, like before the attributes were
+         * resolved, and like in systemd before v258. */
+        r = read_virtual_file(resolved, SIZE_MAX, &buf, &size);
+        if (r == -EBADF && stat(resolved, &statbuf) == 0 && S_ISDIR(statbuf.st_mode))
+                r = -EISDIR;
         if (r < 0)
-                return sysattr_cache_error(udev_device, sysattr, r);
+                return sysattr_cache_error(udev_device, relative, r);
 
         /* got a valid value, store it in cache and return it */
         /* drop trailing newlines, including carriage returns */
@@ -2205,6 +2233,7 @@ _public_ const char *udev_device_get_sysattr_value(struct udev_device *udev_devi
         while (len > 0 && strchr(NEWLINE, buf[len - 1]))
                 buf[--len] = '\0';
         value = buf;
+        sysattr = relative;
 cache:
         list_entry = udev_list_entry_add(&udev_device->sysattr_value_list, sysattr, value);
         if (!list_entry) {
