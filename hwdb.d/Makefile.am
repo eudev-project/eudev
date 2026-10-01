@@ -64,15 +64,23 @@ PYTHON3 = python3
 # Regenerates the 20-*.hwdb files that are generated from the sources above, in the source directory, as
 # tools/update-hwdb.sh of systemd does without downloading the sources first (-n), but without updating
 # 20-acpi-vendor.hwdb.patch. The entries of this hand-made patch override registry entries of the same ids,
-# so those are dropped.
+# so those are dropped. The intermediate files are removed also when a step fails.
+acpi_intermediate = \
+	20-acpi-vendor.hwdb.base \
+	20-acpi-vendor.hwdb.patched \
+	20-acpi-vendor.hwdb.patched.orig \
+	20-acpi-vendor.hwdb.patched.rej \
+	20-acpi-vendor.hwdb.new
+
 regenerate-hwdb:
-	cd $(srcdir) && \
-	$(PYTHON3) ./ids_parser.py && \
-	$(PYTHON3) ./acpi-update.py > 20-acpi-vendor.hwdb.base && \
-	patch -p0 -o 20-acpi-vendor.hwdb.patched 20-acpi-vendor.hwdb.base < 20-acpi-vendor.hwdb.patch && \
-	$(PYTHON3) ./dedup-hwdb.py < 20-acpi-vendor.hwdb.patched > 20-acpi-vendor.hwdb.new && \
-	mv 20-acpi-vendor.hwdb.new 20-acpi-vendor.hwdb && \
-	rm -f 20-acpi-vendor.hwdb.base 20-acpi-vendor.hwdb.patched
+	cd $(srcdir) && { \
+		$(PYTHON3) ./ids_parser.py && \
+		$(PYTHON3) ./acpi-update.py > 20-acpi-vendor.hwdb.base && \
+		patch -p0 -o 20-acpi-vendor.hwdb.patched 20-acpi-vendor.hwdb.base < 20-acpi-vendor.hwdb.patch && \
+		$(PYTHON3) ./dedup-hwdb.py < 20-acpi-vendor.hwdb.patched > 20-acpi-vendor.hwdb.new && \
+		mv 20-acpi-vendor.hwdb.new 20-acpi-vendor.hwdb; \
+		r=$$?; rm -f $(acpi_intermediate); exit $$r; \
+	}
 
 # Checks the hwdb files with parse_hwdb.py, as the parse-hwdb test of systemd does: 20-dmi-id.hwdb,
 # 20-net-ifname.hwdb and the 60-*, 70-* and 80-* files. Its grammar does not cover the other 20-*.hwdb files.
