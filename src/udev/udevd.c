@@ -1596,16 +1596,21 @@ static int synthesize_change(struct udev_device *dev) {
                 if (r >= 0)
                         r = set_reserve(synthesize_change_children, 1);
                 if (r < 0) {
-                        log_debug_errno(r, "Failed to allocate memory to remember the process re-reading the partition table of %s, re-reading it synchronously: %m",
-                                        udev_device_get_devnode(dev));
+                        log_warning_errno(r, "Failed to allocate memory to remember the process re-reading the partition table of %s, re-reading it synchronously: %m",
+                                          udev_device_get_devnode(dev));
                         (void) reread_partition_table(dev, REREADPT_FORCE_UEVENT|REREADPT_BSD_LOCK);
                         return 0;
                 }
 
                 pid = fork();
-                if (pid < 0)
-                        return log_debug_errno(errno, "Failed to fork process to re-read partition table of %s: %m",
-                                               udev_device_get_devnode(dev));
+                if (pid < 0) {
+                        /* Unlike systemd, which then sends no change event at all, re-read the partition
+                         * table synchronously, as before the child was introduced. */
+                        log_warning_errno(errno, "Failed to fork process to re-read the partition table of %s, re-reading it synchronously: %m",
+                                          udev_device_get_devnode(dev));
+                        (void) reread_partition_table(dev, REREADPT_FORCE_UEVENT|REREADPT_BSD_LOCK);
+                        return 0;
+                }
                 if (pid == 0) {
                         /* child */
                         (void) prctl(PR_SET_NAME, "(udev-synth)");
