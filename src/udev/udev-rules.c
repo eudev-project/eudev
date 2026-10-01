@@ -899,7 +899,7 @@ static char *token_to_string(struct udev_rules *rules, struct token *token) {
                 key = "TAGS";
                 break;
         case TK_M_TEST:
-                if (token->key.mode != 0) {
+                if (token->key.mode != MODE_INVALID) {
                         r = asprintf(&s, "TEST{%#o}%s\"%s\"", (unsigned) token->key.mode, op, value);
                         return r < 0 ? NULL : s;
                 }
