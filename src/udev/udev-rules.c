@@ -2777,8 +2777,9 @@ enum escape_type {
 };
 
 /* Adds or removes one symlink of SYMLINK=. libudev refuses unsafe symlinks and symlinks containing
- * control characters, and normalizes the others. */
-static void apply_devlink(struct udev_event *event, struct udev_rules *rules, struct token *rule,
+ * control characters, and normalizes the others. Like systemd, only running out of memory is an error, which
+ * stops the processing of the event. */
+static int apply_devlink(struct udev_event *event, struct udev_rules *rules, struct token *rule,
                           enum operation_type op, const char *link) {
         _cleanup_free_ char *escaped = NULL;
         int r;
@@ -2793,12 +2794,10 @@ static void apply_devlink(struct udev_event *event, struct udev_rules *rules, st
                         log_event_debug(event, rules, rule, "Removed device node symlink \"%s\"", link);
                 else if (op != OP_REMOVE)
                         log_event_debug(event, rules, rule, "Added device node symlink \"%s\".", link);
-                return;
+                return 0;
         }
-        if (r == -ENOMEM) {
-                log_oom();
-                return;
-        }
+        if (r == -ENOMEM)
+                return log_oom();
 
         escaped = cescape(link);
         if (op == OP_REMOVE)
@@ -2807,6 +2806,7 @@ static void apply_devlink(struct udev_event *event, struct udev_rules *rules, st
         else
                 log_event_warning_errno(event, rules, rule, r,
                                         "Failed to add device node symlink \"%s\", ignoring: %m", escaped ?: link);
+        return 0;
 }
 
 /* Like udev_replace_ifname() of systemd: with the naming schemes that have NAMING_REPLACE_STRICTLY, i.e.
@@ -2947,8 +2947,13 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                                           false, properties_list, "sysctl entry name"))
                                 goto nomatch;
                         sysctl_normalize(filename);
-                        if (sysctl_read(filename, &value) < 0)
+                        /* Like systemd, an error other than a missing entry stops the processing of the event. */
+                        r = sysctl_read(filename, &value);
+                        if (r == -ENOENT)
                                 goto nomatch;
+                        if (r < 0)
+                                return log_event_error_errno(event, rules, rule, r, "Failed to read sysctl \"%s\": %m",
+                                                             filename);
 
                         len = strlen(value);
                         while (len > 0 && isspace(value[--len]))
@@ -3045,10 +3050,25 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                                                 goto nomatch;
                                 }
                         }
-                        (void) attr_subst_subdir(filename);
+
+                        /* Like systemd, an error of resolving a "*" path component other than that nothing is
+                         * found stops the processing of the event; an error of stat() other than a missing file
+                         * is logged, and taken as a missing file. */
+                        r = attr_subst_subdir(filename);
+                        if (r < 0 && r != -ENOENT)
+                                return log_event_error_errno(event, rules, rule, r,
+                                                             "Failed to test for the existence of \"%s\": %m", filename);
+                        if (r < 0)
+                                match = false;
+                        else if (stat(filename, &statbuf) < 0) {
+                                if (errno != ENOENT)
+                                        log_event_warning_errno(event, rules, rule, errno,
+                                                                "Failed to stat \"%s\", ignoring: %m", filename);
+                                match = false;
+                        } else
+                                match = true;
 
                         /* like systemd, with a mode mask, at least one of its bits must be set */
-                        match = (stat(filename, &statbuf) == 0);
                         if (match && cur->key.mode != MODE_INVALID)
                                 match = ((statbuf.st_mode & cur->key.mode) > 0);
                         if (match && cur->key.op == OP_NOMATCH)
@@ -3223,10 +3243,8 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                         log_event_info(event, rules, rule, "Dumping current state:");
 
                         f = open_memstream(&buf, &size);
-                        if (!f) {
-                                log_oom();
-                                break;
-                        }
+                        if (!f)
+                                return log_oom();
 
                         (void) dump_event(event, cur->key.dump_flags, f);
 
@@ -3406,7 +3424,9 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
 
                         if (cur->key.op == OP_ASSIGN || cur->key.op == OP_ASSIGN_FINAL)
                                 udev_list_cleanup(&event->seclabel_list);
-                        udev_list_entry_add(&event->seclabel_list, name, label);
+                        /* like systemd, failing to store it stops the processing of the event */
+                        if (!udev_list_entry_add(&event->seclabel_list, name, label))
+                                return log_oom();
                         log_event_debug(event, rules, rule, "Set security label: %s=%s", name, label);
                         break;
                 }
@@ -3421,9 +3441,11 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                         if (value[0] == '\0') {
                                 if (cur->key.op == OP_ADD)
                                         break;
+                                /* like systemd, a failure stops the processing of the event */
                                 r = udev_device_add_property(event->dev, name, NULL);
                                 if (r < 0)
-                                        log_event_error_errno(event, rules, rule, r, "Failed to remove property \"%s\": %m", name);
+                                        return log_event_error_errno(event, rules, rule, r,
+                                                                     "Failed to remove property \"%s\": %m", name);
                                 break;
                         }
 
@@ -3454,10 +3476,11 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                                                         count, p);
                         }
 
+                        /* like systemd, running out of memory stops the processing of the event */
                         r = udev_device_add_property(event->dev, name, value_new);
                         if (r == -ENOMEM)
-                                log_oom();
-                        else if (r < 0) {
+                                return log_oom();
+                        if (r < 0) {
                                 _cleanup_free_ char *v = cescape(value_new);
 
                                 log_event_warning_errno(event, rules, rule, r, "Failed to set property \"%s=%s\", ignoring: %m",
@@ -3482,6 +3505,8 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                                 udev_device_remove_tag(event->dev, tag);
                         else {
                                 r = udev_device_add_tag(event->dev, tag, true);
+                                if (r == -ENOMEM) /* like systemd, this stops the processing of the event */
+                                        return log_oom();
                                 if (r == -EINVAL && tag[0] != '\0')
                                         log_event_warning_errno(event, rules, rule, r, "Failed to %s tag \"%s\", ignoring: %m",
                                                                 assign ? "set" : "add", tag);
@@ -3523,8 +3548,10 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                                                 name);
                                 break;
                         }
-                        free(event->name);
-                        event->name = strdup(name_str);
+                        /* like systemd, running out of memory stops the processing of the event */
+                        r = free_and_strdup(&event->name, name_str);
+                        if (r < 0)
+                                return log_oom();
                         if (udev_device_get_ifindex(event->dev) > 0)
                                 log_event_debug(event, rules, rule, "Set network interface name: %s", strna(event->name));
                         else
@@ -3563,14 +3590,19 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                         next = strchr(pos, ' ');
                         while (next != NULL) {
                                 next[0] = '\0';
-                                apply_devlink(event, rules, rule, cur->key.op, pos);
+                                r = apply_devlink(event, rules, rule, cur->key.op, pos);
+                                if (r < 0)
+                                        return r;
                                 while (isspace(next[1]))
                                         next++;
                                 pos = &next[1];
                                 next = strchr(pos, ' ');
                         }
-                        if (pos[0] != '\0')
-                                apply_devlink(event, rules, rule, cur->key.op, pos);
+                        if (pos[0] != '\0') {
+                                r = apply_devlink(event, rules, rule, cur->key.op, pos);
+                                if (r < 0)
+                                        return r;
+                        }
                         break;
                 }
                 case TK_A_ATTR: {
@@ -3656,7 +3688,11 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                                 else {
                                         event_cache_written_sysattr(event, resolved, value);
 
+                                        /* like systemd, where failing to copy the value stops the processing of
+                                         * the event, as it does not fit into memory, and caching it may fail */
                                         r = udev_device_cache_sysattr_value(event->dev, resolved, value);
+                                        if (r == -ENOMEM)
+                                                return log_oom();
                                         if (r < 0)
                                                 log_event_warning_errno(event, rules, rule, r,
                                                                         "Failed to cache sysfs attribute \"%s\", ignoring: %m",
@@ -3678,13 +3714,16 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                                 break;
                         sysctl_normalize(filename);
                         if (!EVENT_MODE_DESTRUCTIVE(event)) {
-                                char path[UTIL_PATH_SIZE];
+                                _cleanup_free_ char *path = NULL;
 
                                 log_event_debug(event, rules, rule,
                                                 "Running in test mode, skipping writing \"%s\" to sysctl entry \"%s\".",
                                                 value, filename);
 
-                                strscpyl(path, sizeof(path), "/proc/sys/", filename, NULL);
+                                /* like systemd, not cut; running out of memory stops the processing of the event */
+                                path = strjoin("/proc/sys/", filename, NULL);
+                                if (!path)
+                                        return log_oom();
                                 r = verify_regular(path, true);
                                 if (r < 0 && !IN_SET(r, -EACCES, -EPERM))
                                         log_event_error_errno(event, rules, rule, r,
@@ -3721,11 +3760,10 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                                 break;
 
                         log_event_debug(event, rules, rule, "Set command: %s", cmd);
+                        /* like systemd, failing to store it stops the processing of the event */
                         entry = udev_list_entry_add(&event->run_list, cmd, NULL);
-                        if (entry == NULL) {
-                                log_oom();
-                                break;
-                        }
+                        if (entry == NULL)
+                                return log_oom();
                         udev_list_entry_set_num(entry, cur->key.builtin_cmd);
                         break;
                 }

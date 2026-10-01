@@ -1899,6 +1899,39 @@ KERNEL=="sda", SYMLINK+="bad", RUN+="/bin/sh -c 'ln -s sda /dev/bad'"
 EOF
         },
         {
+                desc            => "an error of removing a property stops the processing of the event",
+                devpath         => "/devices/pci0000:00/0000:00:1f.2/host0/target0:0:0/0:0:0:0/block/sda",
+                exp_name        => "sda",
+                not_exp_name    => "bad",
+                rules           => <<EOF
+KERNEL=="sda", SYMLINK+="bad"
+KERNEL=="sda", ENV{a-b}=""
+KERNEL=="sda", SYMLINK+="bad", RUN+="/bin/sh -c 'ln -s sda /dev/bad'"
+EOF
+        },
+        {
+                desc            => "an error of resolving a \"*\" of TEST stops the processing of the event",
+                devpath         => "/devices/pci0000:00/0000:00:1f.2/host0/target0:0:0/0:0:0:0/block/sda",
+                exp_name        => "sda",
+                not_exp_name    => "bad",
+                rules           => <<EOF
+KERNEL=="sda", SYMLINK+="bad"
+KERNEL=="sda", TEST=="/etc/passwd/*/x"
+KERNEL=="sda", SYMLINK+="bad", RUN+="/bin/sh -c 'ln -s sda /dev/bad'"
+EOF
+        },
+        {
+                desc            => "an error of reading a SYSCTL stops the processing of the event",
+                devpath         => "/devices/pci0000:00/0000:00:1f.2/host0/target0:0:0/0:0:0:0/block/sda",
+                exp_name        => "sda",
+                not_exp_name    => "bad",
+                rules           => <<EOF
+KERNEL=="sda", SYMLINK+="bad"
+KERNEL=="sda", SYSCTL{kernel}=="x"
+KERNEL=="sda", SYMLINK+="bad", RUN+="/bin/sh -c 'ln -s sda /dev/bad'"
+EOF
+        },
+        {
                 desc            => "program arguments are split like systemd",
                 devpath         => "/devices/pci0000:00/0000:00:1f.2/host0/target0:0:0/0:0:0:0/block/sda",
                 exp_name        => "found",

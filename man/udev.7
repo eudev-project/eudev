@@ -731,6 +731,20 @@ Similar to
 .RE
 .RE
 .PP
+Like in systemd, some errors while a rule is applied stop the processing of the event, like the ones of
+\fIIMPORT\fR
+above: when
+\fISYSCTL{}\fR
+cannot read the kernel parameter, unless it does not exist; when a
+*
+path component of
+\fITEST\fR
+cannot be resolved because the directory cannot be read; when
+\fIENV{}\fR
+cannot remove a property, e\&.g\&. because its name is not valid; and when the memory runs out\&. Then no further rules are applied, the device node and its symlinks are not handled, the database is not updated, and the programs of
+\fIRUN\fR
+are not run; the event is still sent to the event listeners\&.
+.PP
 The
 \fINAME\fR,
 \fISYMLINK\fR,

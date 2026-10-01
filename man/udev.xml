@@ -833,6 +833,15 @@ SUBSYSTEM=="net", OPTIONS="log_level=debug"</programlisting></para>
         </varlistentry>
       </variablelist>
 
+      <para>Like in systemd, some errors while a rule is applied stop the processing of the
+      event, like the ones of <varname>IMPORT</varname> above: when <varname>SYSCTL{}</varname>
+      cannot read the kernel parameter, unless it does not exist; when a <literal>*</literal>
+      path component of <varname>TEST</varname> cannot be resolved because the directory cannot
+      be read; when <varname>ENV{}</varname> cannot remove a property, e.g. because its name is
+      not valid; and when the memory runs out. Then no further rules are applied, the device
+      node and its symlinks are not handled, the database is not updated, and the programs of
+      <varname>RUN</varname> are not run; the event is still sent to the event listeners.</para>
+
       <para>The <varname>NAME</varname>, <varname>SYMLINK</varname>,
       <varname>PROGRAM</varname>, <varname>OWNER</varname>,
       <varname>GROUP</varname>, <varname>MODE</varname>, <varname>SECLABEL</varname>,
