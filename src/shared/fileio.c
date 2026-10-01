@@ -33,7 +33,9 @@
  * With max_size SIZE_MAX, the whole file is read, and a file larger than READ_VIRTUAL_BYTES_MAX fails with
  * EFBIG; otherwise at most max_size bytes are read. Returns 1 if the whole file was read, 0 if the content
  * is truncated. The content is NUL-terminated; without ret_size, a content with an embedded NUL fails with
- * EBADMSG. */
+ * EBADMSG. A file that is not a regular file fails with EBADF, like in systemd, before anything is read;
+ * unlike systemd, the file is opened with O_NONBLOCK, so that e.g. a FIFO without a writer in a directory
+ * used as sysfs for tests is refused, instead of blocking forever. */
 int read_virtual_file(const char *filename, size_t max_size, char **ret_contents, size_t *ret_size) {
         _cleanup_free_ char *buf = NULL;
         _cleanup_close_ int fd = -1;
@@ -44,7 +46,9 @@ int read_virtual_file(const char *filename, size_t max_size, char **ret_contents
         assert(filename);
         assert(max_size <= READ_VIRTUAL_BYTES_MAX || max_size == SIZE_MAX);
 
-        fd = open(filename, O_RDONLY|O_NOCTTY|O_CLOEXEC);
+        /* O_NONBLOCK makes no difference for the regular files of sysfs and other file systems, and the
+         * other files are refused below. */
+        fd = open(filename, O_RDONLY|O_NOCTTY|O_CLOEXEC|O_NONBLOCK);
         if (fd < 0)
                 return -errno;
 
