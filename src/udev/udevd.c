@@ -144,6 +144,8 @@ static Set *synthesize_change_children;
  * waiting for them, see synthesize_change_one() */
 static Set *synthesized_events;
 static usec_t synthesized_events_clear_usec;
+/* the caller arguments of the uevents udevd triggers, see device_build_default_trigger_args() */
+static char **device_trigger_args;
 /* when udevd gives up waiting for the workers on exit, 30 seconds after the exit started, and when it kills the
  * idle workers, 3 seconds after the event queue became empty, or 0, see main() */
 static usec_t exit_timeout_usec;
@@ -557,6 +559,7 @@ static void worker_spawn(struct event *event) {
                 synthesize_change_children = NULL;
                 set_free_free(synthesized_events);
                 synthesized_events = NULL;
+                device_trigger_args = strv_free(device_trigger_args);
                 event_queue_cleanup(udev, EVENT_UNDEF);
                 udev_monitor_unref(monitor);
                 udev_ctrl_unref(udev_ctrl);
@@ -1740,20 +1743,16 @@ static void synthesized_event_received(struct udev_device *dev) {
  * that /run/udev/queue is kept until udevd received the event. */
 static int synthesize_change_one(struct udev_device *dev) {
         char uuid[ID128_UUID_STRING_MAX];
-        id128_t id;
         char *copy;
         int r;
 
         log_debug("device %s closed, synthesising 'change' on %s",
                   udev_device_get_devnode(dev), udev_device_get_syspath(dev));
 
-        id128_randomize(&id);
-        id128_to_uuid_string(id, uuid);
-
-        /* Synthetic uevents with a UUID, which the kernel passes on as SYNTH_UUID=, need Linux 4.13 or newer.
-         * This finds out whether the kernel supports them, and triggers the uevent without the UUID when it
-         * does not, see there. */
-        r = uevent_trigger_with_uuid(udev_device_get_udev(dev), udev_device_get_syspath(dev), "change", uuid);
+        /* Synthetic uevents with a UUID, which the kernel passes on as SYNTH_UUID=, and the caller arguments
+         * need Linux 4.13 or newer. This finds out whether the kernel supports them, and triggers the uevent
+         * without both when it does not, see uevent_trigger_with_args(). */
+        r = device_trigger_with_timestamp(dev, "change", device_trigger_args, uuid);
         if (r < 0)
                 return log_debug_errno(r, "%s: Failed to trigger 'change' uevent: %m", udev_device_get_devpath(dev));
         if (r == 0)
@@ -1804,7 +1803,7 @@ static int synthesize_change(struct udev_device *dev) {
                 if (r < 0) {
                         log_warning_errno(r, "Failed to allocate memory to remember the process re-reading the partition table of %s, re-reading it synchronously: %m",
                                           udev_device_get_devnode(dev));
-                        (void) reread_partition_table(dev, REREADPT_FORCE_UEVENT|REREADPT_BSD_LOCK);
+                        (void) reread_partition_table(dev, REREADPT_FORCE_UEVENT|REREADPT_BSD_LOCK, device_trigger_args);
                         return 0;
                 }
 
@@ -1814,7 +1813,7 @@ static int synthesize_change(struct udev_device *dev) {
                          * table synchronously, as before the child was introduced. */
                         log_warning_errno(errno, "Failed to fork process to re-read the partition table of %s, re-reading it synchronously: %m",
                                           udev_device_get_devnode(dev));
-                        (void) reread_partition_table(dev, REREADPT_FORCE_UEVENT|REREADPT_BSD_LOCK);
+                        (void) reread_partition_table(dev, REREADPT_FORCE_UEVENT|REREADPT_BSD_LOCK, device_trigger_args);
                         return 0;
                 }
                 if (pid == 0) {
@@ -1836,7 +1835,7 @@ static int synthesize_change(struct udev_device *dev) {
                         if (r < 0)
                                 log_debug_errno(r, "Failed to reset OOM score, ignoring: %m");
 
-                        (void) reread_partition_table(dev, REREADPT_FORCE_UEVENT|REREADPT_BSD_LOCK);
+                        (void) reread_partition_table(dev, REREADPT_FORCE_UEVENT|REREADPT_BSD_LOCK, device_trigger_args);
                         _exit(EXIT_SUCCESS);
                 }
 
@@ -2452,6 +2451,15 @@ int main(int argc, char *argv[]) {
                 write_string_file("/proc/self/oom_score_adj", "-1000");
         }
 
+        /* The caller arguments of the uevents udevd triggers, with the PID of udevd. Unlike systemd 000f4fa03f,
+         * which builds them before it forks with --daemon, so that its events carry the PID of the parent that
+         * has exited, after the fork. */
+        r = device_build_default_trigger_args(/* with_timestamp= */ false, &device_trigger_args);
+        if (r < 0) {
+                r = log_oom();
+                goto exit;
+        }
+
         manager_set_default_children_max();
         default_children_max = arg_children_max;
 
@@ -2767,6 +2775,7 @@ exit:
         workers_free();
         set_free(synthesize_change_children);
         set_free_free(synthesized_events);
+        strv_free(device_trigger_args);
         event_queue_cleanup(udev, EVENT_UNDEF);
         udev_rules_unref(rules);
         udev_builtin_exit(udev);

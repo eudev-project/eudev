@@ -733,8 +733,8 @@ bool syspath_sends_uevents(const char *syspath)
  * subsystem, i.e. without a bus or class, never sends uevents, so it cannot tell, and is triggered with the
  * UUID, without waiting; the next call tries again. Returns 1 if the uevent was triggered with the UUID, 0 if
  * it was triggered without it, and a negative errno on failure. */
-static int uevent_trigger_with_uuid_full(struct udev *udev, const char *syspath, const char *action,
-                                         const char *uuid, const char *args)
+static int uevent_trigger_with_uuid(struct udev *udev, const char *syspath, const char *action,
+                                    const char *uuid, const char *args)
 {
         _cleanup_(udev_monitor_unrefp) struct udev_monitor *monitor = NULL;
         usec_t deadline;
@@ -811,14 +811,9 @@ static int uevent_trigger_with_uuid_full(struct udev *udev, const char *syspath,
         return r < 0 ? r : 0;
 }
 
-int uevent_trigger_with_uuid(struct udev *udev, const char *syspath, const char *action, const char *uuid)
-{
-        return uevent_trigger_with_uuid_full(udev, syspath, action, uuid, NULL);
-}
-
 /* Like sd_device_trigger_with_args() of systemd 66563e97b7: triggers a synthetic uevent of the device with
  * the syspath with the action, e.g. "change", a random UUID, and the arguments, which are KEY VALUE pairs,
- * unless args is NULL, see uevent_trigger_with_uuid_full(). The kernel passes the arguments on as
+ * unless args is NULL, see uevent_trigger_with_uuid(). The kernel passes the arguments on as
  * SYNTH_ARG_KEY=VALUE. Returns 1 if the uevent was triggered with the UUID, which is then stored in ret_uuid
  * unless it is NULL, 0 if it was triggered without the UUID and the arguments, as the kernel does not
  * support them, and ret_uuid is set to the empty string, and a negative errno on failure, e.g. -EINVAL
@@ -842,7 +837,7 @@ int uevent_trigger_with_args(struct udev *udev, const char *syspath, const char 
         id128_randomize(&id);
         id128_to_uuid_string(id, uuid);
 
-        r = uevent_trigger_with_uuid_full(udev, syspath, action, uuid, joined);
+        r = uevent_trigger_with_uuid(udev, syspath, action, uuid, joined);
         if (r < 0)
                 return r;
 

@@ -48,7 +48,7 @@ static int device_open(struct udev_device *dev, int flags) {
         return TAKE_FD(fd);
 }
 
-static int trigger_partitions(struct udev_device *dev, bool blkrrpart_success) {
+static int trigger_partitions(struct udev_device *dev, char * const *args, bool blkrrpart_success) {
         _cleanup_udev_enumerate_unref_ struct udev_enumerate *e = NULL;
         struct udev_list_entry *item;
         int ret = 0, r;
@@ -67,7 +67,7 @@ static int trigger_partitions(struct udev_device *dev, bool blkrrpart_success) {
 
         /* We have partitions but re-reading the partition table did not work, synthesize
          * "change" for the disk and all partitions. */
-        r = device_trigger(dev, "change", NULL);
+        r = device_trigger_with_timestamp(dev, "change", args, /* ret_uuid= */ NULL);
         if (r < 0)
                 RET_GATHER(ret, log_device_debug_errno(dev, r, "Failed to trigger 'change' uevent, proceeding: %m"));
 
@@ -78,7 +78,7 @@ static int trigger_partitions(struct udev_device *dev, bool blkrrpart_success) {
                 if (!d)
                         continue;
 
-                r = device_trigger(d, "change", NULL);
+                r = device_trigger_with_timestamp(d, "change", args, /* ret_uuid= */ NULL);
                 if (r < 0)
                         RET_GATHER(ret, log_device_debug_errno(d, r, "Failed to trigger 'change' uevent, proceeding: %m"));
         }
@@ -86,7 +86,7 @@ static int trigger_partitions(struct udev_device *dev, bool blkrrpart_success) {
         return ret;
 }
 
-static int fallback_ioctl(struct udev_device *d, int fd, RereadPartitionTableFlags flags) {
+static int fallback_ioctl(struct udev_device *d, int fd, RereadPartitionTableFlags flags, char * const *args) {
         int r;
 
         assert(d);
@@ -99,7 +99,7 @@ static int fallback_ioctl(struct udev_device *d, int fd, RereadPartitionTableFla
                 log_device_debug(d, "Successfully reread partition table via BLKRRPART.");
 
         if (FLAGS_SET(flags, REREADPT_FORCE_UEVENT))
-                RET_GATHER(r, trigger_partitions(d, r >= 0));
+                RET_GATHER(r, trigger_partitions(d, args, r >= 0));
 
         return r;
 }
@@ -125,6 +125,7 @@ static int process_partition(
                 blkid_partition pp,
                 Set **partnos,
                 RereadPartitionTableFlags flags,
+                char * const *args,
                 bool *changed,
                 bool *disk_triggered,
                 char ***resized) {
@@ -197,7 +198,7 @@ static int process_partition(
                         if (FLAGS_SET(flags, REREADPT_FORCE_UEVENT)) {
                                 if (!*disk_triggered) {
                                         /* Make sure to synthesize a change event on the main device, before we issue the first one on a partition device */
-                                        r = device_trigger(d, "change", NULL);
+                                        r = device_trigger_with_timestamp(d, "change", args, /* ret_uuid= */ NULL);
                                         if (r < 0)
                                                 return log_device_debug_errno(d, r, "Failed to issue 'change' uevent on device '%s': %m", node);
 
@@ -205,7 +206,7 @@ static int process_partition(
                                         *disk_triggered = true;
                                 }
 
-                                r = device_trigger(partition, "change", NULL);
+                                r = device_trigger_with_timestamp(partition, "change", args, /* ret_uuid= */ NULL);
                                 if (r < 0)
                                         return log_device_debug_errno(partition, r, "Failed to issue 'change' uevent on partition '%s': %m", subnode);
 
@@ -316,7 +317,7 @@ static int remove_partitions(struct udev_device *d, int fd, struct udev_enumerat
 /* *ret_triggered is set when uevents for the disk and its partitions were triggered, or the kernel sent them,
  * also when an error is returned. */
 static int reread_partition_table_full(struct udev_device *dev, int fd, RereadPartitionTableFlags flags,
-                                       bool *ret_triggered) {
+                                       char * const *args, bool *ret_triggered) {
         _cleanup_close_ int lock_fd = -1;
         const char *p;
         int r;
@@ -339,7 +340,7 @@ static int reread_partition_table_full(struct udev_device *dev, int fd, RereadPa
 
                         if (r == -EAGAIN && FLAGS_SET(flags, REREADPT_FORCE_UEVENT)) {
                                 log_device_debug(dev, "Giving up rereading partition table of '%s'. Triggering change events for the device and its partitions.", p);
-                                (void) trigger_partitions(dev, /* blkrrpart_success= */ false);
+                                (void) trigger_partitions(dev, args, /* blkrrpart_success= */ false);
                                 *ret_triggered = true;
                         }
 
@@ -354,7 +355,7 @@ static int reread_partition_table_full(struct udev_device *dev, int fd, RereadPa
                 /* No partition scanning? Generate a uevent at least, if that's requested */
                 if (FLAGS_SET(flags, REREADPT_FORCE_UEVENT)) {
                         *ret_triggered = true;
-                        r = device_trigger(dev, "change", NULL);
+                        r = device_trigger_with_timestamp(dev, "change", args, /* ret_uuid= */ NULL);
                         if (r < 0)
                                 return log_device_debug_errno(dev, r, "Failed to trigger 'change' uevent, proceeding: %m");
 
@@ -393,7 +394,7 @@ static int reread_partition_table_full(struct udev_device *dev, int fd, RereadPa
         if (IN_SET(r, _BLKID_SAFEPROBE_AMBIGUOUS, _BLKID_SAFEPROBE_NOT_FOUND)) {
                 log_device_debug(dev, "Didn't find partition table on block device '%s', falling back to BLKRRPART.", p);
                 *ret_triggered = true;
-                return fallback_ioctl(dev, fd, flags);
+                return fallback_ioctl(dev, fd, flags, args);
         }
 
         assert(r == _BLKID_SAFEPROBE_FOUND);
@@ -402,7 +403,7 @@ static int reread_partition_table_full(struct udev_device *dev, int fd, RereadPa
         if (!streq_ptr(pttype, "gpt")) {
                 log_device_debug(dev, "Didn't find a GPT partition table on '%s', falling back to BLKRRPART.", p);
                 *ret_triggered = true;
-                return fallback_ioctl(dev, fd, flags);
+                return fallback_ioctl(dev, fd, flags, args);
         }
 
         errno = 0;
@@ -429,7 +430,7 @@ static int reread_partition_table_full(struct udev_device *dev, int fd, RereadPa
                 if (!pp)
                         return log_device_debug_errno(dev, errno_or_else(EIO), "Unable to get partition data of partition %i of partition table of '%s': %m", i, p);
 
-                RET_GATHER(ret, process_partition(dev, fd, pp, &found_partnos, flags, &changed, &disk_triggered, &resized));
+                RET_GATHER(ret, process_partition(dev, fd, pp, &found_partnos, flags, args, &changed, &disk_triggered, &resized));
         }
 
         /* Only delete unrecognized partitions if everything else worked */
@@ -457,7 +458,7 @@ static int reread_partition_table_full(struct udev_device *dev, int fd, RereadPa
                  * first partition was updated, it does not even send the change event for the disk before
                  * the change event of an unchanged partition). */
                 if (!disk_triggered) {
-                        r = device_trigger(dev, "change", NULL);
+                        r = device_trigger_with_timestamp(dev, "change", args, /* ret_uuid= */ NULL);
                         if (r < 0)
                                 return log_device_debug_errno(dev, r, "Failed to issue 'change' uevent on device '%s': %m", p);
                 }
@@ -471,7 +472,7 @@ static int reread_partition_table_full(struct udev_device *dev, int fd, RereadPa
                                 continue;
                         }
 
-                        r = device_trigger(partition, "change", NULL);
+                        r = device_trigger_with_timestamp(partition, "change", args, /* ret_uuid= */ NULL);
                         if (r < 0)
                                 RET_GATHER(ret, log_device_debug_errno(partition, r, "Failed to issue 'change' uevent on resized partition: %m"));
                         else
@@ -486,22 +487,31 @@ static int reread_partition_table_full(struct udev_device *dev, int fd, RereadPa
 #else
         log_device_debug(dev, "We don't have libblkid, falling back to BLKRRPART on '%s'.", p);
         *ret_triggered = true;
-        return fallback_ioctl(dev, fd, flags);
+        return fallback_ioctl(dev, fd, flags, args);
 #endif
 }
 
-int reread_partition_table(struct udev_device *dev, RereadPartitionTableFlags flags) {
+int reread_partition_table(struct udev_device *dev, RereadPartitionTableFlags flags, char * const *args) {
+        _cleanup_strv_free_ char **args_free = NULL;
         _cleanup_close_ int fd = -1;
         bool triggered = false;
         int r;
 
         assert(dev);
 
+        if (!args) {
+                r = device_build_default_trigger_args(/* with_timestamp= */ false, &args_free);
+                if (r < 0)
+                        return r;
+
+                args = args_free;
+        }
+
         fd = device_open(dev, O_RDONLY|O_CLOEXEC|O_NONBLOCK|O_NOCTTY);
         if (fd < 0)
                 r = log_debug_errno(fd, "Failed to open block device: %m");
         else
-                r = reread_partition_table_full(dev, fd, flags, &triggered);
+                r = reread_partition_table_full(dev, fd, flags, args, &triggered);
 
         /* eudev: when the partition table could not be re-read or the kernel's partitions could not be
          * updated, e.g. as a partition that is in use cannot be moved, or the disk cannot be opened or
@@ -514,7 +524,7 @@ int reread_partition_table(struct udev_device *dev, RereadPartitionTableFlags fl
         if (r < 0 && !triggered && FLAGS_SET(flags, REREADPT_FORCE_UEVENT)) {
                 log_device_full_errno(dev, ERRNO_IS_DEVICE_ABSENT_OR_EMPTY(r) ? LOG_DEBUG : LOG_WARNING, r,
                                       "Failed to re-read the partition table, triggering 'change' events for the disk and its partitions instead: %m");
-                (void) trigger_partitions(dev, /* blkrrpart_success= */ false);
+                (void) trigger_partitions(dev, args, /* blkrrpart_success= */ false);
         }
 
         return r;

@@ -33,7 +33,6 @@
 #include <sys/un.h>
 
 #include "pager.h"
-#include "random-util.h"
 #include "set.h"
 #include "udev.h"
 #include "udev-util.h"
@@ -56,22 +55,6 @@ static enum {
 
 /* "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" and the terminating NUL */
 #define UUID_STRING_MAX 37
-
-/* Generates a random UUID as sd_id128_randomize() does, in the UUID format. */
-static void random_uuid(char ret[static UUID_STRING_MAX]) {
-        uint8_t b[16];
-
-        random_bytes(b, sizeof(b));
-
-        /* Turn this into a valid v4 UUID, to be nice. */
-        b[6] = (b[6] & 0x0F) | 0x40;
-        b[8] = (b[8] & 0x3F) | 0x80;
-
-        snprintf(ret, UUID_STRING_MAX,
-                 "%02x%02x%02x%02x-%02x%02x-%02x%02x-%02x%02x-%02x%02x%02x%02x%02x%02x",
-                 b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7],
-                 b[8], b[9], b[10], b[11], b[12], b[13], b[14], b[15]);
-}
 
 /* Like sd_device_get_trigger_uuid(): gets the UUID attached to a uevent triggered from userspace,
  * in lowercase UUID format. Returns -ENOENT if the uevent is not a synthetic one, and -ENODATA if
@@ -379,9 +362,14 @@ static int build_list(struct udev *udev, struct udev_enumerate *udev_enumerate,
 }
 
 static int exec_list(struct udev *udev, char **list, const char *action, Set *settle_set) {
+        _cleanup_strv_free_ char **args = NULL;
         char **entry;
         bool warned_uuid = false;
         int r, ret = 0;
+
+        r = device_build_default_trigger_args(/* with_timestamp= */ true, &args);
+        if (r < 0)
+                return log_oom();
 
         STRV_FOREACH(entry, list) {
                 char filename[UTIL_PATH_SIZE];
@@ -397,22 +385,23 @@ static int exec_list(struct udev *udev, char **list, const char *action, Set *se
 
                 strscpyl(filename, sizeof(filename), syspath, "/uevent", NULL);
 
-                /* Use the UUID mode if the user explicitly asked for it, or if --settle has been specified,
-                 * so that we can recognize our own uevent.
+                /* Like systemd, trigger every uevent with a random UUID, which --settle uses to recognize our
+                 * own uevent and --uuid prints, and with the arguments that tell who triggered it, which the
+                 * kernel passes on as SYNTH_ARG_*=; the arguments need the UUID.
                  *
                  * eudev: systemd assumes that kernels before 4.13, which do not know the UUID logic, refuse
                  * the write with EINVAL, and then triggers the uevents without UUIDs. But they accept it,
-                 * and send no uevent at all, so --settle would wait forever. uevent_trigger_with_uuid()
+                 * and send no uevent at all, so --settle would wait forever. uevent_trigger_with_args()
                  * finds out with the first uevent whether the kernel supports UUIDs, and triggers the
-                 * uevents without them if it does not; then --settle waits for an event of the device.
+                 * uevents without them and without the arguments if it does not; then --settle waits for
+                 * an event of the device.
                  *
                  * Also unlike systemd, which then prints a UUID and waits forever with --settle, a device
                  * without a subsystem, for which the kernel sends no uevent, is triggered without a UUID, and
                  * not waited for. */
-                sends = !(arg_uuid || arg_settle) || syspath_sends_uevents(syspath);
-                if ((arg_uuid || arg_settle) && sends) {
-                        random_uuid(id);
-                        r = uevent_trigger_with_uuid(udev, syspath, action, id);
+                sends = syspath_sends_uevents(syspath);
+                if (sends) {
+                        r = uevent_trigger_with_args(udev, syspath, action, args, id);
                         with_uuid = r > 0;
                         if (r == 0 && arg_uuid && !warned_uuid) {
                                 log_warning("The kernel does not support UUIDs of synthetic uevents (Linux 4.13 or newer is needed), triggering uevents without them.");
