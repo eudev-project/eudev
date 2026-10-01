@@ -16,7 +16,7 @@ endif
 
 if ENABLE_HWDB
 SUBDIRS += \
-	hwdb
+	hwdb.d
 endif
 
 if ENABLE_RULE_GENERATOR
@@ -24,9 +24,9 @@ SUBDIRS += \
 	rule_generator
 endif
 
-# the targets that regenerate and check the hwdb files, see hwdb/README
+# the targets that regenerate and check the hwdb files, see hwdb.d/README
 regenerate-hwdb parse-hwdb:
-	cd hwdb && $(MAKE) $(AM_MAKEFLAGS) $@
+	cd hwdb.d && $(MAKE) $(AM_MAKEFLAGS) $@
 
 .PHONY: regenerate-hwdb parse-hwdb
 

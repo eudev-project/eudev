@@ -502,7 +502,7 @@ AC_DEFINE_UNQUOTED([FOREIGN_UID_BASE], [${foreign_uid_base}U], [The first ID of 
 # ------------------------------------------------------------------------------
 
 AC_CONFIG_FILES([Makefile
-	hwdb/Makefile
+	hwdb.d/Makefile
 	man/Makefile
 	rule_generator/Makefile
 	rule_generator/write_net_rules
