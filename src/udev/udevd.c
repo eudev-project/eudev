@@ -80,6 +80,8 @@ static int fd_ep = -1;
 static int fd_inotify = -1;
 static int fd_ready = -1;
 static bool stop_exec_queue;
+/* START_EXEC_QUEUE was received: start the queued events without waiting for the next timeout */
+static bool start_exec_queue;
 static bool reload;
 static int arg_daemonize = false;
 static int arg_resolve_names = 1;
@@ -1332,6 +1334,7 @@ static void handle_ctrl_msg(struct udev_ctrl *uctrl) {
         if (udev_ctrl_get_start_exec_queue(ctrl_msg) > 0) {
                 log_debug("udevd message (START_EXEC_QUEUE) received");
                 stop_exec_queue = false;
+                start_exec_queue = true;
         }
 
         if (udev_ctrl_get_reload(ctrl_msg) > 0) {
@@ -2210,6 +2213,15 @@ int main(int argc, char *argv[]) {
                         requeue_timeout = locked_events_timeout();
                         if (requeue_timeout >= 0 && requeue_timeout < timeout)
                                 timeout = requeue_timeout;
+                }
+
+                /* Like systemd, which starts the queued events after every event source it dispatched, start
+                 * them right away when processing was started again, and not only at the next wakeup of the
+                 * main loop, which may be up to 3 seconds away. */
+                if (start_exec_queue) {
+                        start_exec_queue = false;
+                        if (!udev_exit && !udev_list_node_is_empty(&event_list))
+                                timeout = 0;
                 }
 
                 if (!udev_exit) {
