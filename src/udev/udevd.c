@@ -45,7 +45,6 @@
 #include <sys/stat.h>
 #include <sys/ioctl.h>
 #include <sys/inotify.h>
-#include <sys/utsname.h>
 #include <sys/sysmacros.h>
 
 #include "udev.h"
@@ -1465,25 +1464,6 @@ static void handle_ctrl_msg(struct udev_ctrl *uctrl) {
         return;
 }
 
-/* Synthetic uevents with a UUID, which the kernel passes on as SYNTH_UUID=, need Linux 4.13 or newer. Older
- * kernels log an error about the unknown action and send no uevent, so the action is written without a
- * UUID there. */
-static bool synthetic_uuid_supported(void) {
-        static int cached = -1;
-        struct utsname u;
-        unsigned major, minor;
-
-        if (cached >= 0)
-                return cached;
-
-        cached = uname(&u) >= 0 && sscanf(u.release, "%u.%u", &major, &minor) == 2 &&
-                 (major > 4 || (major == 4 && minor >= 13));
-        if (!cached)
-                log_debug("The kernel does not support UUIDs of synthetic uevents, not waiting for the change events udevd triggers.");
-
-        return cached;
-}
-
 static void synthesized_events_clear(void) {
         for (;;) {
                 _cleanup_free_ char *uuid = set_steal_first(synthesized_events);
@@ -1539,20 +1519,18 @@ static int synthesize_change_one(struct udev_device *dev) {
         log_debug("device %s closed, synthesising 'change' on %s",
                   udev_device_get_devnode(dev), udev_device_get_syspath(dev));
 
-        if (!synthetic_uuid_supported()) {
-                r = device_trigger(dev, "change", NULL);
-                if (r < 0)
-                        return log_debug_errno(r, "%s: Failed to trigger 'change' uevent: %m", udev_device_get_devpath(dev));
-
-                return 0;
-        }
-
         id128_randomize(&id);
         id128_to_uuid_string(id, uuid);
 
-        r = device_trigger(dev, "change", uuid);
+        /* Synthetic uevents with a UUID, which the kernel passes on as SYNTH_UUID=, need Linux 4.13 or newer.
+         * This finds out whether the kernel supports them, and triggers the uevent without the UUID when it
+         * does not, see there. */
+        r = uevent_trigger_with_uuid(udev_device_get_udev(dev), udev_device_get_syspath(dev), "change", uuid);
         if (r < 0)
                 return log_debug_errno(r, "%s: Failed to trigger 'change' uevent: %m", udev_device_get_devpath(dev));
+        if (r == 0)
+                /* without a UUID, there is nothing to wait for */
+                return 0;
 
         /* Avoid /run/udev/queue file being removed by event_queue_update(). */
         copy = strdup(uuid);

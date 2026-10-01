@@ -363,15 +363,16 @@ static int build_list(struct udev *udev, struct udev_enumerate *udev_enumerate,
         return 0;
 }
 
-static int exec_list(char **list, const char *action, Set *settle_set) {
+static int exec_list(struct udev *udev, char **list, const char *action, Set *settle_set) {
         char **entry;
-        int uuid_supported = -1;
+        bool warned_uuid = false;
         int r, ret = 0;
 
         STRV_FOREACH(entry, list) {
                 char filename[UTIL_PATH_SIZE];
                 char id[UUID_STRING_MAX] = "";
                 const char *syspath;
+                bool with_uuid = false;
 
                 syspath = *entry;
                 if (verbose)
@@ -382,21 +383,23 @@ static int exec_list(char **list, const char *action, Set *settle_set) {
                 strscpyl(filename, sizeof(filename), syspath, "/uevent", NULL);
 
                 /* Use the UUID mode if the user explicitly asked for it, or if --settle has been specified,
-                 * so that we can recognize our own uevent. */
-                if ((arg_uuid || arg_settle) && uuid_supported != 0) {
+                 * so that we can recognize our own uevent.
+                 *
+                 * eudev: systemd assumes that kernels before 4.13, which do not know the UUID logic, refuse
+                 * the write with EINVAL, and then triggers the uevents without UUIDs. But they accept it,
+                 * and send no uevent at all, so --settle would wait forever. uevent_trigger_with_uuid()
+                 * finds out with the first uevent whether the kernel supports UUIDs, and triggers the
+                 * uevents without them if it does not; then --settle waits for an event of the device. */
+                if (arg_uuid || arg_settle) {
                         random_uuid(id);
-                        r = write_uevent(filename, action, id);
+                        r = uevent_trigger_with_uuid(udev, syspath, action, id);
+                        with_uuid = r > 0;
+                        if (r == 0 && arg_uuid && !warned_uuid) {
+                                log_warning("The kernel does not support UUIDs of synthetic uevents (Linux 4.13 or newer is needed), triggering uevents without them.");
+                                warned_uuid = true;
+                        }
                 } else
                         r = write_uevent(filename, action, NULL);
-                if (r == -EINVAL && !arg_uuid && arg_settle && uuid_supported < 0) {
-                        /* If we specified a UUID because of the settling logic, and we got EINVAL this might
-                         * be caused by an old kernel which doesn't know the UUID logic (pre-4.13). Let's try
-                         * if it works without the UUID logic then. */
-                        r = write_uevent(filename, action, NULL);
-                        if (r != -EINVAL)
-                                uuid_supported = false; /* dropping the uuid stuff changed the return code,
-                                                         * hence don't bother next time */
-                }
                 if (r < 0) {
                         /* ENOENT may be returned when a device does not have /uevent or is already
                          * removed. Hence, this is logged at debug level and ignored.
@@ -438,16 +441,13 @@ static int exec_list(char **list, const char *action, Set *settle_set) {
                 } else
                         log_debug("%s: Triggered device with action '%s'.", eudev_basename(syspath), action);
 
-                if (uuid_supported < 0)
-                        uuid_supported = true;
-
                 /* If the user asked for it, write event UUID to stdout */
-                if (arg_uuid)
+                if (arg_uuid && with_uuid)
                         printf("%s\n", id);
 
                 /* Wait for the UUID if the kernel supports it, as the device may be renamed while the
                  * event is processed. Otherwise, wait for an event for the device. */
-                if (settle_set != NULL && set_put_strdup(settle_set, uuid_supported ? id : syspath) < 0)
+                if (settle_set != NULL && set_put_strdup(settle_set, with_uuid ? id : syspath) < 0)
                         return log_oom();
         }
 
@@ -499,7 +499,8 @@ static bool settle_device(Set *settle_set, struct udev_device *dev) {
         if (verbose)
                 printf("settle %s\n", syspath);
 
-        if (arg_uuid)
+        /* without UUIDs, see exec_list(), there is none to print */
+        if (arg_uuid && id[0] != '\0')
                 printf("settle %s\n", id);
 
         return true;
@@ -866,7 +867,7 @@ static int adm_trigger(struct udev *udev, int argc, char *argv[]) {
                 return 1;
         }
 
-        r = exec_list(list, action, settle_set);
+        r = exec_list(udev, list, action, settle_set);
         if (r < 0)
                 return 1;
 

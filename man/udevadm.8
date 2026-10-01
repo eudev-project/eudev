@@ -538,14 +538,18 @@ Trigger parent devices of found devices even if the parents will not match the f
 Apart from triggering events, also waits for those events to finish\&. Note that this is different from calling
 \fBudevadm settle\fR\&.
 \fBudevadm settle\fR
-waits for all events to finish\&. This option only waits for events triggered by the same command to finish\&.
+waits for all events to finish\&. This option only waits for events triggered by the same command to finish\&. The events are recognized by their UUIDs, see
+\fB\-\-uuid\fR\&. As kernels before Linux 4\&.13 do not support them,
+\fBudevadm\fR
+finds out with the first event whether the kernel passes the UUID on, which takes up to a second with older kernels, and triggers the events without UUIDs then, and waits for an event of each triggered device instead\&.
 .RE
 .PP
 \fB\-\-uuid\fR
 .RS 4
 Trigger the synthetic device events, and associate a randomized UUID with each\&. These UUIDs are printed to standard output, one line for each event\&. These UUIDs are included in the uevent environment block (in the
 SYNTH_UUID=
-property) and may be used to track delivery of the generated events\&. This requires Linux 4\&.13 or newer\&.
+property) and may be used to track delivery of the generated events\&. This requires Linux 4\&.13 or newer: with older kernels, the events are triggered without UUIDs, with a warning, and no UUIDs are printed, see
+\fB\-\-settle\fR\&.
 .RE
 .PP
 \fB\-\-wait\-daemon[=\fR\fB\fISECONDS\fR\fR\fB]\fR
