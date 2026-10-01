@@ -1,6 +1,8 @@
 ACLOCAL_AMFLAGS = -I m4 ${ACLOCAL_FLAGS}
 
+# README is installed too, like in systemd
 dist_udevhwdb_DATA = \
+	README \
 	20-acpi-vendor.hwdb \
 	20-bluetooth-vendor-product.hwdb \
 	20-dmi-id.hwdb \
@@ -43,7 +45,6 @@ dist_udevhwdb_DATA = \
 # are not used by the build, see README.
 
 EXTRA_DIST = \
-	README \
 	20-acpi-vendor.hwdb.patch \
 	acpi-update.py \
 	acpi_id_registry.csv \

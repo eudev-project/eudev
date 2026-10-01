@@ -15,9 +15,10 @@ man:udevd(8) for a description of the udev daemon.
 Generated files
 ---------------
 
-Some of the files are generated from data files in this directory. The data
-files and the tools that convert them come from the hwdb.d directory of
-systemd:
+This part is about the hwdb.d directory of the eudev sources, from which this
+file is installed. There, some of the files are generated from data files,
+which are not installed. The data files and the tools that convert them come
+from the hwdb.d directory of systemd:
 
   20-usb-vendor-model.hwdb   usb.ids, by ids_parser.py
   20-usb-classes.hwdb
@@ -31,7 +32,7 @@ systemd:
                              acpi-update.py, with the additions of
                              20-acpi-vendor.hwdb.patch
 
-'make regenerate-hwdb' in the build tree generates them again in this
+'make regenerate-hwdb' in the build tree generates them again in the source
 directory, which needs python3 with pyparsing, and patch. Unlike systemd,
 eudev then drops the registry entries of the ids that
 20-acpi-vendor.hwdb.patch adds again (dedup-hwdb.py), as the later entries of
