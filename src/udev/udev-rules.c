@@ -830,14 +830,21 @@ static struct udev_device *event_log_device(struct udev_event *event, struct tok
 }
 
 /* Formats a token like the key of the rule line it comes from, e.g. KERNEL=="sd*", for the trace
- * logs. The text of the rules is not kept, so OPTIONS are shown one by one, and RUN with its type. */
+ * logs. The text of the rules is not kept, so OPTIONS are shown one by one, and RUN with its type.
+ * Unlike the token text of systemd, the attribute and the value are C-escaped, so that control
+ * characters and invalid UTF-8 of the rules do not get into the logs, and a '"' is shown as \",
+ * as it is written in the rules. */
 static char *token_to_string(struct udev_rules *rules, struct token *token) {
         const char *op = operation_key_str(token->key.op);
-        const char *value = rules_str(rules, token->key.value_off);
+        _cleanup_free_ char *value = NULL, *attr = NULL;
         const char *key = NULL, *option = NULL;
         bool has_attr = false;
         char *s = NULL;
         int r;
+
+        value = cescape(rules_str(rules, token->key.value_off));
+        if (!value)
+                return NULL;
 
         switch (token->type) {
         case TK_M_ACTION:
@@ -999,10 +1006,12 @@ static char *token_to_string(struct udev_rules *rules, struct token *token) {
 
         if (option)
                 r = asprintf(&s, "OPTIONS%s\"%s\"", op, option);
-        else if (has_attr)
-                r = asprintf(&s, "%s{%s}%s%s\"%s\"", key, rules_str(rules, token->key.attr_off), op,
-                             token->key.case_insensitive ? "i" : "", value);
-        else
+        else if (has_attr) {
+                attr = cescape(rules_str(rules, token->key.attr_off));
+                if (!attr)
+                        return NULL;
+                r = asprintf(&s, "%s{%s}%s%s\"%s\"", key, attr, op, token->key.case_insensitive ? "i" : "", value);
+        } else
                 r = asprintf(&s, "%s%s%s\"%s\"", key, op, token->key.case_insensitive ? "i" : "", value);
 
         return r < 0 ? NULL : s;
