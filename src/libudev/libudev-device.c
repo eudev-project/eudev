@@ -2311,6 +2311,34 @@ static int sysattr_check_path_nonexistent(const char *path, char **ret_resolved)
         return 0;
 }
 
+/* After the attribute with the resolved path relative relative to the device was written, forgets the
+ * errors cached for it under any name. An error is cached under the name as given when the name cannot be
+ * resolved, e.g. because the attribute does not exist yet, see udev_device_get_sysattr_value(), so a name
+ * with a symlink or ".." in it kept the error after a successful write, as it does in systemd. */
+static void sysattr_cache_forget_errors(struct udev_device *udev_device, const char *relative)
+{
+        struct udev_list_entry *entry, *tmp;
+
+        udev_list_entry_foreach_safe(entry, tmp, udev_list_get_entry(&udev_device->sysattr_value_list)) {
+                _cleanup_free_ char *path = NULL, *resolved = NULL, *r = NULL;
+                const char *name = udev_list_entry_get_name(entry);
+
+                if (udev_list_entry_get_value(entry))
+                        continue;
+
+                if (!streq(name, relative)) {
+                        path = strjoin(udev_device_get_syspath(udev_device), "/", name, NULL);
+                        if (!path ||
+                            sysfs_resolve(path, &resolved) < 0 ||
+                            path_make_relative(udev_device_get_syspath(udev_device), resolved, &r) < 0 ||
+                            !streq(r, relative))
+                                continue;
+                }
+
+                udev_list_entry_delete(entry);
+        }
+}
+
 /* Like the cache of systemd, a value written into "uevent", also in a subdirectory, is not cached, as it is
  * an action, not the value. */
 static bool sysattr_is_uevent(const char *sysattr)
@@ -2327,6 +2355,8 @@ static bool sysattr_is_uevent(const char *sysattr)
  * @value: new value to be set
  *
  * Update the contents of the sys attribute and the cached value of the device.
+ * When the value was written, the errors that were cached for the attribute, also
+ * under other names of it, are forgotten.
  *
  * Returns: Negative error code on failure or 0 on success.
  **/
@@ -2401,6 +2431,8 @@ _public_ int udev_device_set_sysattr_value(struct udev_device *udev_device, cons
                 return r;
         }
 
+        sysattr_cache_forget_errors(udev_device, relative);
+
         /* Like systemd, cache the written value under the resolved path relative to the device, where
          * udev_device_get_sysattr_value() finds it, also for other names of the attribute. */
         if (sysattr_is_uevent(relative))
@@ -2425,6 +2457,8 @@ int udev_device_cache_sysattr_value(struct udev_device *udev_device, const char 
 
         if (udev_device == NULL || sysattr == NULL || value == NULL)
                 return -EINVAL;
+
+        sysattr_cache_forget_errors(udev_device, sysattr);
 
         /* like udev_device_set_sysattr_value(), do not cache the action string written into uevent */
         if (sysattr_is_uevent(sysattr))
