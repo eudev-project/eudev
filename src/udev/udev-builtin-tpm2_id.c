@@ -650,10 +650,16 @@ static bool tpm2_supports_aes_128_cfb(Tpm2Device *d) {
         return true;
 }
 
+/* Logs the failure of a step of tpm2_context_new() as an error, except for the errors that mean "not
+ * supported", with which the caller skips the device without an error, like systemd. */
+#define tpm2_context_error(dev, r, ...) \
+        (errno_is_not_supported(r) ? (r) : log_device_error_errno(dev, r, __VA_ARGS__))
+
 /* Like tpm2_context_new() of systemd, once the device is open: probe it like the device TCTI of tpm2-tss,
  * start up the TPM, query its capabilities and require AES-128-CFB, returning -EOPNOTSUPP if it is
- * missing. */
-static int tpm2_context_new(Tpm2Device *d) {
+ * missing. Unlike systemd, whose builtin logs "Failed to open device node" whatever failed, a failure of the
+ * probe, the startup or the capability queries is logged here, with a message that names the step. */
+static int tpm2_context_new(struct udev_device *dev, Tpm2Device *d) {
         bool aes, cfb;
         int r;
 
@@ -661,15 +667,15 @@ static int tpm2_context_new(Tpm2Device *d) {
 
         r = tpm2_probe(d);
         if (r < 0)
-                return r;
+                return tpm2_context_error(dev, r, "Failed to probe TPM2 device '%s': %m", d->path);
 
         r = tpm2_startup(d);
         if (r < 0)
-                return r;
+                return tpm2_context_error(dev, r, "Failed to start up TPM2 device '%s': %m", d->path);
 
         r = tpm2_cache_capabilities(d, &aes, &cfb);
         if (r < 0)
-                return log_debug_errno(r, "Failed to cache TPM capabilities: %m");
+                return tpm2_context_error(dev, r, "Failed to query the capabilities of TPM2 device '%s': %m", d->path);
 
         /* We require AES and CFB support for session encryption. */
         if (!aes)
@@ -856,13 +862,13 @@ static int builtin_tpm2_id(struct udev_device *dev, int argc, char *argv[], enum
         if (d.fd < 0)
                 return log_device_error_errno(dev, errno, "Failed to open device node '%s': %m", dn);
 
-        r = tpm2_context_new(&d);
+        r = tpm2_context_new(dev, &d);
         if (errno_is_not_supported(r)) {
                 log_device_debug_errno(dev, r, "Full TPM2 support is not available, skipping identification of TPM2 device '%s'.", dn);
                 return EXIT_SUCCESS;
         }
         if (r < 0)
-                return log_device_error_errno(dev, r, "Failed to open device node '%s': %m", dn);
+                return r;
 
         r = tpm2_get_vendor_info(&d, &info);
         if (r < 0)
