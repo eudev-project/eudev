@@ -79,6 +79,8 @@ struct udev_event {
         bool name_final;
         bool devlink_final;
         bool run_final;
+        /* the database entry was written with ID_PROCESSING=1 before the rules, see event_restore_db() */
+        bool dev_db_written;
         bool log_level_was_debug;
         int default_log_level;
         bool net_altnames;

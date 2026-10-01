@@ -1371,6 +1371,20 @@ static void event_assign_altnames(struct udev_event *event) {
                                "Could not assign alternative names to network interface '%s', ignoring: %m", ifname);
 }
 
+/* The event failed after the database entry of the device was written again with ID_PROCESSING=1 before
+ * the rules were applied. Unlike systemd, which leaves the property behind until the next event of the
+ * device, write the previous entry back; when that fails, udev_device_update_db() removes the entry. So
+ * a failed event never leaves a device that looks like it is still being processed. */
+static void event_restore_db(struct udev_event *event) {
+        if (!event->dev_db_written)
+                return;
+        event->dev_db_written = false;
+
+        if (udev_device_add_property(event->dev_db, "ID_PROCESSING", NULL) < 0 ||
+            udev_device_update_db(event->dev_db) < 0)
+                (void) udev_device_delete_db(event->dev_db);
+}
+
 /* Applies the rules to the event, and creates or removes the device node and its symlinks, renames a
  * network interface and writes the database. Like systemd, when the rules fail, e.g. on an error of
  * IMPORT{}, the rest of it is skipped, and the error is returned; the caller does not run RUN either. */
@@ -1454,6 +1468,8 @@ int udev_event_execute_rules(struct udev_event *event,
                                 event->dev_db = udev_device_unref(event->dev_db);
                                 return r;
                         }
+
+                        event->dev_db_written = true;
                 }
 
                 r = udev_rules_apply_to_event(rules, event,
@@ -1462,6 +1478,7 @@ int udev_event_execute_rules(struct udev_event *event,
                                               sigmask);
                 if (r < 0) {
                         log_debug_errno(r, "%s: Failed to apply udev rules: %m", udev_device_get_sysname(dev));
+                        event_restore_db(event);
                         event->dev_db = udev_device_unref(event->dev_db);
                         return r;
                 }
@@ -1629,6 +1646,7 @@ int udev_event_execute_rules(struct udev_event *event,
                         if (r < 0) {
                                 log_debug_errno(r, "%s: Failed to update tags under " UDEV_ROOT_RUN "/udev/tags/: %m",
                                                 udev_device_get_sysname(dev));
+                                event_restore_db(event);
                                 event->dev_db = udev_device_unref(event->dev_db);
                                 return r;
                         }
@@ -1642,6 +1660,7 @@ int udev_event_execute_rules(struct udev_event *event,
                         if (r < 0) {
                                 log_warning_errno(r, "%s: Failed to add 'ID_PROCESSING' property: %m",
                                                   udev_device_get_sysname(dev));
+                                event_restore_db(event);
                                 event->dev_db = udev_device_unref(event->dev_db);
                                 return r;
                         }
@@ -1652,6 +1671,7 @@ int udev_event_execute_rules(struct udev_event *event,
                         if (r < 0) {
                                 log_debug_errno(r, "%s: Failed to update database under " UDEV_ROOT_RUN "/udev/data/: %m",
                                                 udev_device_get_sysname(dev));
+                                event_restore_db(event);
                                 event->dev_db = udev_device_unref(event->dev_db);
                                 return r;
                         }
