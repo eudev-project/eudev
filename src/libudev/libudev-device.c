@@ -2243,6 +2243,63 @@ cache:
         return udev_list_entry_get_value(list_entry);
 }
 
+/* Removes the cached value or error of an attribute. */
+static void sysattr_cache_remove(struct udev_device *udev_device, const char *sysattr)
+{
+        struct udev_list_entry *list_entry;
+
+        list_entry = udev_list_get_entry(&udev_device->sysattr_value_list);
+        list_entry = udev_list_entry_get_by_name(list_entry, sysattr);
+        if (list_entry != NULL)
+                udev_list_entry_delete(list_entry);
+}
+
+/* Like chase() with CHASE_NONEXISTENT: resolves the part of the path that exists, see sysattr_check_path(),
+ * and appends the rest. */
+static int sysattr_check_path_nonexistent(const char *path, char **ret_resolved)
+{
+        _cleanup_free_ char *parent = NULL, *resolved = NULL;
+        const char *base;
+        int r;
+
+        r = sysattr_check_path(path, ret_resolved);
+        if (r != -ENOENT)
+                return r;
+
+        base = strrchr(path, '/');
+        if (!base || base == path)
+                return r;
+
+        parent = strndup(path, base - path);
+        if (!parent)
+                return -ENOMEM;
+        base++;
+
+        r = sysattr_check_path_nonexistent(parent, &resolved);
+        if (r < 0)
+                return r;
+
+        if (isempty(base) || streq(base, "."))
+                *ret_resolved = TAKE_PTR(resolved);
+        else if (streq(base, ".."))
+                return path_get_parent(resolved, ret_resolved);
+        else {
+                *ret_resolved = strjoin(resolved, "/", base, NULL);
+                if (!*ret_resolved)
+                        return -ENOMEM;
+        }
+        return 0;
+}
+
+/* Like the cache of systemd, a value written into "uevent", also in a subdirectory, is not cached, as it is
+ * an action, not the value. */
+static bool sysattr_is_uevent(const char *sysattr)
+{
+        const char *p = strrchr(sysattr, '/');
+
+        return streq(p ? p + 1 : sysattr, "uevent");
+}
+
 /**
  * udev_device_set_sysattr_value:
  * @udev_device: udev device
@@ -2255,9 +2312,7 @@ cache:
  **/
 _public_ int udev_device_set_sysattr_value(struct udev_device *udev_device, const char *sysattr, char *value)
 {
-        char path[UTIL_PATH_SIZE];
-        _cleanup_free_ char *v = NULL, *resolved = NULL;
-        struct udev_list_entry *list_entry;
+        _cleanup_free_ char *v = NULL, *path = NULL, *resolved = NULL, *relative = NULL;
         ssize_t size;
         size_t len;
         int fd, r;
@@ -2267,16 +2322,33 @@ _public_ int udev_device_set_sysattr_value(struct udev_device *udev_device, cons
         if (sysattr == NULL)
                 return -EINVAL;
 
+        path = strjoin(udev_device_get_syspath(udev_device), "/", sysattr, NULL);
+        if (!path)
+                return -ENOMEM;
+
         if (value == NULL) {
-                /* remove the cached value */
-                list_entry = udev_list_get_entry(&udev_device->sysattr_value_list);
-                list_entry = udev_list_entry_get_by_name(list_entry, sysattr);
-                if (list_entry != NULL)
-                        udev_list_entry_delete(list_entry);
+                /* Like systemd, remove the cached value of the resolved path, also of a path that does not
+                 * exist, without writing anything. */
+                r = sysattr_check_path_nonexistent(path, &resolved);
+                if (r < 0)
+                        return r;
+                r = path_make_relative(udev_device_get_syspath(udev_device), resolved, &relative);
+                if (r < 0)
+                        return r;
+                sysattr_cache_remove(udev_device, relative);
                 return 0;
         }
 
-        strscpyl(path, sizeof(path), udev_device_get_syspath(udev_device), "/", sysattr, NULL);
+        /* Like systemd, follow the symlinks of the path, also of its last component, and do not write
+         * outside of sysfs; a missing attribute fails with ENOENT. On failure, clear the cache entry of
+         * the name as given, hoping that it is the normalized one, like systemd does. */
+        r = sysattr_check_path(path, &resolved);
+        if (r >= 0)
+                r = path_make_relative(udev_device_get_syspath(udev_device), resolved, &relative);
+        if (r < 0) {
+                sysattr_cache_remove(udev_device, sysattr);
+                return r;
+        }
 
         /* Like systemd, the value length is limited to 4k: a longer value is truncated. Then trailing
          * newlines, including carriage returns, are dropped. */
@@ -2288,68 +2360,54 @@ _public_ int udev_device_set_sysattr_value(struct udev_device *udev_device, cons
         while (len > 0 && strchr(NEWLINE, v[len - 1]))
                 v[--len] = '\0';
 
-        /* Like systemd, follow the symlinks of the path, also of its last component, and do not write
-         * outside of sysfs; a missing attribute fails with ENOENT. */
-        r = sysattr_check_path(path, &resolved);
-        if (r < 0)
-                goto fail;
-
         /* Do not check the permissions of the attribute, write-only attributes like "remove" are
          * fine. Let the kernel do it and propagate the error. */
         fd = open(resolved, O_WRONLY|O_CLOEXEC|O_NOFOLLOW);
-        if (fd < 0) {
+        if (fd < 0)
                 r = -errno;
-                goto fail;
+        else {
+                size = write(fd, v, len);
+                if (size < 0)
+                        r = -errno;
+                else if ((size_t) size != len)
+                        r = -EIO;
+                else
+                        r = 0;
+                close(fd);
         }
-        size = write(fd, v, len);
-        if (size < 0)
-                r = -errno;
-        else if ((size_t) size != len)
-                r = -EIO;
-        else
-                r = 0;
-        close(fd);
-        if (r < 0)
-                goto fail;
+        if (r < 0) {
+                /* On failure, clear cache entry, as we do not know how it fails. */
+                sysattr_cache_remove(udev_device, relative);
+                return r;
+        }
 
-        /* Do not cache action string written into uevent file. */
-        if (streq(sysattr, "uevent"))
+        /* Like systemd, cache the written value under the resolved path relative to the device, where
+         * udev_device_get_sysattr_value() finds it, also for other names of the attribute. */
+        if (sysattr_is_uevent(relative))
                 return 0;
 
-        /* wrote a valid value, store it in cache */
-        if (udev_list_entry_add(&udev_device->sysattr_value_list, sysattr, v) == NULL) {
+        if (udev_list_entry_add(&udev_device->sysattr_value_list, relative, v) == NULL) {
                 /* The value has been written, hence do not fail. But do not leave a cache
                  * entry without a value behind, which would make the attribute look absent. */
-                log_debug("failed to cache sysfs attribute value '%s', ignoring", sysattr);
-                list_entry = udev_list_get_entry(&udev_device->sysattr_value_list);
-                list_entry = udev_list_entry_get_by_name(list_entry, sysattr);
-                if (list_entry != NULL)
-                        udev_list_entry_delete(list_entry);
+                log_debug("failed to cache sysfs attribute value '%s', ignoring", relative);
+                sysattr_cache_remove(udev_device, relative);
         }
         return 0;
-
-fail:
-        /* On failure, clear cache entry, as we do not know how it fails. */
-        list_entry = udev_list_get_entry(&udev_device->sysattr_value_list);
-        list_entry = udev_list_entry_get_by_name(list_entry, sysattr);
-        if (list_entry != NULL)
-                udev_list_entry_delete(list_entry);
-        return r;
 }
 
-/* Update the cached value of a sys attribute without writing it, e.g. when 'udevadm test' skips
- * a write. Returns 1 when cached, 0 when not (the "uevent" file is never cached). */
+/* Update the cached value of a sys attribute without writing it, e.g. when 'udevadm test' skips a write.
+ * sysattr is the resolved path relative to the device, as udev_device_get_sysattr_value() caches it.
+ * Returns 1 when cached, 0 when not (the "uevent" file is never cached). */
 int udev_device_cache_sysattr_value(struct udev_device *udev_device, const char *sysattr, const char *value)
 {
         _cleanup_free_ char *v = NULL;
-        struct udev_list_entry *list_entry;
         size_t len;
 
         if (udev_device == NULL || sysattr == NULL || value == NULL)
                 return -EINVAL;
 
         /* like udev_device_set_sysattr_value(), do not cache the action string written into uevent */
-        if (streq(sysattr, "uevent"))
+        if (sysattr_is_uevent(sysattr))
                 return 0;
 
         /* drop trailing newlines, including carriage returns */
@@ -2363,10 +2421,7 @@ int udev_device_cache_sysattr_value(struct udev_device *udev_device, const char 
 
         if (udev_list_entry_add(&udev_device->sysattr_value_list, sysattr, v) == NULL) {
                 /* do not leave a cache entry without a value behind */
-                list_entry = udev_list_get_entry(&udev_device->sysattr_value_list);
-                list_entry = udev_list_entry_get_by_name(list_entry, sysattr);
-                if (list_entry != NULL)
-                        udev_list_entry_delete(list_entry);
+                sysattr_cache_remove(udev_device, sysattr);
                 return -ENOMEM;
         }
 
