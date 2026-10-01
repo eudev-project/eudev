@@ -17,6 +17,7 @@
   along with systemd; If not, see <http://www.gnu.org/licenses/>.
 ***/
 
+#include <ctype.h>
 #include <errno.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -241,6 +242,16 @@ static const char* extract_multiplier(const char *p, usec_t *ret) {
 #define TIME_WHITESPACE " \t\n\r"
 #define TIME_DIGITS "0123456789"
 
+/* The number of leading characters of s that strtoll() skips: those for which isspace() is true. */
+static size_t strspn_isspace(const char *s) {
+        size_t n = 0;
+
+        while (isspace((unsigned char) s[n]))
+                n++;
+
+        return n;
+}
+
 /* Parses a time span such as "5", "1.5s", "2min 30s" or "infinity", like systemd's
  * parse_time(). A number without a unit is taken in default_unit. */
 int parse_time(const char *t, usec_t *ret, usec_t default_unit) {
@@ -275,7 +286,10 @@ int parse_time(const char *t, usec_t *ret, usec_t default_unit) {
                         break;
                 }
 
-                if (*p == '-') /* Don't allow "-0" */
+                /* Don't allow "-0". Unlike systemd, look for the sign after all the characters that strtoll()
+                 * skips, i.e. those for which isspace() is true, \v and \f too, so that e.g. "\v-0.5" is
+                 * refused as well. */
+                if (p[strspn_isspace(p)] == '-')
                         return -ERANGE;
 
                 errno = 0;
