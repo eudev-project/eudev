@@ -99,7 +99,7 @@ static int fake_dev(const char *dir) {
 static int mask_rules_dirs(void) {
         const char *const *dir;
 
-        for (dir = udev_rules_get_dirs(); *dir; dir++) {
+        for (dir = udev_rules_get_dirs_runtime(); *dir; dir++) {
                 if (path_startswith(*dir, UDEV_ROOT_RUN))
                         continue;
 

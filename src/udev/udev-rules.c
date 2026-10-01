@@ -156,7 +156,9 @@ static const char* const rules_dirs_all[] = {
 #endif
         NULL};
 
-/* The directories of rules_dirs_all, each one only once, where it comes first. */
+/* The directories of rules_dirs_all, each path only once, where it comes first. udevadm cat and verify use
+ * them, also below another root directory; the rules of this system are read from the ones of
+ * udev_rules_get_dirs_runtime(). */
 const char* const* udev_rules_get_dirs(void) {
         static const char *dirs[ELEMENTSOF(rules_dirs_all)];
         static bool initialized = false;
@@ -174,6 +176,39 @@ const char* const* udev_rules_get_dirs(void) {
         }
         dirs[n] = NULL;
         initialized = true;
+
+        return dirs;
+}
+
+/* The directories of udev_rules_get_dirs(), where a directory that exists is listed only once, at its first
+ * position, also when it has several of the paths, like /lib/udev/rules.d and /usr/lib/udev/rules.d on a
+ * merged /usr, or a bind mount; it is found out by its device and inode at every call, as directories may
+ * be created or mounted later. The directories that do not exist stay in the list, to be looked at later.
+ * The list is valid until the next call. */
+const char* const* udev_rules_get_dirs_runtime(void) {
+        static const char *dirs[ELEMENTSOF(rules_dirs_all)];
+        struct stat st[ELEMENTSOF(rules_dirs_all)];
+        bool exists[ELEMENTSOF(rules_dirs_all)];
+        const char* const* d;
+        size_t j, n = 0;
+
+        for (d = udev_rules_get_dirs(); *d; d++) {
+                struct stat s;
+                bool e = stat(*d, &s) >= 0;
+
+                for (j = 0; e && j < n; j++)
+                        if (exists[j] && st[j].st_dev == s.st_dev && st[j].st_ino == s.st_ino)
+                                break;
+                if (e && j < n)
+                        continue;
+
+                dirs[n] = *d;
+                exists[n] = e;
+                if (e)
+                        st[n] = s;
+                n++;
+        }
+        dirs[n] = NULL;
 
         return dirs;
 }
@@ -2916,7 +2951,7 @@ struct udev_rules *udev_rules_new_full(struct udev *udev, int resolve_names, cha
                         return udev_rules_unref(rules);
         }
 
-        for (d = udev_rules_get_dirs(); *d; d++)
+        for (d = udev_rules_get_dirs_runtime(); *d; d++)
                 if (strv_extend(&dirs, *d) < 0)
                         return udev_rules_unref(rules);
 
@@ -2979,7 +3014,7 @@ bool udev_rules_check_timestamp(struct udev_rules *rules) {
         if (!rules)
                 return false;
 
-        return paths_check_timestamp(udev_rules_get_dirs(), &rules->dirs_ts_usec, true);
+        return paths_check_timestamp(udev_rules_get_dirs_runtime(), &rules->dirs_ts_usec, true);
 }
 
 /* returns whether the value matches the token's pattern, regardless of the operator */
