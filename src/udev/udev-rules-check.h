@@ -54,6 +54,9 @@ void udev_rules_check_line_begin(struct udev_rules_check *c, unsigned line_nr, c
 void udev_rules_check_delimiters(struct udev_rules_check *c, const char *pos);
 void udev_rules_check_token(struct udev_rules_check *c, const char *key, const char *attr, UdevRulesCheckOp op,
                             const char *value, bool is_case_insensitive);
+/* The parser dropped the last key that udev_rules_check_token() was called for, e.g. an OWNER or GROUP that
+ * cannot be resolved, but not the rule line: the key does not count, e.g. as an effect of the line. */
+void udev_rules_check_key_dropped(struct udev_rules_check *c);
 void udev_rules_check_line_end(struct udev_rules_check *c, bool valid);
 void udev_rules_check_goto_unresolved(struct udev_rules_check *c, unsigned line_nr);
 void udev_rules_check_file_end(struct udev_rules_check *c);

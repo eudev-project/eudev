@@ -2547,8 +2547,11 @@ static int add_rule(struct udev_rules *rules, char *line,
                          * SYMLINK, still applies on a system that lacks a user or group of the rules. */
                         if (in_charset(value, DIGITS) || (rules->resolve_names > 0 && value_is_plain(value))) {
                                 r = rule_resolve_user_or_group(rules, value, group, &id);
-                                if (IN_SET(r, -ESRCH, -EINVAL))
+                                if (IN_SET(r, -ESRCH, -EINVAL)) {
+                                        if (checking)
+                                                udev_rules_check_key_dropped(checking);
                                         continue;
+                                }
                                 if (r < 0)
                                         goto invalid;
                                 rule_add_key(&rule_tmp, group ? TK_A_GROUP_ID : TK_A_OWNER_ID, op, NULL, &id);

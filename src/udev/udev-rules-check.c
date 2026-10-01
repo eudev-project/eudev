@@ -80,6 +80,9 @@ struct udev_rules_check {
         bool order_checked;
         CheckLine current;
         size_t n_tokens_allocated;
+        /* the state of the line before the last key, see udev_rules_check_key_dropped() */
+        size_t key_first_token;
+        bool key_had_other;
 
         /* the lines of the file that are kept */
         CheckLine *lines;
@@ -526,6 +529,9 @@ void udev_rules_check_token(struct udev_rules_check *c, const char *base, const 
         assert(base);
         assert(value);
 
+        c->key_first_token = c->current.n_tokens;
+        c->key_had_other = c->current.has_other;
+
         if (c->line_failed)
                 return;
 
@@ -737,7 +743,8 @@ void udev_rules_check_token(struct udev_rules_check *c, const char *base, const 
 
                 /* An empty value, a user or group that cannot be resolved while the rules are read,
                  * and a MODE without substitutions that is not valid, also an empty one, are reported
-                 * by the parser, which ignores the MODE key then. */
+                 * by the parser, which ignores the key then; it tells about the OWNER and GROUP keys
+                 * with udev_rules_check_key_dropped(). */
                 if (streq(base, "MODE")) {
                         if (parse_mode(value, &mode) < 0) {
                                 if (get_substitution_type(value) == SUBST_TYPE_PLAIN)
@@ -804,6 +811,14 @@ void udev_rules_check_token(struct udev_rules_check *c, const char *base, const 
         }
 
         /* Other keys are reported by the parser as unknown. */
+}
+
+void udev_rules_check_key_dropped(struct udev_rules_check *c) {
+        assert(c);
+
+        while (c->current.n_tokens > c->key_first_token)
+                check_token_done(&c->current.tokens[--c->current.n_tokens]);
+        c->current.has_other = c->key_had_other;
 }
 
 static bool strv_set_eq(char **a, char **b) {
