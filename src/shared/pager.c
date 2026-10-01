@@ -3,7 +3,8 @@
 /*
  * The pager of systemd's src/shared/pager.c (as of systemd a446e8ff2c), adapted to eudev: the pager
  * process is forked directly, the owner of the login session, which systemd gets from logind, is the
- * audit login UID, and pager_close() is also called at exit.
+ * audit login UID, pager_close() is also called at exit, and quitting the pager before all output is
+ * written ends the program with exit status 0 instead of SIGPIPE.
  */
 
 #include <errno.h>
@@ -31,6 +32,9 @@ static int stored_stdout = -1;
 static int stored_stderr = -1;
 static bool stdout_redirected = false;
 static bool stderr_redirected = false;
+
+static struct sigaction old_sigpipe;
+static bool sigpipe_handled = false;
 
 noreturn static void pager_fallback(void) {
         char buf[4096];
@@ -127,6 +131,23 @@ static bool running_with_escalated_privileges(void) {
         }
 
         return uid != geteuid();
+}
+
+/* Unlike systemd, where the program is killed by SIGPIPE (exit status 141 in the shell) when it writes
+ * after the pager quit, end like after all output was shown: wait for the pager to exit, as
+ * pager_close() does, and exit with status 0. Only async-signal-safe functions are used here. */
+static void pager_sigpipe_handler(int sig) {
+        if (getpid() != pager_parent) {
+                /* a child forked later, which did not open the pager */
+                (void) signal(SIGPIPE, SIG_DFL);
+                (void) raise(SIGPIPE);
+                return;
+        }
+
+        while (waitpid(pager_pid, NULL, 0) < 0 && errno == EINTR)
+                ;
+
+        _exit(EXIT_SUCCESS);
 }
 
 static void reset_signals(void) {
@@ -364,6 +385,17 @@ void pager_open(PagerFlags flags) {
         }
         stderr_redirected = true;
 
+        /* Writes after the pager quit raise SIGPIPE, see pager_sigpipe_handler(). */
+        {
+                struct sigaction sa = {
+                        .sa_handler = pager_sigpipe_handler,
+                        .sa_flags = SA_RESTART,
+                };
+
+                if (sigaction(SIGPIPE, &sa, &old_sigpipe) >= 0)
+                        sigpipe_handled = true;
+        }
+
         exe_name_pipe[1] = safe_close(exe_name_pipe[1]);
 
         r = no_quit_on_interrupt(exe_name_pipe[0], less_opts);
@@ -400,6 +432,11 @@ void pager_close(void) {
                         (void) close(STDERR_FILENO);
         stored_stderr = safe_close(stored_stderr);
         stdout_redirected = stderr_redirected = false;
+
+        if (sigpipe_handled) {
+                (void) sigaction(SIGPIPE, &old_sigpipe, NULL);
+                sigpipe_handled = false;
+        }
 
         (void) kill(pager_pid, SIGCONT);
         while (waitid(P_PID, pager_pid, &status, WEXITED) < 0 && errno == EINTR)
