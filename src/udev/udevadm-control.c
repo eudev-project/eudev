@@ -65,7 +65,7 @@ static int send_control_commands(struct udev_ctrl *uctrl, int timeout,
         if (arg_exit) {
                 r = udev_ctrl_send_exit(uctrl, timeout);
                 if (r < 0)
-                        return log_error_errno(r, "Failed to send exit request to udevd: %m");
+                        return log_error_errno(r, "Failed to send exit request: %m");
                 return 0;
         }
 
@@ -74,13 +74,13 @@ static int send_control_commands(struct udev_ctrl *uctrl, int timeout,
                 if (r == -EOPNOTSUPP)
                         return log_error_errno(r, "udevd does not support --revert, restart it after upgrading.");
                 if (r < 0)
-                        return log_error_errno(r, "Failed to send revert request to udevd: %m");
+                        return log_error_errno(r, "Failed to send revert request: %m");
         }
 
         if (arg_log_level >= 0) {
                 r = udev_ctrl_send_set_log_level(uctrl, arg_log_level, timeout);
                 if (r < 0)
-                        return log_error_errno(r, "Failed to send request to set log level to udevd: %m");
+                        return log_error_errno(r, "Failed to send request to set log level: %m");
         }
 
         if (arg_start_exec_queue >= 0) {
@@ -89,32 +89,32 @@ static int send_control_commands(struct udev_ctrl *uctrl, int timeout,
                 else
                         r = udev_ctrl_send_stop_exec_queue(uctrl, timeout);
                 if (r < 0)
-                        return log_error_errno(r, "Failed to send request to %s execution queue to udevd: %m",
+                        return log_error_errno(r, "Failed to send request to %s exec queue: %m",
                                                arg_start_exec_queue ? "start" : "stop");
         }
 
         if (arg_reload) {
                 r = udev_ctrl_send_reload(uctrl, timeout);
                 if (r < 0)
-                        return log_error_errno(r, "Failed to send reload request to udevd: %m");
+                        return log_error_errno(r, "Failed to send reload request: %m");
         }
 
         STRV_FOREACH(e, arg_env) {
                 r = udev_ctrl_send_set_env(uctrl, *e, timeout);
                 if (r < 0)
-                        return log_error_errno(r, "Failed to send request to set global property to udevd: %m");
+                        return log_error_errno(r, "Failed to send request to update environment: %m");
         }
 
         if (arg_max_children >= 0) {
                 r = udev_ctrl_send_set_children_max(uctrl, arg_max_children, timeout);
                 if (r < 0)
-                        return log_error_errno(r, "Failed to send request to set number of children to udevd: %m");
+                        return log_error_errno(r, "Failed to send request to set number of children: %m");
         }
 
         if (arg_ping) {
                 r = udev_ctrl_send_ping(uctrl, timeout);
                 if (r < 0)
-                        return log_error_errno(r, "Failed to connect to udev daemon: %m");
+                        return log_error_errno(r, "Failed to send a ping message: %m");
         }
 
         if (arg_trace >= 0) {
@@ -122,7 +122,7 @@ static int send_control_commands(struct udev_ctrl *uctrl, int timeout,
                 if (r == -EOPNOTSUPP)
                         return log_error_errno(r, "udevd does not support --trace, restart it after upgrading.");
                 if (r < 0)
-                        return log_error_errno(r, "Failed to send request to set trace logging to udevd: %m");
+                        return log_error_errno(r, "Failed to send request to set trace logging: %m");
         }
 
         return 0;
@@ -173,7 +173,9 @@ static int adm_control(struct udev *udev, int argc, char *argv[]) {
                 case 'l':
                         arg_log_level = util_log_priority(optarg);
                         if (arg_log_level < 0) {
-                                fprintf(stderr, "invalid log level '%s'\n", optarg);
+                                /* systemd's log_level_from_string() fails with EINVAL also for numbers
+                                 * that are too large */
+                                log_error_errno(EINVAL, "Failed to parse log level '%s': %m", optarg);
                                 return 1;
                         }
                         break;
@@ -188,11 +190,12 @@ static int adm_control(struct udev *udev, int argc, char *argv[]) {
                         break;
                 case 'p':
                         if (strchr(optarg, '=') == NULL) {
-                                fprintf(stderr, "expect <KEY>=<value> instead of '%s'\n", optarg);
+                                log_error("expect <KEY>=<value> instead of '%s'", optarg);
                                 return 1;
                         }
-                        if (strv_extend(&arg_env, optarg) < 0) {
-                                log_oom();
+                        r = strv_extend(&arg_env, optarg);
+                        if (r < 0) {
+                                log_error_errno(r, "Failed to extend environment: %m");
                                 return 1;
                         }
                         break;
@@ -218,7 +221,7 @@ static int adm_control(struct udev *udev, int argc, char *argv[]) {
                 case ARG_TRACE:
                         r = parse_boolean(optarg);
                         if (r < 0) {
-                                log_error_errno(r, "Failed to parse boolean argument to --trace=: %s.", optarg);
+                                log_error_errno(r, "Failed to parse boolean argument to '--trace=': %s", optarg);
                                 return 1;
                         }
                         arg_trace = r;
@@ -257,13 +260,13 @@ static int adm_control(struct udev *udev, int argc, char *argv[]) {
                         assert_not_reached("Unknown option");
                 }
 
-        if (optind < argc) {
-                fprintf(stderr, "Extraneous argument: %s\n", argv[optind]);
-                return 1;
-        }
         if (!arg_exit && !arg_revert && arg_log_level < 0 && arg_start_exec_queue < 0 && !arg_reload &&
             strv_isempty(arg_env) && arg_max_children < 0 && !arg_ping && arg_trace < 0) {
-                fprintf(stderr, "Option missing\n");
+                log_error("No control command option is specified.");
+                return 1;
+        }
+        if (optind < argc) {
+                log_error("This subprogram takes no positional arguments.");
                 return 1;
         }
 
@@ -275,13 +278,14 @@ static int adm_control(struct udev *udev, int argc, char *argv[]) {
         }
 
         if (getuid() != 0) {
-                fprintf(stderr, "root privileges required\n");
+                log_error("root privileges required");
                 return 1;
         }
 
+        errno = 0;
         uctrl = udev_ctrl_new(udev);
         if (uctrl == NULL) {
-                log_error("Failed to create the control socket of udevd.");
+                log_error_errno(errno > 0 ? errno : ENOMEM, "Failed to initialize udev control: %m");
                 return 1;
         }
 
