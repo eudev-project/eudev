@@ -32,4 +32,5 @@ typedef enum ConfFilesFlags {
 } ConfFilesFlags;
 
 int conf_files_list_strv(char ***strv, const char *suffix, const char *root, const char* const* dirs);
+int conf_files_list_strv_full(char ***strv, const char *suffix, const char *root, ConfFilesFlags flags, const char* const* dirs);
 int conf_files_list_strv_path(char ***strv, const char *suffix, const char *root, ConfFilesFlags flags, const char* path);

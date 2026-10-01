@@ -212,7 +212,7 @@ static int conf_files_list_strv_internal(char ***strv, const char *suffix, const
         return 0;
 }
 
-int conf_files_list_strv(char ***strv, const char *suffix, const char *root, const char* const* dirs) {
+int conf_files_list_strv_full(char ***strv, const char *suffix, const char *root, ConfFilesFlags flags, const char* const* dirs) {
         _cleanup_strv_free_ char **copy = NULL;
 
         assert(strv);
@@ -222,7 +222,11 @@ int conf_files_list_strv(char ***strv, const char *suffix, const char *root, con
         if (!copy)
                 return -ENOMEM;
 
-        return conf_files_list_strv_internal(strv, suffix, root, 0, copy);
+        return conf_files_list_strv_internal(strv, suffix, root, flags, copy);
+}
+
+int conf_files_list_strv(char ***strv, const char *suffix, const char *root, const char* const* dirs) {
+        return conf_files_list_strv_full(strv, suffix, root, 0, dirs);
 }
 
 /* Copy every non-empty path element from path_variable to
