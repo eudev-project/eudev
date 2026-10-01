@@ -71,7 +71,7 @@
       used to override a system-supplied rules file with a local file if needed;
       a symlink in <filename>/etc</filename> with the same name as a rules file in
       <filename>/lib</filename>, pointing to <filename>/dev/null</filename>,
-      disables the rules file entirely. Rule files must have the extension
+      or an empty file with that name, disables the rules file entirely. Rule files must have the extension
       <filename>.rules</filename>; other extensions are ignored.</para>
 
       <para>Every line in the rules file contains at least one key-value pair.
@@ -1730,7 +1730,8 @@ net:naming:drvirtio_net:*
       local file if needed; a symlink in <filename>/etc</filename> with the
       same name as a hwdb file in <filename>/usr/lib</filename> or
       <envar>UDEV_HWDB_PATH</envar>, pointing to
-      <filename>/dev/null</filename>, disables the hwdb file entirely. hwdb
+      <filename>/dev/null</filename>, or an empty file with that name,
+      disables the hwdb file entirely. hwdb
       files must have the extension <filename>.hwdb</filename>; other
       extensions are ignored.</para>
 

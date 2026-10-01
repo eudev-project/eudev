@@ -36,7 +36,7 @@ have the highest priority and take precedence over files with the same name in
 /etc/
 with the same name as a hwdb file in
 /usr/lib/, pointing to
-/dev/null, disables that hwdb file entirely\&. hwdb files must have the extension
+/dev/null, or an empty file with that name, disables that hwdb file entirely\&. hwdb files must have the extension
 \&.hwdb; other extensions are ignored\&.
 .PP
 Each hwdb file contains data records consisting of matches and associated key\-value pairs\&. Every record in the hwdb starts with one or more match strings, specifying a shell glob to compare the lookup string against\&. Multiple match lines are specified in consecutive lines\&. Every match line is compared individually, and they are combined by OR\&. Every match line must start at the first character of the line\&.
