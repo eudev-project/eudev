@@ -2683,21 +2683,26 @@ static int udev_device_set_devnode(struct udev_device *udev_device, const char *
         return 0;
 }
 
+/* Like device_add_devlink() of systemd: returns 1 when the symlink was added, 0 when the device has it
+ * already. */
 int udev_device_add_devlink(struct udev_device *udev_device, const char *devlink)
 {
         _cleanup_free_ char *p = NULL;
         struct udev_list_entry *list_entry;
+        bool added;
         int r;
 
         r = mangle_devname(devlink, &p);
         if (r < 0)
                 return r;
 
+        added = !udev_list_entry_get_by_name(udev_list_get_entry(&udev_device->devlinks_list), p);
+
         udev_device->devlinks_uptodate = false;
         list_entry = udev_list_entry_add(&udev_device->devlinks_list, p, NULL);
         if (list_entry == NULL)
                 return -ENOMEM;
-        return 0;
+        return added;
 }
 
 int udev_device_remove_devlink(struct udev_device *udev_device, const char *devlink)

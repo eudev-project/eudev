@@ -3134,10 +3134,10 @@ static int apply_devlink(struct udev_event *event, struct udev_rules *rules, str
         else
                 r = udev_device_add_devlink(event->dev, link);
         if (r >= 0) {
-                /* like systemd, only when the symlink was there */
+                /* like systemd, only when the symlink was there, or was not there yet */
                 if (op == OP_REMOVE && r > 0)
                         log_event_debug(event, rules, rule, token, "Removed device node symlink \"%s\"", link);
-                else if (op != OP_REMOVE)
+                else if (op != OP_REMOVE && r > 0)
                         log_event_debug(event, rules, rule, token, "Added device node symlink \"%s\".", link);
                 return 0;
         }
