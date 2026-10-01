@@ -26,6 +26,7 @@
 #include "util.h"
 #include "strbuf.h"
 #include "conf-files.h"
+#include "fileio.h"
 #include "label.h"
 #include "mkdir.h"
 #include "path-util.h"
@@ -424,6 +425,12 @@ static int trie_store(struct trie *trie, const char *filename) {
                 return -errno;
         }
         root_off = trie_store_nodes(&t, trie->root);
+        if (root_off < 0) {
+                /* systemd writes the database anyway */
+                fclose(t.f);
+                unlink_noerrno(filename_tmp);
+                return root_off;
+        }
         h.nodes_root_off = htole64(root_off);
         pos = ftello(t.f);
         h.nodes_len = htole64(pos - sizeof(struct trie_header_f));
@@ -467,17 +474,20 @@ static int trie_store(struct trie *trie, const char *filename) {
         return 0;
 }
 
+/* Returns 0, 1 if the line has a syntax error, which is logged and the line ignored, or a negative errno,
+ * e.g. -ENOMEM, if the data cannot be inserted. */
 static int insert_data(struct trie *trie, struct udev_list *match_list,
                        char *line, const char *filename, uint16_t file_priority, uint32_t line_number) {
         char *value;
         struct udev_list_entry *entry;
+        int r;
 
         assert(line[0] == ' ');
 
         value = strchr(line, '=');
         if (!value) {
                 log_error("Warning, key-value pair expected but got \"%s\", ignoring", line);
-                return -EINVAL;
+                return 1;
         }
 
         value[0] = '\0';
@@ -490,27 +500,33 @@ static int insert_data(struct trie *trie, struct udev_list *match_list,
         if (isempty(line + 1)) {
                 log_error("Warning, empty key in \"%s=%s\", ignoring",
                           line, value);
-                return -EINVAL;
+                return 1;
         }
 
-        udev_list_entry_foreach(entry, udev_list_get_entry(match_list))
-                trie_insert(trie, trie->root, udev_list_entry_get_name(entry), line, value,
-                            filename, file_priority, line_number);
+        udev_list_entry_foreach(entry, udev_list_get_entry(match_list)) {
+                r = trie_insert(trie, trie->root, udev_list_entry_get_name(entry), line, value,
+                                filename, file_priority, line_number);
+                if (r < 0)
+                        return log_error_errno(r, "%s:%u: Failed to insert '%s': %m",
+                                               filename, line_number, udev_list_entry_get_name(entry));
+        }
 
         return 0;
 }
 
+/* Returns 0, 1 if there were syntax errors, which are logged and the lines ignored, or a negative errno if
+ * the file cannot be read or the data cannot be inserted. */
 static int import_file(struct udev *udev, struct trie *trie, const char *filename, const char *path_in_root, uint16_t file_priority) {
         enum {
                 HW_MATCH,
                 HW_DATA,
                 HW_NONE,
         } state = HW_NONE;
-        FILE *f;
-        char line[LINE_MAX];
+        _cleanup_fclose_ FILE *f = NULL;
         struct udev_list match_list;
         uint32_t line_number = 0;
-        int r = 0, err;
+        bool syntax_errors = false;
+        int r, err;
 
         udev_list_init(udev, &match_list, false);
 
@@ -518,9 +534,17 @@ static int import_file(struct udev *udev, struct trie *trie, const char *filenam
         if (!f)
                 return -errno;
 
-        while (fgets(line, sizeof(line), f)) {
+        for (;;) {
+                _cleanup_free_ char *line = NULL;
                 size_t len;
                 char *pos;
+
+                /* Like systemd, a line longer than LONG_LINE_MAX is an error, instead of being split. */
+                r = read_line(f, LONG_LINE_MAX, &line);
+                if (r < 0)
+                        goto finish;
+                if (r == 0)
+                        break;
 
                 ++line_number;
 
@@ -546,19 +570,22 @@ static int import_file(struct udev *udev, struct trie *trie, const char *filenam
 
                         if (line[0] == ' ') {
                                 log_error("Warning, match expected but got indented property \"%s\", ignoring line", line);
-                                r = -EINVAL;
+                                syntax_errors = true;
                                 break;
                         }
 
                         /* start of record, first match */
                         state = HW_MATCH;
-                        udev_list_entry_add(&match_list, line, NULL);
+                        if (!udev_list_entry_add(&match_list, line, NULL)) {
+                                r = -ENOMEM;
+                                goto finish;
+                        }
                         break;
 
                 case HW_MATCH:
                         if (len == 0) {
                                 log_error("Warning, property expected, ignoring record with no properties");
-                                r = -EINVAL;
+                                syntax_errors = true;
                                 state = HW_NONE;
                                 udev_list_cleanup(&match_list);
                                 break;
@@ -566,15 +593,22 @@ static int import_file(struct udev *udev, struct trie *trie, const char *filenam
 
                         if (line[0] != ' ') {
                                 /* another match */
-                                udev_list_entry_add(&match_list, line, NULL);
+                                if (!udev_list_entry_add(&match_list, line, NULL)) {
+                                        r = -ENOMEM;
+                                        goto finish;
+                                }
                                 break;
                         }
 
                         /* first data */
                         state = HW_DATA;
                         err = insert_data(trie, &match_list, line, path_in_root, file_priority, line_number);
-                        if (err < 0)
+                        if (err < 0) {
                                 r = err;
+                                goto finish;
+                        }
+                        if (err > 0)
+                                syntax_errors = true;
                         break;
 
                 case HW_DATA:
@@ -587,15 +621,19 @@ static int import_file(struct udev *udev, struct trie *trie, const char *filenam
 
                         if (line[0] != ' ') {
                                 log_error("Warning, property or empty line expected, got \"%s\", ignoring record", line);
-                                r = -EINVAL;
+                                syntax_errors = true;
                                 state = HW_NONE;
                                 udev_list_cleanup(&match_list);
                                 break;
                         }
 
                         err = insert_data(trie, &match_list, line, path_in_root, file_priority, line_number);
-                        if (err < 0)
+                        if (err < 0) {
                                 r = err;
+                                goto finish;
+                        }
+                        if (err > 0)
+                                syntax_errors = true;
                         break;
                 };
         }
@@ -603,7 +641,9 @@ static int import_file(struct udev *udev, struct trie *trie, const char *filenam
         if (state == HW_MATCH)
                 log_error("Warning, property expected, ignoring record with no properties");
 
-        fclose(f);
+        r = syntax_errors;
+
+finish:
         udev_list_cleanup(&match_list);
         return r;
 }
@@ -724,7 +764,15 @@ int hwdb_update(struct udev *udev, const char *root, const char *hwdb_bin, bool 
                 }
 
                 log_debug("Reading file \"%s\" -> \"%s\"", c->original_path, c->resolved_path);
-                if (import_file(udev, trie, c->resolved_path, path_in_root, file_priority++) < 0 && ret == 0)
+                err = import_file(udev, trie, c->resolved_path, path_in_root, file_priority++);
+                if (err < 0) {
+                        /* Unlike systemd, which writes a database without the data that could not be
+                         * read, and returns the error only with --strict, keep the old hwdb.bin. */
+                        log_error_errno(err, "Failed to read hwdb file '%s', not updating %s: %m",
+                                        c->original_path, hwdb_bin);
+                        goto out;
+                }
+                if (err > 0 && ret == 0)
                         ret = -EINVAL;
         }
 
