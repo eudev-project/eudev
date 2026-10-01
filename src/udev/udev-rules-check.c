@@ -158,17 +158,21 @@ void udev_rules_check_note_level(struct udev_rules_check *c, int level) {
         c->issues |= 1U << LOG_PRI(level);
 }
 
+/* The message may contain a whole value, so it is not cut to LINE_MAX here, see log_internalv(). */
 _printf_(3,4)
 static void log_line(struct udev_rules_check *c, int level, const char *format, ...) {
-        char buf[LINE_MAX];
+        _cleanup_free_ char *buf = NULL;
         va_list ap;
+        int r;
 
         va_start(ap, format);
-        vsnprintf(buf, sizeof(buf), format, ap);
+        r = vasprintf(&buf, format, ap);
         va_end(ap);
+        if (r < 0)
+                buf = NULL;
 
         udev_rules_check_note_level(c, level);
-        log_full(level, "%s:%u %s", c->filename, c->line_nr, buf);
+        log_full(level, "%s:%u %s", c->filename, c->line_nr, buf ?: "Out of memory.");
 }
 
 #define log_line_error(c, ...)   log_line(c, LOG_ERR, __VA_ARGS__)
@@ -178,14 +182,17 @@ static void log_line(struct udev_rules_check *c, int level, const char *format, 
 /* Like systemd, a token with an error makes the rest of the line ignored. */
 _printf_(2,3)
 static void log_line_error_fail(struct udev_rules_check *c, const char *format, ...) {
-        char buf[LINE_MAX];
+        _cleanup_free_ char *buf = NULL;
         va_list ap;
+        int r;
 
         va_start(ap, format);
-        vsnprintf(buf, sizeof(buf), format, ap);
+        r = vasprintf(&buf, format, ap);
         va_end(ap);
+        if (r < 0)
+                buf = NULL;
 
-        log_line_error(c, "%s", buf);
+        log_line_error(c, "%s", buf ?: "Out of memory.");
         c->line_failed = true;
 }
 

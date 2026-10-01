@@ -465,6 +465,15 @@ static int log_dispatch(
         return -error;
 }
 
+/* The longest message that is logged whole. The messages about applying a udev rule start with the
+ * device, the rules file and its line, and the key with its value, which can be as long as a rule, 16383
+ * characters, and up to four times that when C-escaped, and the message itself may contain a value of up
+ * to 16 KiB again, e.g. a command; 128 KiB is enough for all of them. Other messages are much shorter;
+ * one that does not fit into LINE_MAX is formatted again into a buffer of its size. The kernel refuses
+ * records of more than 1 KiB in /dev/kmsg, though; a longer message is written to the console then, like
+ * with any other error of /dev/kmsg. */
+#define LOG_MESSAGE_MAX (128U * 1024U)
+
 int log_internalv(
         int level,
         int error,
@@ -475,7 +484,10 @@ int log_internalv(
         va_list ap) {
 
         PROTECT_ERRNO;
+        _cleanup_free_ char *long_buffer = NULL;
         char buffer[LINE_MAX];
+        int saved_errno, n;
+        va_list aq;
 
         if (error < 0)
                 error = -error;
@@ -486,11 +498,25 @@ int log_internalv(
         /* Make sure that %m maps to the specified error */
         if (error != 0)
                 errno = error;
+        saved_errno = errno;
 
-        vsnprintf(buffer, sizeof(buffer), format, ap);
+        va_copy(aq, ap);
+        n = vsnprintf(buffer, sizeof(buffer), format, ap);
         char_array_0(buffer);
 
-        return log_dispatch(level, error, file, line, func, NULL, NULL, buffer);
+        if (n >= (int) sizeof(buffer)) {
+                size_t size = MIN((size_t) n + 1, (size_t) LOG_MESSAGE_MAX);
+
+                long_buffer = malloc(size);
+                if (long_buffer) {
+                        errno = saved_errno;
+                        vsnprintf(long_buffer, size, format, aq);
+                        long_buffer[size - 1] = '\0';
+                }
+        }
+        va_end(aq);
+
+        return log_dispatch(level, error, file, line, func, NULL, NULL, long_buffer ?: buffer);
 }
 
 int log_internal_long(
