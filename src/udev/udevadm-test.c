@@ -95,7 +95,7 @@ static int adm_test(struct udev *udev, int argc, char *argv[]) {
                 case 'a':
                         r = parse_device_action(optarg, &action);
                         if (r < 0) {
-                                log_error("Invalid action '%s'", optarg);
+                                log_error("Invalid action '%s'.", optarg);
                                 exit(EXIT_FAILURE);
                         }
                         if (r == 0)
@@ -109,7 +109,7 @@ static int adm_test(struct udev *udev, int argc, char *argv[]) {
                         } else if (streq (optarg, "never")) {
                                 resolve_names = -1;
                         } else {
-                                log_error("resolve-names must be early, late or never");
+                                log_error("--resolve-names= must be 'early', 'late', or 'never'.");
                                 exit(EXIT_FAILURE);
                         }
                         break;
@@ -175,9 +175,11 @@ static int adm_test(struct udev *udev, int argc, char *argv[]) {
 
         maybe_insert_empty_line();
         log_info("Loading udev rules files...");
+        errno = 0;
         rules = udev_rules_new_full(udev, resolve_names, extra_rules_dir);
         if (rules == NULL) {
-                log_error("Failed to read udev rules.");
+                /* it fails only for lack of memory */
+                log_error_errno(errno > 0 ? errno : ENOMEM, "Failed to read udev rules: %m");
                 rc = EXIT_FAILURE;
                 goto out;
         }

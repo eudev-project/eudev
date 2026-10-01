@@ -69,7 +69,7 @@ static int adm_builtin(struct udev *udev, int argc, char *argv[]) {
                 case 'a':
                         r = parse_device_action(optarg, &action);
                         if (r < 0) {
-                                log_error("Invalid action '%s'", optarg);
+                                log_error("Invalid action '%s'.", optarg);
                                 rc = EXIT_FAILURE;
                                 goto out;
                         }
