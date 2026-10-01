@@ -474,10 +474,13 @@ int udev_builtin_net_id_eudev(struct udev_device *dev, enum udev_event_mode mode
         int err;
 
         /* handle only ARPHRD_ETHER and ARPHRD_SLIP devices; like systemd, the errors are returned
-         * as negative error codes */
+         * as negative error codes, but like the systemd schemes, a device without a type is ignored */
         s = udev_device_get_sysattr_value(dev, "type");
-        if (!s)
-                return -ENOENT;
+        if (!s) {
+                log_device_debug_errno(dev, errno > 0 ? errno : ENOENT,
+                                       "Failed to determine prefix for network interface naming, ignoring: %m");
+                return 0;
+        }
         i = strtoul(s, NULL, 0);
         switch (i) {
         case ARPHRD_ETHER:
