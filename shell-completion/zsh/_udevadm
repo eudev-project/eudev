@@ -86,11 +86,11 @@ _udevadm_control(){
         '(-S --start-exec-queue)'{-S,--start-exec-queue}'[Signal udevd to enable the execution of events.]' \
         '(-R --reload)'{-R,--reload}'[Signal udevd to reload the rules files and other databases like the kernel module index.]' \
         '(-p --property)'{-p,--property=}'[Set a global property for all events.]:KEY=VALUE' \
-        '(-m --children-max=)'{-m,--children-max=}'[Set the maximum number of events.]:N' \
+        '(-m --children-max)'{-m,--children-max=}'[Set the maximum number of events.]:N' \
         '--ping[Send a ping message to udevd and wait for the reply.]' \
         '--trace=[Enable/disable trace logging.]:BOOL' \
         '--revert[Revert previously set configurations.]' \
-        '(-t --timeout=)'{-t,--timeout=}'[The maximum number of seconds to wait for a reply from udevd.]:SECONDS'
+        '(-t --timeout)'{-t,--timeout=}'[The maximum number of seconds to wait for a reply from udevd.]:SECONDS'
 }
 
 (( $+functions[_udevadm_monitor] )) ||
@@ -125,30 +125,20 @@ _udevadm_test(){
         '(-)'{-V,--version}'[Show package version]' \
         '(-a --action)'{-a,--action=}'[The action string.]:actions:(add change remove move online offline bind unbind)' \
         '(-N --resolve-names)'{-N,--resolve-names=}'[When to resolve names.]:resolve:(early late never)' \
-        '(-D --extra-rules-dir=)'{-D,--extra-rules-dir=}'[Also load rules from the directory.]:directories:_directories' \
+        '*'{-D,--extra-rules-dir=}'[Also load rules from the directory.]:directories:_directories' \
         '(-v --verbose)'{-v,--verbose}'[Show verbose logs.]' \
         '--json=[Generate JSON output]:MODE:(pretty short off)' \
-        '*::devpath:_files -W /sys'
+        '*::devpath:_udevadm_devices'
 }
 
 (( $+functions[_udevadm_test-builtin] )) ||
 _udevadm_test-builtin(){
-    if (( CURRENT == 2 )); then
-        _arguments \
-            '(- *)'{-h,--help}'[Print help]' \
-            '(- *)'{-V,--version}'[Print version of the program]' \
-            '(-a --action)'{-a,--action=}'[The action string.]:actions:(add change remove move online offline bind unbind)' \
-            '*::builtins:(blkid btrfs factory_reset hwdb input_id keyboard kmod net_driver net_id path_id tpm2_id usb_id)'
-    elif  (( CURRENT == 3 )); then
-        _arguments \
-            '(-a --action)'{-a,--action=}'[The action string.]:actions:(add change remove move online offline bind unbind)' \
-            '(- *)--help[Print help text]' \
-            '*::syspath:_files -W /sys'
-    else
-        _arguments \
-            '(-a --action)'{-a,--action=}'[The action string.]:actions:(add change remove move online offline bind unbind)' \
-            '(- *)--help[Print help text]'
-    fi
+    _arguments \
+        '(- *)'{-h,--help}'[Print help]' \
+        '(- *)'{-V,--version}'[Print version of the program]' \
+        '(-a --action)'{-a,--action=}'[The action string.]:actions:(add change remove move online offline bind unbind)' \
+        ':builtins:(blkid btrfs factory_reset hwdb input_id keyboard kmod net_driver net_id path_id tpm2_id usb_id)' \
+        ':devpath:_udevadm_devices'
 }
 
 (( $+functions[_udevadm_verify] )) ||
@@ -196,6 +186,17 @@ _udevadm_lock(){
         '(-b --backing)'{-b,--backing=}'[File whose backing block device to lock.]:FILE:_files' \
         '(-p --print)'{-p,--print}'[Only show which block device the lock would be taken on.]' \
         '*::command:_normal'
+}
+
+(( $+functions[_udevadm_devices] )) ||
+_udevadm_devices(){
+    local -a alts
+
+    # sysfs paths, also relative to /sys, and device nodes in /dev, or other absolute paths
+    [[ $PREFIX != /* || $PREFIX == /sys/* ]] && alts+=( 'sysfs-paths:sysfs path:_files -W /sys' )
+    [[ $PREFIX != /* || $PREFIX == /dev/* ]] && alts+=( 'device-nodes:device node:_files -W /dev -P /dev/ -g "*(-%)"' )
+    (( $#alts )) || alts=( 'files:file:_files' )
+    _alternative $alts
 }
 
 (( $+functions[_udevadm_mounts] )) ||
@@ -252,7 +253,7 @@ _udevadm_commands(){
 }
 
 _arguments \
-    '--debug[Print debug messages to stderr]' \
-    '(- *)--version[Print version number]' \
-    '(- *)--help[Print help text]' \
+    '(-d --debug)'{-d,--debug}'[Print debug messages to stderr]' \
+    '(- *)'{-V,--version}'[Print version number]' \
+    '(- *)'{-h,--help}'[Print help text]' \
     '*::udevadm commands:_udevadm_commands'
