@@ -157,5 +157,5 @@ out:
 const struct udevadm_cmd udevadm_hwdb = {
         .name = "hwdb",
         .cmd = adm_hwdb,
-        .help = "maintain the hardware database index",
+        .help = "Maintain the hardware database index",
 };
