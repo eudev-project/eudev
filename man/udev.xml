@@ -585,11 +585,13 @@
             processing the most recent event are the current tags, in the
             <varname>CURRENT_TAGS</varname> property.</para>
             <para>A tag name may only contain ASCII letters, digits, <literal>-</literal> and
-            <literal>_</literal>; other names are ignored with an error. <literal>+=</literal>
+            <literal>_</literal>; other names, also an empty one, are ignored with a warning, like
+            in systemd. <literal>+=</literal>
             attaches the tag. <literal>-=</literal> removes it from the current tags only.
             <literal>=</literal> and <literal>:=</literal> first clear the current tags, and drop
             the tags attached earlier while processing this event, and then attach the tag;
-            <varname>TAG</varname><literal>=""</literal> only clears them.</para>
+            <varname>TAG</varname><literal>=""</literal> only clears them, with the warning about
+            the empty name.</para>
           </listitem>
         </varlistentry>
 

@@ -521,7 +521,7 @@ property\&.
 A tag name may only contain ASCII letters, digits,
 \-
 and
-_; other names are ignored with an error\&.
+_; other names, also an empty one, are ignored with a warning, like in systemd\&.
 +=
 attaches the tag\&.
 \-=
@@ -531,7 +531,7 @@ and
 :=
 first clear the current tags, and drop the tags attached earlier while processing this event, and then attach the tag;
 \fITAG\fR=""
-only clears them\&.
+only clears them, with the warning about the empty name\&.
 .RE
 .PP
 \fIRUN{\fR\fI\fItype\fR\fR\fI}\fR

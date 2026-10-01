@@ -3860,7 +3860,8 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                                 r = udev_device_add_tag(event->dev, tag, true);
                                 if (r == -ENOMEM) /* like systemd, this stops the processing of the event */
                                         return log_oom();
-                                if (r == -EINVAL && tag[0] != '\0')
+                                /* like systemd, also for an empty tag */
+                                if (r < 0)
                                         log_event_warning_errno(event, rules, rule, cur, r, "Failed to %s tag \"%s\", ignoring: %m",
                                                                 assign ? "set" : "add", tag);
                         }
