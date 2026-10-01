@@ -119,10 +119,6 @@ static int adm_builtin(struct udev *udev, int argc, char *argv[]) {
         if (r < 0) {
                 log_debug_errno(r, "Builtin command '%s' fails: %m", command);
                 rc = EXIT_FAILURE;
-        } else if (r > 0) {
-                /* the builtins that return EXIT_FAILURE */
-                log_debug("Builtin command '%s' fails.", command);
-                rc = EXIT_FAILURE;
         }
 out:
         udev_device_unref(dev);
