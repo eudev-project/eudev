@@ -608,7 +608,8 @@ static inline void* bsearch_safe(const void *key, const void *base,
                 return NULL;
 
         assert(base);
-        return bsearch(key, base, nmemb, size, compar);
+        /* like systemd: with C23, bsearch() of glibc >= 2.43 returns a const pointer for a const base */
+        return (void*) bsearch(key, base, nmemb, size, compar);
 }
 
 #define typesafe_bsearch(k, b, n, func)                                 \
