@@ -149,10 +149,17 @@ static void udev_read_conf(struct udev *udev, const char *filename) {
 
         f = fopen(filename, "re");
         if (f != NULL) {
-                char line[UTIL_LINE_SIZE];
+                /* on the heap, to keep the stack small for the programs that call udev_new() */
+                _cleanup_free_ char *line = NULL;
                 unsigned line_nr = 0;
 
-                while (fgets(line, sizeof(line), f)) {
+                line = malloc(UTIL_LINE_SIZE);
+                if (!line) {
+                        log_oom_debug();
+                        return;
+                }
+
+                while (fgets(line, UTIL_LINE_SIZE, f)) {
                         size_t len;
                         char *key;
                         char *val;

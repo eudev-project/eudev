@@ -929,7 +929,7 @@ int udev_event_spawn(struct udev_event *event,
         int outpipe[2] = {-1, -1};
         int errpipe[2] = {-1, -1};
         pid_t pid;
-        char arg[UTIL_LINE_SIZE];
+        _cleanup_free_ char *arg = NULL;
         char *argv[UDEV_ARGV_MAX];
         char program[UTIL_PATH_SIZE];
         const char *helper = NULL;
@@ -940,7 +940,11 @@ int udev_event_spawn(struct udev_event *event,
         assert(cmd);
         assert(result || ressize == 0);
 
-        strscpy(arg, sizeof(arg), cmd);
+        /* The words are written over a copy of the command, on the heap, like the argv of systemd, to keep
+         * the stack small. The commands come from buffers of UTIL_LINE_SIZE, which the copy was before. */
+        arg = strndup(cmd, UTIL_LINE_SIZE - 1);
+        if (!arg)
+                return log_oom();
         udev_build_argv(event->udev, arg, &argc, argv);
 
         if (event->event_mode == EVENT_UDEVADM_TEST)
@@ -1374,15 +1378,25 @@ static void event_assign_altnames(struct udev_event *event) {
         if (!EVENT_MODE_NETIF_DESTRUCTIVE(event)) {
                 /* systemd shows the names unfiltered, see udevadm test; here the ones that would be requested */
                 const char *newname = event->name ?: ifname;
-                char names[UTIL_LINE_SIZE] = "";
+                _cleanup_free_ char *names = NULL;
                 char **a;
 
-                STRV_FOREACH(a, event->altnames)
-                        if (!streq(*a, newname))
-                                strscpyl(names + strlen(names), sizeof(names) - strlen(names),
-                                         names[0] ? " " : "", *a, NULL);
+                /* on the heap, to keep the stack small */
+                STRV_FOREACH(a, event->altnames) {
+                        char *n;
 
-                if (names[0])
+                        if (streq(*a, newname))
+                                continue;
+
+                        n = strjoin(names ?: "", isempty(names) ? "" : " ", *a, NULL);
+                        if (!n) {
+                                log_oom();
+                                return;
+                        }
+                        free_and_replace(names, n);
+                }
+
+                if (!isempty(names))
                         log_debug("Running in test mode, skipping assigning alternative names '%s' to network interface '%s'.",
                                   names, newname);
                 return;
