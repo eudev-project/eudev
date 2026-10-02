@@ -521,9 +521,8 @@ int reread_partition_table(struct udev_device *dev, RereadPartitionTableFlags fl
          * holds the lock of the disk, or BLKRRPART failed, do not trigger them again. Do not warn when the
          * disk or its medium is gone. */
         if (r < 0 && !triggered && FLAGS_SET(flags, REREADPT_FORCE_UEVENT)) {
-                log_full_errno(ERRNO_IS_DEVICE_ABSENT(r) || r == -ENOMEDIUM ? LOG_DEBUG : LOG_WARNING, r,
-                               "%s: Failed to re-read the partition table, triggering 'change' events for the disk and its partitions instead: %m",
-                               strna(udev_device_get_sysname(dev)));
+                log_device_full_errno(dev, ERRNO_IS_DEVICE_ABSENT_OR_EMPTY(r) ? LOG_DEBUG : LOG_WARNING, r,
+                                      "Failed to re-read the partition table, triggering 'change' events for the disk and its partitions instead: %m");
                 (void) trigger_partitions(dev, /* blkrrpart_success= */ false);
         }
 
