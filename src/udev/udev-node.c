@@ -518,50 +518,6 @@ static int stack_directory_open_and_lock(
         return r != 0; /* 1 if an older eudev handled the devlink since the last update */
 }
 
-/* Like systemd's sd_device_new_from_devname(): finds the device whose device node the specified
- * path below /dev/, e.g. a device node symlink, resolves to. */
-static int device_new_from_devname(struct udev *udev, const char *devname, struct udev_device **ret) {
-        _cleanup_udev_device_unref_ struct udev_device *dev = NULL;
-        _cleanup_free_ char *resolved = NULL;
-        struct stat st;
-
-        assert(udev);
-        assert(devname);
-        assert(ret);
-
-        if (isempty(path_startswith(devname, "/dev/")))
-                return -EINVAL;
-
-        resolved = realpath(devname, NULL);
-        if (!resolved)
-                return ERRNO_IS_DEVICE_ABSENT(errno) ? -ENODEV : -errno;
-
-        if (isempty(path_startswith(resolved, "/dev/")))
-                return -EINVAL;
-
-        if (stat(resolved, &st) < 0)
-                return ERRNO_IS_DEVICE_ABSENT(errno) ? -ENODEV : -errno;
-
-        if (!S_ISCHR(st.st_mode) && !S_ISBLK(st.st_mode))
-                return -ENOTTY;
-
-        if (major(st.st_rdev) == 0)
-                return -ENODEV;
-
-        dev = udev_device_new_from_devnum(udev, S_ISBLK(st.st_mode) ? 'b' : 'c', st.st_rdev);
-        if (!dev)
-                return -ENODEV;
-
-        if (udev_device_get_devnum(dev) != st.st_rdev)
-                return -ENXIO;
-
-        if (streq_ptr(udev_device_get_subsystem(dev), "block") != !!S_ISBLK(st.st_mode))
-                return -ENXIO;
-
-        *ret = TAKE_PTR(dev);
-        return 0;
-}
-
 static int node_get_current(struct udev *udev, const char *slink, int dirfd, char **ret_id, int *ret_prio) {
         _cleanup_udev_device_unref_ struct udev_device *dev = NULL;
         _cleanup_free_ char *id_dup = NULL;

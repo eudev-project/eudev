@@ -124,25 +124,6 @@ enum {
 
 DEFINE_TRIVIAL_CLEANUP_FUNC(blkid_probe, blkid_free_probe);
 
-/* Like sd_device_new_from_devname() of systemd for a block device node, -ENODEV if it does not exist. */
-static int device_new_from_devname(struct udev *udev, const char *devname, struct udev_device **ret) {
-        struct udev_device *dev;
-        struct stat st;
-
-        if (stat(devname, &st) < 0)
-                return ERRNO_IS_DEVICE_ABSENT(errno) ? -ENODEV : -errno;
-
-        if (!S_ISBLK(st.st_mode))
-                return -ENOTBLK;
-
-        dev = udev_device_new_from_devnum(udev, 'b', st.st_rdev);
-        if (!dev)
-                return -ENODEV;
-
-        *ret = dev;
-        return 0;
-}
-
 /* eudev: *changed is set when a kernel partition device was resized, removed or added, and *disk_triggered
  * when a change event for the disk was triggered, while systemd uses *changed for both. With
  * REREADPT_FORCE_UEVENT, the syspaths of the resized partitions are added to *resized, see

@@ -101,6 +101,7 @@ int udev_device_has_db(struct udev_device *udev_device);
 int udev_device_db_is_persistent(struct udev_device *udev_device);
 int udev_device_tag_index(struct udev_device *dev, bool add);
 int udev_device_tag_index_restore(struct udev_device *dev, struct udev_device *old);
+int device_new_from_devname(struct udev *udev, const char *devname, struct udev_device **ret);
 int device_get_sysattr_value(struct udev_device *device, const char *sysattr, const char **ret);
 bool sysattr_string_is_safe(const char *p);
 int device_get_sysattr_safe_string(struct udev_device *device, const char *sysattr, const char **ret);

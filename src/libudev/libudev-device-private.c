@@ -33,6 +33,7 @@
 #include "libudev-private.h"
 #include "fileio.h"
 #include "log.h"
+#include "path-util.h"
 #include "utf8.h"
 
 static int udev_device_tag(struct udev_device *dev, const char *tag, bool add)
@@ -516,6 +517,50 @@ int device_trigger(struct udev_device *device, const char *action, const char *u
 
 DEFINE_TRIVIAL_CLEANUP_FUNC(struct udev_monitor *, udev_monitor_unref);
 DEFINE_TRIVIAL_CLEANUP_FUNC(struct udev_device *, udev_device_unref);
+
+/* Like sd_device_new_from_devname() of systemd: finds the device whose device node the specified path below
+ * /dev/, e.g. a device node symlink, resolves to. -ENODEV if it does not exist. */
+int device_new_from_devname(struct udev *udev, const char *devname, struct udev_device **ret) {
+        _cleanup_(udev_device_unrefp) struct udev_device *dev = NULL;
+        _cleanup_free_ char *resolved = NULL;
+        struct stat st;
+
+        assert(udev);
+        assert(devname);
+        assert(ret);
+
+        if (isempty(path_startswith(devname, "/dev/")))
+                return -EINVAL;
+
+        resolved = realpath(devname, NULL);
+        if (!resolved)
+                return ERRNO_IS_DEVICE_ABSENT(errno) ? -ENODEV : -errno;
+
+        if (isempty(path_startswith(resolved, "/dev/")))
+                return -EINVAL;
+
+        if (stat(resolved, &st) < 0)
+                return ERRNO_IS_DEVICE_ABSENT(errno) ? -ENODEV : -errno;
+
+        if (!S_ISCHR(st.st_mode) && !S_ISBLK(st.st_mode))
+                return -ENOTTY;
+
+        if (major(st.st_rdev) == 0)
+                return -ENODEV;
+
+        dev = udev_device_new_from_devnum(udev, S_ISBLK(st.st_mode) ? 'b' : 'c', st.st_rdev);
+        if (!dev)
+                return -ENODEV;
+
+        if (udev_device_get_devnum(dev) != st.st_rdev)
+                return -ENXIO;
+
+        if (streq_ptr(udev_device_get_subsystem(dev), "block") != !!S_ISBLK(st.st_mode))
+                return -ENXIO;
+
+        *ret = TAKE_PTR(dev);
+        return 0;
+}
 
 /* Whether the kernel passes the UUID of a synthetic uevent on as SYNTH_UUID=, which it does since Linux 4.13,
  * as found out by uevent_trigger_with_uuid(); -1 as long as it is not known. */
