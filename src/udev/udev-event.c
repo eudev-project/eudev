@@ -1268,14 +1268,16 @@ static void netif_update_device(struct udev_device *dev, const char *name) {
 }
 
 #ifdef ENABLE_RULE_GENERATOR
-/* build the temporary iface name, used when the current name is assigned to another device */
+/* Builds the temporary iface name, used when the current name is assigned to another device: a name that
+ * ends with its only number, like eth5, gets the number 128 - ifindex instead, e.g. eth126. Other names, e.g.
+ * with no number or with digits in the middle like enp0s3, stay as they are, i.e. are not renamed to a
+ * temporary name. */
 static void netif_tmp_name(struct udev_device *dev, char newifname[IFNAMSIZ]) {
         char *pos, *newpos;
 
         strscpy(newifname, IFNAMSIZ, udev_device_get_sysname(dev));
         newpos=pos=&newifname[strcspn(newifname,"0123456789")];
         (void) strtol(pos,&newpos,10);
-        *pos='\0';
         if (newpos > pos && *newpos == '\0') /* append new iface num to name */
                 /* use udev_device_get_ifindex(dev) as it is unique to every iface */
                 snprintf(pos,IFNAMSIZ+(newifname-pos), "%d", 128 - udev_device_get_ifindex(dev));
