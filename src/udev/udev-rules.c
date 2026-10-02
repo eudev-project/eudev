@@ -606,237 +606,6 @@ struct rule_tmp {
         bool has_label;
 };
 
-#ifdef DEBUG
-static const char *operation_str(enum operation_type type) {
-        static const char *operation_strs[] = {
-                [OP_UNSET] =            "UNSET",
-                [OP_MATCH] =            "match",
-                [OP_NOMATCH] =          "nomatch",
-                [OP_MATCH_MAX] =        "MATCH_MAX",
-
-                [OP_ADD] =              "add",
-                [OP_REMOVE] =           "remove",
-                [OP_ASSIGN] =           "assign",
-                [OP_ASSIGN_FINAL] =     "assign-final",
-}        ;
-
-        return operation_strs[type];
-}
-
-static const char *string_glob_str(enum string_glob_type type) {
-        static const char *string_glob_strs[] = {
-                [GL_UNSET] =            "UNSET",
-                [GL_PLAIN] =            "plain",
-                [GL_GLOB] =             "glob",
-                [GL_SPLIT] =            "split",
-                [GL_SPLIT_GLOB] =       "split-glob",
-                [GL_SOMETHING] =        "split-glob",
-        };
-
-        return string_glob_strs[type];
-}
-
-static const char *token_str(enum token_type type) {
-        static const char *token_strs[] = {
-                [TK_UNSET] =                    "UNSET",
-                [TK_RULE] =                     "RULE",
-
-                [TK_M_ACTION] =                 "M ACTION",
-                [TK_M_DEVPATH] =                "M DEVPATH",
-                [TK_M_KERNEL] =                 "M KERNEL",
-                [TK_M_DEVLINK] =                "M DEVLINK",
-                [TK_M_NAME] =                   "M NAME",
-                [TK_M_ENV] =                    "M ENV",
-                [TK_M_TAG] =                    "M TAG",
-                [TK_M_SUBSYSTEM] =              "M SUBSYSTEM",
-                [TK_M_DRIVER] =                 "M DRIVER",
-                [TK_M_ATTR] =                   "M ATTR",
-                [TK_M_SYSCTL] =                 "M SYSCTL",
-
-                [TK_M_PARENTS_MIN] =            "M PARENTS_MIN",
-                [TK_M_KERNELS] =                "M KERNELS",
-                [TK_M_SUBSYSTEMS] =             "M SUBSYSTEMS",
-                [TK_M_DRIVERS] =                "M DRIVERS",
-                [TK_M_ATTRS] =                  "M ATTRS",
-                [TK_M_TAGS] =                   "M TAGS",
-                [TK_M_PARENTS_MAX] =            "M PARENTS_MAX",
-
-                [TK_M_TEST] =                   "M TEST",
-                [TK_M_PROGRAM] =                "M PROGRAM",
-                [TK_M_IMPORT_FILE] =            "M IMPORT_FILE",
-                [TK_M_IMPORT_PROG] =            "M IMPORT_PROG",
-                [TK_M_IMPORT_BUILTIN] =         "M IMPORT_BUILTIN",
-                [TK_M_IMPORT_DB] =              "M IMPORT_DB",
-                [TK_M_IMPORT_CMDLINE] =         "M IMPORT_CMDLINE",
-                [TK_M_IMPORT_PARENT] =          "M IMPORT_PARENT",
-                [TK_M_RESULT] =                 "M RESULT",
-                [TK_M_MAX] =                    "M MAX",
-
-                [TK_A_DUMP] =                   "A DUMP",
-                [TK_A_STRING_ESCAPE_NONE] =     "A STRING_ESCAPE_NONE",
-                [TK_A_STRING_ESCAPE_REPLACE] =  "A STRING_ESCAPE_REPLACE",
-                [TK_A_DB_PERSIST] =             "A DB_PERSIST",
-                [TK_A_NET_ALTNAMES] =           "A NET_ALTNAMES",
-                [TK_A_INOTIFY_WATCH] =          "A INOTIFY_WATCH",
-                [TK_A_DEVLINK_PRIO] =           "A DEVLINK_PRIO",
-                [TK_A_LOG_LEVEL] =              "A LOG_LEVEL",
-                [TK_A_OWNER] =                  "A OWNER",
-                [TK_A_GROUP] =                  "A GROUP",
-                [TK_A_MODE] =                   "A MODE",
-                [TK_A_OWNER_ID] =               "A OWNER_ID",
-                [TK_A_GROUP_ID] =               "A GROUP_ID",
-                [TK_A_STATIC_NODE] =            "A STATIC_NODE",
-                [TK_A_SECLABEL] =               "A SECLABEL",
-                [TK_A_MODE_ID] =                "A MODE_ID",
-                [TK_A_ENV] =                    "A ENV",
-                [TK_A_TAG] =                    "A ENV",
-                [TK_A_NAME] =                   "A NAME",
-                [TK_A_DEVLINK] =                "A DEVLINK",
-                [TK_A_ATTR] =                   "A ATTR",
-                [TK_A_SYSCTL] =                 "A SYSCTL",
-                [TK_A_RUN_BUILTIN] =            "A RUN_BUILTIN",
-                [TK_A_RUN_PROGRAM] =            "A RUN_PROGRAM",
-                [TK_A_GOTO] =                   "A GOTO",
-
-                [TK_END] =                      "END",
-        };
-
-        return token_strs[type];
-}
-
-static void dump_token(struct udev_rules *rules, struct token *token) {
-        enum token_type type = token->type;
-        enum operation_type op = token->key.op;
-        enum string_glob_type glob = token->key.glob;
-        const char *value = rules_str(rules, token->key.value_off);
-        const char *attr = rules_str(rules, token->key.attr_off);
-
-        switch (type) {
-        case TK_RULE:
-                {
-                        const char *tks_ptr = (char *)rules->tokens;
-                        const char *tk_ptr = (char *)token;
-                        unsigned int idx = (tk_ptr - tks_ptr) / sizeof(struct token);
-
-                        log_debug("* RULE %s:%u, token: %u, count: %u, label: '%s'",
-                                  rules_str(rules, token->rule.filename_off), token->rule.filename_line,
-                                  idx, token->rule.token_count,
-                                  rules_str(rules, token->rule.label_off));
-                        break;
-                }
-        case TK_M_ACTION:
-        case TK_M_DEVPATH:
-        case TK_M_KERNEL:
-        case TK_M_SUBSYSTEM:
-        case TK_M_DRIVER:
-        case TK_M_DEVLINK:
-        case TK_M_NAME:
-        case TK_M_KERNELS:
-        case TK_M_SUBSYSTEMS:
-        case TK_M_DRIVERS:
-        case TK_M_TAGS:
-        case TK_M_PROGRAM:
-        case TK_M_IMPORT_FILE:
-        case TK_M_IMPORT_PROG:
-        case TK_M_IMPORT_DB:
-        case TK_M_IMPORT_CMDLINE:
-        case TK_M_IMPORT_PARENT:
-        case TK_M_RESULT:
-        case TK_A_NAME:
-        case TK_A_DEVLINK:
-        case TK_A_OWNER:
-        case TK_A_GROUP:
-        case TK_A_MODE:
-        case TK_A_RUN_BUILTIN:
-        case TK_A_RUN_PROGRAM:
-                log_debug("%s %s '%s'(%s)",
-                          token_str(type), operation_str(op), value, string_glob_str(glob));
-                break;
-        case TK_M_IMPORT_BUILTIN:
-                log_debug("%s %i '%s'", token_str(type), token->key.builtin_cmd, value);
-                break;
-        case TK_M_ATTR:
-        case TK_M_SYSCTL:
-        case TK_M_ATTRS:
-        case TK_M_ENV:
-        case TK_A_ATTR:
-        case TK_A_SYSCTL:
-        case TK_A_ENV:
-                log_debug("%s %s '%s' '%s'(%s)",
-                          token_str(type), operation_str(op), attr, value, string_glob_str(glob));
-                break;
-        case TK_M_TAG:
-        case TK_A_TAG:
-                log_debug("%s %s '%s'", token_str(type), operation_str(op), value);
-                break;
-        case TK_A_DUMP:
-                log_debug("%s %s", token_str(type), json_format_enabled(token->key.dump_flags) ? "json" : "text");
-                break;
-        case TK_A_STRING_ESCAPE_NONE:
-        case TK_A_STRING_ESCAPE_REPLACE:
-        case TK_A_DB_PERSIST:
-        case TK_A_NET_ALTNAMES:
-                log_debug("%s", token_str(type));
-                break;
-        case TK_M_TEST:
-                log_debug("%s %s '%s'(%s) %#o",
-                          token_str(type), operation_str(op), value, string_glob_str(glob), token->key.mode);
-                break;
-        case TK_A_INOTIFY_WATCH:
-                log_debug("%s %u", token_str(type), token->key.watch);
-                break;
-        case TK_A_DEVLINK_PRIO:
-                log_debug("%s %u", token_str(type), token->key.devlink_prio);
-                break;
-        case TK_A_LOG_LEVEL:
-                log_debug("%s %i", token_str(type), token->key.log_level);
-                break;
-        case TK_A_OWNER_ID:
-                log_debug("%s %s %u", token_str(type), operation_str(op), token->key.uid);
-                break;
-        case TK_A_GROUP_ID:
-                log_debug("%s %s %u", token_str(type), operation_str(op), token->key.gid);
-                break;
-        case TK_A_MODE_ID:
-                log_debug("%s %s %#o", token_str(type), operation_str(op), token->key.mode);
-                break;
-        case TK_A_STATIC_NODE:
-                log_debug("%s '%s'", token_str(type), value);
-                break;
-        case TK_A_SECLABEL:
-                log_debug("%s %s '%s' '%s'", token_str(type), operation_str(op), attr, value);
-                break;
-        case TK_A_GOTO:
-                log_debug("%s '%s' %u", token_str(type), value, token->key.rule_goto);
-                break;
-        case TK_END:
-                log_debug("* %s", token_str(type));
-                break;
-        case TK_M_PARENTS_MIN:
-        case TK_M_PARENTS_MAX:
-        case TK_M_MAX:
-        case TK_UNSET:
-                log_debug("unknown type %u", type);
-                break;
-        }
-}
-
-static void dump_rules(struct udev_rules *rules) {
-        unsigned int i;
-
-        log_debug("dumping %u tokens (%zu bytes), %zu strings (%zu bytes)",
-                  rules->token_cur,
-                  rules->token_cur * sizeof(struct token),
-                  rules->strbuf->in_count,
-                  rules->strbuf->in_len);
-        for (i = 0; i < rules->token_cur; i++)
-                dump_token(rules, &rules->tokens[i]);
-}
-#else
-static inline void dump_token(struct udev_rules *rules __attribute__((unused)), struct token *token __attribute__((unused))) {}
-static inline void dump_rules(struct udev_rules *rules __attribute__((unused))) {}
-#endif /* DEBUG */
-
 static const char *operation_key_str(enum operation_type op) {
         switch (op) {
         case OP_MATCH:
@@ -1051,6 +820,47 @@ static char *token_to_string(struct udev_rules *rules, struct token *token) {
 
         return r < 0 ? NULL : s;
 }
+
+#ifdef DEBUG
+/* Logs the token, with the text of token_to_string() for the keys. */
+static void dump_token(struct udev_rules *rules, struct token *token) {
+        _cleanup_free_ char *s = NULL;
+
+        switch (token->type) {
+        case TK_RULE:
+                log_debug("* RULE %s:%u, token: %u, count: %u, label: '%s'",
+                          rules_str(rules, token->rule.filename_off), token->rule.filename_line,
+                          (unsigned) (token - rules->tokens), token->rule.token_count,
+                          rules_str(rules, token->rule.label_off));
+                break;
+        case TK_END:
+                log_debug("* END");
+                break;
+        default:
+                s = token_to_string(rules, token);
+                if (s)
+                        log_debug("%s", s);
+                else
+                        log_debug("unknown type %u", token->type);
+                break;
+        }
+}
+
+static void dump_rules(struct udev_rules *rules) {
+        unsigned int i;
+
+        log_debug("dumping %u tokens (%zu bytes), %zu strings (%zu bytes)",
+                  rules->token_cur,
+                  rules->token_cur * sizeof(struct token),
+                  rules->strbuf->in_count,
+                  rules->strbuf->in_len);
+        for (i = 0; i < rules->token_cur; i++)
+                dump_token(rules, &rules->tokens[i]);
+}
+#else
+static inline void dump_token(struct udev_rules *rules __attribute__((unused)), struct token *token __attribute__((unused))) {}
+static inline void dump_rules(struct udev_rules *rules __attribute__((unused))) {}
+#endif /* DEBUG */
 
 /* Like systemd's trace logs of 'udevadm test --verbose' (event->trace): a message about the rule
  * line of the token, prefixed like the other messages about applying a rule with the device name and
