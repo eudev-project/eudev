@@ -505,6 +505,7 @@ static void worker_spawn(struct event *event) {
         struct udev *udev = event->udev;
         _cleanup_udev_monitor_unref_ struct udev_monitor *worker_monitor = NULL;
         pid_t pid;
+        int k;
 
         /* listen for new events */
         worker_monitor = udev_monitor_new_from_netlink(udev, NULL);
@@ -512,7 +513,13 @@ static void worker_spawn(struct event *event) {
                 return;
         /* allow the main daemon netlink address to send devices to the worker */
         udev_monitor_allow_unicast_sender(worker_monitor, monitor);
-        udev_monitor_enable_receiving(worker_monitor);
+        /* Like systemd, do not start a worker that cannot receive the devices that udevd sends it, e.g. as
+         * SO_PASSCRED could not be set, without which it ignores them; the event stays queued. */
+        k = udev_monitor_enable_receiving(worker_monitor);
+        if (k < 0) {
+                log_error_errno(k, "Worker: Failed to enable receiving of devices: %m");
+                return;
+        }
 
         pid = fork();
         switch (pid) {
@@ -2067,8 +2074,9 @@ int main(int argc, char *argv[]) {
         }
         fd_netlink = udev_monitor_get_fd(monitor);
 
-        if (udev_monitor_enable_receiving(monitor) < 0) {
-                r = log_error_errno(EINVAL, "error binding netlink socket");
+        r = udev_monitor_enable_receiving(monitor);
+        if (r < 0) {
+                log_error_errno(r, "error binding netlink socket: %m");
                 goto exit;
         }
 
