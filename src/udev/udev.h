@@ -138,6 +138,7 @@ void event_cache_written_sysctl(struct udev_event *event, const char *attr, cons
 const char *udev_event_get_property_value_with_fallback(struct udev_device *dev, const char *key,
                                                         struct udev_list *global_props);
 int safe_atou_optional_plus(const char *s, unsigned *ret);
+int udev_check_format(const char *value, size_t *offset, const char **hint);
 size_t udev_event_apply_format(struct udev_event *event,
                                const char *src, char *dest, size_t size,
                                bool replace_whitespace, struct udev_list *global_props,

@@ -5,9 +5,9 @@
  *
  * The checks and their messages follow systemd's src/udev/udev-rules.c (parse_token(),
  * check_token_delimiters(), check_tokens_order(), rule_resolve_goto() and
- * udev_check_rule_line()) and src/udev/udev-format.c (udev_check_format()), for the rules
- * as eudev's parser accepts them. Issues that eudev's parser already reports as errors are
- * not reported again.
+ * udev_check_rule_line()), for the rules as eudev's parser accepts them; the substitutions
+ * are checked with udev_check_format() in udev-event.c, like systemd's in udev-format.c.
+ * Issues that eudev's parser already reports as errors are not reported again.
  */
 
 #include <ctype.h>
@@ -271,128 +271,6 @@ void udev_rules_check_delimiters(struct udev_rules_check *c, const char *pos) {
         }
 }
 
-/* The substitutions of udev_event_apply_format(), like udev_check_format() of systemd. */
-static const struct {
-        const char *name;
-        char fmt;
-} subst_map[] = {
-        { "devnode",  'N' },
-        { "tempnode", 'N' },
-        { "attr",     's' },
-        { "sysfs",    's' },
-        { "env",      'E' },
-        { "kernel",   'k' },
-        { "number",   'n' },
-        { "driver",   'd' },
-        { "devpath",  'p' },
-        { "id",       'b' },
-        { "major",    'M' },
-        { "minor",    'm' },
-        { "result",   'c' },
-        { "parent",   'P' },
-        { "name",     'D' },
-        { "links",    'L' },
-        { "root",     'r' },
-        { "sys",      'S' },
-};
-
-/* Returns 0 if *str does not start a substitution, 1 if it does, and a negative error for an
- * invalid one. On success, *str is moved past the substitution, and the index into subst_map
- * and the attribute (or "" if there is none) are returned. */
-static int get_subst_type(const char **str, size_t *ret_index, char *ret_attr, size_t attr_size) {
-        const char *p = *str, *q = NULL;
-        size_t i = 0;
-
-        if (*p == '$') {
-                p++;
-                if (*p == '$') {
-                        *str = p;
-                        return 0;
-                }
-                for (i = 0; i < ELEMENTSOF(subst_map); i++)
-                        if ((q = startswith(p, subst_map[i].name)))
-                                break;
-        } else if (*p == '%') {
-                p++;
-                if (*p == '%') {
-                        *str = p;
-                        return 0;
-                }
-
-                for (i = 0; i < ELEMENTSOF(subst_map); i++)
-                        if (*p == subst_map[i].fmt) {
-                                q = p + 1;
-                                break;
-                        }
-        } else
-                return 0;
-        if (!q)
-                /* '$' and '%' must be escaped. */
-                return -EINVAL;
-
-        if (*q == '{') {
-                const char *start, *end;
-                size_t len;
-
-                start = q + 1;
-                end = strchr(start, '}');
-                if (!end)
-                        return -EINVAL;
-
-                len = end - start;
-                if (len == 0 || len >= attr_size)
-                        return -EINVAL;
-
-                memcpy(ret_attr, start, len);
-                ret_attr[len] = '\0';
-                q = end + 1;
-        } else
-                ret_attr[0] = '\0';
-
-        *str = q;
-        *ret_index = i;
-        return 1;
-}
-
-static int check_format(const char *value, size_t *ret_offset, const char **ret_hint) {
-        const char *s = value;
-        char attr[UTIL_PATH_SIZE];
-        size_t i;
-        int r;
-
-        while (*s) {
-                r = get_subst_type(&s, &i, attr, sizeof(attr));
-                if (r < 0) {
-                        *ret_offset = s - value;
-                        *ret_hint = "invalid substitution type";
-                        return r;
-                } else if (r == 0) {
-                        s++;
-                        continue;
-                }
-
-                if (IN_SET(subst_map[i].fmt, 's', 'E') && isempty(attr)) {
-                        *ret_offset = s - value;
-                        *ret_hint = "attribute value missing";
-                        return -EINVAL;
-                }
-
-                if (subst_map[i].fmt == 'c' && !isempty(attr)) {
-                        unsigned u;
-
-                        /* a number, optionally followed by '+', like the substitution takes it */
-                        r = safe_atou_optional_plus(attr, &u);
-                        if (r < 0) {
-                                *ret_offset = s - value;
-                                *ret_hint = "attribute value not a valid number";
-                                return r;
-                        }
-                }
-        }
-
-        return 0;
-}
-
 static void check_value_format(struct udev_rules_check *c, const char *key, const char *value, bool nonempty) {
         size_t offset;
         const char *hint;
@@ -400,7 +278,7 @@ static void check_value_format(struct udev_rules_check *c, const char *key, cons
         if (nonempty && isempty(value))
                 log_line_error_fail(c, "Invalid value \"%s\" for %s (char %zu: %s), ignoring.",
                                     value, key, (size_t) 0, "empty value");
-        else if (check_format(value, &offset, &hint) < 0)
+        else if (udev_check_format(value, &offset, &hint) < 0)
                 log_line_error_fail(c, "Invalid value \"%s\" for %s (char %zu: %s), ignoring.",
                                     value, key, offset + 1, hint);
 }
@@ -410,7 +288,7 @@ static void check_attr_format(struct udev_rules_check *c, const char *key, const
         size_t offset;
         const char *hint;
 
-        if (check_format(attr, &offset, &hint) < 0)
+        if (udev_check_format(attr, &offset, &hint) < 0)
                 log_line_error_fail(c, "Invalid attribute \"%s\" for %s (char %zu: %s), ignoring.",
                                     attr, key, offset + 1, hint);
 }

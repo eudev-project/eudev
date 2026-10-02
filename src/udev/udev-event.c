@@ -171,11 +171,12 @@ static char format_type_to_char(enum subst_type t) {
         return '\0';
 }
 
-/* Like get_subst_type() of systemd, without its strict mode: returns 0 when *str does not start a
- * substitution, "$$" or "%%" (then *str is moved to the second character, which is copied), 1 for a
- * substitution, with *str moved behind it, and -EINVAL for a substitution with a missing closing brace or
- * an empty or too long attribute. */
-static int get_subst_type(const char **str, enum subst_type *ret_type, char ret_attr[static UTIL_PATH_SIZE]) {
+/* Like get_subst_type() of systemd: returns 0 when *str does not start a substitution, "$$" or "%%" (then
+ * *str is moved to the second character, which is copied), 1 for a substitution, with *str moved behind it,
+ * and -EINVAL for a substitution with a missing closing brace or an empty or too long attribute. In strict
+ * mode, for udev_check_format(), a '$' or '%' that is not followed by a known substitution is -EINVAL too,
+ * as they must be escaped. */
+static int get_subst_type(const char **str, bool strict, enum subst_type *ret_type, char ret_attr[static UTIL_PATH_SIZE]) {
         const char *p = *str, *q = NULL;
         size_t i = 0;
 
@@ -203,7 +204,8 @@ static int get_subst_type(const char **str, enum subst_type *ret_type, char ret_
         } else
                 return 0;
         if (!q)
-                return 0;
+                /* When 'strict' flag is set, then '$' and '%' must be escaped. */
+                return strict ? -EINVAL : 0;
 
         if (*q == '{') {
                 const char *start, *end;
@@ -246,6 +248,54 @@ int safe_atou_optional_plus(const char *s, unsigned *ret) {
                 return r;
 
         return !!p;
+}
+
+/* Like udev_check_format() of systemd: checks the substitutions of a value for udevadm verify. Returns 0 if
+ * they are valid, otherwise a negative error, with the offset of the invalid substitution in *offset and the
+ * reason in *hint. */
+int udev_check_format(const char *value, size_t *offset, const char **hint) {
+        enum subst_type type;
+        const char *s = value;
+        char attr[UTIL_PATH_SIZE];
+        int r;
+
+        while (*s) {
+                r = get_subst_type(&s, /* strict= */ true, &type, attr);
+                if (r < 0) {
+                        if (offset)
+                                *offset = s - value;
+                        if (hint)
+                                *hint = "invalid substitution type";
+                        return r;
+                } else if (r == 0) {
+                        s++;
+                        continue;
+                }
+
+                if (IN_SET(type, SUBST_ATTR, SUBST_ENV) && isempty(attr)) {
+                        if (offset)
+                                *offset = s - value;
+                        if (hint)
+                                *hint = "attribute value missing";
+                        return -EINVAL;
+                }
+
+                if (type == SUBST_RESULT && !isempty(attr)) {
+                        unsigned i;
+
+                        /* a number, optionally followed by '+', like the substitution takes it */
+                        r = safe_atou_optional_plus(attr, &i);
+                        if (r < 0) {
+                                if (offset)
+                                        *offset = s - value;
+                                if (hint)
+                                        *hint = "attribute value not a valid number";
+                                return r;
+                        }
+                }
+        }
+
+        return 0;
 }
 
 /* Like udev_event_subst_format() of systemd: writes the value of the substitution to dest, of size l, and
@@ -487,7 +537,7 @@ size_t udev_event_apply_format(struct udev_event *event,
                 ssize_t subst_len;
                 bool t;
 
-                r = get_subst_type(&s, &type, attr);
+                r = get_subst_type(&s, /* strict= */ false, &type, attr);
                 if (r < 0) {
                         log_warning_errno(r, "%s: Invalid format string, ignoring: %s",
                                           udev_device_get_sysname(event->dev) ?: "n/a", src);
