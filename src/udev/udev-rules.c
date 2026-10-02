@@ -4255,15 +4255,12 @@ int udev_rules_apply_static_dev_perms(struct udev_rules *rules) {
         gid_t gid = GID_INVALID;
         mode_t mode = MODE_INVALID;
         _cleanup_strv_free_ char **tags = NULL;
-        FILE *f = NULL;
-        _cleanup_free_ char *path = NULL;
         int r = 0;
 
         if (rules->tokens == NULL)
                 return 0;
 
         cur = &rules->tokens[0];
-        rule = cur;
         for (;;) {
                 switch (cur->type) {
                 case TK_RULE:
@@ -4316,17 +4313,6 @@ next:
         }
 
 finish:
-        if (f) {
-                fflush(f);
-                fchmod(fileno(f), 0644);
-                if (ferror(f) || rename(path, UDEV_ROOT_RUN "/udev/static_node-tags") < 0) {
-                        r = -errno;
-                        unlink(UDEV_ROOT_RUN "/udev/static_node-tags");
-                        unlink(path);
-                }
-                fclose(f);
-        }
-
         return r;
 }
 
