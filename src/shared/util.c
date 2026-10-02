@@ -1163,7 +1163,8 @@ char *strnappend(const char *s, const char *suffix, size_t b) {
         assert(suffix);
 
         a = strlen(s);
-        if (b > ((size_t) -1) - a)
+        /* a+b+1 must not overflow */
+        if (b >= ((size_t) -1) - a)
                 return NULL;
 
         r = new(char, a+b+1);
