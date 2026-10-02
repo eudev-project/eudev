@@ -102,10 +102,9 @@ static int prepare(char *dir, char *filename)
                 return -errno;
 
         /* Refuse to write to a truncated file path */
-        if (strlen(buf) + 1 + strlen(filename) > sizeof(buf) - 1)
+        r = snprintf(buf, sizeof(buf), "%s/%s", dir, filename);
+        if (r < 0 || (size_t) r >= sizeof(buf))
                 return -1;
-
-        snprintf(buf, sizeof(buf), "%s/%s", dir, filename);
 
         fd = open(buf, O_RDWR|O_CREAT|O_CLOEXEC, S_IRUSR|S_IWUSR);
         if (fd < 0) {
