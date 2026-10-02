@@ -17,6 +17,7 @@
 #include "fileio.h"
 #include "pager.h"
 #include "path-util.h"
+#include "process-util.h"
 #include "strv.h"
 #include "udev.h"
 #include "udev-util.h"
@@ -365,25 +366,6 @@ static int devname_from_devnum(struct udev *udev, dev_t devnum, char **ret) {
         return 0;
 }
 
-static void reset_signals(void) {
-        sigset_t ss;
-        int sig;
-
-        for (sig = 1; sig < _NSIG; sig++) {
-                struct sigaction sa = {
-                        .sa_handler = SIG_DFL,
-                };
-
-                if (IN_SET(sig, SIGKILL, SIGSTOP))
-                        continue;
-
-                (void) sigaction(sig, &sa, NULL);
-        }
-
-        if (sigemptyset(&ss) >= 0)
-                (void) sigprocmask(SIG_SETMASK, &ss, NULL);
-}
-
 static int run_command(void) {
         struct sigaction sa = {
                 .sa_handler = SIG_IGN,
@@ -400,7 +382,8 @@ static int run_command(void) {
         if (pid == 0) {
                 /* Child */
 
-                reset_signals();
+                (void) reset_all_signal_handlers();
+                (void) reset_signal_mask();
 
                 if (prctl(PR_SET_PDEATHSIG, SIGTERM) < 0 || getppid() != parent)
                         _exit(EXIT_FAILURE);

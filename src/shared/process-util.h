@@ -43,3 +43,8 @@
 
 int get_process_comm(pid_t pid, char **name);
 int get_process_cmdline(pid_t pid, size_t max_length, bool comm_fallback, char **line);
+
+/* Like systemd's signal-util.h: reset all signal handlers to their default, and unblock all signals,
+ * e.g. in a child process before it runs another program. */
+int reset_all_signal_handlers(void);
+int reset_signal_mask(void);

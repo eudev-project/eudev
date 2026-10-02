@@ -21,6 +21,7 @@
 #include "log.h"
 #include "macro.h"
 #include "pager.h"
+#include "process-util.h"
 #include "strv.h"
 #include "terminal-util.h"
 #include "util.h"
@@ -150,25 +151,6 @@ static void pager_sigpipe_handler(int sig) {
         _exit(EXIT_SUCCESS);
 }
 
-static void reset_signals(void) {
-        struct sigaction sa = {
-                .sa_handler = SIG_DFL,
-                .sa_flags = SA_RESTART,
-        };
-        sigset_t ss;
-        int sig;
-
-        for (sig = 1; sig < _NSIG; sig++) {
-                if (IN_SET(sig, SIGKILL, SIGSTOP))
-                        continue;
-
-                (void) sigaction(sig, &sa, NULL);
-        }
-
-        if (sigemptyset(&ss) >= 0)
-                (void) sigprocmask(SIG_SETMASK, &ss, NULL);
-}
-
 void pager_open(PagerFlags flags) {
         _cleanup_strv_free_ char **pager_args = NULL;
         _cleanup_free_ char *l = NULL;
@@ -257,7 +239,8 @@ void pager_open(PagerFlags flags) {
 
                 /* In the child start the pager */
 
-                reset_signals();
+                (void) reset_all_signal_handlers();
+                (void) reset_signal_mask();
 
                 /* We set SIGINT as PR_DEATHSIG signal here, to match the "K" parameter we set in $LESS,
                  * which enables SIGINT behaviour. */

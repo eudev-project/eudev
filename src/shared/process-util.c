@@ -141,3 +141,37 @@ int get_process_cmdline(pid_t pid, size_t max_length, bool comm_fallback, char *
         *line = r;
         return 0;
 }
+
+int reset_all_signal_handlers(void) {
+        static const struct sigaction sa = {
+                .sa_handler = SIG_DFL,
+                .sa_flags = SA_RESTART,
+        };
+        int ret = 0, sig;
+
+        for (sig = 1; sig < _NSIG; sig++) {
+
+                /* These two cannot be caught... */
+                if (IN_SET(sig, SIGKILL, SIGSTOP))
+                        continue;
+
+                /* On Linux the first two RT signals are reserved by glibc, and sigaction() will return
+                 * EINVAL for them. */
+                if (sigaction(sig, &sa, NULL) < 0 && errno != EINVAL && ret >= 0)
+                        ret = -errno;
+        }
+
+        return ret;
+}
+
+int reset_signal_mask(void) {
+        sigset_t ss;
+
+        if (sigemptyset(&ss) < 0)
+                return -errno;
+
+        if (sigprocmask(SIG_SETMASK, &ss, NULL) < 0)
+                return -errno;
+
+        return 0;
+}
