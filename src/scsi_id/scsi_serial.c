@@ -434,7 +434,6 @@ static int append_vendor_model(
                 char buf[static VENDOR_LENGTH + MODEL_LENGTH]) {
 
         assert(dev_scsi);
-        assert(buf);
 
         if (strnlen(dev_scsi->vendor, VENDOR_LENGTH) != VENDOR_LENGTH) {
                 log_debug("%s: bad vendor string \"%s\"",
