@@ -1128,9 +1128,14 @@ static void netif_restore_altname(struct udev_event *event, const char *name) {
 
 /* Renames the network interface oldname to name. If ret_name is not NULL, it is set to the name the interface
  * has afterwards: name on success, otherwise oldname, or the temporary name of the rule generator, when the
- * interface was renamed to it, but not to name. ret_name may point to oldname. */
+ * interface was renamed to it, but neither to name nor back to oldname. ret_name may point to oldname.
+ *
+ * With the rule generator, when name is taken and wait_until is not 0, the interface is renamed to the
+ * temporary name "rename_<oldname>", which frees oldname for another interface, e.g. one that has name now
+ * and is to be renamed to oldname, and renaming it to name is retried until wait_until (CLOCK_MONOTONIC). When
+ * that does not succeed, the interface is renamed back to oldname. */
 static int rename_netif_dev_fromname_toname(struct udev_event *event, const char *oldname, const char *name,
-                                            char ret_name[IFNAMSIZ]) {
+                                            usec_t wait_until, char ret_name[IFNAMSIZ]) {
         int r;
         int sk;
         int altname_dropped;
@@ -1169,15 +1174,14 @@ static int rename_netif_dev_fromname_toname(struct udev_event *event, const char
                 r = -errno;
 
 #ifdef ENABLE_RULE_GENERATOR
-        int loop;
-    struct ifreq ifr_tmp;
+        struct ifreq ifr_tmp;
 
         if (r == 0) {
                 log_info("renamed network interface %s to %s\n", ifr.ifr_name, ifr.ifr_newname);
                 goto out;
         }
         /* keep trying if the destination interface name already exists */
-        if (r != -EEXIST)
+        if (r != -EEXIST || wait_until == 0)
                 goto out;
         log_debug("collision on rename of network interface %s to %s , retrying until timeout\n",
                 ifr.ifr_name, ifr.ifr_newname);
@@ -1197,9 +1201,8 @@ static int rename_netif_dev_fromname_toname(struct udev_event *event, const char
         /* we have changed our name so in subsequent tries i should rename my temporal name to the wanted one */
         strscpy(ifr.ifr_name, IFNAMSIZ, ifr_tmp.ifr_newname);
 
-        /* wait a maximum of 90 seconds for our target to become available */
-        loop = 90 * 20;
-        while (loop--) {
+        /* wait for our target to become available, until the given time */
+        while (now(CLOCK_MONOTONIC) < wait_until) {
                 const struct timespec duration = { 0, 1000 * 1000 * 1000 / 20 };
 
                 nanosleep(&duration, NULL);
@@ -1212,6 +1215,19 @@ static int rename_netif_dev_fromname_toname(struct udev_event *event, const char
                 r = -errno;
                 if (r != -EEXIST)
                         break;
+        }
+
+        /* do not leave the interface with the temporary name, rename it back */
+        if (r < 0) {
+                strscpy(ifr_tmp.ifr_name, IFNAMSIZ, ifr.ifr_name);
+                strscpy(ifr_tmp.ifr_newname, IFNAMSIZ, oldname);
+                if (ioctl(sk, SIOCSIFNAME, &ifr_tmp) < 0)
+                        log_warning_errno(errno, "could not rename network interface %s back to %s: %m",
+                                          ifr_tmp.ifr_name, ifr_tmp.ifr_newname);
+                else {
+                        log_info("Renamed network interface %s back to %s\n", ifr_tmp.ifr_name, ifr_tmp.ifr_newname);
+                        strscpy(ifr.ifr_name, IFNAMSIZ, oldname);
+                }
         }
 
 out:
@@ -1601,7 +1617,8 @@ int udev_event_execute_rules(struct udev_event *event,
 
                                         /* if sysname isn't already the tmpname (ie there is no numeric component), do the rename */
                                         if (!streq(newifname, curname)) {
-                                                r = rename_netif_dev_fromname_toname(event, curname, newifname, curname);
+                                                /* no waiting when the temporary name is taken */
+                                                r = rename_netif_dev_fromname_toname(event, curname, newifname, 0, curname);
                                                 rename_r = r;
                                                 if (r == 0)
                                                         log_debug("renamed netif to '%s' for collision avoidance\n", newifname);
@@ -1612,8 +1629,16 @@ int udev_event_execute_rules(struct udev_event *event,
 
                                 /* rename it now to its final target if it is not already there, from the name it has
                                  * now, also when it could not be renamed to the temporary name */
-                                if (name != NULL && !streq(name, curname))
-                                        rename_r = rename_netif_dev_fromname_toname(event, curname, name, curname);
+                                if (name != NULL && !streq(name, curname)) {
+                                        /* When name is taken, wait up to 90 seconds for it to become free, but
+                                         * not beyond the event timeout, when the programs of the event are
+                                         * killed and soon after the worker. */
+                                        usec_t wait_until = usec_add(now(CLOCK_MONOTONIC), 90 * USEC_PER_SEC);
+
+                                        if (timeout_usec > 0)
+                                                wait_until = MIN(wait_until, usec_add(event->birth_usec, timeout_usec));
+                                        rename_r = rename_netif_dev_fromname_toname(event, curname, name, wait_until, curname);
+                                }
 
                                 /* also when only the temporary renaming succeeded, the device has to follow the interface */
                                 if (!streq(curname, udev_device_get_sysname(dev)))
@@ -1628,7 +1653,7 @@ int udev_event_execute_rules(struct udev_event *event,
                         int r;
 
                         if (name != NULL) {
-                                r = rename_netif_dev_fromname_toname(event, udev_device_get_sysname(dev), name, NULL);
+                                r = rename_netif_dev_fromname_toname(event, udev_device_get_sysname(dev), name, 0, NULL);
                                 rename_r = r;
                                 if (r >= 0)
                                         netif_update_device(dev, name);
