@@ -273,39 +273,8 @@ static int device_get_diskseq(struct udev_device *device, uint64_t *ret) {
         return 0;
 }
 
-/* Like sd_device_get_driver_subsystem(): for the devices of the "drivers" pseudo-subsystem, i.e.
- * /sys/bus/SUBSYSTEM/drivers/DRIVER, the subsystem of the driver. */
-static int device_get_driver_subsystem(struct udev_device *device, char *buf, size_t size) {
-        const char *devpath, *drivers, *p;
-
-        assert(device);
-        assert(buf);
-
-        if (!streq_ptr(udev_device_get_subsystem(device), "drivers"))
-                return -ENOENT;
-
-        devpath = udev_device_get_devpath(device);
-        drivers = strstr(devpath, "/drivers/");
-        if (!drivers)
-                drivers = endswith(devpath, "/drivers");
-        if (!drivers)
-                return -EINVAL;
-
-        /* Find the path component immediately before the "/drivers/" string */
-        for (p = drivers; p > devpath && p[-1] != '/'; p--)
-                ;
-        if (p == drivers)
-                return -EINVAL;
-        if ((size_t) (drivers - p) >= size)
-                return -ENAMETOOLONG;
-
-        memcpy(buf, p, drivers - p);
-        buf[drivers - p] = '\0';
-        return 0;
-}
-
 static void print_record(struct udev_device *device, const char *prefix) {
-        char driver_subsystem[UTIL_NAME_SIZE];
+        _cleanup_free_ char *driver_subsystem = NULL;
         const char *str, *subsys;
         dev_t devnum;
         uint64_t q;
@@ -351,7 +320,7 @@ static void print_record(struct udev_device *device, const char *prefix) {
         if (subsys)
                 printf("%sU: %s%s%s\n", prefix, ansi_highlight_green(), subsys, ansi_normal());
 
-        if (device_get_driver_subsystem(device, driver_subsystem, sizeof(driver_subsystem)) >= 0)
+        if (device_get_driver_subsystem(device, &driver_subsystem) >= 0)
                 printf("%sB: %s%s%s\n", prefix, ansi_highlight_green(), driver_subsystem, ansi_normal());
 
         str = udev_device_get_devtype(device);
@@ -399,7 +368,7 @@ static void print_record(struct udev_device *device, const char *prefix) {
 }
 
 static int record_to_json(struct udev_device *device) {
-        char driver_subsystem[UTIL_NAME_SIZE];
+        _cleanup_free_ char *driver_subsystem = NULL;
         struct udev_list_entry *list_entry;
         JsonWriter w;
         const char *str;
@@ -426,7 +395,7 @@ static int record_to_json(struct udev_device *device) {
                 json_writer_string(&w, str);
         }
 
-        if (device_get_driver_subsystem(device, driver_subsystem, sizeof(driver_subsystem)) >= 0) {
+        if (device_get_driver_subsystem(device, &driver_subsystem) >= 0) {
                 json_writer_key(&w, "DRIVER_SUBSYSTEM");
                 json_writer_string(&w, driver_subsystem);
         }
