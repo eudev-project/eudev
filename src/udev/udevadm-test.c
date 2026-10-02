@@ -102,13 +102,7 @@ static int adm_test(struct udev *udev, int argc, char *argv[]) {
                                 exit(EXIT_SUCCESS);
                         break;
                 case 'N':
-                        if (streq (optarg, "early")) {
-                                resolve_names = 1;
-                        } else if (streq (optarg, "late")) {
-                                resolve_names = 0;
-                        } else if (streq (optarg, "never")) {
-                                resolve_names = -1;
-                        } else {
+                        if (udev_parse_resolve_names(optarg, &resolve_names) < 0) {
                                 log_error("--resolve-names= must be 'early', 'late', or 'never'.");
                                 exit(EXIT_FAILURE);
                         }

@@ -43,13 +43,7 @@ static int parse_resolve_names(const char *s, int *ret) {
                 return 0;
         }
 
-        if (streq(s, "early"))
-                *ret = 1;
-        else if (streq(s, "late"))
-                *ret = 0;
-        else if (streq(s, "never"))
-                *ret = -1;
-        else {
+        if (udev_parse_resolve_names(s, ret) < 0) {
                 log_error("--resolve-names= must be 'early', 'late', or 'never'.");
                 return -EINVAL;
         }
