@@ -735,10 +735,10 @@ retry:
                         errno = EAGAIN;
                         return NULL;
                 }
-                /* avoid 32-bit overflow of properties_off + 32 */
-                if ((uint64_t) nlh->properties_off + 32 > (uint64_t) buflen) {
-                        log_debug("message smaller than expected (%u > %zd)",
-                                  nlh->properties_off+32, buflen);
+                /* like systemd, without the 32-bit overflow of properties_off + 32 */
+                if (nlh->properties_off > LESS_BY((size_t) buflen, 32u)) {
+                        log_debug("Invalid properties offset (%u) for message of length %zi.",
+                                  nlh->properties_off, buflen);
                         errno = EAGAIN;
                         return NULL;
                 }
