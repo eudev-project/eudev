@@ -285,36 +285,6 @@ int mac_selinux_apply(const char *path, const char *label) {
         return 0;
 }
 
-int mac_selinux_get_create_label_from_exe(const char *exe, char **label) {
-        int r = -EOPNOTSUPP;
-
-#ifdef HAVE_SELINUX
-        _cleanup_security_context_free_ char *mycon = NULL, *fcon = NULL;
-        security_class_t sclass;
-
-        assert(exe);
-        assert(label);
-
-        if (!mac_selinux_use())
-                return -EOPNOTSUPP;
-
-        r = getcon(&mycon);
-        if (r < 0)
-                return -errno;
-
-        r = getfilecon(exe, &fcon);
-        if (r < 0)
-                return -errno;
-
-        sclass = string_to_security_class("process");
-        r = security_compute_create(mycon, fcon, sclass, label);
-        if (r < 0)
-                return -errno;
-#endif
-
-        return r;
-}
-
 int mac_selinux_get_our_label(char **label) {
         int r = -EOPNOTSUPP;
 

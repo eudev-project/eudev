@@ -109,47 +109,6 @@ static struct udev_monitor *udev_monitor_new(struct udev *udev)
         return udev_monitor;
 }
 
-/* we consider udev running when /dev is on devtmpfs */
-__attribute__((unused)) static bool udev_has_devtmpfs(struct udev *udev __attribute__((unused))) {
-
-        union file_handle_union h = FILE_HANDLE_INIT;
-        _cleanup_fclose_ FILE *f = NULL;
-        char line[LINE_MAX], *e;
-        int mount_id;
-        int r;
-
-        r = name_to_handle_at(AT_FDCWD, "/dev", &h.handle, &mount_id, 0);
-        if (r < 0) {
-                if (errno != EOPNOTSUPP)
-                        log_debug_errno(errno, "name_to_handle_at on /dev: %m");
-                return false;
-        }
-
-        f = fopen("/proc/self/mountinfo", "re");
-        if (!f)
-                return false;
-
-        FOREACH_LINE(line, f, return false) {
-                int mid;
-
-                if (sscanf(line, "%i", &mid) != 1)
-                        continue;
-
-                if (mid != mount_id)
-                        continue;
-
-                e = strstr(line, " - ");
-                if (!e)
-                        continue;
-
-                /* accept any name that starts with the currently expected type */
-                if (startswith(e + 3, "devtmpfs"))
-                        return true;
-        }
-
-        return false;
-}
-
 static void monitor_set_nl_address(struct udev_monitor *udev_monitor) {
         union sockaddr_union snl = {};
         socklen_t addrlen;

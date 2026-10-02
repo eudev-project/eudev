@@ -35,7 +35,6 @@ int mac_selinux_apply(const char *path, const char *label);
 int mac_selinux_fix_fd(int fd, const char *path, bool ignore_erofs);
 int mac_selinux_apply_fd(int fd, const char *path, const char *label);
 
-int mac_selinux_get_create_label_from_exe(const char *exe, char **label);
 int mac_selinux_get_our_label(char **label);
 int mac_selinux_get_child_mls_label(int socket_fd, const char *exe, const char *exec_label, char **label);
 void mac_selinux_free(char *label);

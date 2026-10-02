@@ -43,4 +43,3 @@
 
 int get_process_comm(pid_t pid, char **name);
 int get_process_cmdline(pid_t pid, size_t max_length, bool comm_fallback, char **line);
-int get_process_environ(pid_t pid, char **environ);
