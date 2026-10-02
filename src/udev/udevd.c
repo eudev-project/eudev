@@ -66,9 +66,6 @@
 #define EVENT_REQUEUE_INTERVAL_USEC (200 * USEC_PER_MSEC)
 #define EVENT_REQUEUE_TIMEOUT_USEC  (3 * USEC_PER_MINUTE)
 
-/* Device is absent or "empty". We get -ENOMEDIUM from CD/DVD devices, also in VMs. */
-#define ERRNO_IS_DEVICE_ABSENT_OR_EMPTY(r) IN_SET(abs(r), ENODEV, ENXIO, ENOENT, ENOMEDIUM)
-
 static struct udev_rules *rules;
 static struct udev_ctrl *udev_ctrl;
 static struct udev_ctrl_connection *udev_ctrl_conn;

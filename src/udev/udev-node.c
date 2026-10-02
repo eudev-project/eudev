@@ -39,12 +39,6 @@
 #include "smack-util.h"
 #include "unaligned.h"
 
-/* Three different errors for "this device does not quite exist" */
-#define ERRNO_IS_DEVICE_ABSENT(r) IN_SET(abs(r), ENODEV, ENXIO, ENOENT)
-
-/* Device is absent or "empty". We get -ENOMEDIUM from CD/DVD devices, also in VMs. */
-#define ERRNO_IS_DEVICE_ABSENT_OR_EMPTY(r) (ERRNO_IS_DEVICE_ABSENT(r) || abs(r) == ENOMEDIUM)
-
 /* How often creating a devlink is tried when its parent directory vanishes concurrently */
 #define NODE_CREATE_SYMLINK_MAX_RETRIES 128
 
