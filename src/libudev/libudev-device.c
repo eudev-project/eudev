@@ -1556,6 +1556,51 @@ _public_ struct udev_device *udev_device_new_from_device_id(struct udev *udev, c
         }
 }
 
+/* Like path_is_normalized() of systemd: checks that a name does not contain "." or ".." path components or
+ * duplicated slashes, so that it cannot be used to escape the directories in /sys, and that it is not too long
+ * for a path, with no component longer than NAME_MAX. */
+static bool name_is_normalized(const char *p)
+{
+        const char *c;
+
+        if (isempty(p) || strlen(p) >= PATH_MAX)
+                return false;
+
+        if (streq(p, ".") || streq(p, ".."))
+                return false;
+
+        if (startswith(p, "../") || endswith(p, "/..") || strstr(p, "/../"))
+                return false;
+
+        if (startswith(p, "./") || endswith(p, "/.") || strstr(p, "/./"))
+                return false;
+
+        if (strstr(p, "//"))
+                return false;
+
+        for (c = p; *c; c += strspn(c, "/")) {
+                size_t n = strcspn(c, "/");
+
+                if (n > NAME_MAX)
+                        return false;
+                c += n;
+        }
+
+        return true;
+}
+
+/* Sets path to the concatenation of the strings, and returns true if that exists. A path that does not fit
+ * into path does not exist either, it would be too long for stat(). */
+#define sys_path_exists(path, statbuf, ...)                                                    \
+        ({                                                                                      \
+                bool _truncated;                                                                \
+                                                                                                \
+                strscpyl_full(path, sizeof(path), &_truncated, __VA_ARGS__, NULL);             \
+                if (_truncated)                                                                 \
+                        errno = ENOENT;                                                         \
+                !_truncated && stat(path, statbuf) == 0;                                        \
+        })
+
 /**
  * udev_device_new_from_subsystem_sysname:
  * @udev: udev library context
@@ -1571,32 +1616,10 @@ _public_ struct udev_device *udev_device_new_from_device_id(struct udev *udev, c
  *
  * Returns: a new udev device, or #NULL, if it does not exist
  **/
-/* Checks that a name does not contain "." or ".." path components, or duplicated or
- * leading slashes, so that it cannot be used to escape the directories in /sys. */
-static bool name_is_normalized(const char *p)
-{
-        if (isempty(p))
-                return false;
-
-        if (streq(p, ".") || streq(p, ".."))
-                return false;
-
-        if (startswith(p, "../") || endswith(p, "/..") || strstr(p, "/../"))
-                return false;
-
-        if (startswith(p, "./") || endswith(p, "/.") || strstr(p, "/./"))
-                return false;
-
-        if (p[0] == '/' || strstr(p, "//"))
-                return false;
-
-        return true;
-}
-
 _public_ struct udev_device *udev_device_new_from_subsystem_sysname(struct udev *udev, const char *subsystem, const char *sysname_in)
 {
-        char path[UTIL_PATH_SIZE];
-        char sysname[UTIL_PATH_SIZE];
+        _cleanup_free_ char *sysname = NULL;
+        char path[PATH_MAX];
         struct stat statbuf;
         char *p;
 
@@ -1606,40 +1629,46 @@ _public_ struct udev_device *udev_device_new_from_subsystem_sysname(struct udev 
                 return NULL;
         }
 
-        /* translate sysname back to sysfs filename */
-        strscpy(sysname, sizeof(sysname), sysname_in);
+        /* Like systemd, which accepts a leading '/' in the subsystem, but then finds no device, as it checks
+         * that the subsystem of the device it found is the requested one. */
+        if (subsystem[0] == '/') {
+                errno = ENODEV;
+                return NULL;
+        }
+
+        /* translate sysname back to sysfs filename, like systemd also for the special subsystems below */
+        sysname = strdup(sysname_in);
+        if (!sysname) {
+                errno = ENOMEM;
+                return NULL;
+        }
         for (p = sysname; *p != '\0'; p++)
                 if (*p == '/')
                         *p = '!';
 
         if (streq(subsystem, "subsystem")) {
-                strscpyl(path, sizeof(path), "/sys/subsystem/", sysname, NULL);
-                if (stat(path, &statbuf) == 0)
+                if (sys_path_exists(path, &statbuf, "/sys/subsystem/", sysname))
                         goto found;
 
-                strscpyl(path, sizeof(path), "/sys/bus/", sysname, NULL);
-                if (stat(path, &statbuf) == 0)
+                if (sys_path_exists(path, &statbuf, "/sys/bus/", sysname))
                         goto found;
 
-                strscpyl(path, sizeof(path), "/sys/class/", sysname, NULL);
-                if (stat(path, &statbuf) == 0)
+                if (sys_path_exists(path, &statbuf, "/sys/class/", sysname))
                         goto found;
                 goto out;
         }
 
         if (streq(subsystem, "module")) {
-                strscpyl(path, sizeof(path), "/sys/module/", sysname, NULL);
-                if (stat(path, &statbuf) == 0)
+                if (sys_path_exists(path, &statbuf, "/sys/module/", sysname))
                         goto found;
                 goto out;
         }
 
         if (streq(subsystem, "drivers")) {
-                char subsys[UTIL_NAME_SIZE];
+                const char *subsys = sysname;
                 char *driver;
 
-                strscpy(subsys, sizeof(subsys), sysname);
-                driver = strchr(subsys, ':');
+                driver = strchr(sysname, ':');
                 /* like systemd, a driver must follow the ':' */
                 if (driver != NULL && driver[1] != '\0') {
                         driver[0] = '\0';
@@ -1647,23 +1676,19 @@ _public_ struct udev_device *udev_device_new_from_subsystem_sysname(struct udev 
 
                         /* If the sysname is "drivers", then it's the drivers directory itself that is meant. */
                         if (streq(driver, "drivers")) {
-                                strscpyl(path, sizeof(path), "/sys/subsystem/", subsys, "/drivers", NULL);
-                                if (stat(path, &statbuf) == 0)
+                                if (sys_path_exists(path, &statbuf, "/sys/subsystem/", subsys, "/drivers"))
                                         goto found;
 
-                                strscpyl(path, sizeof(path), "/sys/bus/", subsys, "/drivers", NULL);
-                                if (stat(path, &statbuf) == 0)
+                                if (sys_path_exists(path, &statbuf, "/sys/bus/", subsys, "/drivers"))
                                         goto found;
 
                                 goto out;
                         }
 
-                        strscpyl(path, sizeof(path), "/sys/subsystem/", subsys, "/drivers/", driver, NULL);
-                        if (stat(path, &statbuf) == 0)
+                        if (sys_path_exists(path, &statbuf, "/sys/subsystem/", subsys, "/drivers/", driver))
                                 goto found;
 
-                        strscpyl(path, sizeof(path), "/sys/bus/", subsys, "/drivers/", driver, NULL);
-                        if (stat(path, &statbuf) == 0)
+                        if (sys_path_exists(path, &statbuf, "/sys/bus/", subsys, "/drivers/", driver))
                                 goto found;
                 } else
                         /* like systemd, no such driver */
@@ -1672,16 +1697,13 @@ _public_ struct udev_device *udev_device_new_from_subsystem_sysname(struct udev 
                 goto out;
         }
 
-        strscpyl(path, sizeof(path), "/sys/subsystem/", subsystem, "/devices/", sysname, NULL);
-        if (stat(path, &statbuf) == 0)
+        if (sys_path_exists(path, &statbuf, "/sys/subsystem/", subsystem, "/devices/", sysname))
                 goto found;
 
-        strscpyl(path, sizeof(path), "/sys/bus/", subsystem, "/devices/", sysname, NULL);
-        if (stat(path, &statbuf) == 0)
+        if (sys_path_exists(path, &statbuf, "/sys/bus/", subsystem, "/devices/", sysname))
                 goto found;
 
-        strscpyl(path, sizeof(path), "/sys/class/", subsystem, "/", sysname, NULL);
-        if (stat(path, &statbuf) == 0)
+        if (sys_path_exists(path, &statbuf, "/sys/class/", subsystem, "/", sysname))
                 goto found;
 out:
         /* like systemd, a device that does not exist is ENODEV */
