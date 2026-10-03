@@ -359,8 +359,9 @@ static const char* const udev_conf_dirs[] = {
  * first udev.conf in the directories of udev_conf_dirs, or NULL, and the drop-ins in their subdirectories
  * udev.conf.d. Like for the rules files, and like systemd's "udevadm cat --config", a mask, i.e. an empty file or
  * a symlink to /dev/null, and a file that is not a regular file are left out; a masked udev.conf hides the ones
- * in the later directories, others do not. */
-int udev_conf_files(const char *root, ConfFile **ret_main, ConfFile ***ret_dropins, size_t *ret_n_dropins) {
+ * in the later directories, others do not. flags may add CONF_FILES_WARN, for udevadm cat. */
+int udev_conf_files(const char *root, ConfFilesFlags flags,
+                    ConfFile **ret_main, ConfFile ***ret_dropins, size_t *ret_n_dropins) {
         _cleanup_strv_free_ char **dirs = NULL;
         ConfFile *main_file = NULL;
         size_t i;
@@ -385,7 +386,7 @@ int udev_conf_files(const char *root, ConfFile **ret_main, ConfFile ***ret_dropi
                         return -ENOMEM;
                 }
 
-        r = conf_files_list_strv_full(".conf", root, CONF_FILES_REGULAR | CONF_FILES_FILTER_MASKED,
+        r = conf_files_list_strv_full(".conf", root, flags | CONF_FILES_REGULAR | CONF_FILES_FILTER_MASKED,
                                       (const char * const *) dirs, ret_dropins, ret_n_dropins);
         if (r < 0) {
                 conf_file_free(main_file);
@@ -404,7 +405,7 @@ static void udev_read_conf_files(struct udev *udev, const char *root) {
         size_t n_dropins = 0, i;
         int r;
 
-        r = udev_conf_files(root, &main_file, &dropins, &n_dropins);
+        r = udev_conf_files(root, 0, &main_file, &dropins, &n_dropins);
         if (r < 0) {
                 log_debug_errno(r, "Failed to find the udev.conf files, ignoring: %m");
                 return;

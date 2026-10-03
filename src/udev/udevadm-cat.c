@@ -153,23 +153,34 @@ static int cat_file(const char *name, const char *path, bool *newline) {
         return 0;
 }
 
+/* Like conf_files_cat() of systemd for "udev/udev.conf": shows the main configuration file and the drop-ins, as
+ * libudev reads them, see udev_conf_files(). Like systemd, a mask, i.e. an empty file or a symlink to /dev/null,
+ * and a file that is not a regular file count as not found. */
 static int cat_config(bool *newline) {
-        ConfFile *c = NULL;
-        int r;
+        ConfFile *c = NULL, **dropins = NULL;
+        size_t n_dropins = 0, i;
+        int r, ret = 0;
 
-        /* eudev reads only this file, there are no drop-ins. Like systemd, a mask, i.e. an empty file or a
-         * symlink to /dev/null, and a file that is not a regular file count as not found. */
-        r = conf_file_new(UDEV_CONF_DIR "/udev.conf", arg_root, CONF_FILES_REGULAR | CONF_FILES_FILTER_MASKED, &c);
-        if (r < 0) {
+        r = udev_conf_files(arg_root, CONF_FILES_WARN, &c, &dropins, &n_dropins);
+        if (r < 0)
+                return log_error_errno(r, "Failed to query file list: %m");
+
+        if (c)
+                ret = cat_file(c->original_path, c->resolved_path, newline);
+        else
                 printf("%s# Main configuration file udev/udev.conf not found%s\n",
                        ansi_highlight_magenta(),
                        ansi_normal());
-                return 0;
+
+        for (i = 0; i < n_dropins; i++) {
+                r = cat_file(dropins[i]->original_path, dropins[i]->resolved_path, newline);
+                if (r < 0 && ret == 0)
+                        ret = r;
         }
 
-        r = cat_file(c->original_path, c->resolved_path, newline);
         conf_file_free(c);
-        return r;
+        conf_file_free_array(dropins, n_dropins);
+        return ret;
 }
 
 static int adm_cat(struct udev *udev __attribute__((unused)), int argc, char *argv[]) {

@@ -1249,8 +1249,9 @@
           <term><option>--config</option></term>
           <listitem>
             <para>Shows
-            <citerefentry><refentrytitle>udev.conf</refentrytitle><manvolnum>5</manvolnum></citerefentry>,
-            rather than udev rules files. When specified, no udev rules file can be specified.
+            <citerefentry><refentrytitle>udev.conf</refentrytitle><manvolnum>5</manvolnum></citerefentry>
+            files, the main configuration file and its drop-ins, rather than udev rules files. When specified,
+            no udev rules file can be specified.
             </para>
           </listitem>
         </varlistentry>

@@ -24,6 +24,7 @@
 #include <stdbool.h>
 
 #include "libudev.h"
+#include "conf-files.h"
 #include "macro.h"
 #include "util.h"
 #include "mkdir.h"
@@ -52,8 +53,8 @@ char **udev_get_conf_warnings(struct udev *udev);
 int udev_get_timeout_signal(struct udev *udev);
 int udev_get_hwdb_format(struct udev *udev);
 int udev_read_hwdb_format(const char *root);
-struct ConfFile;
-int udev_conf_files(const char *root, struct ConfFile **ret_main, struct ConfFile ***ret_dropins, size_t *ret_n_dropins);
+int udev_conf_files(const char *root, ConfFilesFlags flags,
+                    ConfFile **ret_main, ConfFile ***ret_dropins, size_t *ret_n_dropins);
 bool udev_get_sas_legacy_path(struct udev *udev);
 const char *udev_get_net_naming_scheme(struct udev *udev);
 int udev_get_net_altnames(struct udev *udev);
