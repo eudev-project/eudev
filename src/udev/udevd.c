@@ -2234,8 +2234,9 @@ int main(int argc, char *argv[]) {
                 goto exit;
         }
 
-        if (udev_ctrl_enable_receiving(udev_ctrl) < 0) {
-                r = log_error_errno(EINVAL, "error binding udev control socket");
+        r = udev_ctrl_enable_receiving(udev_ctrl);
+        if (r < 0) {
+                log_error_errno(r, "error binding udev control socket: %m");
                 goto exit;
         }
 
