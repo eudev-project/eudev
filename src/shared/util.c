@@ -180,19 +180,68 @@ static int cg_get_root_path(const char *controller, char **ret) {
         }
 }
 
-/* Whether the controllers are in cgroup v1: like cg_all_unified() of systemd v257, which is false when
- * /sys/fs/cgroup is a tmpfs, in the "legacy" and the "hybrid" setups, with the hierarchies of cgroup v1 mounted
- * below it; in the hybrid setup, cgroup v2 is mounted below it too, but without controllers. Unlike systemd
- * v257, which refused a tmpfs without its own hierarchy /sys/fs/cgroup/systemd or cgroup v2 on
- * /sys/fs/cgroup/unified, any tmpfs means cgroup v1 here, e.g. also as set up by OpenRC. Anything else,
- * cgroup v2 or nothing mounted, is handled as cgroup v2, like systemd a446e8ff2c does. */
-static bool cg_is_legacy(void) {
-        struct statfs fs;
+/* Finds the directory of the cgroup, a path as in /proc/PID/cgroup, in the hierarchy of cgroup v1 that the
+ * controller is attached to, from /proc/self/mountinfo: below the mount point of the hierarchy, which is not
+ * necessarily /sys/fs/cgroup/<controller>, the part of the path below the root of the mount, which is not "/"
+ * e.g. in a container without a cgroup namespace, where only its own part of the hierarchy is mounted. Returns
+ * -ENOENT if the hierarchy is not mounted, or the cgroup is not below the root of any of its mounts. */
+static int cg_v1_get_path(const char *controller, const char *cgroup, char **ret) {
+        _cleanup_fclose_ FILE *f = NULL;
+        int r;
 
-        if (statfs("/sys/fs/cgroup/", &fs) < 0)
-                return false;
+        assert(controller);
+        assert(cgroup);
+        assert(ret);
 
-        return F_TYPE_EQUAL(fs.f_type, TMPFS_MAGIC);
+        /* cg_get_root_path() turns "/init.scope" into "" */
+        if (isempty(cgroup))
+                cgroup = "/";
+
+        f = fopen("/proc/self/mountinfo", "re");
+        if (!f)
+                return -errno;
+
+        for (;;) {
+                _cleanup_free_ char *line = NULL, *root = NULL, *mount_point = NULL;
+                _cleanup_strv_free_ char **fields = NULL;
+                size_t n, sep;
+                const char *rest;
+
+                r = read_line(f, LONG_LINE_MAX, &line);
+                if (r < 0)
+                        return r;
+                if (r == 0)
+                        return -ENOENT;
+
+                /* "ID PARENT-ID MAJOR:MINOR ROOT MOUNT-POINT OPTIONS [OPTIONAL-FIELDS...] - FSTYPE SOURCE
+                 * SUPER-OPTIONS", see proc(5); ROOT and MOUNT-POINT have spaces and such escaped as \ooo */
+                r = strv_split_and_extend(&fields, line, " ", false);
+                if (r < 0)
+                        return r;
+
+                n = strv_length(fields);
+                for (sep = 6; sep < n && !streq(fields[sep], "-"); sep++)
+                        ;
+                if (sep + 3 >= n)
+                        continue;
+
+                if (!streq(fields[sep + 1], "cgroup") || !list_contains_word(fields[sep + 3], controller))
+                        continue;
+
+                r = cunescape_length(fields[3], strlen(fields[3]), UNESCAPE_RELAX, &root);
+                if (r < 0)
+                        return r;
+                r = cunescape_length(fields[4], strlen(fields[4]), UNESCAPE_RELAX, &mount_point);
+                if (r < 0)
+                        return r;
+
+                rest = path_startswith(cgroup, root);
+                if (!rest)
+                        continue;
+
+                *ret = isempty(rest) ? TAKE_PTR(mount_point) : strjoin(mount_point, "/", rest, NULL);
+                return *ret ? 0 : -ENOMEM;
+        }
 }
 
 uint64_t physical_memory(void) {
@@ -220,17 +269,29 @@ uint64_t physical_memory(void) {
         /* eudev: like systemd v231 to v257, read the limit of cgroup v1 too, memory.limit_in_bytes, which
          * systemd a446e8ff2c no longer does. systemd took the cgroup of PID 1 in its own hierarchy
          * (name=systemd), which exists only when systemd is PID 1, and read the file of that cgroup in the
-         * hierarchy of the memory controller; here, the cgroup of PID 1 in that hierarchy is used. */
-        legacy = cg_is_legacy();
-
-        r = cg_get_root_path(legacy ? "memory" : NULL, &root);
+         * hierarchy of the memory controller below /sys/fs/cgroup/memory/; here, the cgroup of PID 1 in that
+         * hierarchy is used, wherever it is mounted. The memory controller is in cgroup v1 when PID 1 has a
+         * cgroup in such a hierarchy, otherwise cgroup v2 is used, like systemd a446e8ff2c does. */
+        r = cg_get_root_path("memory", &root);
+        legacy = r >= 0;
+        if (!legacy)
+                r = cg_get_root_path(NULL, &root);
         if (r < 0) {
                 log_debug_errno(r, "Failed to determine root cgroup, ignoring cgroup memory limit: %m");
                 return mem;
         }
 
         if (legacy) {
-                p = strjoin("/sys/fs/cgroup/memory/", root, "/memory.limit_in_bytes", NULL);
+                _cleanup_free_ char *dir = NULL;
+
+                r = cg_v1_get_path("memory", root, &dir);
+                if (r < 0) {
+                        log_debug_errno(r, "Failed to find cgroup '%s' in a mount of the hierarchy of the memory controller, ignoring cgroup memory limit: %m",
+                                        isempty(root) ? "/" : root);
+                        return mem;
+                }
+
+                p = strjoin(dir, "/memory.limit_in_bytes", NULL);
                 if (!p) {
                         log_oom_debug();
                         return mem;
