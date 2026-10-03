@@ -41,8 +41,8 @@ unsigned udev_rules_check_get_issues(struct udev_rules_check *c);
 const char* const* udev_rules_get_dirs(void);
 /* The same, but each directory of this system only once, also when it has several of the paths, e.g.
  * /lib/udev/rules.d and /usr/lib/udev/rules.d on a merged /usr; for the rules of this system, not of
- * another root directory. */
-const char* const* udev_rules_get_dirs_runtime(void);
+ * another root directory. Returns a new list, or NULL when out of memory. */
+char **udev_rules_get_dirs_runtime(void);
 
 /* In udev-rules.c: whether a single value of OPTIONS= is one that the parser knows. */
 bool udev_rules_option_is_known(const char *value);

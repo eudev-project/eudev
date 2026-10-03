@@ -182,15 +182,21 @@ const char* const* udev_rules_get_dirs(void) {
 
 /* The directories of udev_rules_get_dirs(), where a directory that exists is listed only once, at its first
  * position, also when it has several of the paths, like /lib/udev/rules.d and /usr/lib/udev/rules.d on a
- * merged /usr, or a bind mount; it is found out by its device and inode at every call, as directories may
- * be created or mounted later. The directories that do not exist stay in the list, to be looked at later.
- * The list is valid until the next call. */
-const char* const* udev_rules_get_dirs_runtime(void) {
-        static const char *dirs[ELEMENTSOF(rules_dirs_all)];
+ * merged /usr, or a bind mount; it is found out by its device and inode. The directories that do not exist
+ * stay in the list, to be looked at later. Returns a new list, or NULL when out of memory. udev_rules_new()
+ * looks them up once and keeps them, for loading the rules and for udev_rules_check_timestamp(); when a
+ * directory is created or mounted later, its timestamp changes, so that the rules are loaded again, with the
+ * directories looked up again. */
+char **udev_rules_get_dirs_runtime(void) {
         struct stat st[ELEMENTSOF(rules_dirs_all)];
         bool exists[ELEMENTSOF(rules_dirs_all)];
+        _cleanup_strv_free_ char **dirs = NULL;
         const char* const* d;
         size_t j, n = 0;
+
+        dirs = new0(char *, ELEMENTSOF(rules_dirs_all));
+        if (!dirs)
+                return NULL;
 
         for (d = udev_rules_get_dirs(); *d; d++) {
                 struct stat s;
@@ -202,19 +208,22 @@ const char* const* udev_rules_get_dirs_runtime(void) {
                 if (e && j < n)
                         continue;
 
-                dirs[n] = *d;
+                dirs[n] = strdup(*d);
+                if (!dirs[n])
+                        return NULL;
                 exists[n] = e;
                 if (e)
                         st[n] = s;
                 n++;
         }
-        dirs[n] = NULL;
 
-        return dirs;
+        return TAKE_PTR(dirs);
 }
 
 struct udev_rules {
         struct udev *udev;
+        /* the directories of the rules, see udev_rules_get_dirs_runtime() */
+        char **dirs;
         usec_t dirs_ts_usec;
         int resolve_names;
 
@@ -2780,8 +2789,7 @@ struct udev_rules *udev_rules_new_full(struct udev *udev, int resolve_names, cha
         struct udev_rules *rules;
         struct udev_list file_list;
         struct token end_token;
-        const char* const* d;
-        char **files, **f;
+        char **files, **f, **d;
         int r;
 
         rules = new0(struct udev_rules, 1);
@@ -2801,6 +2809,10 @@ struct udev_rules *udev_rules_new_full(struct udev *udev, int resolve_names, cha
         if (!rules->strbuf)
                 return udev_rules_unref(rules);
 
+        rules->dirs = udev_rules_get_dirs_runtime();
+        if (!rules->dirs)
+                return udev_rules_unref(rules);
+
         udev_rules_check_timestamp(rules);
 
         /* Like systemd's udev_rules_load(): the extra directories come first, so that their files
@@ -2811,7 +2823,7 @@ struct udev_rules *udev_rules_new_full(struct udev *udev, int resolve_names, cha
                         return udev_rules_unref(rules);
         }
 
-        for (d = udev_rules_get_dirs_runtime(); *d; d++)
+        STRV_FOREACH(d, rules->dirs)
                 if (strv_extend(&dirs, *d) < 0)
                         return udev_rules_unref(rules);
 
@@ -2862,6 +2874,7 @@ struct udev_rules *udev_rules_new_full(struct udev *udev, int resolve_names, cha
 struct udev_rules *udev_rules_unref(struct udev_rules *rules) {
         if (rules == NULL)
                 return NULL;
+        strv_free(rules->dirs);
         free(rules->tokens);
         strbuf_cleanup(rules->strbuf);
         free(rules->uids);
@@ -2874,7 +2887,7 @@ bool udev_rules_check_timestamp(struct udev_rules *rules) {
         if (!rules)
                 return false;
 
-        return paths_check_timestamp(udev_rules_get_dirs_runtime(), &rules->dirs_ts_usec, true);
+        return paths_check_timestamp((const char* const*) rules->dirs, &rules->dirs_ts_usec, true);
 }
 
 /* returns whether the value matches the token's pattern, regardless of the operator */

@@ -97,9 +97,16 @@ static int fake_dev(const char *dir) {
  * the host get into the tests. The one below UDEV_ROOT_RUN is in the test's /run already, and holds the
  * rules of the test. A directory that does not exist has no rules to hide. */
 static int mask_rules_dirs(void) {
-        const char *const *dir;
+        _cleanup_strv_free_ char **dirs = NULL;
+        char **dir;
 
-        for (dir = udev_rules_get_dirs_runtime(); *dir; dir++) {
+        dirs = udev_rules_get_dirs_runtime();
+        if (!dirs) {
+                fprintf(stderr, "failed to get the rules directories: %m\n");
+                return -ENOMEM;
+        }
+
+        STRV_FOREACH(dir, dirs) {
                 if (path_startswith(*dir, UDEV_ROOT_RUN))
                         continue;
 
