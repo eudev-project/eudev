@@ -24,6 +24,9 @@
 #include <fcntl.h>
 #include <sys/ioctl.h>
 #include <linux/limits.h>
+/* eudev's copy of the input event codes (src/include/uapi), before <linux/input.h>, so that the
+ * older copy of the kernel headers of the build host, which has the same include guard, is skipped */
+#include <linux/input-event-codes.h>
 #include <linux/input.h>
 
 #include "udev.h"

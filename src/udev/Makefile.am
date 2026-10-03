@@ -140,7 +140,8 @@ CLEANFILES = \
 
 
 AM_CPPFLAGS += \
-	-I $(top_builddir)/src/udev
+	-I $(top_builddir)/src/udev \
+	-isystem $(top_srcdir)/src/include/uapi
 
 libudev_core_la_SOURCES += \
 	udev-builtin-keyboard.c
@@ -148,11 +149,13 @@ libudev_core_la_SOURCES += \
 nodist_libudev_core_la_SOURCES = \
 	keyboard-keys-from-name.h
 
-# The awk program spells out the word boundaries \< and \> of the one of systemd, which mawk does not
-# know.
-keyboard-keys.txt: Makefile
+# The key names of the keyboard builtin are generated like systemd does it, from eudev's own copy of
+# the input-event-codes.h header of Linux in src/include/uapi/linux/ (copied from systemd, and updated
+# on every sync with systemd), so that they do not depend on the kernel headers of the build host. The
+# awk program spells out the word boundaries \< and \> of the one of systemd, which mawk does not know.
+keyboard-keys.txt: Makefile $(top_srcdir)/src/include/uapi/linux/input-event-codes.h
 	$(AM_V_at)f="$@"; case $$f in */*) $(MKDIR_P) "$${f%/*}"; esac
-	$(AM_V_GEN)$(CPP) $(CFLAGS) $(AM_CPPFLAGS) $(CPPFLAGS) -dM -include linux/input.h - < /dev/null | $(AWK) ' \
+	$(AM_V_GEN)$(CPP) $(CFLAGS) $(AM_CPPFLAGS) $(CPPFLAGS) -dM -include $(top_srcdir)/src/include/uapi/linux/input-event-codes.h - < /dev/null | $(AWK) ' \
 		/(^|[^A-Za-z0-9_])(KEY_(MAX|MIN_INTERESTING))|(BTN_(MISC|MOUSE|JOYSTICK|GAMEPAD|DIGI|WHEEL|TRIGGER_HAPPY))([^A-Za-z0-9_]|$$)/ { next } \
 		/^#define[ \t]+(KEY|BTN)_[^ ]+[ \t]+[0-9BK]/ { print $$2 } \
 	' > $@

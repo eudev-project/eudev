@@ -26,7 +26,11 @@ if ENABLE_PROGRAMS
 SUBDIRS += $(PROGRAMS_SUBDIRS)
 endif
 
-# the wrappers of glibc's headers, see LIBC_CPPFLAGS in configure.ac
+# the wrappers of glibc's headers, see LIBC_CPPFLAGS in configure.ac, and eudev's copy of the Linux
+# header with the input event codes, from which src/udev/Makefile.am generates the key names; like
+# the other headers in src/include/uapi/linux/ of systemd, it is copied verbatim from systemd and
+# updated on every sync with systemd
 EXTRA_DIST = \
 	include/glibc/stdio.h \
-	include/glibc/stdlib.h
+	include/glibc/stdlib.h \
+	include/uapi/linux/input-event-codes.h

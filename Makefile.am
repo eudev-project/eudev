@@ -43,6 +43,7 @@ EXTRA_DIST = \
 	LICENSES/GPL-2.0-or-later.txt \
 	LICENSES/LGPL-2.0-or-later.txt \
 	LICENSES/LGPL-2.1-or-later.txt \
+	LICENSES/Linux-syscall-note.txt \
 	LICENSES/MIT.txt \
 	LICENSES/murmurhash2-public-domain.txt \
 	shell-completion/bash/udevadm \

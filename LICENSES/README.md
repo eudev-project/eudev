@@ -53,6 +53,11 @@ below, under LGPL-2.1-or-later.
  * **GPL-2.0-only** (the text is GPL-2.0-or-later.txt): src/scsi_id/scsi.h,
    whose notice names version 2 of the license without "or any later
    version"; systemd marks its copy as GPL-2.0-or-later.
+ * **GPL-2.0-only WITH Linux-syscall-note** (GPL-2.0-or-later.txt and
+   Linux-syscall-note.txt): src/include/uapi/linux/input-event-codes.h, a
+   header of the user space API of Linux, copied verbatim from the same
+   directory of systemd, which copies it from Linux. It is used within the
+   scope of the exception of the syscall note.
  * src/shared/ioprio.h is a minimal version of the linux/ioprio.h header of
    Linux, which its comment says is licensed under the GPL version 2.
  * **LGPL-2.0-or-later** (GNU Library General Public License v2.0 or later,
