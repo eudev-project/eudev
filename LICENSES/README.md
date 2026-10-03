@@ -3,9 +3,10 @@
 This directory contains the full texts of the licenses used by the files of
 the eudev source tree, named by their SPDX identifiers (https://spdx.org/).
 The license notice at the top of a file, either an SPDX-License-Identifier
-line or the full notice, says which license applies to it; this file gives an
-overview. COPYING in the top directory is the text of the GPL version 2, the
-same as GPL-2.0-or-later.txt.
+line or the full notice, says which license applies to it. This file only
+lists those notices, by license; eudev has no default license for the files
+that have no notice (see the end). COPYING in the top directory is the text of
+the GPL version 2, the same as GPL-2.0-or-later.txt.
 
 Most of eudev comes from udev of systemd, whose files carry the same licenses.
 
@@ -53,14 +54,14 @@ below, under LGPL-2.1-or-later.
 
  * **GPL-2.0-only** (the text is GPL-2.0-or-later.txt): src/scsi_id/scsi.h,
    whose notice names version 2 of the license without "or any later
-   version"; systemd marks its copy as GPL-2.0-or-later.
+   version". Hence the helper program scsi_id, which is built with it, is
+   effectively distributed under GPL-2.0-only. eudev keeps the notice as it
+   is; systemd marks its copy as GPL-2.0-or-later.
  * **GPL-2.0-only WITH Linux-syscall-note** (GPL-2.0-or-later.txt and
    Linux-syscall-note.txt): src/include/uapi/linux/input-event-codes.h, a
    header of the user space API of Linux, copied verbatim from the same
    directory of systemd, which copies it from Linux. It is used within the
    scope of the exception of the syscall note.
- * src/shared/ioprio.h is a minimal version of the linux/ioprio.h header of
-   Linux, which its comment says is licensed under the GPL version 2.
  * **LGPL-2.0-or-later** (GNU Library General Public License v2.0 or later,
    LGPL-2.0-or-later.txt): the parts of src/shared/utf8.c that are based on
    gutf8.c of GLib, as the original notice in the file says; the file as a
@@ -81,8 +82,8 @@ The other files have no license notice of their own: the udev rules in rules/
 and rule_generator/, the hwdb files in hwdb.d/ except the ones named above, the
 other man page sources and the generated man pages, the build system files,
 the documentation, the test scripts test/udev-test.pl and test/rules-test.sh,
-and the test data. Those that come from systemd are distributed by systemd
-under its main license, LGPL-2.1-or-later.
+and the test data. eudev states no license for them: there is no default
+license.
 
 The data files from which some of the hwdb files are generated (see
 hwdb.d/README) come from public registries and lists: hwdb.d/usb.ids
