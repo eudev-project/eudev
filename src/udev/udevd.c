@@ -1284,6 +1284,60 @@ static usec_t manager_kill_worker_timeout(void) {
         return usec_add(arg_event_timeout_usec, extra_timeout_usec());
 }
 
+/* Like the timers of systemd's worker_attach_event(), on_worker_timeout_warning() and on_worker_timeout_kill():
+ * warns when the event of a worker takes a third of the event timeout, and sends the timeout signal to the worker
+ * after the event timeout and the extra time. Called on every iteration of the main loop, and not only when it
+ * times out, so that a hanging worker is also killed when the loop never waits that long, e.g. as uevents or
+ * messages keep arriving. Returns the time in milliseconds until the next of these is due, rounded up, or -1 if
+ * there is none. */
+static int manager_check_worker_timeouts(void) {
+        struct worker *worker;
+        usec_t now_usec, next_usec = USEC_INFINITY;
+        Iterator i;
+
+        if (hashmap_isempty(workers))
+                return -1;
+
+        now_usec = now(CLOCK_MONOTONIC);
+
+        HASHMAP_FOREACH(worker, workers, i) {
+                struct event *event = worker->event;
+                usec_t usec;
+
+                if (worker->state != WORKER_RUNNING && worker->state != WORKER_KILLING)
+                        continue;
+
+                assert(event);
+
+                usec = usec_add(event->start_usec, manager_kill_worker_timeout());
+                if (usec <= now_usec) {
+                        log_error("worker ["PID_FMT"] %s timeout; kill it", worker->pid, event->devpath);
+                        (void) kill_and_sigcont(worker->pid, arg_timeout_signal);
+                        worker->state = WORKER_KILLED;
+
+                        log_error("seq %llu '%s' killed", udev_device_get_seqnum(event->dev), event->devpath);
+                        continue;
+                }
+                next_usec = MIN(next_usec, usec);
+
+                if (event->warned)
+                        continue;
+
+                usec = usec_add(event->start_usec, arg_event_timeout_warn_usec);
+                if (usec <= now_usec) {
+                        log_warning("worker ["PID_FMT"] %s is taking a long time", worker->pid, event->devpath);
+                        event->warned = true;
+                } else
+                        next_usec = MIN(next_usec, usec);
+        }
+
+        if (next_usec == USEC_INFINITY)
+                return -1;
+
+        next_usec = DIV_ROUND_UP(next_usec - now_usec, USEC_PER_MSEC);
+        return next_usec > INT_MAX ? INT_MAX : (int) next_usec;
+}
+
 static void manager_set_log_level(int log_level) {
         int old = log_get_max_level(), new;
 
@@ -2297,8 +2351,10 @@ int main(int argc, char *argv[]) {
                 static usec_t last_usec;
                 struct epoll_event ev[8];
                 int fdcount;
-                int timeout;
+                int timeout, worker_timeout;
                 bool is_worker, is_signal, is_inotify, is_netlink, is_ctrl;
+                /* the timeout of the main loop is the next deadline of a worker, see below */
+                bool worker_wakeup = false;
                 int i;
 
                 if (udev_exit) {
@@ -2335,7 +2391,7 @@ int main(int argc, char *argv[]) {
                 } else {
                         int requeue_timeout;
 
-                        /* kill idle or hanging workers */
+                        /* kill idle workers */
                         timeout = 3 * MSEC_PER_SEC;
 
                         /* requeue the events of locked block devices after a delay */
@@ -2364,6 +2420,13 @@ int main(int argc, char *argv[]) {
                                 timeout = synthesized_timeout;
                 }
 
+                /* warn about and kill hanging workers, and wake up when that is due next */
+                worker_timeout = manager_check_worker_timeouts();
+                if (worker_timeout >= 0 && (timeout < 0 || worker_timeout < timeout)) {
+                        timeout = worker_timeout;
+                        worker_wakeup = true;
+                }
+
                 /* tell settle that we are busy or idle */
                 event_queue_update();
 
@@ -2371,11 +2434,9 @@ int main(int argc, char *argv[]) {
                 if (fdcount < 0)
                         continue;
 
-                if (fdcount == 0) {
-                        struct worker *worker;
-                        Iterator j;
-
-                        /* timeout */
+                /* timeout, unless only a deadline of a worker is due, which manager_check_worker_timeouts()
+                 * handles in the next iteration */
+                if (fdcount == 0 && !worker_wakeup) {
                         if (udev_exit) {
                                 log_error("timeout, giving up waiting for workers to finish");
                                 break;
@@ -2386,33 +2447,6 @@ int main(int argc, char *argv[]) {
                                 log_debug("cleanup idle workers");
                                 worker_kill(false);
                         }
-
-                        /* check for hanging events */
-                        HASHMAP_FOREACH(worker, workers, j) {
-                                struct event *event = worker->event;
-                                usec_t ts;
-
-                                if (worker->state != WORKER_RUNNING && worker->state != WORKER_KILLING)
-                                        continue;
-
-                                assert(event);
-
-                                ts = now(CLOCK_MONOTONIC);
-
-                                if ((ts - event->start_usec) > arg_event_timeout_warn_usec) {
-                                        if ((ts - event->start_usec) > manager_kill_worker_timeout()) {
-                                                log_error("worker ["PID_FMT"] %s timeout; kill it", worker->pid, event->devpath);
-                                                (void) kill_and_sigcont(worker->pid, arg_timeout_signal);
-                                                worker->state = WORKER_KILLED;
-
-                                                log_error("seq %llu '%s' killed", udev_device_get_seqnum(event->dev), event->devpath);
-                                        } else if (!event->warned) {
-                                                log_warning("worker ["PID_FMT"] %s is taking a long time", worker->pid, event->devpath);
-                                                event->warned = true;
-                                        }
-                                }
-                        }
-
                 }
 
                 is_worker = is_signal = is_inotify = is_netlink = is_ctrl = false;
