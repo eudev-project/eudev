@@ -177,20 +177,18 @@ ssize_t util_get_sys_core_link_value(struct udev *udev __attribute__((unused)), 
         return strscpy(value, size, pos);
 }
 
+/* Like log_level_from_string() of systemd: a log level by name, e.g. "debug", or as a number from 0 to 7,
+ * parsed with safe_atou(), which also takes a "0x", "0o" or "0b" prefix, e.g. "0x7". Returns -EINVAL for
+ * anything else. */
 int util_log_priority(const char *priority)
 {
-        char *endptr;
         int prio;
 
-        prio = strtoul(priority, &endptr, 10);
-        if (endptr[0] == '\0' || isspace((unsigned char) endptr[0])) {
-                if (prio >= 0 && prio <= 7)
-                        return prio;
-                else
-                        return -ERANGE;
-        }
+        prio = log_level_from_string(priority);
+        if (prio < 0)
+                return -EINVAL;
 
-        return log_level_from_string(priority);
+        return prio;
 }
 
 void util_remove_trailing_chars(char *path, char c)
