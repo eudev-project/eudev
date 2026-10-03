@@ -360,6 +360,12 @@ static int write_to_syslog(
         return 1;
 }
 
+/* The longest record that /dev/kmsg accepts, including the "<N>" prefix and the newline; the kernel refuses
+ * longer ones with EINVAL (PRINTKRB_RECORD_MAX). */
+#define KMSG_RECORD_MAX 1024U
+/* the mark of a message that is cut to fit into a record of /dev/kmsg */
+#define KMSG_TRUNCATED "..."
+
 static int write_to_kmsg(
                 int level,
                 int error __attribute__((unused)),
@@ -371,7 +377,8 @@ static int write_to_kmsg(
                 const char *buffer) {
 
         char header_priority[1 + DECIMAL_STR_MAX(int) + 2], header_pid[1 + DECIMAL_STR_MAX(pid_t) + 4];
-        struct iovec iovec[5] = {};
+        struct iovec iovec[6] = {};
+        size_t total;
 
         if (kmsg_fd < 0)
                 return 0;
@@ -386,7 +393,25 @@ static int write_to_kmsg(
         IOVEC_SET_STRING(iovec[1], program_invocation_short_name);
         IOVEC_SET_STRING(iovec[2], header_pid);
         IOVEC_SET_STRING(iovec[3], buffer);
-        IOVEC_SET_STRING(iovec[4], "\n");
+        IOVEC_SET_STRING(iovec[4], "");
+        IOVEC_SET_STRING(iovec[5], "\n");
+
+        /* Unlike systemd, which then gives up on /dev/kmsg, and writes this and all later messages to the
+         * console, cut a message that does not fit into a record, at the start of a UTF-8 character, and
+         * mark it as cut. The other log targets get the whole message. */
+        total = IOVEC_TOTAL_SIZE(iovec, ELEMENTSOF(iovec));
+        if (total > KMSG_RECORD_MAX) {
+                size_t excess = total - KMSG_RECORD_MAX + STRLEN(KMSG_TRUNCATED);
+
+                if (excess < iovec[3].iov_len) {
+                        size_t n = iovec[3].iov_len - excess;
+
+                        while (n > 0 && ((unsigned char) buffer[n] & 0xc0) == 0x80)
+                                n--;
+                        iovec[3].iov_len = n;
+                        IOVEC_SET_STRING(iovec[4], KMSG_TRUNCATED);
+                }
+        }
 
         if (writev(kmsg_fd, iovec, ELEMENTSOF(iovec)) < 0)
                 return -errno;
@@ -466,11 +491,10 @@ static int log_dispatch(
 
 /* The longest message that is logged whole. The messages about applying a udev rule start with the
  * device, the rules file and its line, and the key with its value, which can be as long as a rule, 16383
- * characters, and up to four times that when C-escaped, and the message itself may contain a value of up
+ * characters, and up to four times that when escaped, and the message itself may contain a value of up
  * to 16 KiB again, e.g. a command; 128 KiB is enough for all of them. Other messages are much shorter;
  * one that does not fit into LINE_MAX is formatted again into a buffer of its size. The kernel refuses
- * records of more than 1 KiB in /dev/kmsg, though; a longer message is written to the console then, like
- * with any other error of /dev/kmsg. */
+ * records of more than 1 KiB in /dev/kmsg, though; a longer message is cut there, see write_to_kmsg(). */
 #define LOG_MESSAGE_MAX (128U * 1024U)
 
 int log_internalv(
