@@ -135,7 +135,10 @@ static int adm_settle(struct udev *udev, int argc, char *argv[]) {
                 struct udev_ctrl *uctrl;
 
                 uctrl = udev_ctrl_new(udev);
-                if (uctrl != NULL) {
+                if (uctrl == NULL)
+                        /* as before, wait for the queue without the ping */
+                        log_error_errno(errno > 0 ? errno : ENOMEM, "Failed to initialize udev control: %m");
+                else {
                         usec_t ping_usec = MAX(5 * USEC_PER_SEC, timeout_usec);
                         int ping_timeout;
 

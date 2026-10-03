@@ -2216,7 +2216,7 @@ int main(int argc, char *argv[]) {
         /* open control and netlink socket */
         udev_ctrl = udev_ctrl_new(udev);
         if (!udev_ctrl) {
-                r = log_error_errno(EINVAL, "error initializing udev control socket");
+                r = log_error_errno(errno > 0 ? errno : ENOMEM, "error initializing udev control socket: %m");
                 goto exit;
         }
         fd_ctrl = udev_ctrl_get_fd(udev_ctrl);

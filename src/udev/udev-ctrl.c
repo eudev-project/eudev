@@ -89,8 +89,10 @@ struct udev_ctrl *udev_ctrl_new_from_fd(struct udev *udev, int fd) {
         if (fd < 0) {
                 uctrl->sock = socket(AF_LOCAL, SOCK_SEQPACKET|SOCK_NONBLOCK|SOCK_CLOEXEC, 0);
                 if (uctrl->sock < 0) {
-                        log_error_errno(errno, "error getting socket: %m");
+                        /* the caller logs the error, with errno */
+                        r = errno;
                         udev_ctrl_unref(uctrl);
+                        errno = r;
                         return NULL;
                 }
         } else {
