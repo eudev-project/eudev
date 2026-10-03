@@ -25,7 +25,7 @@ Most of eudev comes from udev of systemd, whose files carry the same licenses.
    - rule_generator/rule_generator.functions and
      rule_generator/write_net_rules.in
    - test/test-collect.c, which includes src/collect/collect.c
-   - test/rule-syntax-check.py, hwdb.d/dedup-hwdb.py and
+   - test/rule-syntax-check.py, test/hwdb-test.sh, hwdb.d/dedup-hwdb.py and
      tools/gen-80-net-name-slot.py
 
  * **LGPL-2.1-or-later** (GNU Lesser General Public License v2.1 or later,
