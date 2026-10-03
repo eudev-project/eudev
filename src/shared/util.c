@@ -2320,7 +2320,8 @@ char *strjoin(const char *x, ...) {
                                 break;
 
                         n = strlen(t);
-                        if (n > ((size_t) -1) - l) {
+                        /* l+n and the terminating NUL must not overflow */
+                        if (n >= ((size_t) -1) - l) {
                                 va_end(ap);
                                 return NULL;
                         }
