@@ -3268,7 +3268,9 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                               struct udev_list *properties_list,
                               const sigset_t *sigmask) {
         struct token *cur;
-        struct token *rule;
+        /* the first token is the one of a rule, or the end, so this is set before it is used; the
+         * initialization keeps compilers from warning that it may be used uninitialized */
+        struct token *rule = NULL;
         enum escape_type esc = ESCAPE_UNSET;
         bool has_node = false, is_netif = false;
         bool ok;
@@ -3286,7 +3288,6 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
 
         /* loop through token list, match, run actions or forward to next rule */
         cur = &rules->tokens[0];
-        rule = cur;
         for (;;) {
                 dump_token(rules, cur);
                 switch (cur->type) {
@@ -4312,14 +4313,14 @@ finish:
 int udev_rules_assigning_name_to(struct udev_rules *rules, const char *match_name)
 {
         struct token *cur;
-        struct token *rule;
+        /* set by the first token, see udev_rules_apply_to_event() */
+        struct token *rule = NULL;
 
         if (rules->tokens == NULL)
                 return 0;
 
         /* loop through token list, match, run actions or forward to next rule */
         cur = &rules->tokens[0];
-        rule = cur;
         for (;;) {
                 dump_token(rules, cur);
                 switch (cur->type) {
