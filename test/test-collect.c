@@ -5,7 +5,7 @@
  *
  * A NUL byte after a separator made checkout() move its pointer before the start of its buffer and read
  * there (heap-buffer-overflow with AddressSanitizer), and a NUL byte after a word made it drop the rest of
- * the file.
+ * the file. When the buffer grew for a long ID, the IDs before it were added twice.
  */
 
 /* the functions of collect, which are static, with its main() renamed */
@@ -70,6 +70,9 @@ int main(void) {
         r |= TEST_CHECKOUT("empty", "", "");
         r |= TEST_CHECKOUT("plain", "aaaa bbbb cccc\n", "aaaa bbbb cccc");
         r |= TEST_CHECKOUT("separators", " \t aaaa\n\nbbbb\r\ncccc  ", "aaaa bbbb cccc");
+        r |= TEST_CHECKOUT("long word after short ones, the buffer grows",
+                           "aa bb cccccccccccccccccccccccccccccccccccccccc dd\n",
+                           "aa bb cccccccccccccccccccccccccccccccccccccccc dd");
         r |= TEST_CHECKOUT("word longer than the buffer",
                            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa bb cc\n",
                            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa bb cc");

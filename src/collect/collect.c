@@ -206,6 +206,8 @@ static int checkout(int fd)
                                 if (debug)
                                         fprintf(stderr, "ID overflow, restarting with size %zu\n", bufsize);
                                 free(buf);
+                                /* the IDs found so far are read again */
+                                kickall();
                                 lseek(fd, 0, SEEK_SET);
                                 goto restart;
                         }
