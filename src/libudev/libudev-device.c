@@ -1464,6 +1464,8 @@ static int parse_devnum_id(const char *s, dev_t *ret)
  *
  * Like in systemd, an ID that is not valid fails with EINVAL, or ERANGE for a device
  * number that is too large, and the ID of a device that does not exist with ENODEV.
+ * When the network interface of the index was renamed or replaced in the meantime, the
+ * call fails with ENXIO.
  *
  * The initial refcount is 1, and needs to be decremented to
  * release the resources of the udev device.
@@ -1482,7 +1484,7 @@ _public_ struct udev_device *udev_device_new_from_device_id(struct udev *udev, c
 
         /* Like sd_device_new_from_device_id() of systemd, an ID that is not valid fails with EINVAL, or
          * ERANGE for a device number that is too large, and one of a device that does not exist with
-         * ENODEV. */
+         * ENODEV, or ENXIO for an interface index that no longer has the name. */
         switch(id[0]) {
         case 'b':
         case 'c': {
@@ -1496,6 +1498,7 @@ _public_ struct udev_device *udev_device_new_from_device_id(struct udev *udev, c
                 return udev_device_new_from_devnum(udev, id[0], devnum);
         }
         case 'n': {
+                _cleanup_free_ char *path = NULL;
                 int sk;
                 struct ifreq ifr;
                 struct udev_device *dev;
@@ -1523,19 +1526,26 @@ _public_ struct udev_device *udev_device_new_from_device_id(struct udev *udev, c
                 }
                 close(sk);
 
-                dev = udev_device_new_from_subsystem_sysname(udev, "net", ifr.ifr_name);
+                /* like sd_device_new_from_ifindex() of systemd: the device of the interface name, which
+                 * must still have the index, otherwise the interface was renamed in the meantime */
+                path = strjoin("/sys/class/net/", ifr.ifr_name, NULL);
+                if (!path) {
+                        errno = ENOMEM;
+                        return NULL;
+                }
+                dev = udev_device_new_from_syspath(udev, path);
                 if (dev == NULL)
                         return NULL;
                 if (udev_device_get_ifindex(dev) == ifindex)
                         return dev;
 
-                /* this is racy, so we may end up with the wrong device */
                 udev_device_unref(dev);
-                errno = ENODEV;
+                errno = ENXIO;
                 return NULL;
         }
         case '+': {
-                _cleanup_free_ char *subsys = NULL;
+                _cleanup_free_ char *subsys = NULL, *sysname = NULL;
+                char *p;
 
                 sep = strchr(id + 1, ':');
                 if (!sep || sep[1] == '\0') {
@@ -1544,11 +1554,19 @@ _public_ struct udev_device *udev_device_new_from_device_id(struct udev *udev, c
                 }
 
                 subsys = strndup(id + 1, sep - id - 1);
-                if (!subsys) {
+                sysname = strdup(sep + 1);
+                if (!subsys || !sysname) {
                         errno = ENOMEM;
                         return NULL;
                 }
-                return udev_device_new_from_subsystem_sysname(udev, subsys, sep + 1);
+
+                /* Like systemd: the device ID has the name of the directory of the device, which may contain
+                 * '!', while udev_device_new_from_subsystem_sysname() takes the sysname, with '/' instead. */
+                for (p = sysname; *p; p++)
+                        if (*p == '!')
+                                *p = '/';
+
+                return udev_device_new_from_subsystem_sysname(udev, subsys, sysname);
         }
         default:
                 errno = EINVAL;
@@ -1589,17 +1607,60 @@ static bool name_is_normalized(const char *p)
         return true;
 }
 
-/* Sets path to the concatenation of the strings, and returns true if that exists. A path that does not fit
- * into path does not exist either, it would be too long for stat(). */
-#define sys_path_exists(path, statbuf, ...)                                                    \
-        ({                                                                                      \
-                bool _truncated;                                                                \
-                                                                                                \
-                strscpyl_full(path, sizeof(path), &_truncated, __VA_ARGS__, NULL);             \
-                if (_truncated)                                                                 \
-                        errno = ENOENT;                                                         \
-                !_truncated && stat(path, statbuf) == 0;                                        \
-        })
+/* Like device_new_from_path_join() of systemd: looks up the device at the path joined from a, b, c and d,
+ * and checks that it really has the requested subsystem (no subsystem when it is NULL), the requested
+ * subsystem of the driver for a device of the "drivers" pseudo-subsystem (none for other devices), and the
+ * requested sysname. Returns 1 when the device matches and is stored in *device, or matches the one stored
+ * there already; 0 when there is no such device; -ETOOMANYREFS when a different device was found before,
+ * as the subsystem and sysname are not unique, e.g. /sys/bus/gpio/devices/gpiochip0 and
+ * /sys/class/gpio/gpiochip0; or another error of udev_device_new_from_syspath(). */
+static int device_new_from_path_join(struct udev *udev, struct udev_device **device,
+                                     const char *subsystem, const char *driver_subsystem, const char *sysname,
+                                     const char *a, const char *b, const char *c, const char *d)
+{
+        _cleanup_free_ char *p = NULL, *new_driver_subsystem = NULL;
+        struct udev_device *new_device;
+        int r;
+
+        assert(device);
+        assert(sysname);
+
+        p = path_join(a, b, c, d);
+        if (!p)
+                return -ENOMEM;
+
+        new_device = udev_device_new_from_syspath(udev, p);
+        if (!new_device)
+                return errno == ENODEV ? 0 : -errno;
+
+        r = 0;
+        if (!streq_ptr(udev_device_get_subsystem(new_device), subsystem))
+                goto finish;
+
+        (void) device_get_driver_subsystem(new_device, &new_driver_subsystem);
+        if (!streq_ptr(driver_subsystem, new_driver_subsystem))
+                goto finish;
+
+        if (!streq_ptr(udev_device_get_sysname(new_device), sysname))
+                goto finish;
+
+        /* the first device that is found is taken */
+        r = 1;
+        if (!*device) {
+                *device = new_device;
+                return r;
+        }
+
+        /* if one was found before, it must be the same */
+        if (!streq(udev_device_get_devpath(*device), udev_device_get_devpath(new_device)))
+                r = log_debug_errno(ETOOMANYREFS,
+                                    "found multiple devices for subsystem=%s and sysname=%s, refusing: %s, %s",
+                                    strna(subsystem), sysname, udev_device_get_devpath(*device),
+                                    udev_device_get_devpath(new_device));
+finish:
+        udev_device_unref(new_device);
+        return r;
+}
 
 /**
  * udev_device_new_from_subsystem_sysname:
@@ -1611,107 +1672,102 @@ static bool name_is_normalized(const char *p)
  * and the udev database entry. The device is looked up by the subsystem
  * and name string of the device, like "mem" / "zero", or "block" / "sda".
  *
+ * Like in systemd, the device is looked up below /sys/bus and /sys/class,
+ * and below /sys/firmware for a device without a subsystem, e.g.
+ * "devicetree" / "base", and the device that is found must have the
+ * requested subsystem and name. A device that does not exist fails with
+ * ENODEV; when two different devices are found, e.g. one below /sys/bus
+ * and one below /sys/class, the call fails with ETOOMANYREFS.
+ *
  * The initial refcount is 1, and needs to be decremented to
  * release the resources of the udev device.
  *
  * Returns: a new udev device, or #NULL, if it does not exist
  **/
-_public_ struct udev_device *udev_device_new_from_subsystem_sysname(struct udev *udev, const char *subsystem, const char *sysname_in)
+_public_ struct udev_device *udev_device_new_from_subsystem_sysname(struct udev *udev, const char *subsystem, const char *sysname)
 {
-        _cleanup_free_ char *sysname = NULL;
-        char path[PATH_MAX];
-        struct stat statbuf;
+        _cleanup_free_ char *name = NULL;
+        struct udev_device *device = NULL;
         char *p;
+        int r;
 
-        if (subsystem == NULL || sysname_in == NULL ||
-            !name_is_normalized(subsystem) || !name_is_normalized(sysname_in)) {
+        if (subsystem == NULL || sysname == NULL ||
+            !name_is_normalized(subsystem) || !name_is_normalized(sysname)) {
                 errno = EINVAL;
                 return NULL;
         }
 
-        /* Like systemd, which accepts a leading '/' in the subsystem, but then finds no device, as it checks
-         * that the subsystem of the device it found is the requested one. */
-        if (subsystem[0] == '/') {
-                errno = ENODEV;
-                return NULL;
-        }
-
-        /* translate sysname back to sysfs filename, like systemd also for the special subsystems below */
-        sysname = strdup(sysname_in);
-        if (!sysname) {
+        /* translate sysname back to sysfs filename */
+        name = strdup(sysname);
+        if (!name) {
                 errno = ENOMEM;
                 return NULL;
         }
-        for (p = sysname; *p != '\0'; p++)
+        for (p = name; *p != '\0'; p++)
                 if (*p == '/')
                         *p = '!';
 
+        /* Like sd_device_new_from_subsystem_sysname() of systemd: the special subsystems are looked up in
+         * their directories first, then every subsystem in the directories of devices */
         if (streq(subsystem, "subsystem")) {
-                if (sys_path_exists(path, &statbuf, "/sys/subsystem/", sysname))
-                        goto found;
+                r = device_new_from_path_join(udev, &device, subsystem, NULL, sysname, "/sys/bus/", name, NULL, NULL);
+                if (r >= 0)
+                        r = device_new_from_path_join(udev, &device, subsystem, NULL, sysname, "/sys/class/", name, NULL, NULL);
+                if (r < 0)
+                        goto fail;
 
-                if (sys_path_exists(path, &statbuf, "/sys/bus/", sysname))
-                        goto found;
+        } else if (streq(subsystem, "module")) {
+                r = device_new_from_path_join(udev, &device, subsystem, NULL, sysname, "/sys/module/", name, NULL, NULL);
+                if (r < 0)
+                        goto fail;
 
-                if (sys_path_exists(path, &statbuf, "/sys/class/", sysname))
-                        goto found;
-                goto out;
-        }
+        } else if (streq(subsystem, "drivers")) {
+                char *sep;
 
-        if (streq(subsystem, "module")) {
-                if (sys_path_exists(path, &statbuf, "/sys/module/", sysname))
-                        goto found;
-                goto out;
-        }
+                /* require a ':' and something non-empty after it */
+                sep = strchr(name, ':');
+                if (sep && sep[1] != '\0') {
+                        const char *subsys = name;
 
-        if (streq(subsystem, "drivers")) {
-                const char *subsys = sysname;
-                char *driver;
-
-                driver = strchr(sysname, ':');
-                /* like systemd, a driver must follow the ':' */
-                if (driver != NULL && driver[1] != '\0') {
-                        driver[0] = '\0';
-                        driver = &driver[1];
+                        *(sep++) = '\0';
 
                         /* If the sysname is "drivers", then it's the drivers directory itself that is meant. */
-                        if (streq(driver, "drivers")) {
-                                if (sys_path_exists(path, &statbuf, "/sys/subsystem/", subsys, "/drivers"))
-                                        goto found;
-
-                                if (sys_path_exists(path, &statbuf, "/sys/bus/", subsys, "/drivers"))
-                                        goto found;
-
-                                goto out;
-                        }
-
-                        if (sys_path_exists(path, &statbuf, "/sys/subsystem/", subsys, "/drivers/", driver))
-                                goto found;
-
-                        if (sys_path_exists(path, &statbuf, "/sys/bus/", subsys, "/drivers/", driver))
-                                goto found;
-                } else
-                        /* like systemd, no such driver */
-                        errno = ENODEV;
-
-                goto out;
+                        if (streq(sep, "drivers"))
+                                r = device_new_from_path_join(udev, &device, subsystem, subsys, "drivers",
+                                                              "/sys/bus/", subsys, "/drivers", NULL);
+                        else
+                                r = device_new_from_path_join(udev, &device, subsystem, subsys, sysname + (sep - name),
+                                                              "/sys/bus/", subsys, "/drivers/", sep);
+                        sep[-1] = ':';
+                        if (r < 0)
+                                goto fail;
+                }
         }
 
-        if (sys_path_exists(path, &statbuf, "/sys/subsystem/", subsystem, "/devices/", sysname))
-                goto found;
+        r = device_new_from_path_join(udev, &device, subsystem, NULL, sysname, "/sys/bus/", subsystem, "/devices/", name);
+        if (r < 0)
+                goto fail;
 
-        if (sys_path_exists(path, &statbuf, "/sys/bus/", subsystem, "/devices/", sysname))
-                goto found;
+        r = device_new_from_path_join(udev, &device, subsystem, NULL, sysname, "/sys/class/", subsystem, name, NULL);
+        if (r < 0)
+                goto fail;
 
-        if (sys_path_exists(path, &statbuf, "/sys/class/", subsystem, "/", sysname))
-                goto found;
-out:
-        /* like systemd, a device that does not exist is ENODEV */
-        if (IN_SET(errno, ENOENT, ENOTDIR))
+        /* Note that devices under /sys/firmware/ (e.g. /sys/firmware/devicetree/base/) do not have
+         * subsystem. Hence, pass NULL for subsystem. See issue #35861 of systemd. */
+        r = device_new_from_path_join(udev, &device, NULL, NULL, sysname, "/sys/firmware/", subsystem, name, NULL);
+        if (r < 0)
+                goto fail;
+
+        if (!device) {
                 errno = ENODEV;
+                return NULL;
+        }
+
+        return device;
+fail:
+        udev_device_unref(device);
+        errno = -r;
         return NULL;
-found:
-        return udev_device_new_from_syspath(udev, path);
 }
 
 /**
