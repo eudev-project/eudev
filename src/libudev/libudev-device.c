@@ -1153,6 +1153,7 @@ static int udev_device_handle_uevent_line(struct udev_device *udev_device, const
 static int udev_device_read_uevent_file(struct udev_device *udev_device)
 {
         _cleanup_free_ char *filename = NULL, *uevent = NULL;
+        size_t size;
         char *p;
         int r;
 
@@ -1162,7 +1163,10 @@ static int udev_device_read_uevent_file(struct udev_device *udev_device)
         filename = strjoin(udev_device->syspath, "/uevent", NULL);
         if (!filename)
                 return -ENOMEM;
-        r = read_full_file(filename, &uevent, NULL);
+        /* Read like an attribute, with read_virtual_file(), as systemd does, which unlike systemd opens the
+         * file with O_NONBLOCK and refuses anything but a regular file, so that e.g. a FIFO named "uevent" in
+         * a directory used as /sys for tests does not block. Like in systemd, the content ends at a NUL. */
+        r = read_virtual_file(filename, SIZE_MAX, &uevent, &size);
         if (r == -EACCES)
                 /* empty uevent files may be write-only */
                 return 0;
