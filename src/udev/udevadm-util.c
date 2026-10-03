@@ -501,8 +501,10 @@ int parse_device_action(const char *str, const char **ret) {
         }
 
         a = device_action_from_string(str);
-        if (a < 0)
+        if (a < 0) {
+                log_error("Invalid action '%s'.", str);
                 return a;
+        }
 
         *ret = device_action_table[a];
         return 1;

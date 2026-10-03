@@ -653,10 +653,8 @@ static int adm_trigger(struct udev *udev, int argc, char *argv[]) {
                         break;
                 case 'c':
                         r = parse_device_action(optarg, &action);
-                        if (r < 0) {
-                                log_error("unknown action '%s'", optarg);
-                                return 2;
-                        }
+                        if (r < 0)
+                                return 1;
                         if (r == 0)
                                 return 0;
                         break;

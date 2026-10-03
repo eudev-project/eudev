@@ -59,7 +59,7 @@ int parse_json_argument(const char *s, JsonFormatFlags *ret);
 int device_action_from_string(const char *s);
 
 /* Like systemd's parse_device_action(): returns 1 and the action if str is one, 0 after listing the
- * actions for "help", and -EINVAL otherwise. */
+ * actions for "help", and -EINVAL after logging "Invalid action 'str'." otherwise. */
 int parse_device_action(const char *str, const char **ret);
 
 /* The last line of the help texts, like systemd's: "See the udevadm(8) man page for details.",

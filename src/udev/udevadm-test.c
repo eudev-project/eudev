@@ -94,10 +94,8 @@ static int adm_test(struct udev *udev, int argc, char *argv[]) {
                 switch (c) {
                 case 'a':
                         r = parse_device_action(optarg, &action);
-                        if (r < 0) {
-                                log_error("Invalid action '%s'.", optarg);
+                        if (r < 0)
                                 exit(EXIT_FAILURE);
-                        }
                         if (r == 0)
                                 exit(EXIT_SUCCESS);
                         break;
