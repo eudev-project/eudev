@@ -2309,9 +2309,9 @@ static int sysattr_check_path(const char *path, char **ret_resolved)
 
         r = sysfs_resolve(path, &resolved);
         if (r == -ENODEV)
-                r = -EINVAL; /* like systemd */
+                r = -EINVAL; /* like systemd, also without a message */
         if (r < 0)
-                return log_debug_errno(r, "refusing sysfs attribute %s: %m", path);
+                return r;
 
         if (ret_resolved)
                 *ret_resolved = TAKE_PTR(resolved);
