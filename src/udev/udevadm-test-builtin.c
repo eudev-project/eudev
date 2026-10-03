@@ -31,6 +31,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
+#include "netif-naming-scheme.h"
 #include "pager.h"
 #include "udev.h"
 #include "udevadm-util.h"
@@ -97,6 +98,9 @@ static int adm_builtin(struct udev *udev, int argc, char *argv[]) {
 
         command = argv[optind++];
         syspath = argv[optind++];
+
+        /* like udevadm test, the naming scheme that the init hook of net_id logs */
+        naming_scheme_set_log_level(LOG_DEBUG);
 
         udev_builtin_init(udev);
 
