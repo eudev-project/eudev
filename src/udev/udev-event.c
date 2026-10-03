@@ -1368,18 +1368,26 @@ static void netif_update_device(struct udev_device *dev, const char *name) {
 
 #ifdef ENABLE_RULE_GENERATOR
 /* Builds the temporary iface name, used when the current name is assigned to another device: a name that
- * ends with its only number, like eth5, gets the number 128 - ifindex instead, e.g. eth126. Other names, e.g.
- * with no number or with digits in the middle like enp0s3, stay as they are, i.e. are not renamed to a
- * temporary name. */
+ * ends with its only number, like eth5, gets a number derived from the ifindex instead, which is unique to
+ * every interface: 128 - ifindex below 128, e.g. eth126 for ifindex 2, and the ifindex itself from 128 on, so
+ * that the number never is negative or 0, and never is the one of another interface. Other names, e.g. with
+ * no number or with digits in the middle like enp0s3, stay as they are, i.e. are not renamed to a temporary
+ * name; and so does a name where the number does not fit. */
 static void netif_tmp_name(struct udev_device *dev, char newifname[IFNAMSIZ]) {
+        int ifindex = udev_device_get_ifindex(dev);
         char *pos, *newpos;
+        int n;
 
         strscpy(newifname, IFNAMSIZ, udev_device_get_sysname(dev));
         newpos=pos=&newifname[strcspn(newifname,"0123456789")];
         (void) strtol(pos,&newpos,10);
-        if (newpos > pos && *newpos == '\0') /* append new iface num to name */
-                /* use udev_device_get_ifindex(dev) as it is unique to every iface */
-                snprintf(pos,IFNAMSIZ+(newifname-pos), "%d", 128 - udev_device_get_ifindex(dev));
+        if (newpos == pos || *newpos != '\0')
+                return;
+
+        /* replace the number */
+        n = snprintf(pos, IFNAMSIZ - (pos - newifname), "%d", ifindex < 128 ? 128 - ifindex : ifindex);
+        if (n < 0 || n >= IFNAMSIZ - (pos - newifname))
+                strscpy(newifname, IFNAMSIZ, udev_device_get_sysname(dev));
 }
 #endif
 
