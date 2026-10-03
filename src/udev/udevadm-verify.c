@@ -33,24 +33,6 @@ static void help(void) {
         print_man_page_link();
 }
 
-/* Like systemd's parse_resolve_name_timing(): returns 1 if parsed, 0 for "help", and a
- * negative error otherwise. */
-static int parse_resolve_names(const char *s, int *ret) {
-        if (streq(s, "help")) {
-                puts("never\n"
-                     "late\n"
-                     "early");
-                return 0;
-        }
-
-        if (udev_parse_resolve_names(s, ret) < 0) {
-                log_error("--resolve-names= must be 'early', 'late', or 'never'.");
-                return -EINVAL;
-        }
-
-        return 1;
-}
-
 static int parse_argv(int argc, char *argv[]) {
         enum {
                 ARG_ROOT = 0x100,
@@ -78,7 +60,7 @@ static int parse_argv(int argc, char *argv[]) {
                         printf("%s\n", UDEV_VERSION);
                         return 0;
                 case 'N':
-                        r = parse_resolve_names(optarg, &arg_resolve_names);
+                        r = parse_resolve_name_timing(optarg, &arg_resolve_names);
                         if (r <= 0)
                                 return r;
                         break;

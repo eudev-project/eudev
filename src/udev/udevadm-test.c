@@ -88,8 +88,6 @@ static int adm_test(struct udev *udev, int argc, char *argv[]) {
                 {}
         };
 
-        log_debug("version %s (udev %s)", VERSION, UDEV_VERSION);
-
         while((c = getopt_long(argc, argv, "a:N:D:vhV", options, NULL)) >= 0)
                 switch (c) {
                 case 'a':
@@ -100,10 +98,11 @@ static int adm_test(struct udev *udev, int argc, char *argv[]) {
                                 exit(EXIT_SUCCESS);
                         break;
                 case 'N':
-                        if (udev_parse_resolve_names(optarg, &resolve_names) < 0) {
-                                log_error("--resolve-names= must be 'early', 'late', or 'never'.");
+                        r = parse_resolve_name_timing(optarg, &resolve_names);
+                        if (r < 0)
                                 exit(EXIT_FAILURE);
-                        }
+                        if (r == 0)
+                                exit(EXIT_SUCCESS);
                         break;
                 case 'D': {
                         char *p;
@@ -148,6 +147,9 @@ static int adm_test(struct udev *udev, int argc, char *argv[]) {
                 rc = EXIT_FAILURE;
                 goto out;
         }
+
+        /* after the arguments are checked, like systemd, which parses them first */
+        log_debug("version %s (udev %s)", VERSION, UDEV_VERSION);
 
         log_info("This program is for debugging only, it does not run any program\n"
                  "specified by a RUN key. It may show incorrect results, because\n"

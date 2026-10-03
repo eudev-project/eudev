@@ -510,6 +510,25 @@ int parse_device_action(const char *str, const char **ret) {
         return 1;
 }
 
+int parse_resolve_name_timing(const char *str, int *ret) {
+        assert(str);
+        assert(ret);
+
+        if (streq(str, "help")) {
+                puts("never\n"
+                     "late\n"
+                     "early");
+                return 0;
+        }
+
+        if (udev_parse_resolve_names(str, ret) < 0) {
+                log_error("--resolve-names= must be 'early', 'late', or 'never'.");
+                return -EINVAL;
+        }
+
+        return 1;
+}
+
 void print_man_page_link(void) {
         _cleanup_free_ char *link = NULL;
 

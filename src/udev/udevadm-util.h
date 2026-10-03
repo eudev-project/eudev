@@ -62,6 +62,11 @@ int device_action_from_string(const char *s);
  * actions for "help", and -EINVAL after logging "Invalid action 'str'." otherwise. */
 int parse_device_action(const char *str, const char **ret);
 
+/* Like systemd's parse_resolve_name_timing(): returns 1 and the value of --resolve-names= as
+ * udev_rules_new() takes it, see udev_parse_resolve_names(), 0 after listing the values for "help",
+ * and -EINVAL after logging an error otherwise. */
+int parse_resolve_name_timing(const char *str, int *ret);
+
 /* The last line of the help texts, like systemd's: "See the udevadm(8) man page for details.",
  * with a link to the man page if links are enabled. */
 void print_man_page_link(void);
