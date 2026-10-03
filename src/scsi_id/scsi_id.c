@@ -128,26 +128,20 @@ static int get_file_options(struct udev *udev __attribute__((unused)),
 {
         _cleanup_free_ char *vendor_in = NULL, *model_in = NULL, *options_in = NULL; /* read in from file */
         _cleanup_strv_free_ char **options_argv = NULL;
-        _cleanup_fclose_ FILE *f = NULL;
-        int lineno, r;
+        int r;
 
-        f = fopen(config_file, "re");
+        *newargv = NULL;
+
+        _cleanup_fclose_ FILE *f = fopen(config_file, "re");
         if (!f) {
                 if (errno == ENOENT)
                         return 1;
-                else {
-                        log_error_errno(errno, "can't open %s: %m", config_file);
-                        return -1;
-                }
+                return log_error_errno(errno, "Cannot open %s: %m", config_file);
         }
 
-        *newargv = NULL;
-        lineno = 0;
-        for (;;) {
+        for (int lineno = 0;;) {
                 _cleanup_free_ char *buffer = NULL, *key = NULL, *value = NULL;
                 const char *buf;
-
-                vendor_in = model_in = options_in = NULL;
 
                 r = read_line(f, MAX_BUFFER_LEN, &buffer);
                 if (r < 0)
@@ -220,17 +214,14 @@ static int get_file_options(struct udev *udev __attribute__((unused)),
 
         }
 
-        if (vendor_in == NULL && model_in == NULL && options_in == NULL)
+        if (!vendor_in && !model_in && !options_in)
                 return 1; /* No matches  */
 
-        /*
-        * Something matched. Allocate newargv, and store
-        * values found in options_in.
-        */
+        /* Something matched. Allocate newargv, and store values found in options_in. */
         options_argv = strv_split(options_in, " \t");
         if (!options_argv)
                 return log_oom();
-        r = strv_prepend(&options_argv, ""); /* getopt skips over argv[0] */
+        r = strv_prepend(&options_argv, ""); /* argv[0] is skipped */
         if (r < 0)
                 return r;
         *newargv = TAKE_PTR(options_argv);
