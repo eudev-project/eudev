@@ -33,7 +33,9 @@ from the hwdb.d directory of systemd:
                              20-acpi-vendor.hwdb.patch
 
 'make regenerate-hwdb' in the build tree generates them again in the source
-directory, which needs python3 with pyparsing, and patch. Unlike systemd,
+directory, which needs python3 with pyparsing, and patch. The files are made
+in a work directory and replace the ones in the source directory only when
+all of them could be made. Unlike systemd,
 eudev then drops the registry entries of the ids that
 20-acpi-vendor.hwdb.patch adds again (dedup-hwdb.py), as the later entries of
 the patch override them anyway, so that no id is listed twice. The patch

@@ -64,23 +64,42 @@ PYTHON3 = python3
 # Regenerates the 20-*.hwdb files that are generated from the sources above, in the source directory, as
 # tools/update-hwdb.sh of systemd does without downloading the sources first (-n), but without updating
 # 20-acpi-vendor.hwdb.patch. The entries of this hand-made patch override registry entries of the same ids,
-# so those are dropped. The intermediate files are removed also when a step fails.
-acpi_intermediate = \
-	20-acpi-vendor.hwdb.base \
-	20-acpi-vendor.hwdb.patched \
-	20-acpi-vendor.hwdb.patched.orig \
-	20-acpi-vendor.hwdb.patched.rej \
-	20-acpi-vendor.hwdb.new
+# so those are dropped. ids_parser.py writes its results into the current directory, so all the files are
+# made in a work directory below the build directory, from copies of the sources, and moved into the
+# source directory only when all of them were made: when a step fails, the source directory stays as it
+# was. The work directory is removed in any case.
+hwdb_sources = \
+	usb.ids \
+	pci.ids \
+	sdio.ids \
+	ma-large.txt \
+	ma-medium.txt \
+	ma-small.txt \
+	acpi_id_registry.csv \
+	pnp_id_registry.csv
+
+hwdb_generated = \
+	20-usb-vendor-model.hwdb \
+	20-usb-classes.hwdb \
+	20-pci-vendor-model.hwdb \
+	20-pci-classes.hwdb \
+	20-sdio-vendor-model.hwdb \
+	20-sdio-classes.hwdb \
+	20-OUI.hwdb \
+	20-acpi-vendor.hwdb
 
 regenerate-hwdb:
-	cd $(srcdir) && { \
-		$(PYTHON3) ./ids_parser.py && \
-		$(PYTHON3) ./acpi-update.py > 20-acpi-vendor.hwdb.base && \
-		patch -p0 -o 20-acpi-vendor.hwdb.patched 20-acpi-vendor.hwdb.base < 20-acpi-vendor.hwdb.patch && \
-		$(PYTHON3) ./dedup-hwdb.py < 20-acpi-vendor.hwdb.patched > 20-acpi-vendor.hwdb.new && \
-		mv 20-acpi-vendor.hwdb.new 20-acpi-vendor.hwdb; \
-		r=$$?; rm -f $(acpi_intermediate); exit $$r; \
-	}
+	src=`cd $(srcdir) && pwd` && tmp=`pwd`/regenerate-hwdb.tmp && \
+	trap 'rm -rf "$$tmp"' 0 && trap 'exit 1' 1 2 15 && \
+	rm -rf "$$tmp" && $(MKDIR_P) "$$tmp" && \
+	for f in $(hwdb_sources); do cp "$$src/$$f" "$$tmp/" || exit 1; done && \
+	cd "$$tmp" && \
+	$(PYTHON3) "$$src/ids_parser.py" && \
+	$(PYTHON3) "$$src/acpi-update.py" > 20-acpi-vendor.hwdb.base && \
+	patch -p0 -o 20-acpi-vendor.hwdb.patched 20-acpi-vendor.hwdb.base < "$$src/20-acpi-vendor.hwdb.patch" && \
+	$(PYTHON3) "$$src/dedup-hwdb.py" < 20-acpi-vendor.hwdb.patched > 20-acpi-vendor.hwdb && \
+	for f in $(hwdb_generated); do test -f $$f || exit 1; done && \
+	mv -f $(hwdb_generated) "$$src/"
 
 # Checks the hwdb files with parse_hwdb.py, as the parse-hwdb test of systemd does: 20-dmi-id.hwdb,
 # 20-net-ifname.hwdb and the 60-*, 70-* and 80-* files. Its grammar does not cover the other 20-*.hwdb files.
