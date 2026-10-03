@@ -127,6 +127,14 @@ static unsigned parse_line_nr = 0;
 /* Like log_event_trace() of systemd: a debug message only in trace mode, see struct udev_event. */
 #define log_event_trace(event, rules, rule, tok, ...)                                             \
         ((event)->trace ? log_event_debug(event, rules, rule, tok, __VA_ARGS__) : 0)
+/* Like log_event_done() of systemd: in trace mode, that an action of the rules was done. */
+#define log_event_done(event, rules, rule, tok)                                                   \
+        log_event_trace(event, rules, rule, tok, "DONE")
+/* Like log_event_final_set() of systemd: in trace mode, that an action of the rules is ignored, as a
+ * final value was assigned before. */
+#define log_event_final_set(event, rules, rule, tok)                                              \
+        log_event_trace(event, rules, rule, tok, "Already assigned final value, ignoring further %s.", \
+                        (tok)->key.op == OP_REMOVE ? "modification" : "assignment")
 
 #define PREALLOC_TOKEN          2048
 #define IMPORT_PROGRAM_SIZE     (128 * 1024)
@@ -3001,8 +3009,11 @@ static bool apply_format(struct udev_event *event, struct udev_rules *rules, str
         bool truncated = false;
 
         (void) udev_event_apply_format(event, format, result, size, replace_whitespace, properties_list, &truncated);
-        if (!truncated)
+        if (!truncated) {
+                if (event->trace && !streq(format, result))
+                        log_event_trace(event, rules, rule, token, "Format substitution: \"%s\" -> \"%s\"", format, result);
                 return true;
+        }
 
         if (token->type < TK_M_MAX)
                 log_event_debug(event, rules, rule, token,
@@ -3586,26 +3597,33 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                 }
                 case TK_A_STRING_ESCAPE_NONE:
                         esc = ESCAPE_NONE;
+                        log_event_done(event, rules, rule, cur);
                         break;
                 case TK_A_STRING_ESCAPE_REPLACE:
                         esc = ESCAPE_REPLACE;
+                        log_event_done(event, rules, rule, cur);
                         break;
                 case TK_A_DB_PERSIST:
                         udev_device_set_db_persist(event->dev);
+                        log_event_done(event, rules, rule, cur);
                         break;
                 case TK_A_NET_ALTNAMES:
                         event->net_altnames = true;
                         log_event_debug(event, rules, rule, cur, "OPTIONS net_altnames");
                         break;
                 case TK_A_INOTIFY_WATCH:
-                        if (event->inotify_watch_final)
+                        if (event->inotify_watch_final) {
+                                log_event_final_set(event, rules, rule, cur);
                                 break;
+                        }
                         if (cur->key.op == OP_ASSIGN_FINAL)
                                 event->inotify_watch_final = true;
                         event->inotify_watch = cur->key.watch;
+                        log_event_done(event, rules, rule, cur);
                         break;
                 case TK_A_DEVLINK_PRIO:
                         udev_device_set_devlink_priority(event->dev, cur->key.devlink_prio);
+                        log_event_done(event, rules, rule, cur);
                         break;
                 case TK_A_LOG_LEVEL: {
                         int level = cur->key.log_level;
@@ -3632,14 +3650,17 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                                                   udev_device_get_action(event->dev) ?: "n/a");
                                 event->log_level_was_debug = true;
                         }
+                        log_event_done(event, rules, rule, cur);
                         break;
                 }
                 case TK_A_OWNER: {
                         char owner[UTIL_NAME_SIZE];
                         uid_t uid;
 
-                        if (event->owner_final)
+                        if (event->owner_final) {
+                                log_event_final_set(event, rules, rule, cur);
                                 break;
+                        }
                         if (cur->key.op == OP_ASSIGN_FINAL)
                                 event->owner_final = true;
                         if (!apply_format(event, rules, rule, cur, rules_str(rules, cur->key.value_off), owner, sizeof(owner),
@@ -3664,8 +3685,10 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                         char group[UTIL_NAME_SIZE];
                         gid_t gid;
 
-                        if (event->group_final)
+                        if (event->group_final) {
+                                log_event_final_set(event, rules, rule, cur);
                                 break;
+                        }
                         if (cur->key.op == OP_ASSIGN_FINAL)
                                 event->group_final = true;
                         if (!apply_format(event, rules, rule, cur, rules_str(rules, cur->key.value_off), group, sizeof(group),
@@ -3691,8 +3714,10 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                         mode_t mode;
                         int r;
 
-                        if (event->mode_final)
+                        if (event->mode_final) {
+                                log_event_final_set(event, rules, rule, cur);
                                 break;
+                        }
                         /* like systemd, also when the value is not valid */
                         if (cur->key.op == OP_ASSIGN_FINAL)
                                 event->mode_final = true;
@@ -3710,8 +3735,10 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                         break;
                 }
                 case TK_A_OWNER_ID:
-                        if (event->owner_final)
+                        if (event->owner_final) {
+                                log_event_final_set(event, rules, rule, cur);
                                 break;
+                        }
                         if (cur->key.op == OP_ASSIGN_FINAL)
                                 event->owner_final = true;
                         event->owner_set = true;
@@ -3719,8 +3746,10 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                         log_event_debug(event, rules, rule, cur, "Set owner ID: %u", event->uid);
                         break;
                 case TK_A_GROUP_ID:
-                        if (event->group_final)
+                        if (event->group_final) {
+                                log_event_final_set(event, rules, rule, cur);
                                 break;
+                        }
                         if (cur->key.op == OP_ASSIGN_FINAL)
                                 event->group_final = true;
                         event->group_set = true;
@@ -3728,8 +3757,10 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                         log_event_debug(event, rules, rule, cur, "Set group ID: %u", event->gid);
                         break;
                 case TK_A_MODE_ID:
-                        if (event->mode_final)
+                        if (event->mode_final) {
+                                log_event_final_set(event, rules, rule, cur);
                                 break;
+                        }
                         if (cur->key.op == OP_ASSIGN_FINAL)
                                 event->mode_final = true;
                         event->mode_set = true;
@@ -3766,13 +3797,16 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                         int r;
 
                         if (value[0] == '\0') {
-                                if (cur->key.op == OP_ADD)
+                                if (cur->key.op == OP_ADD) {
+                                        log_event_done(event, rules, rule, cur);
                                         break;
+                                }
                                 /* like systemd, a failure stops the processing of the event */
                                 r = udev_device_add_property(event->dev, name, NULL);
                                 if (r < 0)
                                         return log_event_error_errno(event, rules, rule, cur, r,
                                                                      "Failed to remove property \"%s\": %m", name);
+                                log_event_trace(event, rules, rule, cur, "Removed property \"%s\".", name);
                                 break;
                         }
 
@@ -3812,7 +3846,8 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
 
                                 log_event_warning_errno(event, rules, rule, cur, r, "Failed to set property \"%s=%s\", ignoring: %m",
                                                         name, v ?: "");
-                        }
+                        } else
+                                log_event_trace(event, rules, rule, cur, "Set property \"%s=%s\".", name, value_new);
                         break;
                 }
                 case TK_A_TAG: {
@@ -3828,9 +3863,10 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                                         log_event_warning_errno(event, rules, rule, cur, r,
                                                                 "Failed to clear previously assigned tags, ignoring: %m");
                         }
-                        if (cur->key.op == OP_REMOVE)
+                        if (cur->key.op == OP_REMOVE) {
                                 udev_device_remove_tag(event->dev, tag);
-                        else {
+                                log_event_trace(event, rules, rule, cur, "Removed tag \"%s\".", tag);
+                        } else {
                                 r = udev_device_add_tag(event->dev, tag, true);
                                 if (r == -ENOMEM) /* like systemd, this stops the processing of the event */
                                         return log_oom();
@@ -3838,6 +3874,8 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                                 if (r < 0)
                                         log_event_warning_errno(event, rules, rule, cur, r, "Failed to %s tag \"%s\", ignoring: %m",
                                                                 assign ? "set" : "add", tag);
+                                else
+                                        log_event_trace(event, rules, rule, cur, "%s tag \"%s\".", assign ? "Set" : "Added", tag);
                         }
                         break;
                 }
@@ -3847,8 +3885,10 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                         char name_str[UTIL_PATH_SIZE];
                         int count;
 
-                        if (event->name_final)
+                        if (event->name_final) {
+                                log_event_final_set(event, rules, rule, cur);
                                 break;
+                        }
                         if (cur->key.op == OP_ASSIGN_FINAL)
                                 event->name_final = true;
                         /* Like systemd, ignore NAME for a device that is not a network interface; the name of
@@ -3879,8 +3919,10 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                         char *pos, *next;
                         int count = 0;
 
-                        if (event->devlink_final)
+                        if (event->devlink_final) {
+                                log_event_final_set(event, rules, rule, cur);
                                 break;
+                        }
                         if (major(udev_device_get_devnum(event->dev)) == 0) {
                                 log_event_debug(event, rules, rule, cur,
                                                 "Device does not have device node, ignoring to manage device node symlink.");
@@ -3990,8 +4032,10 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                                         log_event_error_errno(event, rules, rule, cur, r,
                                                               "Failed to write \"%s\" to sysfs attribute \"%s\", ignoring: %m",
                                                               value, resolved);
-                                else
+                                else {
                                         event_cache_written_sysattr(event, resolved, value);
+                                        log_event_done(event, rules, rule, cur);
+                                }
                         } else {
                                 log_event_debug(event, rules, rule, cur,
                                                 "Running in test mode, skipping writing \"%s\" to sysfs attribute \"%s\".",
@@ -4058,8 +4102,10 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                                 log_event_error_errno(event, rules, rule, cur, r,
                                                       "Failed to write \"%s\" to sysctl entry \"%s\", ignoring: %m",
                                                       value, filename);
-                        else
+                        else {
                                 event_cache_written_sysctl(event, filename, value);
+                                log_event_done(event, rules, rule, cur);
+                        }
                         break;
                 }
                 case TK_A_RUN_BUILTIN:
@@ -4067,8 +4113,10 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                         struct udev_list_entry *entry;
                         char cmd[UTIL_LINE_SIZE];
 
-                        if (event->run_final)
+                        if (event->run_final) {
+                                log_event_final_set(event, rules, rule, cur);
                                 break;
+                        }
                         if (cur->key.op == OP_ASSIGN_FINAL)
                                 event->run_final = true;
                         if (cur->key.op == OP_ASSIGN || cur->key.op == OP_ASSIGN_FINAL)
@@ -4086,10 +4134,14 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                         udev_list_entry_set_num(entry, cur->key.builtin_cmd);
                         break;
                 }
+                case TK_A_STATIC_NODE:
+                        /* like systemd, nothing to do for events */
+                        break;
                 case TK_A_GOTO:
                         if (cur->key.rule_goto == 0)
                                 break;
-                        trace_token(event, rules, rule, cur, NULL);
+                        /* like systemd, which logs it after the other keys of the line, as here */
+                        trace_line(event, rules, rule, "GOTO=%s", rules_str(rules, cur->key.value_off));
                         cur = &rules->tokens[cur->key.rule_goto];
                         continue;
                 case TK_END:
@@ -4103,8 +4155,9 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                         goto nomatch;
                 }
 
-                if (cur->type != TK_RULE)
-                        trace_token(event, rules, rule, cur, cur->type < TK_M_MAX ? "PASS" : NULL);
+                /* like systemd, the actions log what they did themselves */
+                if (cur->type != TK_RULE && cur->type < TK_M_MAX)
+                        trace_token(event, rules, rule, cur, "PASS");
                 cur++;
                 continue;
         nomatch:
