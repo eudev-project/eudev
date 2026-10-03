@@ -2728,11 +2728,19 @@ static int parse_file(struct udev_rules *rules, const char *filename) {
                                 break;
                         }
                         if (rules->tokens[i].key.rule_goto == 0) {
+                                struct token *rt = &rules->tokens[rule_idx];
+
                                 /* like systemd, the rule has no GOTO then */
-                                rules->tokens[rule_idx].rule.has_goto = false;
+                                rt->rule.has_goto = false;
                                 log_rule_error("GOTO=\"%s\" has no matching label, ignoring.", label);
+                                /* like rule_resolve_goto() of systemd, which drops such a line; here, it is
+                                 * skipped, see udev_rules_apply_to_event(); udevadm verify reports it its
+                                 * own way */
                                 if (checking)
                                         udev_rules_check_goto_unresolved(checking, parse_line_nr);
+                                else if (!rt->rule.has_name && !rt->rule.has_devlink && !rt->rule.has_static_node &&
+                                         !rt->rule.update_something)
+                                        log_rule_warning("The line has no effect any more, dropping.");
                         }
                 }
         }
