@@ -273,6 +273,16 @@ static int device_get_diskseq(struct udev_device *device, uint64_t *ret) {
         return 0;
 }
 
+/* The properties of the device to show. Like systemd, none for a device without a subsystem, e.g.
+ * /sys/class or /sys/devices/platform: sd-device cannot read the properties of such a device, as it
+ * has no ID in the udev database, so systemd shows not even DEVPATH. */
+static struct udev_list_entry *device_get_properties_to_show(struct udev_device *device) {
+        if (!udev_device_get_subsystem(device))
+                return NULL;
+
+        return udev_device_get_properties_list_entry(device);
+}
+
 static void print_record(struct udev_device *device, const char *prefix) {
         _cleanup_free_ char *driver_subsystem = NULL;
         const char *str, *subsys;
@@ -357,7 +367,7 @@ static void print_record(struct udev_device *device, const char *prefix) {
         if (str)
                 printf("%sV: %s%s%s\n", prefix, ansi_highlight_yellow4(), str, ansi_normal());
 
-        udev_list_entry_foreach(list_entry, udev_device_get_properties_list_entry(device))
+        udev_list_entry_foreach(list_entry, device_get_properties_to_show(device))
                 printf("%sE: %s=%s\n",
                        prefix,
                        udev_list_entry_get_name(list_entry),
@@ -406,7 +416,7 @@ static int record_to_json(struct udev_device *device) {
                 json_writer_string(&w, str);
         }
 
-        udev_list_entry_foreach(list_entry, udev_device_get_properties_list_entry(device)) {
+        udev_list_entry_foreach(list_entry, device_get_properties_to_show(device)) {
                 json_writer_key(&w, udev_list_entry_get_name(list_entry));
                 json_writer_string(&w, udev_list_entry_get_value(list_entry));
         }
@@ -1171,7 +1181,7 @@ static int query_device(enum query_type query, struct udev_device *device,
                 return 0;
 
         case QUERY_PROPERTY:
-                list_entry = udev_device_get_properties_list_entry(device);
+                list_entry = device_get_properties_to_show(device);
                 while (list_entry != NULL) {
                         if (properties && !strv_contains(properties, udev_list_entry_get_name(list_entry))) {
                                 list_entry = udev_list_entry_get_next(list_entry);
