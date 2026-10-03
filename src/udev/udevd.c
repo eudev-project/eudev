@@ -1725,6 +1725,55 @@ static void handle_signal(struct udev *udev __attribute__((unused)), int signo) 
         }
 }
 
+/* parse_proc_cmdline_item() runs before the log level is merged, which the kernel command line can change,
+ * so it keeps its messages here, and main() logs them with the merged level, see cmdline_log_flush(). Each
+ * message starts with the digit of its log level. */
+static char **cmdline_messages = NULL;
+
+static void cmdline_log(int level, int error, const char *format, ...) _printf_(3, 4);
+static void cmdline_log(int level, int error, const char *format, ...) {
+        _cleanup_free_ char *m = NULL;
+        va_list ap;
+        char *s;
+        int r;
+
+        assert(level >= 0 && level <= LOG_DEBUG);
+
+        /* for %m */
+        errno = abs(error);
+
+        va_start(ap, format);
+        r = vasprintf(&m, format, ap);
+        va_end(ap);
+        if (r < 0) {
+                log_oom();
+                return;
+        }
+
+        if (asprintf(&s, "%i%s", level, m) < 0 || strv_consume(&cmdline_messages, s) < 0)
+                log_oom();
+}
+
+static void cmdline_log_flush(void) {
+        char **m;
+
+        STRV_FOREACH(m, cmdline_messages)
+                log_full(**m - '0', "%s", *m + 1);
+
+        strv_free(cmdline_messages);
+        cmdline_messages = NULL;
+}
+
+/* Like proc_cmdline_value_missing() of systemd: warns and returns true if the key has no value, with the message
+ * kept for cmdline_log_flush(). */
+static bool cmdline_value_missing(const char *key, const char *value) {
+        if (value)
+                return false;
+
+        cmdline_log(LOG_WARNING, 0, "Missing argument for %s= kernel command line switch, ignoring.", key);
+        return true;
+}
+
 /*
  * read the kernel command line, in case we need to get into debug mode
  *   udev.log_level=<level>                    syslog priority
@@ -1735,6 +1784,7 @@ static void handle_signal(struct udev *udev __attribute__((unused)), int signo) 
  *   udev.timeout_signal=<signal>              signal sent to workers and programs on a timeout
  *   udev.blockdev_read_only[=<bool>]          mark all block devices read-only when they appear
  * "-" and "_" are the same in the keys, e.g. udev.children-max= is udev.children_max=.
+ * The messages are logged later, see cmdline_log().
  */
 static int parse_proc_cmdline_item(const char *key, const char *value) {
         int r = 0;
@@ -1749,7 +1799,7 @@ static int parse_proc_cmdline_item(const char *key, const char *value) {
         if (proc_cmdline_key_streq(key, "udev.log_level") ||
             proc_cmdline_key_streq(key, "udev.log_priority")) { /* kept for backward compatibility */
 
-                if (proc_cmdline_value_missing(key, value))
+                if (cmdline_value_missing(key, value))
                         return 0;
 
                 r = util_log_priority(value);
@@ -1760,34 +1810,34 @@ static int parse_proc_cmdline_item(const char *key, const char *value) {
 
         } else if (proc_cmdline_key_streq(key, "udev.event_timeout")) {
 
-                if (proc_cmdline_value_missing(key, value))
+                if (cmdline_value_missing(key, value))
                         return 0;
 
                 r = parse_sec(value, &config_by_kernel.timeout_usec);
 
         } else if (proc_cmdline_key_streq(key, "udev.children_max")) {
 
-                if (proc_cmdline_value_missing(key, value))
+                if (cmdline_value_missing(key, value))
                         return 0;
 
                 r = safe_atou(value, &config_by_kernel.children_max);
 
         } else if (proc_cmdline_key_streq(key, "udev.exec_delay")) {
 
-                if (proc_cmdline_value_missing(key, value))
+                if (cmdline_value_missing(key, value))
                         return 0;
 
                 r = parse_sec(value, &config_by_kernel.exec_delay_usec);
 
         } else if (proc_cmdline_key_streq(key, "udev.timeout_signal")) {
 
-                if (proc_cmdline_value_missing(key, value))
+                if (cmdline_value_missing(key, value))
                         return 0;
 
                 r = signal_from_string(value);
                 if (r > 0 && !signal_terminates(r)) {
                         /* e.g. SIGCHLD, with which the timeout would not stop anything */
-                        log_warning("%s=%s cannot terminate a process, ignoring.", key, value);
+                        cmdline_log(LOG_WARNING, 0, "%s=%s cannot terminate a process, ignoring.", key, value);
                         return 0;
                 }
                 if (r > 0)
@@ -1800,13 +1850,13 @@ static int parse_proc_cmdline_item(const char *key, const char *value) {
                 else {
                         r = parse_boolean(value);
                         if (r < 0)
-                                log_warning_errno(r, "Failed to parse udev.blockdev-read-only argument, ignoring: %s", value);
+                                cmdline_log(LOG_WARNING, r, "Failed to parse udev.blockdev-read-only argument, ignoring: %s", value);
                         else
                                 config_by_kernel.blockdev_read_only = r;
                 }
 
                 if (config_by_kernel.blockdev_read_only)
-                        log_notice("All physical block devices will be marked read-only.");
+                        cmdline_log(LOG_NOTICE, 0, "All physical block devices will be marked read-only.");
 
                 return 0;
 
@@ -1817,7 +1867,7 @@ static int parse_proc_cmdline_item(const char *key, const char *value) {
                 else {
                         r = parse_boolean(value);
                         if (r < 0)
-                                log_warning_errno(r, "Failed to parse udev.trace argument, ignoring: %s", value);
+                                cmdline_log(LOG_WARNING, r, "Failed to parse udev.trace argument, ignoring: %s", value);
                         else
                                 arg_trace = r;
                 }
@@ -1826,7 +1876,7 @@ static int parse_proc_cmdline_item(const char *key, const char *value) {
         }
 
         if (r < 0)
-                log_warning_errno(r, "Failed to parse \"%s=%s\", ignoring: %m", key, value);
+                cmdline_log(LOG_WARNING, r, "Failed to parse \"%s=%s\", ignoring: %m", key, value);
 
         return 0;
 }
@@ -2012,7 +2062,7 @@ int main(int argc, char *argv[]) {
 
         r = parse_proc_cmdline(parse_proc_cmdline_item);
         if (r < 0)
-                log_warning_errno(r, "failed to parse kernel command line, ignoring: %m");
+                cmdline_log(LOG_WARNING, r, "failed to parse kernel command line, ignoring: %m");
 
         manager_merge_config();
         log_set_max_level(manager_merge_config_log_level());
@@ -2021,6 +2071,10 @@ int main(int argc, char *argv[]) {
          * level, as udev_new() applied udev_log= right away, so that e.g. --debug shows them too */
         STRV_FOREACH(w, udev_get_conf_warnings(udev))
                 log_warning("%s", *w);
+
+        /* the same for the kernel command line, e.g. so that udev_log=err in udev.conf does not hide its
+         * warnings when --debug or udev.log_level= sets a higher level */
+        cmdline_log_flush();
 
         manager_adjust_config();
 
