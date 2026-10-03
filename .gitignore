@@ -40,6 +40,7 @@ src/udev/keyboard-keys.txt
 # no longer generated, but left behind in build trees of older versions
 src/udev/keyboard-keys-to-name.h
 
+test/test-collect
 test/test-json-writer
 test/test-libudev
 test/test-udev
@@ -48,6 +49,8 @@ test/test
 
 test/rules-test.sh.log
 test/rules-test.sh.trs
+test/test-collect.log
+test/test-collect.trs
 test/test-json-writer.log
 test/test-json-writer.trs
 test/test-suite.log

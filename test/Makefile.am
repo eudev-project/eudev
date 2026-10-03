@@ -15,7 +15,15 @@ noinst_PROGRAMS = \
 	test-udev-devlink
 
 check_PROGRAMS = \
+	test-collect \
 	test-json-writer
+
+test_collect_SOURCES = \
+	test-collect.c
+
+test_collect_LDADD = \
+	$(top_builddir)/src/libudev/libudev-private.la \
+	$(top_builddir)/src/udev/libudev-core.la
 
 test_json_writer_SOURCES = \
 	test-json-writer.c
@@ -66,6 +74,7 @@ AM_TESTS_ENVIRONMENT = \
 	UDEV_DEVICE_VERIFY_SYSFS=0; export UDEV_DEVICE_VERIFY_SYSFS;
 
 TESTS = \
+	test-collect \
 	test-json-writer \
 	udev-test.pl \
 	rules-test.sh \

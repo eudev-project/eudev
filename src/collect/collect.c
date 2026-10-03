@@ -171,10 +171,16 @@ static int prepare(char *dir, char *filename)
  *
  * Yes, one could have used fgets() for this. But then we'd
  * have to use freopen etc which I found quite tedious.
+ *
+ * A NUL byte, which collect never writes, is taken as a separator:
+ * otherwise the parsing would stop at it in the middle of the buffer,
+ * and the pointer moved down by the half could end up before the
+ * buffer.
  */
 static int checkout(int fd)
 {
         int len;
+        ssize_t n, i;
         char *buf, *ptr, *word = NULL;
         struct _mate *him;
 
@@ -187,7 +193,11 @@ static int checkout(int fd)
         buf[bufsize] = '\0';
 
         ptr = buf + len;
-        while ((read(fd, buf + len, len)) > 0) {
+        while ((n = read(fd, buf + len, len)) > 0) {
+                for (i = 0; i < n; i++)
+                        if (buf[len + i] == '\0')
+                                buf[len + i] = ' ';
+
                 while (ptr && *ptr) {
                         word = ptr;
                         ptr = strpbrk(word," \n\t\r");

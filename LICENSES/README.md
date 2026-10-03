@@ -23,6 +23,7 @@ Most of eudev comes from udev of systemd, whose files carry the same licenses.
      scsi.h) and src/v4l_id/
    - rule_generator/rule_generator.functions and
      rule_generator/write_net_rules.in
+   - test/test-collect.c, which includes src/collect/collect.c
    - test/rule-syntax-check.py, hwdb.d/dedup-hwdb.py and
      tools/gen-80-net-name-slot.py
 
@@ -35,7 +36,7 @@ Most of eudev comes from udev of systemd, whose files carry the same licenses.
      blockdev-util.c, reread-partition-table.c, udev-netlink.c and the
      builtins btrfs, hwdb, keyboard, net_driver and net_id
    - src/fido_id/ and src/include/glibc/
-   - the test programs test/test-*.c and test/udev-devlink-test.sh
+   - the other test programs test/test-*.c, and test/udev-devlink-test.sh
    - the man page sources man/hwdb.xml, man/systemd-hwdb.xml,
      man/udev.conf.xml and man/custom-man.xsl
    - the shell completions in shell-completion/
