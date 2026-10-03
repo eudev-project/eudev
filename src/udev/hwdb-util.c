@@ -515,8 +515,10 @@ static int insert_data(struct trie *trie, struct udev_list *match_list,
 }
 
 /* Returns 0, 1 if there were syntax errors, which are logged and the lines ignored, or a negative errno if
- * the file cannot be read or the data cannot be inserted. */
-static int import_file(struct udev *udev, struct trie *trie, const char *filename, const char *path_in_root, uint16_t file_priority) {
+ * the file cannot be read or the data cannot be inserted. In the latter case, which insert_data() logs
+ * with the file and line, *ret_logged is set to true. */
+static int import_file(struct udev *udev, struct trie *trie, const char *filename, const char *path_in_root,
+                       uint16_t file_priority, bool *ret_logged) {
         enum {
                 HW_MATCH,
                 HW_DATA,
@@ -528,6 +530,9 @@ static int import_file(struct udev *udev, struct trie *trie, const char *filenam
         bool syntax_errors = false;
         int r, err;
 
+        assert(ret_logged);
+
+        *ret_logged = false;
         udev_list_init(udev, &match_list, false);
 
         f = fopen(filename, "re");
@@ -604,6 +609,7 @@ static int import_file(struct udev *udev, struct trie *trie, const char *filenam
                         state = HW_DATA;
                         err = insert_data(trie, &match_list, line, path_in_root, file_priority, line_number);
                         if (err < 0) {
+                                *ret_logged = true;
                                 r = err;
                                 goto finish;
                         }
@@ -629,6 +635,7 @@ static int import_file(struct udev *udev, struct trie *trie, const char *filenam
 
                         err = insert_data(trie, &match_list, line, path_in_root, file_priority, line_number);
                         if (err < 0) {
+                                *ret_logged = true;
                                 r = err;
                                 goto finish;
                         }
@@ -756,6 +763,7 @@ int hwdb_update(struct udev *udev, const char *root, const char *hwdb_bin, bool 
         for (i = 0; i < n_files; i++) {
                 const ConfFile *c = files[i];
                 const char *path_in_root = c->original_path;
+                bool logged;
 
                 /* Like systemd, the database stores the path as found in the directory, without the
                  * root, to not leak build paths and keep the database reproducible, and the file is read
@@ -768,12 +776,14 @@ int hwdb_update(struct udev *udev, const char *root, const char *hwdb_bin, bool 
                 }
 
                 log_debug("Reading file \"%s\" -> \"%s\"", c->original_path, c->resolved_path);
-                err = import_file(udev, trie, c->resolved_path, path_in_root, file_priority++);
+                err = import_file(udev, trie, c->resolved_path, path_in_root, file_priority++, &logged);
                 if (err < 0) {
                         /* Unlike systemd, which writes a database without the data that could not be
-                         * read, and returns the error only with --strict, keep the old hwdb.bin. */
-                        log_error_errno(err, "Failed to read hwdb file '%s', not updating %s: %m",
-                                        c->original_path, hwdb_bin);
+                         * read, and returns the error only with --strict, keep the old hwdb.bin. A failure
+                         * to insert the data is logged with the file and line already. */
+                        if (!logged)
+                                log_error_errno(err, "Failed to read hwdb file '%s', not updating %s: %m",
+                                                c->original_path, hwdb_bin);
                         goto out;
                 }
                 if (err > 0 && ret == 0)
