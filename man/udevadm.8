@@ -193,10 +193,10 @@ Export the content of the udev database\&.
 Cleanup the udev database\&.
 .RE
 .PP
-\fB\-w\fR\fB[SECONDS]\fR, \fB\-\-wait\-for\-initialization\fR\fB[=SECONDS]\fR
+\fB\-w\fR\fB[SECS]\fR, \fB\-\-wait\-for\-initialization\fR\fB[=SECS]\fR
 .RS 4
 Wait for device to be initialized\&. If argument
-\fISECONDS\fR
+\fISECS\fR
 is not specified, the default is to wait forever\&.
 .RE
 .PP
@@ -589,7 +589,7 @@ field of
 .PP
 Watches the udev event queue, and exits if all current events are handled\&.
 .PP
-\fB\-t\fR, \fB\-\-timeout=\fR\fB\fISECONDS\fR\fR
+\fB\-t\fR, \fB\-\-timeout=\fR\fB\fISEC\fR\fR
 .RS 4
 Maximum number of seconds to wait for the event queue to become empty\&. Takes a value in seconds, or in the usual supported time units, e\&.g\&.
 500ms
@@ -706,7 +706,7 @@ command\&. When specified, settings set with
 will be cleared\&.
 .RE
 .PP
-\fB\-t\fR, \fB\-\-timeout=\fR\fIseconds\fR
+\fB\-t\fR, \fB\-\-timeout=\fR\fB\fISECONDS\fR\fR
 .RS 4
 The maximum number of seconds to wait for a reply from udevd\&. Takes a value in seconds, or in the usual supported time units, e\&.g\&.
 500ms
@@ -1096,7 +1096,7 @@ or
 \fBudevd\fR
 after e\&.g\&. partitioning or formatting the devices\&.
 .PP
-\fB\-t\fR, \fB\-\-timeout=\fR\fB\fISECONDS\fR\fR
+\fB\-t\fR, \fB\-\-timeout=\fR\fB\fISEC\fR\fR
 .RS 4
 Maximum number of seconds to wait for the specified devices or device symlinks being created, initialized, or removed\&. The default value is
 infinity\&.

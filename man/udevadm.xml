@@ -238,10 +238,10 @@
           </listitem>
         </varlistentry>
         <varlistentry>
-          <term><option>-w<optional>SECONDS</optional></option></term>
-          <term><option>--wait-for-initialization<optional>=SECONDS</optional></option></term>
+          <term><option>-w<optional>SECS</optional></option></term>
+          <term><option>--wait-for-initialization<optional>=SECS</optional></option></term>
           <listitem>
-            <para>Wait for device to be initialized. If argument <replaceable>SECONDS</replaceable>
+            <para>Wait for device to be initialized. If argument <replaceable>SECS</replaceable>
             is not specified, the default is to wait forever.</para>
           </listitem>
         </varlistentry>
@@ -675,7 +675,7 @@
       <variablelist>
         <varlistentry>
           <term><option>-t</option></term>
-          <term><option>--timeout=<replaceable>SECONDS</replaceable></option></term>
+          <term><option>--timeout=<replaceable>SEC</replaceable></option></term>
           <listitem>
             <para>Maximum number of seconds to wait for the event
             queue to become empty. Takes a value in seconds, or in the usual supported time units, e.g.
@@ -811,7 +811,7 @@
         </varlistentry>
         <varlistentry>
           <term><option>-t</option></term>
-          <term><option>--timeout=</option><replaceable>seconds</replaceable></term>
+          <term><option>--timeout=<replaceable>SECONDS</replaceable></option></term>
           <listitem>
             <para>The maximum number of seconds to wait for a reply from udevd. Takes a value in
             seconds, or in the usual supported time units, e.g. <literal>500ms</literal> or
@@ -1297,7 +1297,7 @@
       <variablelist>
         <varlistentry>
           <term><option>-t</option></term>
-          <term><option>--timeout=<replaceable>SECONDS</replaceable></option></term>
+          <term><option>--timeout=<replaceable>SEC</replaceable></option></term>
           <listitem>
             <para>Maximum number of seconds to wait for the specified devices or device symlinks being
             created, initialized, or removed. The default value is <literal>infinity</literal>.</para>
