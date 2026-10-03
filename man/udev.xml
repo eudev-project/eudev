@@ -503,6 +503,11 @@
             <para>Symlink names must never conflict with the kernel's default device
             node names, as that would result in unpredictable behavior.
             </para>
+            <para>On a remove event, the symlinks recorded in the udev database of the
+            device are removed, together with the ones the rules add for the event. Unlike
+            in systemd, a <varname>SYMLINK=</varname> or <varname>SYMLINK-=</varname> in
+            a rule line that is evaluated on a remove event does not keep any of them, which
+            would leave dangling symlinks behind.</para>
           </listitem>
         </varlistentry>
 

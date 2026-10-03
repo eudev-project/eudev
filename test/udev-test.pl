@@ -2010,6 +2010,24 @@ EOF
                 rules           => "KERNEL==\"sda\", " . join(", ", map { "KERNEL!=\"x$_\"" } (0..299)) . ", SYMLINK+=\"found\"\n" .
                                    "KERNEL==\"sda\", " . join(", ", map { "KERNEL!=\"x$_\"" } (0..299)) . ", KERNEL==\"x\", SYMLINK+=\"bad\"\n",
         },
+        {
+                desc            => "the symlinks of the database are removed, also when SYMLINK= clears them on remove",
+                devpath         => "/devices/pci0000:00/0000:00:1f.2/host0/target0:0:0/0:0:0:0/block/sda",
+                exp_name        => "found",
+                rules           => <<EOF
+KERNEL=="sda", ACTION=="add", SYMLINK+="found"
+KERNEL=="sda", ACTION=="remove", SYMLINK="", ENV{X}="1"
+EOF
+        },
+        {
+                desc            => "the symlinks of the database are removed, also when SYMLINK-= drops one on remove",
+                devpath         => "/devices/pci0000:00/0000:00:1f.2/host0/target0:0:0/0:0:0:0/block/sda",
+                exp_name        => "found",
+                rules           => <<EOF
+KERNEL=="sda", ACTION=="add", SYMLINK+="found"
+KERNEL=="sda", ACTION=="remove", SYMLINK-="found", ENV{X}="1"
+EOF
+        },
 );
 
 sub udev {

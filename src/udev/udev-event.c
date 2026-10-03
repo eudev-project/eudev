@@ -1522,7 +1522,19 @@ int udev_event_execute_rules(struct udev_event *event,
                 return 0;
 
         if (streq(udev_device_get_action(dev), "remove")) {
+                _cleanup_strv_free_ char **db_devlinks = NULL;
+                struct udev_list_entry *entry;
+                char **devlink;
+
                 udev_device_read_db(dev);
+
+                /* eudev: unlike systemd, remove the symlinks recorded in the database, which were created
+                 * by udevd and have entries below /run/udev/links/, also when a rule evaluated for this
+                 * event drops them from the device with SYMLINK= or SYMLINK-=. Otherwise they would stay
+                 * behind, dangling, and point to another device that gets the same kernel name later. */
+                udev_list_entry_foreach(entry, udev_device_get_devlinks_list_entry(dev))
+                        if (strv_extend(&db_devlinks, udev_list_entry_get_name(entry)) < 0)
+                                return log_oom();
 
                 if (EVENT_MODE_DESTRUCTIVE(event)) {
                         r = udev_device_tag_index(dev, false);
@@ -1546,8 +1558,12 @@ int udev_event_execute_rules(struct udev_event *event,
                         log_debug_errno(r, "%s: Failed to apply udev rules: %m", udev_device_get_sysname(dev));
 
                 if (EVENT_MODE_DESTRUCTIVE(event)) {
-                        if (major(udev_device_get_devnum(dev)) != 0)
+                        if (major(udev_device_get_devnum(dev)) != 0) {
+                                STRV_FOREACH(devlink, db_devlinks)
+                                        (void) udev_device_add_devlink(dev, *devlink);
+
                                 udev_node_remove(dev);
+                        }
                 }
 
                 return r < 0 ? r : 0;
