@@ -1456,6 +1456,64 @@
 
     <variablelist class='environment-variables'>
       <varlistentry>
+        <term><varname>$UDEV_LOG_LEVEL</varname></term>
+        <term><varname>$SYSTEMD_LOG_LEVEL</varname></term>
+        <listitem>
+          <para>The maximum log level of emitted messages (messages with a higher log level, i.e. less
+          important ones, are suppressed). Takes a comma-separated list of values. A value may be either
+          one of (in order of decreasing importance) <constant>emerg</constant>,
+          <constant>alert</constant>, <constant>crit</constant>, <constant>err</constant>,
+          <constant>warning</constant>, <constant>notice</constant>, <constant>info</constant>,
+          <constant>debug</constant>, or an integer in the range 0…7, also with a <literal>0x</literal>,
+          <literal>0o</literal> or <literal>0b</literal> prefix. See
+          <citerefentry project='man-pages'><refentrytitle>syslog</refentrytitle><manvolnum>3</manvolnum></citerefentry>
+          for more information. Each value may optionally be prefixed with one of
+          <constant>console</constant>, <constant>syslog</constant> or <constant>kmsg</constant> followed by
+          a colon to set the maximum log level for that specific log target (e.g.
+          <constant>SYSTEMD_LOG_LEVEL=debug,console:info</constant> specifies to log at debug level except
+          when logging to the console which should be at info level). Note that the global maximum log level
+          takes priority over any per target maximum log levels.
+          It overrides <varname>udev_log=</varname> of
+          <citerefentry><refentrytitle>udev.conf</refentrytitle><manvolnum>5</manvolnum></citerefentry>,
+          and <option>--debug</option> overrides it. Like the other <varname>$UDEV_LOG_*</varname>
+          variables, <varname>$UDEV_LOG_LEVEL</varname> takes precedence over
+          <varname>$SYSTEMD_LOG_LEVEL</varname>, which is used like in systemd.</para>
+        </listitem>
+      </varlistentry>
+      <varlistentry>
+        <term><varname>$UDEV_LOG_TARGET</varname></term>
+        <term><varname>$SYSTEMD_LOG_TARGET</varname></term>
+        <listitem>
+          <para>The destination for log messages. One of <constant>console</constant> (log to the attached
+          tty), <constant>console-prefixed</constant> (log to the attached tty but with prefixes encoding the
+          log level and "facility", see
+          <citerefentry project='man-pages'><refentrytitle>syslog</refentrytitle><manvolnum>3</manvolnum></citerefentry>),
+          <constant>kmsg</constant> (log to the kernel circular log buffer), <constant>syslog</constant>
+          (log to <filename>/dev/log</filename>), <constant>syslog-or-kmsg</constant> (log to
+          <filename>/dev/log</filename> if available, and to kmsg otherwise), <constant>auto</constant>
+          (log to kmsg if it can be written, and to the attached tty otherwise),
+          <constant>safe</constant> (log to kmsg if standard error is not a tty, and to the attached tty
+          otherwise), <constant>null</constant> (disable log output).
+          The default is <constant>console</constant>.</para>
+        </listitem>
+      </varlistentry>
+      <varlistentry>
+        <term><varname>$UDEV_LOG_COLOR</varname></term>
+        <term><varname>$SYSTEMD_LOG_COLOR</varname></term>
+        <listitem>
+          <para>A boolean. If true, error messages and more important ones written to the tty are
+          highlighted in red.</para>
+        </listitem>
+      </varlistentry>
+      <varlistentry>
+        <term><varname>$UDEV_LOG_LOCATION</varname></term>
+        <term><varname>$SYSTEMD_LOG_LOCATION</varname></term>
+        <listitem>
+          <para>A boolean. If true, messages written to the tty are prefixed with a filename and line
+          number in the source code where the message originates.</para>
+        </listitem>
+      </varlistentry>
+      <varlistentry>
         <term><varname>$SYSTEMD_COLORS</varname></term>
         <listitem>
           <para>Takes a boolean argument, or a special value. By default (unset), <command>udevadm</command>

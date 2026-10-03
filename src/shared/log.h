@@ -48,6 +48,14 @@ int log_get_max_level(void) _pure_;
 int log_open(void);
 void log_close(void);
 
+/* Like log_parse_environment() of systemd, without the kernel command line, which systemd only parses in
+ * PID 1 and in programs started by systemd: sets the log target, the maximum log level (also of single
+ * targets), and whether the messages to the console are colored and show the location in the source code,
+ * from $SYSTEMD_LOG_TARGET, $SYSTEMD_LOG_LEVEL, $SYSTEMD_LOG_COLOR and $SYSTEMD_LOG_LOCATION. eudev: each of
+ * them is read from $UDEV_LOG_TARGET, $UDEV_LOG_LEVEL, $UDEV_LOG_COLOR or $UDEV_LOG_LOCATION first, when set.
+ * Not for library code. */
+void log_parse_environment(void);
+
 void log_close_syslog(void);
 void log_close_journal(void);
 void log_close_kmsg(void);

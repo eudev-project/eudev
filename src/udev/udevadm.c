@@ -107,6 +107,9 @@ int main(int argc, char *argv[]) {
         if (udev == NULL)
                 goto out;
 
+        /* like systemd's udevadm, after udev_log= of udev.conf, which udev_new() applied, so that the
+         * environment overrides it */
+        log_parse_environment();
         log_open();
         mac_selinux_init("/dev");
 

@@ -1201,6 +1201,79 @@ Print help text\&.
 .RE
 .SH "ENVIRONMENT"
 .PP
+\fI$UDEV_LOG_LEVEL\fR, \fI$SYSTEMD_LOG_LEVEL\fR
+.RS 4
+The maximum log level of emitted messages (messages with a higher log level, i\&.e\&. less important ones, are suppressed)\&. Takes a comma\-separated list of values\&. A value may be either one of (in order of decreasing importance)
+\fBemerg\fR,
+\fBalert\fR,
+\fBcrit\fR,
+\fBerr\fR,
+\fBwarning\fR,
+\fBnotice\fR,
+\fBinfo\fR,
+\fBdebug\fR, or an integer in the range 0\&...7, also with a
+0x,
+0o
+or
+0b
+prefix\&. See
+\fBsyslog\fR(3)
+for more information\&. Each value may optionally be prefixed with one of
+\fBconsole\fR,
+\fBsyslog\fR
+or
+\fBkmsg\fR
+followed by a colon to set the maximum log level for that specific log target (e\&.g\&.
+\fBSYSTEMD_LOG_LEVEL=debug,console:info\fR
+specifies to log at debug level except when logging to the console which should be at info level)\&. Note that the global maximum log level takes priority over any per target maximum log levels\&. It overrides
+\fIudev_log=\fR
+of
+\fBudev.conf\fR(5), and
+\fB\-\-debug\fR
+overrides it\&. Like the other
+\fI$UDEV_LOG_*\fR
+variables,
+\fI$UDEV_LOG_LEVEL\fR
+takes precedence over
+\fI$SYSTEMD_LOG_LEVEL\fR, which is used like in systemd\&.
+.RE
+.PP
+\fI$UDEV_LOG_TARGET\fR, \fI$SYSTEMD_LOG_TARGET\fR
+.RS 4
+The destination for log messages\&. One of
+\fBconsole\fR
+(log to the attached tty),
+\fBconsole\-prefixed\fR
+(log to the attached tty but with prefixes encoding the log level and "facility", see
+\fBsyslog\fR(3)),
+\fBkmsg\fR
+(log to the kernel circular log buffer),
+\fBsyslog\fR
+(log to
+/dev/log),
+\fBsyslog\-or\-kmsg\fR
+(log to
+/dev/log
+if available, and to kmsg otherwise),
+\fBauto\fR
+(log to kmsg if it can be written, and to the attached tty otherwise),
+\fBsafe\fR
+(log to kmsg if standard error is not a tty, and to the attached tty otherwise),
+\fBnull\fR
+(disable log output)\&. The default is
+\fBconsole\fR\&.
+.RE
+.PP
+\fI$UDEV_LOG_COLOR\fR, \fI$SYSTEMD_LOG_COLOR\fR
+.RS 4
+A boolean\&. If true, error messages and more important ones written to the tty are highlighted in red\&.
+.RE
+.PP
+\fI$UDEV_LOG_LOCATION\fR, \fI$SYSTEMD_LOG_LOCATION\fR
+.RS 4
+A boolean\&. If true, messages written to the tty are prefixed with a filename and line number in the source code where the message originates\&.
+.RE
+.PP
 \fI$SYSTEMD_COLORS\fR
 .RS 4
 Takes a boolean argument, or a special value\&. By default (unset),

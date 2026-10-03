@@ -26,8 +26,10 @@
 #include <sys/un.h>
 #include <stddef.h>
 #include <string.h>
+#include <limits.h>
 
 #include "log.h"
+#include "strv.h"
 #include "util.h"
 #include "missing.h"
 #include "macro.h"
@@ -41,6 +43,14 @@
 static LogTarget log_target = LOG_TARGET_CONSOLE;
 static int log_max_level = LOG_INFO;
 static int log_facility = LOG_DAEMON;
+
+/* Like log_target_max_level[] of systemd: the maximum log levels of the single targets, which can only
+ * lower the global one, see log_set_max_level_from_string(). */
+static int log_target_max_level[] = {
+        [LOG_TARGET_CONSOLE] = INT_MAX,
+        [LOG_TARGET_KMSG] = INT_MAX,
+        [LOG_TARGET_SYSLOG] = INT_MAX,
+};
 
 static int console_fd = STDERR_FILENO;
 static int syslog_fd = -1;
@@ -246,12 +256,15 @@ static int write_to_console(
                 const char *object __attribute__((unused)),
                 const char *buffer) {
 
-        char location[64], prefix[1 + DECIMAL_STR_MAX(int) + 2];
+        char location[256], prefix[1 + DECIMAL_STR_MAX(int) + 2];
         struct iovec iovec[6] = {};
         unsigned n = 0;
         bool highlight;
 
         if (console_fd < 0)
+                return 0;
+
+        if (LOG_PRI(level) > log_target_max_level[LOG_TARGET_CONSOLE])
                 return 0;
 
         if (log_target == LOG_TARGET_CONSOLE_PREFIXED) {
@@ -262,7 +275,8 @@ static int write_to_console(
         highlight = LOG_PRI(level) <= LOG_ERR && show_color;
 
         if (show_location) {
-                snprintf(location, sizeof(location), "(%s:%i) ", file, line);
+                /* like systemd */
+                snprintf(location, sizeof(location), "%s:%i: ", file, line);
                 char_array_0(location);
                 IOVEC_SET_STRING(iovec[n++], location);
         }
@@ -317,6 +331,9 @@ static int write_to_syslog(
         struct tm *tm;
 
         if (syslog_fd < 0)
+                return 0;
+
+        if (LOG_PRI(level) > log_target_max_level[LOG_TARGET_SYSLOG])
                 return 0;
 
         snprintf(header_priority, sizeof(header_priority), "<%i>", level);
@@ -381,6 +398,9 @@ static int write_to_kmsg(
         size_t total;
 
         if (kmsg_fd < 0)
+                return 0;
+
+        if (LOG_PRI(level) > log_target_max_level[LOG_TARGET_KMSG])
                 return 0;
 
         snprintf(header_priority, sizeof(header_priority), "<%i>", level);
@@ -624,6 +644,124 @@ int log_oom_internal(const char *file, int line, const char *func) {
 
 int log_get_max_level(void) {
         return log_max_level;
+}
+
+static int log_set_target_from_string(const char *e) {
+        LogTarget t;
+
+        t = log_target_from_string(e);
+        if (t < 0)
+                return -EINVAL;
+
+        log_set_target(t);
+        return 0;
+}
+
+/* Like log_set_max_level_from_string() of systemd: a comma-separated list of log levels, by name or
+ * number, the global one, or one of a single target, console, kmsg or syslog, with the name of the target
+ * and a colon in front, e.g. "debug,console:info"; systemd's journal target does not exist in eudev. The
+ * values are applied in order, until one is invalid. */
+static int log_set_max_level_from_string(const char *e) {
+        _cleanup_strv_free_ char **words = NULL;
+        char **w;
+        int r;
+
+        r = strv_split_and_extend(&words, e, ",", false);
+        if (r < 0)
+                return r;
+
+        STRV_FOREACH(w, words) {
+                _cleanup_free_ char *prefix = NULL;
+                const char *colon;
+                LogTarget target;
+                int level;
+
+                colon = strchr(*w, ':');
+                if (!colon) {
+                        level = log_level_from_string(*w);
+                        if (level < 0)
+                                return -EINVAL;
+
+                        log_set_max_level(level);
+                        continue;
+                }
+
+                prefix = strndup(*w, colon - *w);
+                if (!prefix)
+                        return -ENOMEM;
+
+                target = log_target_from_string(prefix);
+                if (!IN_SET(target, LOG_TARGET_CONSOLE, LOG_TARGET_KMSG, LOG_TARGET_SYSLOG))
+                        return -EINVAL;
+
+                level = log_level_from_string(colon + 1);
+                if (level < 0)
+                        return -EINVAL;
+
+                log_target_max_level[target] = level;
+        }
+
+        return 0;
+}
+
+static int log_show_color_from_string(const char *e) {
+        int r;
+
+        r = parse_boolean(e);
+        if (r < 0)
+                return r;
+
+        show_color = r;
+        return 0;
+}
+
+static int log_show_location_from_string(const char *e) {
+        int r;
+
+        r = parse_boolean(e);
+        if (r < 0)
+                return r;
+
+        show_location = r;
+        return 0;
+}
+
+/* $UDEV_LOG_<name>, or $SYSTEMD_LOG_<name> when that is not set */
+static const char *log_getenv(const char *name) {
+        const char *u, *s, *e;
+
+        u = strjoina("UDEV_LOG_", name);
+        s = strjoina("SYSTEMD_LOG_", name);
+
+        e = getenv(u);
+        if (!e)
+                e = getenv(s);
+
+        return e;
+}
+
+void log_parse_environment(void) {
+        const char *e;
+        int r;
+
+        e = log_getenv("TARGET");
+        if (e && log_set_target_from_string(e) < 0)
+                log_warning("Failed to parse log target '%s', ignoring.", e);
+
+        e = log_getenv("LEVEL");
+        if (e) {
+                r = log_set_max_level_from_string(e);
+                if (r < 0)
+                        log_warning_errno(r, "Failed to parse log level '%s', ignoring: %m", e);
+        }
+
+        e = log_getenv("COLOR");
+        if (e && log_show_color_from_string(e) < 0)
+                log_warning("Failed to parse log color '%s', ignoring.", e);
+
+        e = log_getenv("LOCATION");
+        if (e && log_show_location_from_string(e) < 0)
+                log_warning("Failed to parse log location '%s', ignoring.", e);
 }
 static const char *const log_target_table[] = {
         [LOG_TARGET_CONSOLE] = "console",

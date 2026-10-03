@@ -1976,14 +1976,17 @@ int main(int argc, char *argv[]) {
         if (fd_stde > STDERR_FILENO)
                 close(fd_stde);
 
+        /* Like log_setup() of systemd-udevd, before udev.conf is read, so that its udev_log= takes
+         * precedence over $SYSTEMD_LOG_LEVEL, as in systemd. */
+        log_set_target(LOG_TARGET_AUTO);
+        log_parse_environment();
+        log_open();
+
         udev = udev_new();
         if (!udev) {
                 r = log_error_errno(errno, "could not allocate udev context: %m");
                 goto exit;
         }
-
-        log_set_target(LOG_TARGET_AUTO);
-        log_open();
 
         r = parse_argv(argc, argv);
         if (r <= 0)
