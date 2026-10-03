@@ -21,12 +21,6 @@ build-aux/
 
 *.pc
 
-m4/libtool.m4
-m4/ltoptions.m4
-m4/ltsugar.m4
-m4/ltversion.m4
-m4/lt~obsolete.m4
-
 rule_generator/write_net_rules
 
 rules/64-btrfs.rules
@@ -43,6 +37,8 @@ src/fido_id/fido_id
 src/udev/keyboard-keys-from-name.gperf
 src/udev/keyboard-keys-from-name.h
 src/udev/keyboard-keys.txt
+# no longer generated, but left behind in build trees of older versions
+src/udev/keyboard-keys-to-name.h
 
 test/test-json-writer
 test/test-libudev

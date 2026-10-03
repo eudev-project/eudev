@@ -1,0 +1,8 @@
+# This directory is kept in git, so that aclocal finds it on the first run of
+# autoreconf (see AC_CONFIG_MACRO_DIR in configure.ac). libtoolize copies its
+# macros here.
+libtool.m4
+ltoptions.m4
+ltsugar.m4
+ltversion.m4
+lt~obsolete.m4

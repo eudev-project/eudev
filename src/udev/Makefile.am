@@ -166,3 +166,7 @@ CLEANFILES += \
 	keyboard-keys-from-name.gperf \
 	keyboard-keys.txt \
 	$(BUILT_SOURCES)
+
+# no longer generated, but left behind in build trees of older versions
+CLEANFILES += \
+	keyboard-keys-to-name.h
