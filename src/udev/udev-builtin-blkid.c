@@ -332,7 +332,7 @@ static int find_gpt_root(struct udev_device *dev, blkid_probe pr, const char *lo
                                         if (label) {
                                                 root_label = strdup(label);
                                                 if (!root_label)
-                                                        return log_oom();
+                                                        return log_oom_debug();
                                         }
                                 }
                         }

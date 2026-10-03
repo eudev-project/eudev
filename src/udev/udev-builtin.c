@@ -125,7 +125,7 @@ int udev_builtin_run(struct udev_device *dev, enum udev_builtin_cmd cmd, const c
         /* like systemd, which splits the command into a new string vector, do not cut it */
         arg = strdup(command);
         if (!arg)
-                return log_oom();
+                return -ENOMEM;
         udev_build_argv(udev_device_get_udev(dev), arg, &argc, argv);
         return builtins[cmd]->cmd(dev, argc, argv, mode);
 }
@@ -140,7 +140,7 @@ int udev_builtin_add_property(struct udev_device *dev, enum udev_event_mode mode
 
         r = udev_device_add_property(dev, key, val);
         if (r < 0)
-                return log_device_debug_errno(dev, r, "Failed to %s property '%s%s%s': %m",
+                return log_device_debug_errno(dev, r, "Failed to %s property '%s%s%s'",
                                               val ? "add" : "remove", key, val ? "=" : "", val ?: "");
 
         if (mode == EVENT_UDEVADM_TEST_BUILTIN) {
