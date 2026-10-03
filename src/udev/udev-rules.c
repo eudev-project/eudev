@@ -127,6 +127,8 @@ static unsigned parse_line_nr = 0;
 /* Like log_event_trace() of systemd: a debug message only in trace mode, see struct udev_event. */
 #define log_event_trace(event, rules, rule, tok, ...)                                             \
         ((event)->trace ? log_event_debug(event, rules, rule, tok, __VA_ARGS__) : 0)
+#define log_event_trace_errno(event, rules, rule, tok, error, ...)                                \
+        ((event)->trace ? log_event_debug_errno(event, rules, rule, tok, error, __VA_ARGS__) : 0)
 /* Like log_event_done() of systemd: in trace mode, that an action of the rules was done. */
 #define log_event_done(event, rules, rule, tok)                                                   \
         log_event_trace(event, rules, rule, tok, "DONE")
@@ -950,21 +952,6 @@ static void trace_line(struct udev_event *event, struct udev_rules *rules, struc
         log_event_debug(event, rules, rule, NULL, "%s", message);
 }
 
-/* Logs the token, and whether a match passed or failed. */
-static void trace_token(struct udev_event *event, struct udev_rules *rules, struct token *rule,
-                        struct token *token, const char *result) {
-        _cleanup_free_ char *s = NULL;
-
-        if (!event->trace)
-                return;
-
-        s = token_to_string(rules, token);
-        if (!s)
-                return;
-
-        trace_line(event, rules, rule, "%s%s%s", s, result ? ": " : "", result ?: "");
-}
-
 /* Logs the tokens that the parent devices are checked against. */
 static void trace_parent_tokens(struct udev_event *event, struct udev_rules *rules, struct token *rule,
                                 struct token *first, struct token *end) {
@@ -1264,7 +1251,8 @@ static int import_property(struct udev_event *event, struct udev_rules *rules, s
 
                 log_event_warning_errno(event, rules, rule, token, r, "Failed to import property \"%s=%s\", ignoring: %m",
                                         k ?: key, v ?: "");
-        }
+        } else
+                log_event_trace(event, rules, rule, token, "Imported property \"%s=%s\".", key, val ?: "");
         return r;
 }
 
@@ -2985,6 +2973,8 @@ static bool match_value(struct udev_rules *rules, struct token *token, const cha
         return match;
 }
 
+#ifdef ENABLE_RULE_GENERATOR
+/* Returns 0 when the value passes the match of the token, with its operator, -1 when not, without logging. */
 static int match_key(struct udev_rules *rules, struct token *token, const char *val) {
         bool match;
 
@@ -2998,6 +2988,118 @@ static int match_key(struct udev_rules *rules, struct token *token, const char *
         if (!match && (token->key.op == OP_NOMATCH))
                 return 0;
         return -1;
+}
+#endif
+
+/* Like log_event_result() of systemd: logs PASS or FAIL in trace mode, and returns the result. */
+static bool log_event_result(struct udev_event *event, struct udev_rules *rules, struct token *rule,
+                             struct token *token, bool result) {
+        log_event_trace(event, rules, rule, token, "%s", result ? "PASS" : "FAIL");
+        return result;
+}
+
+/* The alternatives of the value of a match, like the trace messages of token_match_string() of systemd
+ * show them: "" once if one of them is empty, then the others, quoted and separated by ", ", e.g.
+ * "", "a", "b*" for "a||b*". Returns the number of alternatives in *ret_n. */
+static char *token_value_alternatives(struct udev_rules *rules, struct token *token, unsigned *ret_n) {
+        const char *value = rules_str(rules, token->key.value_off), *v;
+        bool split = IN_SET(token->key.glob, GL_SPLIT, GL_SPLIT_GLOB), empty = false;
+        unsigned n = 0;
+        char *buf, *t;
+
+        buf = new(char, strlen(value) * 4 + 8);
+        if (!buf)
+                return NULL;
+
+        for (v = value;;) {
+                size_t len = split ? strcspn(v, "|") : strlen(v);
+
+                if (len == 0)
+                        empty = true;
+                if (v[len] == '\0')
+                        break;
+                v += len + 1;
+        }
+
+        t = buf;
+        *t = '\0';
+        if (empty) {
+                t = stpcpy(t, "\"\"");
+                n++;
+        }
+        for (v = value;;) {
+                size_t len = split ? strcspn(v, "|") : strlen(v);
+
+                if (len > 0) {
+                        if (n > 0)
+                                t = stpcpy(t, ", ");
+                        *(t++) = '"';
+                        t = mempcpy(t, v, len);
+                        *(t++) = '"';
+                        *t = '\0';
+                        n++;
+                }
+                if (v[len] == '\0')
+                        break;
+                v += len + 1;
+        }
+
+        *ret_n = n;
+        return buf;
+}
+
+/* Like token_match_string() of systemd: whether the string passes the match of the token, with its operator.
+ * In trace mode, the comparison is logged, followed by PASS or FAIL when log_result is true, otherwise by a
+ * period, as systemd does it for the alternatives of the match: SUBSYSTEM=="subsystem" (which the parser
+ * turns into "subsystem|class|bus"), an empty value or "?*", and the alternatives of other values. */
+static bool token_match_string(struct udev_event *event, struct udev_rules *rules, struct token *rule,
+                               struct token *token, const char *str, bool log_result) {
+        const char *value = rules_str(rules, token->key.value_off), *res;
+        bool match, result;
+
+        str = str ?: "";
+        match = token->key.glob != GL_UNSET && match_value(rules, token, str);
+        result = token->key.glob != GL_UNSET && match == (token->key.op != OP_NOMATCH);
+
+        if (!event->trace)
+                return result;
+
+        res = log_result ? (result ? ": PASS" : ": FAIL") : ".";
+
+        if (token->type == TK_M_SUBSYSTEM && streq(value, "subsystem|class|bus"))
+                log_event_trace(event, rules, rule, token,
+                                "String \"%s\" matches %s of \"subsystem\", \"class\", or \"bus\"%s",
+                                str, match ? "one" : "neither", res);
+        else if (token->key.glob == GL_SOMETHING || isempty(value))
+                log_event_trace(event, rules, rule, token, "String \"%s\" is%s empty%s",
+                                str, isempty(str) ? "" : " not", res);
+        else {
+                _cleanup_free_ char *joined = NULL;
+                unsigned n = 0;
+
+                joined = token_value_alternatives(rules, token, &n);
+                log_event_trace(event, rules, rule, token, "String \"%s\" %s %s%s",
+                                str,
+                                match ? (n > 1 ? "matches one of" : "matches") : (n > 1 ? "matches neither of" : "does not match"),
+                                joined ?: "", res);
+        }
+
+        return result;
+}
+
+/* Like the matches of SYMLINK, TAG and TAGS in systemd: with ==, one of the values of the list must match
+ * the token, with !=, none of them. In trace mode, the comparison with each value that is checked is logged,
+ * then the result. skip is the length of a prefix of the values that is not compared, e.g. of "/dev/". */
+static bool token_match_list(struct udev_event *event, struct udev_rules *rules, struct token *rule,
+                             struct token *token, struct udev_list_entry *first, size_t skip) {
+        struct udev_list_entry *list_entry;
+
+        udev_list_entry_foreach(list_entry, first)
+                if (token_match_string(event, rules, rule, token, udev_list_entry_get_name(list_entry) + skip,
+                                       /* log_result= */ false) == (token->key.op != OP_NOMATCH))
+                        return log_event_result(event, rules, rule, token, token->key.op != OP_NOMATCH);
+
+        return log_event_result(event, rules, rule, token, token->key.op == OP_NOMATCH);
 }
 
 /* Like apply_format_full() of systemd: substitutes format into result of size. If the result is truncated,
@@ -3026,7 +3128,9 @@ static bool apply_format(struct udev_event *event, struct udev_rules *rules, str
         return false;
 }
 
-/* Returns 0 when the attribute matches, -1 when not, and -ENOMEM when out of memory. */
+/* Like token_match_attr() of systemd: returns 0 when the attribute matches, -1 when not, and -ENOMEM when out
+ * of memory. In trace mode, an attribute that cannot be read is logged, and does not match; otherwise
+ * token_match_string() logs the comparison. */
 static int match_attr(struct udev_rules *rules, struct udev_device *dev, struct udev_event *event,
                       struct token *rule, struct token *cur, struct udev_list *properties_list) {
         _cleanup_free_ char *stripped = NULL, *subsys_value = NULL;
@@ -3046,16 +3150,22 @@ static int match_attr(struct udev_rules *rules, struct udev_device *dev, struct 
                 /* fall through */
         case SB_NONE:
                 value = udev_device_get_sysattr_value(dev, name);
-                if (value == NULL)
+                if (value == NULL) {
+                        log_event_trace_errno(event, rules, rule, cur, errno, "Cannot read sysfs attribute%s%s%s: %m",
+                                              name == nbuf ? " \"" : "", name == nbuf ? name : "",
+                                              name == nbuf ? "\"" : "");
                         return -1;
+                }
                 break;
         case SB_SUBSYS:
                 /* unlike systemd, which cuts it at 511 bytes, the whole value */
                 r = util_resolve_subsys_kernel_value(event->udev, name, &subsys_value);
                 if (r == -ENOMEM)
                         return log_oom();
-                if (r < 0)
+                if (r < 0) {
+                        log_event_trace_errno(event, rules, rule, cur, r, "Cannot read sysfs attribute: %m");
                         return -1;
+                }
                 value = subsys_value;
                 break;
         default:
@@ -3087,7 +3197,7 @@ static int match_attr(struct udev_rules *rules, struct udev_device *dev, struct 
                 }
         }
 
-        return match_key(rules, cur, value);
+        return token_match_string(event, rules, rule, cur, value, /* log_result= */ true) ? 0 : -1;
 }
 
 enum escape_type {
@@ -3192,37 +3302,24 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                         esc = ESCAPE_UNSET;
                         break;
                 case TK_M_ACTION:
-                        if (match_key(rules, cur, udev_device_get_action(event->dev)) != 0)
+                        if (!token_match_string(event, rules, rule, cur, udev_device_get_action(event->dev), true))
                                 goto nomatch;
                         break;
                 case TK_M_DEVPATH:
-                        if (match_key(rules, cur, udev_device_get_devpath(event->dev)) != 0)
+                        if (!token_match_string(event, rules, rule, cur, udev_device_get_devpath(event->dev), true))
                                 goto nomatch;
                         break;
                 case TK_M_KERNEL:
-                        if (match_key(rules, cur, udev_device_get_sysname(event->dev)) != 0)
+                        if (!token_match_string(event, rules, rule, cur, udev_device_get_sysname(event->dev), true))
                                 goto nomatch;
                         break;
-                case TK_M_DEVLINK: {
-                        struct udev_list_entry *list_entry;
-                        bool match = false;
-
-                        udev_list_entry_foreach(list_entry, udev_device_get_devlinks_list_entry(event->dev)) {
-                                const char *devlink;
-
-                                devlink =  udev_list_entry_get_name(list_entry) + strlen("/dev/");
-                                if (match_value(rules, cur, devlink)) {
-                                        match = true;
-                                        break;
-                                }
-                        }
-                        /* with '!=', the token matches only if no symlink matches */
-                        if (match != (cur->key.op == OP_MATCH))
+                case TK_M_DEVLINK:
+                        if (!token_match_list(event, rules, rule, cur, udev_device_get_devlinks_list_entry(event->dev),
+                                              strlen("/dev/")))
                                 goto nomatch;
                         break;
-                }
                 case TK_M_NAME:
-                        if (match_key(rules, cur, event->name) != 0)
+                        if (!token_match_string(event, rules, rule, cur, event->name, true))
                                 goto nomatch;
                         break;
                 case TK_M_ENV: {
@@ -3231,33 +3328,20 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
 
                         /* check global properties too */
                         value = udev_event_get_property_value_with_fallback(event->dev, key_name, properties_list);
-                        if (!value)
-                                value = "";
-                        if (match_key(rules, cur, value))
+                        if (!token_match_string(event, rules, rule, cur, value, true))
                                 goto nomatch;
                         break;
                 }
-                case TK_M_TAG: {
-                        struct udev_list_entry *list_entry;
-                        bool match = false;
-
-                        udev_list_entry_foreach(list_entry, udev_device_get_current_tags_list_entry(event->dev)) {
-                                if (match_value(rules, cur, udev_list_entry_get_name(list_entry))) {
-                                        match = true;
-                                        break;
-                                }
-                        }
-                        /* with '!=', the token matches only if no tag matches */
-                        if (match != (cur->key.op == OP_MATCH))
+                case TK_M_TAG:
+                        if (!token_match_list(event, rules, rule, cur, udev_device_get_current_tags_list_entry(event->dev), 0))
                                 goto nomatch;
                         break;
-                }
                 case TK_M_SUBSYSTEM:
-                        if (match_key(rules, cur, udev_device_get_subsystem(event->dev)) != 0)
+                        if (!token_match_string(event, rules, rule, cur, udev_device_get_subsystem(event->dev), true))
                                 goto nomatch;
                         break;
                 case TK_M_DRIVER:
-                        if (match_key(rules, cur, udev_device_get_driver(event->dev)) != 0)
+                        if (!token_match_string(event, rules, rule, cur, udev_device_get_driver(event->dev), true))
                                 goto nomatch;
                         break;
                 case TK_M_ATTR:
@@ -3283,7 +3367,7 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
 
                         /* Like systemd, a missing entry is compared as an empty value, and the whitespace around
                          * the value is removed. */
-                        if (match_key(rules, cur, value ? strstrip(value) : "") != 0)
+                        if (!token_match_string(event, rules, rule, cur, value ? strstrip(value) : NULL, true))
                                 goto nomatch;
                         break;
                 }
@@ -3309,17 +3393,21 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                                 /* loop over sequence of parent match keys */
                                 for (key = cur; key < next; key++ ) {
                                         dump_token(rules, key);
+                                        /* like systemd, logged with the parent device that is checked */
                                         switch(key->type) {
                                         case TK_M_KERNELS:
-                                                if (match_key(rules, key, udev_device_get_sysname(event->dev_parent)) != 0)
+                                                if (!token_match_string(event, rules, rule, key,
+                                                                        udev_device_get_sysname(event->dev_parent), true))
                                                         goto try_parent;
                                                 break;
                                         case TK_M_SUBSYSTEMS:
-                                                if (match_key(rules, key, udev_device_get_subsystem(event->dev_parent)) != 0)
+                                                if (!token_match_string(event, rules, rule, key,
+                                                                        udev_device_get_subsystem(event->dev_parent), true))
                                                         goto try_parent;
                                                 break;
                                         case TK_M_DRIVERS:
-                                                if (match_key(rules, key, udev_device_get_driver(event->dev_parent)) != 0)
+                                                if (!token_match_string(event, rules, rule, key,
+                                                                        udev_device_get_driver(event->dev_parent), true))
                                                         goto try_parent;
                                                 break;
                                         case TK_M_ATTRS:
@@ -3329,21 +3417,11 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                                                 if (r != 0)
                                                         goto try_parent;
                                                 break;
-                                        case TK_M_TAGS: {
-                                                struct udev_list_entry *list_entry;
-                                                bool match = false;
-
-                                                udev_list_entry_foreach(list_entry, udev_device_get_current_tags_list_entry(event->dev_parent)) {
-                                                        if (match_value(rules, key, udev_list_entry_get_name(list_entry))) {
-                                                                match = true;
-                                                                break;
-                                                        }
-                                                }
-                                                /* with '!=', the token matches only if no tag matches */
-                                                if (match != (key->key.op == OP_MATCH))
+                                        case TK_M_TAGS:
+                                                if (!token_match_list(event, rules, rule, key,
+                                                                      udev_device_get_current_tags_list_entry(event->dev_parent), 0))
                                                         goto try_parent;
                                                 break;
-                                        }
                                         default:
                                                 goto nomatch;
                                         }
@@ -3380,8 +3458,10 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                                         /* like systemd, a path that does not fit fails */
                                         strscpyl_full(filename, sizeof(filename), &truncated,
                                                       udev_device_get_syspath(event->dev), "/", tmp, NULL);
-                                        if (truncated)
+                                        if (truncated) {
+                                                log_event_result(event, rules, rule, cur, false);
                                                 goto nomatch;
+                                        }
                                 }
                         }
 
@@ -3405,9 +3485,7 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                         /* like systemd, with a mode mask, at least one of its bits must be set */
                         if (match && cur->key.mode != MODE_INVALID)
                                 match = ((statbuf.st_mode & cur->key.mode) > 0);
-                        if (match && cur->key.op == OP_NOMATCH)
-                                goto nomatch;
-                        if (!match && cur->key.op == OP_MATCH)
+                        if (!log_event_result(event, rules, rule, cur, match == (cur->key.op != OP_NOMATCH)))
                                 goto nomatch;
                         break;
                 }
@@ -3425,7 +3503,7 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                         log_event_debug(event, rules, rule, cur, "Running command \"%s\"", program);
 
                         if (udev_event_spawn(event, timeout_usec, timeout_warn_usec, program, envp, sigmask, result, sizeof(result), NULL) < 0) {
-                                if (cur->key.op != OP_NOMATCH)
+                                if (!log_event_result(event, rules, rule, cur, cur->key.op == OP_NOMATCH))
                                         goto nomatch;
                         } else {
                                 int count;
@@ -3439,7 +3517,7 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                                                                 count, result);
                                 }
                                 event->program_result = strdup(result);
-                                if (cur->key.op == OP_NOMATCH)
+                                if (!log_event_result(event, rules, rule, cur, cur->key.op != OP_NOMATCH))
                                         goto nomatch;
                         }
                         break;
@@ -3454,8 +3532,7 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                         r = import_file_into_properties(event, rules, rule, cur, import);
                         if (r < 0)
                                 return r;
-                        ok = r > 0;
-                        if (ok == (cur->key.op == OP_NOMATCH))
+                        if (!log_event_result(event, rules, rule, cur, (r > 0) == (cur->key.op != OP_NOMATCH)))
                                 goto nomatch;
                         break;
                 }
@@ -3471,8 +3548,7 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                                                            import, sigmask);
                         if (r < 0)
                                 return r;
-                        ok = r > 0;
-                        if (ok == (cur->key.op == OP_NOMATCH))
+                        if (!log_event_result(event, rules, rule, cur, (r > 0) == (cur->key.op != OP_NOMATCH)))
                                 goto nomatch;
                         break;
                 }
@@ -3487,7 +3563,7 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                                                 udev_builtin_name(cur->key.builtin_cmd));
                                 /* return the result from earlier run */
                                 ok = !(event->builtin_ret & (1 << cur->key.builtin_cmd));
-                                if (ok == (cur->key.op == OP_NOMATCH))
+                                if (!log_event_result(event, rules, rule, cur, ok == (cur->key.op != OP_NOMATCH)))
                                         goto nomatch;
                                 break;
                         }
@@ -3514,7 +3590,7 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                                         log_event_debug(event, rules, rule, cur, "Builtin command \"%s\" returned non-zero", command);
                                 event->builtin_ret |= (1 << cur->key.builtin_cmd);
                         }
-                        if (ok == (cur->key.op == OP_NOMATCH))
+                        if (!log_event_result(event, rules, rule, cur, ok == (cur->key.op != OP_NOMATCH)))
                                 goto nomatch;
                         break;
                 }
@@ -3526,7 +3602,7 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                         if (value != NULL &&
                             import_property(event, rules, rule, cur, key, value) == -ENOMEM)
                                 return -ENOMEM;
-                        if ((value != NULL) == (cur->key.op == OP_NOMATCH))
+                        if (!log_event_result(event, rules, rule, cur, (value != NULL) == (cur->key.op != OP_NOMATCH)))
                                 goto nomatch;
                         break;
                 }
@@ -3550,7 +3626,7 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                                         return -ENOMEM;
                         }
 
-                        if (imported == (cur->key.op == OP_NOMATCH))
+                        if (!log_event_result(event, rules, rule, cur, imported == (cur->key.op != OP_NOMATCH)))
                                 goto nomatch;
                         break;
                 }
@@ -3564,13 +3640,12 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                         r = import_parent_into_properties(event, rules, rule, cur, import);
                         if (r < 0)
                                 return r;
-                        ok = r > 0;
-                        if (ok == (cur->key.op == OP_NOMATCH))
+                        if (!log_event_result(event, rules, rule, cur, (r > 0) == (cur->key.op != OP_NOMATCH)))
                                 goto nomatch;
                         break;
                 }
                 case TK_M_RESULT:
-                        if (match_key(rules, cur, event->program_result) != 0)
+                        if (!token_match_string(event, rules, rule, cur, event->program_result, true))
                                 goto nomatch;
                         break;
                 case TK_A_DUMP: {
@@ -4155,15 +4230,10 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                         goto nomatch;
                 }
 
-                /* like systemd, the actions log what they did themselves */
-                if (cur->type != TK_RULE && cur->type < TK_M_MAX)
-                        trace_token(event, rules, rule, cur, "PASS");
+                /* like systemd, the keys log their result themselves in trace mode */
                 cur++;
                 continue;
         nomatch:
-                /* the parent conditions are logged above */
-                if (cur->type != TK_RULE && !(cur->type > TK_M_PARENTS_MIN && cur->type < TK_M_PARENTS_MAX))
-                        trace_token(event, rules, rule, cur, "FAIL");
                 /* fast-forward to next rule */
                 cur = rule + rule->rule.token_count;
         }
