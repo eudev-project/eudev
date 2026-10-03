@@ -148,6 +148,9 @@ int main(int argc, char *argv[]) {
                                 /* we need '0' here to reset the internal state */
                                 optind = 0;
                                 rc = run_command(udev, udevadm_cmds[i], argc, argv);
+                                /* also if the pager, which is closed at exit, was quit before all output
+                                 * was written */
+                                pager_set_exit_status(rc);
                                 goto out;
                         }
 

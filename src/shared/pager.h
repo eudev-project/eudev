@@ -14,3 +14,8 @@ typedef enum PagerFlags {
 void pager_open(PagerFlags flags);
 void pager_close(void);
 bool pager_have(void);
+
+/* Unlike systemd, where the program is killed by SIGPIPE, the program ends when the pager is quit before
+ * all output is written, with exit status 0, unless an error was recorded before: then with the failure
+ * code given here, which the program would return at its end. */
+void pager_set_exit_status(int status);

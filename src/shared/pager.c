@@ -4,7 +4,8 @@
  * The pager of systemd's src/shared/pager.c (as of systemd a446e8ff2c), adapted to eudev: the pager
  * process is forked directly, the owner of the login session, which systemd gets from logind, is the
  * audit login UID, pager_close() is also called at exit, and quitting the pager before all output is
- * written ends the program with exit status 0 instead of SIGPIPE.
+ * written ends the program instead of SIGPIPE, with exit status 0, or with the failure code that the
+ * program set with pager_set_exit_status() before.
  */
 
 #include <errno.h>
@@ -36,6 +37,7 @@ static bool stderr_redirected = false;
 
 static struct sigaction old_sigpipe;
 static bool sigpipe_handled = false;
+static volatile sig_atomic_t sigpipe_exit_status = EXIT_SUCCESS;
 
 noreturn static void pager_fallback(void) {
         char buf[4096];
@@ -136,7 +138,8 @@ static bool running_with_escalated_privileges(void) {
 
 /* Unlike systemd, where the program is killed by SIGPIPE (exit status 141 in the shell) when it writes
  * after the pager quit, end like after all output was shown: wait for the pager to exit, as
- * pager_close() does, and exit with status 0. Only async-signal-safe functions are used here. */
+ * pager_close() does, and exit with status 0, or with the failure code set before with
+ * pager_set_exit_status(). Only async-signal-safe functions are used here. */
 static void pager_sigpipe_handler(int sig) {
         if (getpid() != pager_parent) {
                 /* a child forked later, which did not open the pager */
@@ -148,7 +151,11 @@ static void pager_sigpipe_handler(int sig) {
         while (waitpid(pager_pid, NULL, 0) < 0 && errno == EINTR)
                 ;
 
-        _exit(EXIT_SUCCESS);
+        _exit(sigpipe_exit_status);
+}
+
+void pager_set_exit_status(int status) {
+        sigpipe_exit_status = status;
 }
 
 void pager_open(PagerFlags flags) {

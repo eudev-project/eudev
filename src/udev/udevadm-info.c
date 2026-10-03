@@ -1461,6 +1461,7 @@ static int uinfo(struct udev *udev, int argc, char *argv[]) {
 
         if (strv_isempty(devices)) {
                 if (action == ACTION_QUERY) {
+                        pager_set_exit_status(2);
                         help();
                         return 2;
                 }
@@ -1501,13 +1502,18 @@ static int uinfo(struct udev *udev, int argc, char *argv[]) {
 
                 device = find_device(udev, *p, NULL);
                 if (!device) {
-                        if (errno == EINVAL)
+                        bool bad_argument = errno == EINVAL;
+
+                        /* The exit status also if the pager is quit while the message or the output of the
+                         * other devices is written. */
+                        if (ret == 0)
+                                ret = 4;
+                        pager_set_exit_status(ret);
+
+                        if (bad_argument)
                                 log_error("Bad argument \"%s\", expected an absolute path in /dev/ or /sys/, or device ID.", *p);
                         else
                                 log_error("Unknown device \"%s\".", *p);
-
-                        if (ret == 0)
-                                ret = 4;
                         continue;
                 }
 
