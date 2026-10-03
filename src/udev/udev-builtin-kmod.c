@@ -30,37 +30,90 @@
 #include <libkmod.h>
 
 #include "udev.h"
+#include "strv.h"
 
 static struct kmod_ctx *ctx = NULL;
 
-static int load_module(struct udev *udev __attribute__((unused)), const char *alias) {
+/* the modules of the module_blacklist= options of the kernel command line, which the kernel refuses to
+ * load with EPERM */
+static char **cmdline_denylist = NULL;
+
+static int parse_proc_cmdline_item(const char *key, const char *value) {
+        if (proc_cmdline_key_streq(key, "module_blacklist")) {
+                if (proc_cmdline_value_missing(key, value))
+                        return 0;
+
+                return strv_split_and_extend(&cmdline_denylist, value, ",", /* filter_duplicates= */ true);
+        }
+
+        return 0;
+}
+
+/* Like module_load_and_warn() of systemd, which the kmod builtin calls with verbose=false, so that
+ * everything is logged at debug level. */
+static int load_module(const char *module) {
         struct kmod_list *list = NULL;
         struct kmod_list *l;
-        int err;
+        bool denylist_parsed = false;
+        int r;
 
-        err = kmod_module_new_from_lookup(ctx, alias, &list);
-        if (err < 0)
-                return err;
+        log_debug("Loading module: %s", module);
 
-        if (list == NULL)
-                log_debug("No module matches '%s'", alias);
+        r = kmod_module_new_from_lookup(ctx, module, &list);
+        if (r < 0)
+                return log_debug_errno(r, "Failed to look up module alias '%s': %m", module);
+
+        if (!list)
+                return log_debug_errno(ENOENT, "Failed to find module '%s'", module);
 
         kmod_list_foreach(l, list) {
                 struct kmod_module *mod = kmod_module_get_module(l);
+                int err;
 
-                err = kmod_module_probe_insert_module(mod, KMOD_PROBE_APPLY_BLACKLIST, NULL, NULL, NULL, NULL);
-                if (err == KMOD_PROBE_APPLY_BLACKLIST)
-                        log_debug("Module '%s' is blacklisted", kmod_module_get_name(mod));
-                else if (err == 0)
-                        log_debug("Inserted '%s'", kmod_module_get_name(mod));
-                else
-                        log_debug("Failed to insert '%s'", kmod_module_get_name(mod));
+                switch (kmod_module_get_initstate(mod)) {
+
+                case KMOD_MODULE_BUILTIN:
+                        log_debug("Module '%s' is built in", kmod_module_get_name(mod));
+                        break;
+
+                case KMOD_MODULE_LIVE:
+                        log_debug("Module '%s' is already loaded", kmod_module_get_name(mod));
+                        break;
+
+                default:
+                        err = kmod_module_probe_insert_module(mod, KMOD_PROBE_APPLY_BLACKLIST, NULL, NULL, NULL, NULL);
+                        if (err == 0)
+                                log_debug("Inserted module '%s'", kmod_module_get_name(mod));
+                        else if (err == KMOD_PROBE_APPLY_BLACKLIST)
+                                log_debug("Module '%s' is deny-listed (by kmod)", kmod_module_get_name(mod));
+                        else {
+                                if (err == -EPERM) {
+                                        if (!denylist_parsed) {
+                                                cmdline_denylist = strv_free(cmdline_denylist);
+                                                r = parse_proc_cmdline(parse_proc_cmdline_item);
+                                                if (r < 0)
+                                                        log_debug_errno(r, "Failed to parse kernel command line, ignoring: %m");
+
+                                                denylist_parsed = true;
+                                        }
+                                }
+
+                                if (err == -EPERM && strv_contains(cmdline_denylist, kmod_module_get_name(mod)))
+                                        log_debug("Module '%s' is deny-listed (by kernel)", kmod_module_get_name(mod));
+                                else {
+                                        log_debug_errno(err, "Failed to insert module '%s': %m", kmod_module_get_name(mod));
+                                        if (!IN_SET(err, -ENODEV, -ENOENT))
+                                                r = err;
+                                }
+                        }
+                }
 
                 kmod_module_unref(mod);
         }
 
         kmod_module_unref_list(list);
-        return err;
+        cmdline_denylist = strv_free(cmdline_denylist);
+        return r;
 }
 
 _printf_(6,0) static void udev_kmod_log(void *data __attribute__((unused)), int priority, const char *file, int line, const char *fn, const char *format, va_list args) {
@@ -68,7 +121,6 @@ _printf_(6,0) static void udev_kmod_log(void *data __attribute__((unused)), int 
 }
 
 static int builtin_kmod(struct udev_device *dev, int argc, char *argv[], enum udev_event_mode mode) {
-        struct udev *udev = udev_device_get_udev(dev);
         int i;
 
         if (mode != EVENT_UDEV_WORKER) {
@@ -90,13 +142,10 @@ static int builtin_kmod(struct udev_device *dev, int argc, char *argv[], enum ud
                 if (!modalias)
                         return log_device_warning_errno(dev, ENOENT, "Failed to read property \"MODALIAS\": %m");
 
-                log_debug("Execute '%s' '%s'", argv[1], modalias);
-                load_module(udev, modalias);
+                (void) load_module(modalias);
         } else
-                for (i = 2; argv[i]; i++) {
-                        log_debug("Execute '%s' '%s'", argv[1], argv[i]);
-                        load_module(udev, argv[i]);
-                }
+                for (i = 2; argv[i]; i++)
+                        (void) load_module(argv[i]);
 
         return EXIT_SUCCESS;
 }
@@ -108,26 +157,34 @@ static int builtin_kmod_init(struct udev *udev) {
 
         ctx = kmod_new(NULL, NULL);
         if (!ctx)
-                return -ENOMEM;
+                return log_error_errno(ENOMEM, "Failed to initialize libkmod context: %m");
 
-        log_debug("Load module index");
         kmod_set_log_fn(ctx, udev_kmod_log, udev);
-        kmod_load_resources(ctx);
+        (void) kmod_load_resources(ctx);
+        log_debug("Loaded kernel module index.");
         return 0;
 }
 
 /* called on udev shutdown and reload request */
 static void builtin_kmod_exit(struct udev *udev __attribute__((unused))) {
-        log_debug("Unload module index");
+        if (!ctx)
+                return;
+
         ctx = kmod_unref(ctx);
+        log_debug("Unloaded kernel module index.");
 }
 
 /* called every couple of seconds during event activity; 'true' if config has changed */
 static bool builtin_kmod_validate(struct udev *udev __attribute__((unused))) {
-        log_debug("Validate module index");
         if (!ctx)
                 return false;
-        return (kmod_validate_resources(ctx) != KMOD_RESOURCES_OK);
+
+        if (kmod_validate_resources(ctx) != KMOD_RESOURCES_OK) {
+                log_debug("Kernel module index needs reloading.");
+                return true;
+        }
+
+        return false;
 }
 
 const struct udev_builtin udev_builtin_kmod = {
