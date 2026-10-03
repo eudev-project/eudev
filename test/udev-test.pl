@@ -1917,13 +1917,11 @@ EOF
         },
         {
                 desc            => "rule lines whose only assignments do not apply to the device are not evaluated",
-                devpath         => "/devices/pci0000:00/0000:00:1f.2",
+                devpath         => "/devices/pci0000:00/0000:00:1f.2/host0/target0:0:0/0:0:0:0/block/sda",
                 exp_name        => "found",
-                exp_rem_error   => "yes",
-                option          => "clean",
                 rules           => <<EOF
-KERNEL=="0000:00:1f.2", TEST=="/etc/passwd/*/x", NAME="x", SYMLINK+="y", OWNER="1", GROUP="1", MODE="0666"
-KERNEL=="0000:00:1f.2", ACTION=="add", RUN+="/bin/ln -s null /dev/found"
+KERNEL=="sda", TEST=="/etc/passwd/*/x", NAME="x"
+KERNEL=="sda", SYMLINK+="found"
 EOF
         },
         {
@@ -2009,6 +2007,17 @@ EOF
                 not_exp_name    => "bad",
                 rules           => "KERNEL==\"sda\", " . join(", ", map { "KERNEL!=\"x$_\"" } (0..299)) . ", SYMLINK+=\"found\"\n" .
                                    "KERNEL==\"sda\", " . join(", ", map { "KERNEL!=\"x$_\"" } (0..299)) . ", KERNEL==\"x\", SYMLINK+=\"bad\"\n",
+        },
+        {
+                desc            => "rule lines whose only assignments do not apply to a device without a node are not evaluated",
+                devpath         => "/devices/pci0000:00/0000:00:1f.2",
+                exp_name        => "found",
+                exp_rem_error   => "yes",
+                option          => "clean",
+                rules           => <<EOF
+KERNEL=="0000:00:1f.2", TEST=="/etc/passwd/*/x", NAME="x", SYMLINK+="y", OWNER="1", GROUP="1", MODE="0666"
+KERNEL=="0000:00:1f.2", ACTION=="add", RUN+="/bin/ln -s null /dev/found"
+EOF
         },
         {
                 desc            => "the symlinks of the database are removed, also when SYMLINK= clears them on remove",
