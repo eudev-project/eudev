@@ -171,6 +171,60 @@ int strv_push(char ***l, char *value) {
         return 0;
 }
 
+/* Like strv_push_prepend(), strv_consume_prepend() and strv_prepend() of systemd a446e8ff2c. */
+int strv_push_prepend(char ***l, char *value) {
+        char **c;
+        unsigned n, m, i;
+
+        if (!value)
+                return 0;
+
+        n = strv_length(*l);
+
+        /* increase and check for overflow */
+        m = n + 2;
+        if (m < n)
+                return -ENOMEM;
+
+        c = new(char*, m);
+        if (!c)
+                return -ENOMEM;
+
+        for (i = 0; i < n; i++)
+                c[i+1] = (*l)[i];
+
+        c[0] = value;
+        c[n+1] = NULL;
+
+        free(*l);
+        *l = c;
+
+        return 0;
+}
+
+int strv_consume_prepend(char ***l, char *value) {
+        int r;
+
+        r = strv_push_prepend(l, value);
+        if (r < 0)
+                free(value);
+
+        return r;
+}
+
+int strv_prepend(char ***l, const char *value) {
+        char *v;
+
+        if (!value)
+                return 0;
+
+        v = strdup(value);
+        if (!v)
+                return -ENOMEM;
+
+        return strv_consume_prepend(l, v);
+}
+
 int strv_consume(char ***l, char *value) {
         int r;
 
@@ -249,6 +303,52 @@ char **strv_remove(char **l, const char *s) {
 
         *t = NULL;
         return l;
+}
+
+/* Like strv_split_full() of systemd a446e8ff2c. */
+int strv_split_full(char ***t, const char *s, const char *separators, ExtractFlags flags) {
+        _cleanup_strv_free_ char **l = NULL;
+        size_t n = 0, allocated = 0;
+        int r;
+
+        assert(t);
+        assert(s);
+
+        for (;;) {
+                _cleanup_free_ char *word = NULL;
+
+                r = extract_first_word(&s, &word, separators, flags);
+                if (r < 0)
+                        return r;
+                if (r == 0)
+                        break;
+
+                if (!GREEDY_REALLOC(l, allocated, n + 2))
+                        return -ENOMEM;
+
+                l[n++] = TAKE_PTR(word);
+                l[n] = NULL;
+        }
+
+        if (!l) {
+                l = new0(char*, 1);
+                if (!l)
+                        return -ENOMEM;
+        }
+
+        *t = TAKE_PTR(l);
+
+        return (int) n;
+}
+
+/* Like strv_split() of systemd a446e8ff2c. */
+char **strv_split(const char *s, const char *separators) {
+        char **ret;
+
+        if (strv_split_full(&ret, s, separators, EXTRACT_RETAIN_ESCAPE) < 0)
+                return NULL;
+
+        return ret;
 }
 
 int strv_split_and_extend(char ***l, const char *s, const char *separators, bool filter_duplicates) {

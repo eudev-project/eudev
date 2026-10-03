@@ -3383,6 +3383,242 @@ finish:
         return 1;
 }
 
+/* Like extract_first_word() of systemd a446e8ff2c (src/basic/extract-word.c), with eudev's GREEDY_REALLOC()
+ * and cunescape_one(), which never accepts a NUL. */
+int extract_first_word(const char **p, char **ret, const char *separators, ExtractFlags flags) {
+        _cleanup_free_ char *s = NULL;
+        size_t allocated = 0, sz = 0;
+        char quote = 0;                 /* 0 or ' or " */
+        bool backslash = false;         /* whether we've just seen a backslash */
+        char c;
+        int r;
+
+        assert(p);
+        assert(ret);
+        assert(!FLAGS_SET(flags, EXTRACT_KEEP_QUOTE | EXTRACT_UNQUOTE));
+
+        /* Bail early if called after last value or with no input */
+        if (!*p)
+                goto finish;
+        c = **p;
+
+        if (!separators)
+                separators = WHITESPACE;
+
+        /* Parses the first word of a string, and returns it in
+         * *ret. Removes all quotes in the process. When parsing fails
+         * (because of an uneven number of quotes or similar), leaves
+         * the pointer *p at the first invalid character. */
+
+        if (flags & EXTRACT_DONT_COALESCE_SEPARATORS)
+                if (!GREEDY_REALLOC(s, allocated, sz+1))
+                        return -ENOMEM;
+
+        for (;; (*p)++, c = **p) {
+                if (c == 0)
+                        goto finish_force_terminate;
+                else if (strchr(separators, c)) {
+                        if (flags & EXTRACT_DONT_COALESCE_SEPARATORS) {
+                                if (!(flags & EXTRACT_RETAIN_SEPARATORS))
+                                        (*p)++;
+                                goto finish_force_next;
+                        }
+                } else {
+                        /* We found a non-blank character, so we will always
+                         * want to return a string (even if it is empty),
+                         * allocate it here. */
+                        if (!GREEDY_REALLOC(s, allocated, sz+1))
+                                return -ENOMEM;
+                        break;
+                }
+        }
+
+        for (;; (*p)++, c = **p) {
+                if (backslash) {
+                        if (!GREEDY_REALLOC(s, allocated, sz+7))
+                                return -ENOMEM;
+
+                        if (c == 0) {
+                                if ((flags & EXTRACT_UNESCAPE_RELAX) &&
+                                    (quote == 0 || flags & EXTRACT_RELAX)) {
+                                        /* If we find an unquoted trailing backslash and we're in
+                                         * EXTRACT_UNESCAPE_RELAX mode, keep it verbatim in the
+                                         * output.
+                                         *
+                                         * Unbalanced quotes will only be allowed in EXTRACT_RELAX
+                                         * mode, EXTRACT_UNESCAPE_RELAX mode does not allow them.
+                                         */
+                                        s[sz++] = '\\';
+                                        goto finish_force_terminate;
+                                }
+                                if (flags & EXTRACT_RELAX)
+                                        goto finish_force_terminate;
+                                return -EINVAL;
+                        }
+
+                        if (flags & (EXTRACT_CUNESCAPE|EXTRACT_UNESCAPE_SEPARATORS|EXTRACT_UNESCAPE_RELAX)) {
+                                bool eight_bit = false;
+                                uint32_t u;
+
+                                if ((flags & EXTRACT_CUNESCAPE) &&
+                                    (r = cunescape_one(*p, (size_t) -1, &u, &eight_bit)) >= 0) {
+                                        /* A valid escaped sequence */
+                                        assert(r >= 1);
+
+                                        (*p) += r - 1;
+
+                                        if (eight_bit)
+                                                s[sz++] = u;
+                                        else
+                                                sz += utf8_encode_unichar(s + sz, u);
+                                } else if ((flags & EXTRACT_UNESCAPE_SEPARATORS) &&
+                                           (strchr(separators, **p) || **p == '\\'))
+                                        /* An escaped separator char or the escape char itself */
+                                        s[sz++] = c;
+                                else if (flags & EXTRACT_UNESCAPE_RELAX) {
+                                        s[sz++] = '\\';
+                                        s[sz++] = c;
+                                } else
+                                        return -EINVAL;
+                        } else
+                                s[sz++] = c;
+
+                        backslash = false;
+
+                } else if (quote != 0) {     /* inside either single or double quotes */
+                        for (;; (*p)++, c = **p) {
+                                if (c == 0) {
+                                        if (flags & EXTRACT_RELAX)
+                                                goto finish_force_terminate;
+                                        return -EINVAL;
+                                } else if (c == quote) {        /* found the end quote */
+                                        quote = 0;
+                                        if (flags & EXTRACT_UNQUOTE)
+                                                break;
+                                } else if (c == '\\' && !(flags & EXTRACT_RETAIN_ESCAPE)) {
+                                        backslash = true;
+                                        break;
+                                }
+
+                                if (!GREEDY_REALLOC(s, allocated, sz+2))
+                                        return -ENOMEM;
+
+                                s[sz++] = c;
+
+                                if (quote == 0)
+                                        break;
+                        }
+
+                } else {
+                        for (;; (*p)++, c = **p) {
+                                if (c == 0)
+                                        goto finish_force_terminate;
+                                else if (IN_SET(c, '\'', '"') && (flags & (EXTRACT_KEEP_QUOTE | EXTRACT_UNQUOTE))) {
+                                        quote = c;
+                                        if (flags & EXTRACT_UNQUOTE)
+                                                break;
+                                } else if (c == '\\' && !(flags & EXTRACT_RETAIN_ESCAPE)) {
+                                        backslash = true;
+                                        break;
+                                } else if (strchr(separators, c)) {
+                                        if (flags & EXTRACT_DONT_COALESCE_SEPARATORS) {
+                                                if (!(flags & EXTRACT_RETAIN_SEPARATORS))
+                                                        (*p)++;
+                                                goto finish_force_next;
+                                        }
+                                        if (!(flags & EXTRACT_RETAIN_SEPARATORS))
+                                                /* Skip additional coalesced separators. */
+                                                for (;; (*p)++, c = **p) {
+                                                        if (c == 0)
+                                                                goto finish_force_terminate;
+                                                        if (!strchr(separators, c))
+                                                                break;
+                                                }
+                                        goto finish;
+
+                                }
+
+                                if (!GREEDY_REALLOC(s, allocated, sz+2))
+                                        return -ENOMEM;
+
+                                s[sz++] = c;
+
+                                if (quote != 0)
+                                        break;
+                        }
+                }
+        }
+
+finish_force_terminate:
+        *p = NULL;
+finish:
+        if (!s) {
+                *p = NULL;
+                *ret = NULL;
+                return 0;
+        }
+
+finish_force_next:
+        s[sz] = 0;
+        *ret = TAKE_PTR(s);
+
+        return 1;
+}
+
+/* We pass ExtractFlags as unsigned int (to avoid undefined behaviour when passing
+ * an object that undergoes default argument promotion as an argument to va_start).
+ * Let's make sure that ExtractFlags fits into an unsigned int. */
+assert_cc(sizeof(enum ExtractFlags) <= sizeof(unsigned));
+
+/* Like extract_many_words_internal() of systemd a446e8ff2c. */
+int extract_many_words_internal(const char **p, const char *separators, unsigned flags, ...) {
+        _cleanup_free_ char **l = NULL;
+        va_list ap;
+        unsigned n = 0, c, i;
+        int r;
+
+        /* Parses a number of words from a string, stripping any quotes if necessary. */
+
+        assert(p);
+
+        /* Count how many words are expected */
+        va_start(ap, flags);
+        while (va_arg(ap, char**))
+                n++;
+        va_end(ap);
+
+        if (n == 0)
+                return 0;
+
+        /* Read all words into a temporary array (on the heap, systemd uses the stack) */
+        l = new0(char*, n);
+        if (!l)
+                return -ENOMEM;
+
+        for (c = 0; c < n; c++) {
+                r = extract_first_word(p, &l[c], separators, flags);
+                if (r < 0) {
+                        for (i = 0; i < c; i++)
+                                free(l[i]);
+                        return r;
+                }
+                if (r == 0)
+                        break;
+        }
+
+        /* If we managed to parse all words, return them in the passed in parameters */
+        va_start(ap, flags);
+        for (i = 0; i < n; i++) {
+                char **v = va_arg(ap, char**);
+
+                assert(v);
+                *v = l[i];
+        }
+        va_end(ap);
+
+        return c;
+}
+
 void cmsg_close_all(struct msghdr *mh) {
         struct cmsghdr *cmsg;
 

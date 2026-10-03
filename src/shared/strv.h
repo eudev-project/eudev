@@ -50,6 +50,11 @@ char *strv_find(char * const *l, const char *name) _pure_;
 char **strv_sort(char **l);
 
 int strv_split_and_extend(char ***l, const char *s, const char *separators, bool filter_duplicates);
+int strv_split_full(char ***t, const char *s, const char *separators, ExtractFlags flags);
+char **strv_split(const char *s, const char *separators);
+int strv_push_prepend(char ***l, char *value);
+int strv_consume_prepend(char ***l, char *value);
+int strv_prepend(char ***l, const char *value);
 
 char **strv_new(const char *x, ...) _sentinel_;
 char **strv_new_ap(const char *x, va_list ap);
