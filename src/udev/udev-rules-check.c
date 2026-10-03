@@ -139,11 +139,12 @@ struct udev_rules_check *udev_rules_check_free(struct udev_rules_check *c) {
         return NULL;
 }
 
-int udev_rules_check_file(struct udev *udev, struct udev_rules_check *c, const char *filename) {
+int udev_rules_check_file(struct udev *udev, struct udev_rules_check *c, const char *filename, const char *path) {
         assert(c);
         assert(filename);
+        assert(path);
 
-        return udev_rules_parse_file_for_check(udev, c->resolve_names, filename, c);
+        return udev_rules_parse_file_for_check(udev, c->resolve_names, filename, path, c);
 }
 
 unsigned udev_rules_check_get_issues(struct udev_rules_check *c) {

@@ -2572,7 +2572,10 @@ ignore:
         return -1;
 }
 
-static int parse_file(struct udev_rules *rules, const char *filename) {
+/* Reads the rules file path. Like systemd's udev_rules_parse_file(), which reads the file it found and
+ * uses its original path in the messages and as the file name of its rules, the messages and rules use
+ * filename, e.g. the name of a symlink as given to udevadm verify. */
+static int parse_file(struct udev_rules *rules, const char *path, const char *filename) {
         _cleanup_fclose_ FILE *f = NULL;
         _cleanup_free_ char *continuation = NULL;
         unsigned int first_token;
@@ -2582,7 +2585,7 @@ static int parse_file(struct udev_rules *rules, const char *filename) {
         unsigned int i, rule_idx;
         int r;
 
-        f = fopen(filename, "re");
+        f = fopen(path, "re");
         if (!f) {
                 if (errno == ENOENT)
                         return 0;
@@ -2749,15 +2752,16 @@ static int parse_file(struct udev_rules *rules, const char *filename) {
 }
 
 int udev_rules_parse_file_for_check(struct udev *udev, int resolve_names, const char *filename,
-                                    struct udev_rules_check *c) {
+                                    const char *path, struct udev_rules_check *c) {
         struct udev_rules *rules;
         int r;
 
         assert(filename);
+        assert(path);
         assert(c);
 
         /* parse_file() ignores missing files */
-        if (access(filename, R_OK) < 0)
+        if (access(path, R_OK) < 0)
                 return -errno;
 
         rules = new0(struct udev_rules, 1);
@@ -2776,7 +2780,7 @@ int udev_rules_parse_file_for_check(struct udev *udev, int resolve_names, const 
 
         udev_rules_check_file_begin(c, filename);
         checking = c;
-        r = parse_file(rules, filename);
+        r = parse_file(rules, path, filename);
         checking = NULL;
 
         udev_rules_unref(rules);
@@ -2841,7 +2845,7 @@ struct udev_rules *udev_rules_new_full(struct udev *udev, int resolve_names, cha
         }
 
         STRV_FOREACH(f, files) {
-                r = parse_file(rules, *f);
+                r = parse_file(rules, *f, *f);
                 if (r < 0)
                         log_debug_errno(r, "Failed to read rules file %s, ignoring: %m", *f);
         }

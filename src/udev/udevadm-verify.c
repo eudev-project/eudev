@@ -106,7 +106,7 @@ static int verify_rules_file(struct udev *udev, struct udev_rules_check *check, 
         unsigned issues, mask;
         int r;
 
-        r = udev_rules_check_file(udev, check, path);
+        r = udev_rules_check_file(udev, check, name, path);
         if (r < 0)
                 return log_error_errno(r, "Failed to parse rules file %s: %m", name);
 
