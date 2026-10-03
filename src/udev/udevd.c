@@ -1914,11 +1914,10 @@ static int parse_argv(int argc, char *argv[]) {
                         log_set_target(LOG_TARGET_CONSOLE);
                         break;
                 case 'N':
+                        /* like systemd, warn and keep the setting of udev.conf, or the default */
                         r = udev_parse_resolve_names(optarg, &config_by_command.resolve_names);
-                        if (r < 0) {
-                                log_error("resolve-names must be early, late or never");
-                                return 0;
-                        }
+                        if (r < 0)
+                                log_warning("Invalid --resolve-names= value '%s', ignoring.", optarg);
                         break;
                 case 'r':
                         r = safe_atou(optarg, &fd_ready_u);
