@@ -635,14 +635,18 @@ static int poll_timeout(usec_t usec) {
 }
 
 /* Like the timeout warning timer of systemd's spawn_wait(): warns about a slow program once, when the event is
- * older than its warning time. Returns the timeout for poll() and epoll_wait() until the warning, or after
- * it, until the timeout of the event, which must not have passed yet. */
-static int spawn_warn(usec_t age_usec, usec_t timeout_usec, usec_t timeout_warn_usec,
+ * older than its warning time, with the message of systemd's on_spawn_timeout_warning(). Returns the timeout
+ * for poll() and epoll_wait() until the warning, or after it, until the timeout of the event, which must not
+ * have passed yet. */
+static int spawn_warn(struct udev_event *event, usec_t age_usec, usec_t timeout_usec, usec_t timeout_warn_usec,
                       const char *cmd, pid_t pid, bool *warned) {
         assert(age_usec < timeout_usec);
 
         if (!*warned && timeout_warn_usec < timeout_usec && age_usec >= timeout_warn_usec) {
-                log_warning("slow: '%s' ["PID_FMT"]", cmd, pid);
+                char buf[FORMAT_TIMESPAN_MAX];
+
+                log_device_warning(event->dev, "Spawned process '%s' ["PID_FMT"] is taking longer than %s to complete.",
+                                   cmd, pid, format_timespan(buf, sizeof(buf), timeout_warn_usec, USEC_PER_SEC));
                 *warned = true;
         }
 
@@ -708,12 +712,11 @@ static void spawn_read(struct udev_event *event,
                 if (timeout_usec > 0) {
                         usec_t age_usec;
 
+                        /* stop reading at the timeout, spawn_wait() kills the program and logs it */
                         age_usec = now(CLOCK_MONOTONIC) - event->birth_usec;
-                        if (age_usec >= timeout_usec) {
-                                log_error("timeout '%s'", cmd);
+                        if (age_usec >= timeout_usec)
                                 return;
-                        }
-                        timeout = spawn_warn(age_usec, timeout_usec, timeout_warn_usec, cmd, pid, warned);
+                        timeout = spawn_warn(event, age_usec, timeout_usec, timeout_warn_usec, cmd, pid, warned);
                 } else {
                         timeout = -1;
                 }
@@ -809,11 +812,15 @@ static int spawn_wait(struct udev_event *event,
 
                         age_usec = now(CLOCK_MONOTONIC) - event->birth_usec;
                         if (age_usec >= timeout_usec) {
-                                log_error("timeout: killing '%s' ["PID_FMT"]", cmd, pid);
+                                char buf[FORMAT_TIMESPAN_MAX];
+
+                                /* the message of systemd's on_spawn_timeout() */
+                                log_device_error(event->dev, "Spawned process '%s' ["PID_FMT"] timed out after %s, killing.",
+                                                 cmd, pid, format_timespan(buf, sizeof(buf), timeout_usec, USEC_PER_SEC));
                                 (void) kill_and_sigcont(pid, event->timeout_signal);
                                 killed = true;
                         } else
-                                timeout = spawn_warn(age_usec, timeout_usec, timeout_warn_usec, cmd, pid, warned);
+                                timeout = spawn_warn(event, age_usec, timeout_usec, timeout_warn_usec, cmd, pid, warned);
                 }
 
                 fdcount = poll(pfd, 1, timeout);
