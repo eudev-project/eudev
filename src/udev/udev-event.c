@@ -1209,6 +1209,65 @@ static void netif_restore_altname(struct udev_event *event, const char *name) {
                 log_oom();
 }
 
+#ifdef ENABLE_RULE_GENERATOR
+/* With the rule generator: renames the interface, which has the temporary name "rename_<name>", like
+ * SIOCSIFNAME, see rename_netif_dev_fromname_toname(). Kernels before Linux 6.2 refuse to rename an interface
+ * that is up (EBUSY). The interface was down when it got the temporary name, else that would have failed the
+ * same way, so it was brought up while it waited for its new name, e.g. by a network manager that saw a new
+ * interface. Leaving it with the temporary name would defeat the rules, so take it down for the renaming, and
+ * set *taken_down, so that the caller brings it up again afterwards. An interface that is up when udev first
+ * tries to rename it is left alone, like systemd does. */
+static int netif_rename_temporary(int sk, struct ifreq *ifr, bool *taken_down) {
+        struct ifreq ifr_up;
+
+        if (ioctl(sk, SIOCSIFNAME, ifr) >= 0)
+                return 0;
+        if (errno != EBUSY)
+                return -errno;
+
+        memzero(&ifr_up, sizeof(struct ifreq));
+        strscpy(ifr_up.ifr_name, IFNAMSIZ, ifr->ifr_name);
+        if (ioctl(sk, SIOCGIFFLAGS, &ifr_up) < 0)
+                return log_debug_errno(errno, "could not get the flags of network interface %s: %m", ifr->ifr_name);
+        if (!(ifr_up.ifr_flags & IFF_UP))
+                return -EBUSY;
+
+        ifr_up.ifr_flags &= ~IFF_UP;
+        if (ioctl(sk, SIOCSIFFLAGS, &ifr_up) < 0)
+                return log_warning_errno(errno, "could not take network interface %s down to rename it to %s: %m",
+                                         ifr->ifr_name, ifr->ifr_newname);
+
+        /* once, it may be brought up again while it waits */
+        if (!*taken_down)
+                log_info("Network interface %s was brought up while it had the temporary name, taking it down to rename it to %s.",
+                         ifr->ifr_name, ifr->ifr_newname);
+        *taken_down = true;
+
+        if (ioctl(sk, SIOCSIFNAME, ifr) < 0)
+                return -errno;
+
+        return 0;
+}
+
+/* Brings the interface up again, after netif_rename_temporary() took it down. */
+static void netif_bring_up(int sk, const char *name) {
+        struct ifreq ifr_up;
+
+        memzero(&ifr_up, sizeof(struct ifreq));
+        strscpy(ifr_up.ifr_name, IFNAMSIZ, name);
+        if (ioctl(sk, SIOCGIFFLAGS, &ifr_up) < 0) {
+                log_warning_errno(errno, "could not get the flags of network interface %s to bring it up again: %m", name);
+                return;
+        }
+
+        ifr_up.ifr_flags |= IFF_UP;
+        if (ioctl(sk, SIOCSIFFLAGS, &ifr_up) < 0)
+                log_warning_errno(errno, "could not bring network interface %s up again: %m", name);
+        else
+                log_info("Brought network interface %s up again.", name);
+}
+#endif
+
 /* Renames the network interface oldname to name. If ret_name is not NULL, it is set to the name the interface
  * has afterwards: name on success, otherwise oldname, or the temporary name of the rule generator, when the
  * interface was renamed to it, but neither to name nor back to oldname. ret_name may point to oldname.
@@ -1258,6 +1317,7 @@ static int rename_netif_dev_fromname_toname(struct udev_event *event, const char
 
 #ifdef ENABLE_RULE_GENERATOR
         struct ifreq ifr_tmp;
+        bool taken_down = false;
 
         if (r == 0) {
                 log_info("renamed network interface %s to %s\n", ifr.ifr_name, ifr.ifr_newname);
@@ -1287,34 +1347,40 @@ static int rename_netif_dev_fromname_toname(struct udev_event *event, const char
         /* we have changed our name so in subsequent tries i should rename my temporal name to the wanted one */
         strscpy(ifr.ifr_name, IFNAMSIZ, ifr_tmp.ifr_newname);
 
-        /* wait for our target to become available, until the given time */
+        /* wait for our target to become available, until the given time; when the interface was brought up
+         * meanwhile, it is taken down for the renaming, and brought up again below */
         while (now(CLOCK_MONOTONIC) < wait_until) {
                 const struct timespec duration = { 0, 1000 * 1000 * 1000 / 20 };
 
                 nanosleep(&duration, NULL);
 
-                r = ioctl(sk, SIOCSIFNAME, &ifr);
+                r = netif_rename_temporary(sk, &ifr, &taken_down);
                 if (r == 0) {
                         log_info("renamed network interface %s to %s\n", ifr.ifr_name, ifr.ifr_newname);
                         break;
                 }
-                r = -errno;
                 if (r != -EEXIST)
                         break;
         }
 
         /* do not leave the interface with the temporary name, rename it back */
         if (r < 0) {
+                int k;
+
                 strscpy(ifr_tmp.ifr_name, IFNAMSIZ, ifr.ifr_name);
                 strscpy(ifr_tmp.ifr_newname, IFNAMSIZ, oldname);
-                if (ioctl(sk, SIOCSIFNAME, &ifr_tmp) < 0)
-                        log_warning_errno(errno, "could not rename network interface %s back to %s: %m",
+                k = netif_rename_temporary(sk, &ifr_tmp, &taken_down);
+                if (k < 0)
+                        log_warning_errno(k, "could not rename network interface %s back to %s: %m",
                                           ifr_tmp.ifr_name, ifr_tmp.ifr_newname);
                 else {
                         log_info("Renamed network interface %s back to %s\n", ifr_tmp.ifr_name, ifr_tmp.ifr_newname);
                         strscpy(ifr.ifr_name, IFNAMSIZ, oldname);
                 }
         }
+
+        if (taken_down)
+                netif_bring_up(sk, r < 0 ? ifr.ifr_name : ifr.ifr_newname);
 
 out:
 #endif
