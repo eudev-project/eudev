@@ -65,6 +65,25 @@ static inline struct _mate *node_to_mate(struct udev_list_node *node)
         return container_of(node, struct _mate, node);
 }
 
+/*
+ * kickall
+ *
+ * Frees the internal list.
+ */
+static void kickall(void)
+{
+        struct udev_list_node *him_node;
+        struct udev_list_node *tmp;
+
+        udev_list_node_foreach_safe(him_node, tmp, &bunch) {
+                struct _mate *him = node_to_mate(him_node);
+
+                udev_list_node_remove(&him->node);
+                free(him->name);
+                free(him);
+        }
+}
+
 noreturn static void sig_alrm(int signo __attribute__((unused)))
 {
         /* exit() is not async-signal-safe */
@@ -382,6 +401,7 @@ int main(int argc, char **argv)
         int fd;
         int i;
         int ret = EXIT_SUCCESS;
+        int count = -1; /* the number of missing IDs, printed only when it is known */
         int prune = 0;
         char tmpdir[UTIL_PATH_SIZE];
 
@@ -467,14 +487,16 @@ int main(int argc, char **argv)
                                 fprintf(stderr, "ID %s: not in database\n", argv[i]);
                         him = new(struct _mate, 1);
                         if (!him) {
-                                ret = ENOMEM;
+                                log_oom();
+                                ret = 2;
                                 goto out;
                         }
 
                         him->name = strdup(argv[i]);
                         if (!him->name) {
                                 free(him);
-                                ret = ENOMEM;
+                                log_oom();
+                                ret = 2;
                                 goto out;
                         }
 
@@ -501,9 +523,14 @@ int main(int argc, char **argv)
         if (lseek(fd, 0, SEEK_SET) < 0 || ftruncate(fd, 0) < 0) { /* in the unlikely event lseek/ftruncate fail */
                 fprintf(stderr, "lseek/ftruncate %s/%s failed: %m\n", tmpdir, checkpoint);
                 close(fd);
-                return -1;
+                ret = -1;
+                goto out;
         }
         ret = missing(fd);
+        if (ret == -ENOMEM) /* missing() logged it */
+                ret = 2;
+        else if (ret >= 0)
+                count = ret;
 
         if (lockf(fd, F_ULOCK, 0)) {
                 /* this error can be safely ignored */
@@ -512,8 +539,9 @@ int main(int argc, char **argv)
 out:
         if (debug)
                 everybody();
-        if (ret >= 0)
-                printf("COLLECT_%s=%d\n", checkpoint, ret);
+        if (count >= 0)
+                printf("COLLECT_%s=%d\n", checkpoint, count);
+        kickall();
 exit:
         udev_unref(udev);
         return ret;
