@@ -2854,6 +2854,17 @@ bool proc_cmdline_key_streq(const char *x, const char *y) {
         }
 }
 
+bool proc_cmdline_value_missing(const char *key, const char *value) {
+        assert(key);
+
+        if (!value) {
+                log_warning("Missing argument for %s= kernel command line switch, ignoring.", key);
+                return true;
+        }
+
+        return false;
+}
+
 static const char *proc_cmdline_key_startswith(const char *s, const char *prefix) {
         /* Much like startswith(), but considers "-" and "_" the same */
 
