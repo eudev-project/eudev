@@ -913,7 +913,10 @@
             <envar>UDEV_HWDB_PATH</envar> path environment variable,
             and store it in
             <filename>/etc/udev/hwdb.bin</filename>, all below the
-            directory given with <option>--root=</option>. This should be
+            directory given with <option>--root=</option>. A relative
+            directory in <envar>UDEV_HWDB_PATH</envar> is relative to the
+            directory given with <option>--root=</option>, or else to the
+            current directory. This should be
             done after any update to the source files; it will not be
             called automatically. The running udev daemon will detect
             a new database on its own and does not need to be notified

@@ -359,14 +359,22 @@ static int conf_files_list_impl(const char *suffix, const char *root, ConfFilesF
         }
 
         STRV_FOREACH(d, dirs) {
-                _cleanup_free_ char *resolved_dirpath = NULL, *original_dirpath = NULL;
+                _cleanup_free_ char *resolved_dirpath = NULL, *original_dirpath = NULL, *dir_abs = NULL;
                 _cleanup_closedir_ DIR *dir = NULL;
+                const char *dirpath = *d;
 
-                /* like path_strv_resolve() before, relative directories are ignored */
-                if (!path_is_absolute(*d))
-                        continue;
+                /* Like prepare_dirs() of systemd: without root, a relative directory is relative to the
+                 * current directory, and with root, relative to root. */
+                if (!root && !path_is_absolute(dirpath)) {
+                        dir_abs = path_make_absolute_cwd(dirpath);
+                        if (!dir_abs) {
+                                r = -ENOMEM;
+                                goto finish;
+                        }
+                        dirpath = dir_abs;
+                }
 
-                original_dirpath = prefix_root(root, *d);
+                original_dirpath = prefix_root(root, dirpath);
                 if (!original_dirpath) {
                         r = -ENOMEM;
                         goto finish;
@@ -375,7 +383,7 @@ static int conf_files_list_impl(const char *suffix, const char *root, ConfFilesF
 
                 /* The directory is resolved below root, like the files in it. A directory that is the same
                  * as an earlier one, e.g. through a symlink, is read only once. */
-                r = chase(*d, root, 0, &resolved_dirpath);
+                r = chase(dirpath, root, 0, &resolved_dirpath);
                 if (r >= 0 && strv_contains(resolved_dirs, resolved_dirpath))
                         continue;
                 if (r >= 0) {

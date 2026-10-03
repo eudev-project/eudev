@@ -55,7 +55,8 @@ int conf_file_new(const char *path, const char *root, ConfFilesFlags flags, Conf
 /* Like systemd's conf_files_list_strv() and conf_files_list_strv_full(): the files with the suffix in
  * the directories dirs, below root, sorted by name, where a file overrides the files with the same
  * name in later directories, and with CONF_FILES_FILTER_MASKED a mask, i.e. a symlink to /dev/null or
- * an empty file, masks them. conf_files_list_strv() returns the paths in ConfFile.result. */
+ * an empty file, masks them. A relative directory is relative to root, or without root to the current
+ * directory. conf_files_list_strv() returns the paths in ConfFile.result. */
 int conf_files_list_strv(char ***ret, const char *suffix, const char *root, ConfFilesFlags flags, const char * const *dirs);
 int conf_files_list_strv_full(const char *suffix, const char *root, ConfFilesFlags flags, const char * const *dirs,
                               ConfFile ***ret_files, size_t *ret_n_files);
