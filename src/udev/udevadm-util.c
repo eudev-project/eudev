@@ -27,42 +27,11 @@
 #include "udev-util.h"
 #include "udevadm-util.h"
 
-/* Like systemd's sd_device_new_from_path(): the path of a device node in /dev or of a symlink to
- * one, or a sysfs path, also a relative one or a symlink to one. Sets errno on failure, like systemd
- * ENODEV if the path does not exist, or is neither a device node in /dev nor a path in /sys. */
-static struct udev_device *device_new_from_path(struct udev *udev, const char *path) {
-        _cleanup_free_ char *resolved = NULL;
-        struct stat st;
-
-        assert(udev);
-        assert(path);
-
-        resolved = realpath(path, NULL);
-        if (!resolved) {
-                if (errno == ENOENT)
-                        errno = ENODEV;
-                return NULL;
-        }
-
-        if (!isempty(path_startswith(resolved, "/dev/")) && stat(resolved, &st) >= 0) {
-                if (S_ISBLK(st.st_mode))
-                        return udev_device_new_from_devnum(udev, 'b', st.st_rdev);
-                if (S_ISCHR(st.st_mode))
-                        return udev_device_new_from_devnum(udev, 'c', st.st_rdev);
-        }
-
-        if (isempty(path_startswith(resolved, "/sys/"))) {
-                errno = ENODEV;
-                return NULL;
-        }
-
-        return udev_device_new_from_syspath(udev, resolved);
-}
-
 struct udev_device *find_device(struct udev *udev,
                                 const char *id,
                                 const char *prefix) {
         struct udev_device *dev;
+        int r;
 
         assert(udev);
         assert(id);
@@ -71,8 +40,8 @@ struct udev_device *find_device(struct udev *udev,
         if (dev)
                 return dev;
 
-        dev = device_new_from_path(udev, id);
-        if (dev)
+        r = device_new_from_path(udev, id, &dev);
+        if (r >= 0)
                 return dev;
 
         if (prefix && !path_startswith(id, prefix)) {
@@ -84,15 +53,13 @@ struct udev_device *find_device(struct udev *udev,
                         return NULL;
                 }
 
-                dev = device_new_from_path(udev, path);
-                if (dev)
+                r = device_new_from_path(udev, path, &dev);
+                if (r >= 0)
                         return dev;
         }
 
         /* systemd tries a device unit name if the argument is not a path, eudev has none. */
-        if (!strchr(id, '/'))
-                errno = EINVAL;
-
+        errno = strchr(id, '/') ? -r : EINVAL;
         return NULL;
 }
 

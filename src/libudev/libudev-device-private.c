@@ -518,9 +518,13 @@ int device_trigger(struct udev_device *device, const char *action, const char *u
 DEFINE_TRIVIAL_CLEANUP_FUNC(struct udev_monitor *, udev_monitor_unref);
 DEFINE_TRIVIAL_CLEANUP_FUNC(struct udev_device *, udev_device_unref);
 
-/* Like sd_device_new_from_devname() of systemd: finds the device whose device node the specified path below
- * /dev/, e.g. a device node symlink, resolves to. -ENODEV if it does not exist. */
-int device_new_from_devname(struct udev *udev, const char *devname, struct udev_device **ret) {
+/* Like device_new_from_devname() of systemd's sd-device: finds the device whose device node the path resolves
+ * to, below /dev/, e.g. the path of a device node symlink. With strict, as for sd_device_new_from_devname(),
+ * the path itself must be below /dev/ too; without, as for sd_device_new_from_path(), it may be any path, also
+ * a relative one. Returns -EINVAL if it is not below /dev/, -ENODEV if it does not exist, and -ENOTTY if it is
+ * not a device node. */
+static int device_new_from_devname_full(struct udev *udev, const char *devname, bool strict,
+                                        struct udev_device **ret) {
         _cleanup_(udev_device_unrefp) struct udev_device *dev = NULL;
         _cleanup_free_ char *resolved = NULL;
         struct stat st;
@@ -529,7 +533,7 @@ int device_new_from_devname(struct udev *udev, const char *devname, struct udev_
         assert(devname);
         assert(ret);
 
-        if (isempty(path_startswith(devname, "/dev/")))
+        if (strict && isempty(path_startswith(devname, "/dev/")))
                 return -EINVAL;
 
         resolved = realpath(devname, NULL);
@@ -559,6 +563,38 @@ int device_new_from_devname(struct udev *udev, const char *devname, struct udev_
                 return -ENXIO;
 
         *ret = TAKE_PTR(dev);
+        return 0;
+}
+
+int device_new_from_devname(struct udev *udev, const char *devname, struct udev_device **ret) {
+        return device_new_from_devname_full(udev, devname, /* strict= */ true, ret);
+}
+
+int device_new_from_path(struct udev *udev, const char *path, struct udev_device **ret) {
+        _cleanup_free_ char *resolved = NULL;
+        struct udev_device *dev;
+
+        assert(udev);
+        assert(path);
+        assert(ret);
+
+        if (device_new_from_devname_full(udev, path, /* strict= */ false, ret) >= 0)
+                return 0;
+
+        /* Like device_set_syspath() of systemd, the symlinks of the path are resolved first, so that it may
+         * also be a relative path or a symlink, e.g. /sys/class/net/lo. */
+        resolved = realpath(path, NULL);
+        if (!resolved)
+                return ERRNO_IS_DEVICE_ABSENT(errno) ? -ENODEV : -errno;
+
+        if (isempty(path_startswith(resolved, "/sys/")))
+                return -ENODEV;
+
+        dev = udev_device_new_from_syspath(udev, resolved);
+        if (!dev)
+                return errno > 0 ? -errno : -ENODEV;
+
+        *ret = dev;
         return 0;
 }
 
