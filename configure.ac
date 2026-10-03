@@ -359,13 +359,15 @@ AM_CONDITIONAL([ENABLE_ZSH_COMPLETION], [test "x$with_zshcompletiondir" != xno])
 AC_ARG_ENABLE([rule-generator],
 	AS_HELP_STRING([--enable-rule-generator], [enable legacy persistent network, cdrom support, not with --disable-programs]),
 	[], [enable_rule_generator=no])
-install_rule_generator=$enable_rule_generator
-AS_IF([test "x$enable_rule_generator" != xno && test "x$enable_programs" != "xyes"],
-	[install_rule_generator="no (--disable-programs)"])
+# every value other than "no" enables it; the define and the automake conditional follow the same result
+AS_IF([test "x$enable_rule_generator" = xno],
+	[install_rule_generator=no],
+	[test "x$enable_programs" != xyes],
+	[install_rule_generator="no (--disable-programs)"],
+	[install_rule_generator=yes])
 
-if test "x${install_rule_generator}" != xno && test "x$enable_programs" = "xyes"; then
-	AC_DEFINE([ENABLE_RULE_GENERATOR], [1], [Define if we are enabling rule generator])
-fi
+AS_IF([test "x$install_rule_generator" = xyes],
+	[AC_DEFINE([ENABLE_RULE_GENERATOR], [1], [Define if we are enabling rule generator])])
 
 AM_CONDITIONAL([ENABLE_RULE_GENERATOR], [test "x$install_rule_generator" = xyes])
 
@@ -411,10 +413,10 @@ login_defs_value() {
 }
 
 AS_IF([test "x$with_system_uid_max" = x0 || test -z "$with_system_uid_max"],
-	[with_system_uid_max=$(login_defs_value SYS_UID_MAX)])
+	[with_system_uid_max=`login_defs_value SYS_UID_MAX`])
 AS_IF([test -z "$with_system_uid_max"], [with_system_uid_max=999])
 AS_IF([test "x$with_system_gid_max" = x0 || test -z "$with_system_gid_max"],
-	[with_system_gid_max=$(login_defs_value SYS_GID_MAX)])
+	[with_system_gid_max=`login_defs_value SYS_GID_MAX`])
 AS_IF([test -z "$with_system_gid_max"], [with_system_gid_max=999])
 
 for v in "$with_system_uid_max" "$with_system_gid_max"; do
@@ -450,16 +452,16 @@ for v in "$with_nobody_user" "$with_nobody_group"; do
 done
 
 AS_IF([test "x$cross_compiling" = xno && command -v getent >/dev/null 2>&1], [
-	nobody_name=$(getent passwd 65534 | cut -d: -f1)
+	nobody_name=`getent passwd 65534 | cut -d: -f1`
 	AS_IF([test -n "$nobody_name" && test "x$nobody_name" != "x$with_nobody_user"],
 		[AC_MSG_WARN([The local user with the UID 65534 does not match the configured user name "$with_nobody_user" of the nobody user (its name is $nobody_name).])])
-	nobody_id=$(getent passwd "$with_nobody_user" | cut -d: -f3)
+	nobody_id=`getent passwd "$with_nobody_user" | cut -d: -f3`
 	AS_IF([test -n "$nobody_id" && test "x$nobody_id" != x65534],
 		[AC_MSG_WARN([The local user with the configured user name "$with_nobody_user" of the nobody user does not have UID 65534 (it has $nobody_id).])])
-	nobody_name=$(getent group 65534 | cut -d: -f1)
+	nobody_name=`getent group 65534 | cut -d: -f1`
 	AS_IF([test -n "$nobody_name" && test "x$nobody_name" != "x$with_nobody_group"],
 		[AC_MSG_WARN([The local group with the GID 65534 does not match the configured group name "$with_nobody_group" of the nobody group (its name is $nobody_name).])])
-	nobody_id=$(getent group "$with_nobody_group" | cut -d: -f3)
+	nobody_id=`getent group "$with_nobody_group" | cut -d: -f3`
 	AS_IF([test -n "$nobody_id" && test "x$nobody_id" != x65534],
 		[AC_MSG_WARN([The local group with the configured group name "$with_nobody_group" of the nobody group does not have GID 65534 (it has $nobody_id).])])
 ])
@@ -474,7 +476,8 @@ AC_DEFINE_UNQUOTED([NOBODY_GROUP_NAME], ["$with_nobody_group"], [The name of the
 # foreign-uid-base - the first ID of the range of the 65536 foreign users and groups of systemd, like
 # its meson option: a number, also 0 like in systemd, in decimal, or hexadecimal with 0x, which meson
 # does not take; the lower 16 bits must be zero, which systemd checks when it is compiled, and the range
-# must end below 0xFFFFFFFF
+# must end below 0xFFFFFFFF; checked without $(( )), which shells before POSIX do not know: printf
+# converts a hexadecimal value, and the lower 16 bits are zero if its hexadecimal form ends with 0000
 # ------------------------------------------------------------------------------
 AC_ARG_WITH([foreign-uid-base],
 	AS_HELP_STRING([--with-foreign-uid-base=UID],
@@ -487,18 +490,21 @@ case "$with_foreign_uid_base" in
 0@<:@xX@:>@*@<:@!0-9a-fA-F@:>@*|0@<:@xX@:>@?????????*)
 	foreign_uid_base= ;;
 0@<:@xX@:>@*)
-	foreign_uid_base=$(( with_foreign_uid_base )) ;;
+	foreign_uid_base=`printf '%u' "$with_foreign_uid_base"` ;;
 @<:@1-9@:>@*@<:@!0-9@:>@*|???????????*)
 	foreign_uid_base= ;;
 @<:@1-9@:>@*)
-	foreign_uid_base=$(( with_foreign_uid_base )) ;;
+	foreign_uid_base=$with_foreign_uid_base ;;
 0)
 	foreign_uid_base=0 ;;
 *)
 	foreign_uid_base= ;;
 esac
+AS_IF([test -n "$foreign_uid_base"],
+	[AS_CASE([`printf '%x' "$foreign_uid_base"`],
+		[0|*0000], [],
+		[foreign_uid_base=])])
 AS_IF([test -z "$foreign_uid_base" ||
-       test $(( foreign_uid_base % 65536 )) -ne 0 ||
        test "$foreign_uid_base" -gt 4294836224],
 	[AC_MSG_ERROR([*** invalid base of the foreign user and group IDs: $with_foreign_uid_base])])
 
