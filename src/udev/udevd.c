@@ -1867,13 +1867,30 @@ static int parse_argv(int argc, char *argv[]) {
                 {}
         };
 
+        static const char optstring[] = "c:de:Dt:N:hVr:";
         int c;
         unsigned fd_ready_u;
 
         assert(argc >= 0);
         assert(argv);
 
-        while ((c = getopt_long(argc, argv, "c:de:Dt:N:hVr:", options, NULL)) >= 0) {
+        /* Unlike systemd, which logs to the console with --debug only after parsing all options and the
+         * kernel command line, find -D/--debug before the other options, so that the warnings about all of
+         * them, also about those that come before it, go to the console, and with the debug level, also
+         * when udev_log= in udev.conf, which udev_new() applied already, is lower. The final log level is
+         * set when the settings are merged, see main(). getopt_long() reports invalid options only in the
+         * second pass, and starts again with optind set to 0. */
+        opterr = 0;
+        while ((c = getopt_long(argc, argv, optstring, options, NULL)) >= 0)
+                if (c == 'D') {
+                        config_by_command.log_level = LOG_DEBUG;
+                        log_set_target(LOG_TARGET_CONSOLE);
+                        log_set_max_level(LOG_DEBUG);
+                }
+        opterr = 1;
+        optind = 0;
+
+        while ((c = getopt_long(argc, argv, optstring, options, NULL)) >= 0) {
                 int r;
 
                 switch (c) {
@@ -1907,11 +1924,7 @@ static int parse_argv(int argc, char *argv[]) {
                                 config_by_command.timeout_signal = r;
                         break;
                 case 'D':
-                        /* Unlike systemd, which does this after parsing the kernel command line, log to
-                         * the console right away, so that the warnings about the following options, udev.conf
-                         * and the kernel command line go there too, and not to /dev/kmsg. */
-                        config_by_command.log_level = LOG_DEBUG;
-                        log_set_target(LOG_TARGET_CONSOLE);
+                        /* handled above */
                         break;
                 case 'N':
                         /* like systemd, warn and keep the setting of udev.conf, or the default */
