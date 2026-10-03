@@ -168,7 +168,10 @@
           <constant>SIGCONT</constant>, <constant>SIGSTOP</constant>,
           <constant>SIGTSTP</constant>, <constant>SIGTTIN</constant>,
           <constant>SIGTTOU</constant>, <constant>SIGURG</constant> and
-          <constant>SIGWINCH</constant>.</para>
+          <constant>SIGWINCH</constant>. A worker that has not finished its
+          event 5 seconds after the signal, e.g. as it blocks
+          <constant>SIGTERM</constant> while it processes an event, is killed
+          with <constant>SIGKILL</constant>.</para>
         </listitem>
       </varlistentry>
 

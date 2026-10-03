@@ -130,7 +130,10 @@ prefix\&. Signals whose default action does not terminate a process, with which 
 \fBSIGTTOU\fR,
 \fBSIGURG\fR
 and
-\fBSIGWINCH\fR\&.
+\fBSIGWINCH\fR\&. A worker that has not finished its event 5 seconds after the signal, e\&.g\&. as it blocks
+\fBSIGTERM\fR
+while it processes an event, is killed with
+\fBSIGKILL\fR\&.
 .RE
 .PP
 \fB\-N\fR, \fB\-\-resolve\-names=\fR

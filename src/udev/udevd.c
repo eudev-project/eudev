@@ -66,6 +66,9 @@
 #define EVENT_REQUEUE_INTERVAL_USEC (200 * USEC_PER_MSEC)
 #define EVENT_REQUEUE_TIMEOUT_USEC  (3 * USEC_PER_MINUTE)
 
+/* how long a killed worker has to exit after the timeout signal, before it gets SIGKILL */
+#define WORKER_SIGKILL_DELAY_USEC (5 * USEC_PER_SEC)
+
 static struct udev_rules *rules;
 static struct udev_ctrl *udev_ctrl;
 static struct udev_ctrl_connection *udev_ctrl_conn;
@@ -192,6 +195,9 @@ struct worker {
         struct udev_monitor *monitor;
         enum worker_state state;
         struct event *event;
+        /* when the worker gets SIGKILL, as it was sent the timeout signal and did not finish its event, or 0,
+         * see manager_check_worker_timeouts() */
+        usec_t sigkill_usec;
 };
 
 /* passed from worker to main process */
@@ -1143,6 +1149,11 @@ static void worker_returned(int fd_worker) {
                 } else if (worker->state != WORKER_KILLED)
                         worker->state = WORKER_IDLE;
 
+                /* The worker finished its event after the timeout signal, and exits by itself, as the signal
+                 * terminates it, or is SIGTERM, which it reads after the event. Do not follow up with
+                 * SIGKILL, see manager_check_worker_timeouts(). */
+                worker->sigkill_usec = 0;
+
                 /* worker returned */
                 event = worker->event;
                 if (event && msg.result == EVENT_RESULT_TRY_AGAIN) {
@@ -1286,10 +1297,13 @@ static usec_t manager_kill_worker_timeout(void) {
 
 /* Like the timers of systemd's worker_attach_event(), on_worker_timeout_warning() and on_worker_timeout_kill(),
  * with their messages: warns when the event of a worker takes a third of the event timeout, and sends the timeout
- * signal to the worker after the event timeout and the extra time. Called on every iteration of the main loop,
- * and not only when it times out, so that a hanging worker is also killed when the loop never waits that long,
- * e.g. as uevents or messages keep arriving. Returns the time in milliseconds until the next of these is due,
- * rounded up, or -1 if there is none. */
+ * signal to the worker after the event timeout and the extra time. Unlike systemd, a worker that is still
+ * processing its event WORKER_SIGKILL_DELAY_USEC after the timeout signal gets SIGKILL: the signal may not
+ * terminate it, e.g. SIGTERM, which the worker blocks and reads from its signalfd only between events or while it
+ * waits for a program, and then waits for the program. Called on every iteration of the main loop, and not only
+ * when it times out, so that a hanging worker is also killed when the loop never waits that long, e.g. as uevents
+ * or messages keep arriving. Returns the time in milliseconds until the next of these is due, rounded up, or -1 if
+ * there is none. */
 static int manager_check_worker_timeouts(void) {
         struct worker *worker;
         usec_t now_usec, next_usec = USEC_INFINITY;
@@ -1304,6 +1318,17 @@ static int manager_check_worker_timeouts(void) {
                 struct event *event = worker->event;
                 usec_t usec;
 
+                /* reset when the worker finishes its event, see worker_returned() */
+                if (worker->sigkill_usec > 0 && event) {
+                        if (worker->sigkill_usec <= now_usec) {
+                                log_device_error(event->dev, "Worker ["PID_FMT"] processing SEQNUM=%llu did not exit after SIG%s, killing it with SIGKILL.",
+                                                 worker->pid, event->seqnum, signal_to_string(arg_timeout_signal));
+                                (void) kill(worker->pid, SIGKILL);
+                                worker->sigkill_usec = 0;
+                        } else
+                                next_usec = MIN(next_usec, worker->sigkill_usec);
+                }
+
                 if (worker->state != WORKER_RUNNING && worker->state != WORKER_KILLING)
                         continue;
 
@@ -1316,6 +1341,11 @@ static int manager_check_worker_timeouts(void) {
 
                         log_device_error(event->dev, "Worker ["PID_FMT"] processing SEQNUM=%llu killed.",
                                          worker->pid, event->seqnum);
+
+                        if (arg_timeout_signal != SIGKILL) {
+                                worker->sigkill_usec = usec_add(now_usec, WORKER_SIGKILL_DELAY_USEC);
+                                next_usec = MIN(next_usec, worker->sigkill_usec);
+                        }
                         continue;
                 }
                 next_usec = MIN(next_usec, usec);
