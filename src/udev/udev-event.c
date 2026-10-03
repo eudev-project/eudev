@@ -1517,7 +1517,9 @@ static void event_assign_altnames(struct udev_event *event) {
  * device, write the previous entry back; when that fails, udev_device_update_db() removes the entry. So
  * a failed event never leaves a device that looks like it is still being processed. Also unlike systemd,
  * restore the tag index when it was updated: remove the tags that the failed event added, which systemd
- * leaves behind too, and add the tags of the previous entry again, if there was one. */
+ * leaves behind too, and add the tags of the previous entry again, if there was one; and when the
+ * previous entry could not be written back, remove its tags too, so that the tag index agrees with the
+ * missing entry. */
 static void event_restore_db(struct udev_event *event) {
         int r;
 
@@ -1534,9 +1536,16 @@ static void event_restore_db(struct udev_event *event) {
                 return;
         event->dev_db_written = false;
 
-        if (udev_device_add_property(event->dev_db, "ID_PROCESSING", NULL) < 0 ||
-            udev_device_update_db(event->dev_db) < 0)
-                (void) udev_device_delete_db(event->dev_db);
+        if (udev_device_add_property(event->dev_db, "ID_PROCESSING", NULL) >= 0 &&
+            udev_device_update_db(event->dev_db) >= 0)
+                return;
+
+        (void) udev_device_delete_db(event->dev_db);
+
+        r = udev_device_tag_index(event->dev_db, false);
+        if (r < 0)
+                log_debug_errno(r, "%s: Failed to remove tags under " UDEV_ROOT_RUN "/udev/tags/, ignoring: %m",
+                                udev_device_get_sysname(event->dev));
 }
 
 /* Applies the rules to the event, and creates or removes the device node and its symlinks, renames a
