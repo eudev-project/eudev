@@ -491,6 +491,68 @@ fallback_fstat:
         return check_st_dev && (a.st_dev != b.st_dev);
 }
 
+/* Like path_get_mnt_id() of systemd before it required statx(): the mount ID of the file system of path,
+ * which is not followed if it is a symlink, from name_to_handle_at(), or from /proc/self/fdinfo when that is
+ * not supported or not allowed, like is_name_to_handle_at_fatal_error() of systemd says. */
+int path_get_mnt_id(const char *path, int *ret) {
+        union file_handle_union h = FILE_HANDLE_INIT;
+        int r;
+
+        assert(path);
+        assert(ret);
+
+        r = name_to_handle_at(AT_FDCWD, path, &h.handle, ret, 0);
+        if (r >= 0)
+                return 0;
+        if (!IN_SET(errno, EOPNOTSUPP, ENOSYS, EACCES, EPERM, EOVERFLOW, EINVAL))
+                return -errno;
+
+        return fd_fdinfo_mnt_id(AT_FDCWD, path, 0, ret);
+}
+
+/* Like dev_is_devtmpfs() of systemd: whether /dev is a devtmpfs, according to /proc/self/mountinfo; a
+ * negative errno if that cannot be found out. */
+int dev_is_devtmpfs(void) {
+        _cleanup_fclose_ FILE *f = NULL;
+        int mount_id, r;
+
+        r = path_get_mnt_id("/dev", &mount_id);
+        if (r < 0)
+                return r;
+
+        f = fopen("/proc/self/mountinfo", "re");
+        if (!f)
+                return -errno;
+
+        for (;;) {
+                _cleanup_free_ char *line = NULL;
+                const char *e;
+                int mid;
+
+                r = read_line(f, LONG_LINE_MAX, &line);
+                if (r < 0)
+                        return r;
+                if (r == 0)
+                        break;
+
+                if (sscanf(line, "%i", &mid) != 1)
+                        continue;
+
+                if (mid != mount_id)
+                        continue;
+
+                e = strstr(line, " - ");
+                if (!e)
+                        continue;
+
+                /* accept any name that starts with the currently expected type */
+                if (startswith(e + 3, "devtmpfs"))
+                        return true;
+        }
+
+        return false;
+}
+
 int path_is_mount_point(const char *t, bool allow_symlink) {
         _cleanup_close_ int fd = -1;
 
