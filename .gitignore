@@ -59,6 +59,8 @@ test/udev-test.pl.log
 test/udev-test.pl.trs
 test/udev-devlink-test.sh.log
 test/udev-devlink-test.sh.trs
+test/hwdb-test.sh.log
+test/hwdb-test.sh.trs
 
 eudev-*.tar.gz
 eudev-*.tar.gz.asc

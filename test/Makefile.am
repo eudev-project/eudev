@@ -69,7 +69,8 @@ TESTS = \
 	test-json-writer \
 	udev-test.pl \
 	rules-test.sh \
-	udev-devlink-test.sh
+	udev-devlink-test.sh \
+	hwdb-test.sh
 
 check_DATA = \
 	test/sys
@@ -89,4 +90,5 @@ EXTRA_DIST = \
 	udev-test.pl \
 	rules-test.sh \
 	udev-devlink-test.sh \
+	hwdb-test.sh \
 	rule-syntax-check.py

@@ -778,7 +778,7 @@ path environment variable, and store it in
 \fB\-\-root=\fR\&. A relative directory in
 \fBUDEV_HWDB_PATH\fR
 is relative to the directory given with
-\fB\-\-root=\fR, or else to the current directory\&. This should be done after any update to the source files; it will not be called automatically\&. The running udev daemon will detect a new database on its own and does not need to be notified about it\&. If no hwdb files are found, the compiled database is removed\&.
+\fB\-\-root=\fR, or else to the current directory\&. This should be done after any update to the source files; it will not be called automatically\&. The running udev daemon will detect a new database on its own and does not need to be notified about it\&. If no hwdb files are found, the compiled database is removed\&. A directory of hwdb files that does not exist is skipped, but if one exists and cannot be read, e\&.g\&. because it is not a directory, or a hwdb file cannot be read, the update fails, and the compiled database is kept as it is\&.
 .RE
 .PP
 \fB\-s\fR, \fB\-\-strict\fR

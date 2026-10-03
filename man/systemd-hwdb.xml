@@ -82,7 +82,9 @@
       <optional><replaceable>options</replaceable></optional>
       update</title>
       <para>Update the binary database. If no hwdb files are found, the binary database is
-      removed.</para>
+      removed. A directory of hwdb files that does not exist is skipped, but if one exists and
+      cannot be read, e.g. because it is not a directory, or a hwdb file cannot be read, the update
+      fails, and the binary database is kept as it is. systemd skips such a directory or file.</para>
     </refsect2>
 
     <refsect2><title>systemd-hwdb
