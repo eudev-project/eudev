@@ -81,9 +81,9 @@ struct udev_event {
         bool name_final;
         bool devlink_final;
         bool run_final;
-        /* the database entry was written with ID_PROCESSING=1 before the rules, see event_restore_db() */
+        /* the database entry was written with ID_PROCESSING=1 before the rules, see udev_event_restore_db() */
         bool dev_db_written;
-        /* the tag index was updated with the tags of the device, see event_restore_db() */
+        /* the tag index was updated with the tags of the device, see udev_event_restore_db() */
         bool tags_indexed;
         /* trace logging, i.e. log the processing of each rule: udevd's trace mode (udev.trace,
          * udevadm control --trace=) and 'udevadm test --verbose' */
@@ -153,6 +153,7 @@ int udev_event_execute_rules(struct udev_event *event,
                               struct udev_rules *rules,
                               const sigset_t *sigset);
 void udev_event_execute_run(struct udev_event *event, usec_t timeout_usec, const sigset_t *sigset);
+void udev_event_restore_db(struct udev_event *event);
 #define UDEV_ARGV_MAX 128
 int udev_build_argv(struct udev *udev, char *cmd, int *argc, char *argv[]);
 

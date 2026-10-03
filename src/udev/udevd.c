@@ -678,7 +678,8 @@ static void worker_spawn(struct event *event) {
                                 /* Finalize database. But do not re-create database on remove, which has been already
                                  * removed in udev_event_execute_rules(). Unlike systemd, which also logs "Failed to
                                  * process device" then, log only the specific error when this fails: RUN has run
-                                 * already, and the event is sent to the listeners. */
+                                 * already, and the event is sent to the listeners. Also unlike systemd, restore the
+                                 * previous database entry and the tag index then, like for a failure before RUN. */
                                 if (!streq_ptr(udev_device_get_action(dev), "remove")) {
                                         r = udev_device_add_property(dev, "ID_PROCESSING", NULL);
                                         if (r < 0)
@@ -690,6 +691,8 @@ static void worker_spawn(struct event *event) {
                                                         log_warning_errno(r, "%s: Failed to update database under " UDEV_ROOT_RUN "/udev/data/: %m",
                                                                           udev_device_get_sysname(dev));
                                         }
+                                        if (r < 0)
+                                                udev_event_restore_db(udev_event);
                                 }
                         }
 
