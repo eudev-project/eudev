@@ -366,9 +366,11 @@ static int wait_main(struct udev *udev) {
                                 continue;
 
                         if (pfd[i].fd == inotify_fd) {
-                                union inotify_event_buffer buffer;
+                                /* Only that something changed in /run/udev matters, not the events. */
+                                r = flush_fd(inotify_fd);
+                                if (r < 0)
+                                        return log_error_errno(r, "Failed to read inotify events: %m");
 
-                                (void) read(inotify_fd, &buffer, sizeof(buffer));
                                 if (check(udev))
                                         return 0;
                         } else if (on_device(udev, pfd[i].fd == udev_monitor_get_fd(udev_monitor) ? udev_monitor : kernel_monitor))
