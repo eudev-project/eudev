@@ -113,6 +113,11 @@ int main(int argc, char *argv[]) {
         log_open();
         mac_selinux_init("/dev");
 
+        /* getopt() begins its messages about invalid options with argv[0]. Like systemd, whose messages
+         * begin with the program name, "udevadm: ", for udevadm and its commands alike, not with the path
+         * of the program or the name of the command. */
+        argv[0] = program_invocation_short_name;
+
         while ((c = getopt_long(argc, argv, "+dhV", options, NULL)) >= 0)
                 switch (c) {
 
@@ -139,6 +144,7 @@ int main(int argc, char *argv[]) {
                         if (streq(udevadm_cmds[i]->name, command)) {
                                 argc -= optind;
                                 argv += optind;
+                                argv[0] = program_invocation_short_name;
                                 /* we need '0' here to reset the internal state */
                                 optind = 0;
                                 rc = run_command(udev, udevadm_cmds[i], argc, argv);
