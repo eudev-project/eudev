@@ -44,11 +44,11 @@ static int install_force_release(struct udev_device *dev, const unsigned *releas
 
         atkbd = udev_device_get_parent_with_subsystem_devtype(dev, "serio", NULL);
         if (!atkbd)
-                return -ENODEV;
+                return log_device_error_errno(dev, errno, "Failed to get serio parent: %m");
 
         ret = device_get_sysattr_safe_string(atkbd, "force_release", &cur);
         if (ret < 0)
-                return ret;
+                return log_device_error_errno(atkbd, ret, "Failed to get force-release attribute: %m");
 
         s = codes;
         l = sizeof(codes);
@@ -63,8 +63,9 @@ static int install_force_release(struct udev_device *dev, const unsigned *releas
         log_device_debug(atkbd, "keyboard: updating force-release list with '%s'", codes);
         ret = udev_device_set_sysattr_value(atkbd, "force_release", codes);
         if (ret < 0)
-                log_device_error_errno(atkbd, ret, "Failed to set force-release attribute: %m");
-        return ret;
+                return log_device_error_errno(atkbd, ret, "Failed to set force-release attribute: %m");
+
+        return 0;
 }
 
 static void map_keycode(struct udev_device *dev, int fd, int scancode, const char *keycode)
@@ -157,7 +158,7 @@ static void set_trackpoint_sensitivity(struct udev_device *dev, const char *valu
         /* The sensitivity sysfs attr belongs to the serio parent device */
         pdev = udev_device_get_parent_with_subsystem_devtype(dev, "serio", NULL);
         if (!pdev) {
-                log_device_warning(dev, "Failed to get serio parent.");
+                log_device_error_errno(dev, errno, "Failed to get serio parent: %m");
                 return;
         }
 
@@ -292,7 +293,7 @@ static int builtin_keyboard(struct udev_device *dev, int argc __attribute__((unu
 
         /* install list of force-release codes */
         if (release_count > 0)
-                install_force_release(dev, release, release_count);
+                (void) install_force_release(dev, release, release_count);
 
         return EXIT_SUCCESS;
 }
