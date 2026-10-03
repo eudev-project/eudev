@@ -1018,6 +1018,21 @@ int udev_event_spawn(struct udev_event *event,
                 return 0;
         }
 
+        /* Like systemd, do not start a program when the event has reached its timeout already, e.g. a RUN
+         * program after a slow PROGRAM, at which point it would be killed right away. */
+        if (timeout_usec > 0) {
+                usec_t age_usec = usec_sub_unsigned(now(CLOCK_MONOTONIC), event->birth_usec);
+
+                if (age_usec >= timeout_usec) {
+                        char buf[FORMAT_TIMESPAN_MAX], buf2[FORMAT_TIMESPAN_MAX];
+
+                        log_device_warning(event->dev, "The event already takes longer (%s) than the timeout (%s), skipping execution of '%s'.",
+                                           format_timespan(buf, sizeof(buf), age_usec, 1),
+                                           format_timespan(buf2, sizeof(buf2), timeout_usec, 1), cmd);
+                        return -ETIME;
+                }
+        }
+
         /* The helpers run in test mode must not change the device either: tell cdrom_id not to
          * lock, unlock or eject the media, which the rules ask for with --lock-media. */
         if (helper && streq(helper, "cdrom_id")) {
@@ -1854,9 +1869,21 @@ void udev_event_execute_run(struct udev_event *event, usec_t timeout_usec, usec_
                         char **envp;
 
                         if (event->exec_delay_usec > 0) {
+                                char buf[FORMAT_TIMESPAN_MAX];
                                 struct timespec ts;
 
-                                log_debug("delay execution of '%s'", command);
+                                /* Like systemd, do not delay a program beyond the timeout of the event, see
+                                 * udev_event_spawn(). */
+                                if (timeout_usec > 0 &&
+                                    event->exec_delay_usec >= usec_sub_unsigned(timeout_usec,
+                                                                                usec_sub_unsigned(now(CLOCK_MONOTONIC), event->birth_usec))) {
+                                        log_device_warning(event->dev, "Cannot delay execution of \"%s\" for %s, skipping.",
+                                                           command, format_timespan(buf, sizeof(buf), event->exec_delay_usec, USEC_PER_SEC));
+                                        continue;
+                                }
+
+                                log_device_debug(event->dev, "Delaying execution of \"%s\" for %s.",
+                                                 command, format_timespan(buf, sizeof(buf), event->exec_delay_usec, USEC_PER_SEC));
                                 (void) nanosleep(timespec_store(&ts, event->exec_delay_usec), NULL);
                         }
 

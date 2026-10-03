@@ -66,6 +66,17 @@ static inline usec_t usec_add(usec_t a, usec_t b) {
         return a > USEC_INFINITY - b ? USEC_INFINITY : a + b;
 }
 
+/* Like usec_sub_unsigned() of systemd: subtracts delta from timestamp, 0 if it is larger, and keeps
+ * USEC_INFINITY. */
+static inline usec_t usec_sub_unsigned(usec_t timestamp, usec_t delta) {
+        if (timestamp == USEC_INFINITY)
+                return USEC_INFINITY;
+        if (timestamp < delta)
+                return 0;
+
+        return timestamp - delta;
+}
+
 usec_t timespec_load(const struct timespec *ts) _pure_;
 struct timespec *timespec_store(struct timespec *ts, usec_t u);
 
