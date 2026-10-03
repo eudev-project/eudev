@@ -115,10 +115,9 @@ ENV{DEVTYPE}=="disk", SUBSYSTEMS=="nvme-subsystem", IMPORT{builtin}="path_id"
 KERNEL=="mmcblk[0-9]boot[0-9]", ENV{DEVTYPE}=="disk", ENV{ID_PATH}=="?*",                   SYMLINK+="disk/by-path/$env{ID_PATH}-boot%n"
 KERNEL=="mmcblk[0-9]boot[0-9]", ENV{DEVTYPE}=="disk", ENV{ID_PATH_WITH_USB_REVISION}=="?*", SYMLINK+="disk/by-path/$env{ID_PATH_WITH_USB_REVISION}-boot%n"
 KERNEL!="mmcblk[0-9]boot[0-9]",                       ENV{ID_PATH}=="?*",                   SYMLINK+="disk/by-path/$env{ID_PATH}$env{.PART_SUFFIX}"
-# The old ATA link (ID_PATH_ATA_COMPAT, ...-ata-<port>) is the same for all devices of an ATA port, e.g. PATA
-# master and slave or the disks behind a port multiplier, so only the device on bus 0 with target 0
-# (ID_PATH ...-ata-<port>.0) gets it, to keep it unique (eudev only, systemd creates it for all of them).
-KERNEL!="mmcblk[0-9]boot[0-9]",                       ENV{ID_PATH_ATA_COMPAT}=="?*", ENV{ID_PATH}=="*-ata-*.0", ENV{ID_PATH}!="*-ata-*.*.0", SYMLINK+="disk/by-path/$env{ID_PATH_ATA_COMPAT}$env{.PART_SUFFIX}"
+# The old ATA link, ...-ata-<port>: eudev's path_id sets ID_PATH_ATA_COMPAT only for the device that owns the
+# name alone, the one on bus 0 with target 0 or the only device of the ATA port, to keep the link unique.
+KERNEL!="mmcblk[0-9]boot[0-9]",                       ENV{ID_PATH_ATA_COMPAT}=="?*",        SYMLINK+="disk/by-path/$env{ID_PATH_ATA_COMPAT}$env{.PART_SUFFIX}"
 KERNEL!="mmcblk[0-9]boot[0-9]",                       ENV{ID_PATH_WITH_USB_REVISION}=="?*", SYMLINK+="disk/by-path/$env{ID_PATH_WITH_USB_REVISION}$env{.PART_SUFFIX}"
 
 # legacy virtio-pci by-path links (deprecated)

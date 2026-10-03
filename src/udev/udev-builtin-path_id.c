@@ -360,6 +360,24 @@ out:
         return parent;
 }
 
+/* eudev: whether the SCSI host of an ATA port has only one target, i.e. the port has only one device: libata
+ * adds a SCSI target for each device it finds on the port, below the host of the port. */
+static bool scsi_host_has_one_target(struct udev_device *hostdev) {
+        _cleanup_closedir_ DIR *dir = NULL;
+        struct dirent *de;
+        unsigned n = 0;
+
+        dir = opendir(udev_device_get_syspath(hostdev));
+        if (!dir)
+                return false;
+
+        while ((de = readdir(dir)))
+                if (startswith(de->d_name, "target") && IN_SET(de->d_type, DT_DIR, DT_UNKNOWN))
+                        n++;
+
+        return n == 1;
+}
+
 static struct udev_device *handle_scsi_ata(struct udev_device *parent, char **path, char **compat_path) {
         struct udev *udev  = udev_device_get_udev(parent);
         struct udev_device *targetdev;
@@ -401,8 +419,14 @@ static struct udev_device *handle_scsi_ata(struct udev_device *parent, char **pa
                 /* Master/slave are distinguished by target id */
                 path_prepend(path, "ata-%s.%u", port_no, target);
 
-        /* old compatible persistent link for ATA devices */
-        if (compat_path)
+        /* old compatible persistent link for ATA devices
+         *
+         * eudev: the name has neither the bus nor the target, so it is the same for all the devices of the port,
+         * e.g. a PATA master and slave, or the disks behind a port multiplier. To keep the link unique, only the
+         * device that owns the name alone gets it: the one on bus 0 with target 0 (a single SATA disk, a PATA
+         * master, the disk on port 0 of a port multiplier), or the only device of the port (a lone PATA slave
+         * or a lone disk behind a port multiplier). systemd gives it to all of them. */
+        if (compat_path && ((bus == 0 && target == 0) || scsi_host_has_one_target(targetdev)))
                 path_prepend(compat_path, "ata-%s", port_no);
 out:
         udev_device_unref(atadev);
