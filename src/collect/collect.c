@@ -123,8 +123,10 @@ static int prepare(char *dir, char *filename)
 
         /* Refuse to write to a truncated file path */
         r = snprintf(buf, sizeof(buf), "%s/%s", dir, filename);
-        if (r < 0 || (size_t) r >= sizeof(buf))
+        if (r < 0 || (size_t) r >= sizeof(buf)) {
+                fprintf(stderr, "The path of the checkpoint file %s/%s is too long\n", dir, filename);
                 return -1;
+        }
 
         fd = open(buf, O_RDWR|O_CREAT|O_CLOEXEC, S_IRUSR|S_IWUSR);
         if (fd < 0) {
