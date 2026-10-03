@@ -8,8 +8,8 @@ _udevadm_info(){
         '(-)'{-h,--help}'[Print help]' \
         '(-)'{-V,--version}'[Print version of the program]' \
         '--query=[Query the database for specified type of device data. It needs the --path or --name to identify the specified device.]:type:(name symlink path property all)' \
-        '--path=[The devpath of the device to query.]:sys files:_files -W /sys' \
-        '--name=[The name of the device node or a symlink to query]:device files:_files -W /dev' \
+        '*--path=[The devpath of the device to query.]:sys files:_files -W /sys' \
+        '*--name=[The name of the device node or a symlink to query]:device files:_files -W /dev' \
         '--root[Print absolute paths in name or symlink query.]' \
         '--attribute-walk[Print all sysfs properties of the specified device that can be used in udev rules to match the specified device]' \
         '--tree[Show tree of devices.]' \
@@ -19,19 +19,19 @@ _udevadm_info(){
         '--export-db[Export the content of the udev database.]' \
         '--cleanup-db[Cleanup the udev database.]' \
         '--value[When showing properties, print only their values.]' \
-        '--property=[Show only properties by this name.]:NAME' \
+        '*--property=[Show only properties by this name.]:NAME' \
         '--wait-for-initialization=-[Wait for device to be initialized.]:SECONDS' \
         '--json=[Generate JSON output]:MODE:(pretty short off)' \
         '--no-pager[Do not pipe output into a pager.]' \
-        '--subsystem-match=[When used with --export-db, only show devices of the given subsystem.]:SUBSYSTEM' \
-        '--subsystem-nomatch=[When used with --export-db, only show devices not of the given subsystem.]:SUBSYSTEM' \
-        '--attr-match=[When used with --export-db, only show devices matching the given attribute.]:FILE[=VALUE]' \
-        '--attr-nomatch=[When used with --export-db, only show devices not matching the given attribute.]:FILE[=VALUE]' \
-        '--property-match=[When used with --export-db, only show devices matching the given property and value.]:KEY=VALUE' \
-        '--tag-match=[When used with --export-db, only show devices with the given tag.]:TAG' \
-        '--sysname-match=[When used with --export-db, only show devices with the given /sys path.]:NAME' \
-        '--name-match=[When used with --export-db, only show devices with the given name in /dev.]:device files:_files -W /dev' \
-        '--parent-match=[When used with --export-db, only show devices with the given parent device.]:sys files:_files -W /sys' \
+        '*--subsystem-match=[When used with --export-db, only show devices of the given subsystem.]:SUBSYSTEM' \
+        '*--subsystem-nomatch=[When used with --export-db, only show devices not of the given subsystem.]:SUBSYSTEM' \
+        '*--attr-match=[When used with --export-db, only show devices matching the given attribute.]:FILE[=VALUE]' \
+        '*--attr-nomatch=[When used with --export-db, only show devices not matching the given attribute.]:FILE[=VALUE]' \
+        '*--property-match=[When used with --export-db, only show devices matching the given property and value.]:KEY=VALUE' \
+        '*--tag-match=[When used with --export-db, only show devices with the given tag.]:TAG' \
+        '*--sysname-match=[When used with --export-db, only show devices with the given /sys path.]:NAME' \
+        '*--name-match=[When used with --export-db, only show devices with the given name in /dev.]:device files:_files -W /dev' \
+        '*--parent-match=[When used with --export-db, only show devices with the given parent device.]:sys files:_files -W /sys' \
         '--initialized-match[When used with --export-db, only show devices that are initialized.]' \
         '--initialized-nomatch[When used with --export-db, only show devices that are not initialized.]' \
         '*::devpath:_path_files -g "*(-/,-%)"'
@@ -42,27 +42,27 @@ _udevadm_trigger(){
     _arguments \
         '(-)'{-h,--help}'[Show help]' \
         '(-)'{-V,--version}'[Show package version]' \
-        '--verbose[Print the list of devices which will be triggered.]' \
+        '(-v --verbose)'{-v,--verbose}'[Print the list of devices which will be triggered.]' \
         '(-n --dry-run)'{-n,--dry-run}'[Do not actually trigger the event.]' \
-        '--quiet[Suppress error logging in triggering events.]' \
-        '--type=[Trigger a specific type of devices.]:types:(all devices subsystems)' \
-        '--action=[Type of event to be triggered.]:actions:(add change remove move online offline bind unbind)' \
-        '--subsystem-match=[Trigger events for devices which belong to a matching subsystem.]:SUBSYSTEM' \
-        '--subsystem-nomatch=[Do not trigger events for devices which belong to a matching subsystem.]:SUBSYSTEM' \
-        '--attr-match=attribute=[Trigger events for devices with a matching sysfs attribute.]:FILE' \
-        '--attr-nomatch=attribute=[Do not trigger events for devices with a matching sysfs attribute.]:FILE' \
-        '--property-match=[Trigger events for devices with a matching property value.]:KEY=VALUE' \
-        '--tag-match=[Trigger events for devices with a matching tag.]:TAG' \
-        '--sysname-match=[Trigger events for devices with a matching sys device name.]:NAME' \
-        '--name-match=[Trigger events for devices with a matching device path.]:device files:_files -W /dev' \
-        '--parent-match=[Trigger events for all children of a given device.]:NAME' \
+        '(-q --quiet)'{-q,--quiet}'[Suppress error logging in triggering events.]' \
+        '(-t --type)'{-t,--type=}'[Trigger a specific type of devices.]:types:(all devices subsystems)' \
+        '(-c --action)'{-c,--action=}'[Type of event to be triggered.]:actions:(add change remove move online offline bind unbind)' \
+        '*'{-s,--subsystem-match=}'[Trigger events for devices which belong to a matching subsystem.]:SUBSYSTEM' \
+        '*'{-S,--subsystem-nomatch=}'[Do not trigger events for devices which belong to a matching subsystem.]:SUBSYSTEM' \
+        '*'{-a,--attr-match=}'[Trigger events for devices with a matching sysfs attribute.]:FILE[=VALUE]' \
+        '*'{-A,--attr-nomatch=}'[Do not trigger events for devices with a matching sysfs attribute.]:FILE[=VALUE]' \
+        '*'{-p,--property-match=}'[Trigger events for devices with a matching property value.]:KEY=VALUE' \
+        '*'{-g,--tag-match=}'[Trigger events for devices with a matching tag.]:TAG' \
+        '*'{-y,--sysname-match=}'[Trigger events for devices with a matching sys device name.]:NAME' \
+        '*--name-match=[Trigger events for devices with a matching device path.]:device files:_files -W /dev' \
+        '*'{-b,--parent-match=}'[Trigger events for all children of a given device.]:NAME' \
         '--include-parents[Also trigger parent devices of found devices.]' \
         '--initialized-match[Trigger events for devices that are already initialized.]' \
         '--initialized-nomatch[Trigger events for devices that are not initialized yet.]' \
         '(-w --settle)'{-w,--settle}'[Wait for the triggered events to complete.]' \
         '--wait-daemon=-[Wait for udevd daemon to be initialized before triggering uevents.]:SECONDS' \
         '--uuid[Print synthetic uevent UUID.]' \
-        '--prioritized-subsystem=[Trigger events for devices which belong to a matching subsystem earlier.]:SUBSYSTEM' \
+        '*--prioritized-subsystem=[Trigger events for devices which belong to a matching subsystem earlier.]:SUBSYSTEM' \
         '*::devpath:_path_files -g "*(-/,-%)"'
 }
 
@@ -85,7 +85,7 @@ _udevadm_control(){
         '(-s --stop-exec-queue)'{-s,--stop-exec-queue}'[Signal udevd to stop executing new events. Incoming events will be queued.]' \
         '(-S --start-exec-queue)'{-S,--start-exec-queue}'[Signal udevd to enable the execution of events.]' \
         '(-R --reload)'{-R,--reload}'[Signal udevd to reload the rules files and other databases like the kernel module index.]' \
-        '(-p --property)'{-p,--property=}'[Set a global property for all events.]:KEY=VALUE' \
+        '*'{-p,--property=}'[Set a global property for all events.]:KEY=VALUE' \
         '(-m --children-max)'{-m,--children-max=}'[Set the maximum number of events.]:N' \
         '--ping[Send a ping message to udevd and wait for the reply.]' \
         '--trace=[Enable/disable trace logging.]:BOOL' \
@@ -101,8 +101,8 @@ _udevadm_monitor(){
         '(-k --kernel)'{-k,--kernel}'[Print the kernel uevents.]' \
         '(-u --udev)'{-u,--udev}'[Print the udev event after the rule processing.]' \
         '(-p --property)'{-p,--property}'[Also print the properties of the event.]' \
-        '(-s --subsystem-match)'{-s,--subsystem-match=}'[Filter events by subsystem/\[devtype\].]:SUBSYSTEM' \
-        '(-t --tag-match)'{-t,--tag-match=}'[Filter events by tag.]:TAG'
+        '*'{-s,--subsystem-match=}'[Filter events by subsystem/\[devtype\].]:SUBSYSTEM' \
+        '*'{-t,--tag-match=}'[Filter events by tag.]:TAG'
 }
 
 (( $+functions[_udevadm_hwdb] )) ||
@@ -173,7 +173,20 @@ _udevadm_wait(){
         '--initialized=[Wait for devices being initialized by udevd.]:boolean:(yes no)' \
         '--removed[Wait for devices being removed.]' \
         '--settle[Also wait for udev queue being empty.]' \
-        '*::devpath:_files -W /dev'
+        '*::devpath:_udevadm_wait_devices'
+}
+
+(( $+functions[_udevadm_wait_devices] )) ||
+_udevadm_wait_devices(){
+    # udevadm wait takes absolute paths below /dev and /sys: device nodes and their symlinks in /dev,
+    # also for a name relative to /dev, and sysfs paths
+    if [[ $PREFIX == /sys/* ]]; then
+        _files
+    elif [[ $PREFIX != /* || $PREFIX == /dev/* ]]; then
+        _files -W /dev -P /dev/ -g "*(-%)"
+    else
+        compadd -S '' -- /dev/ /sys/
+    fi
 }
 
 (( $+functions[_udevadm_lock] )) ||
