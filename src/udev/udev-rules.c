@@ -3439,6 +3439,7 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                         if (!apply_format(event, rules, rule, cur, rules_str(rules, cur->key.value_off), import, sizeof(import),
                                           false, properties_list, "file name to be imported"))
                                 goto nomatch;
+                        log_event_debug(event, rules, rule, cur, "Importing properties from \"%s\"", import);
                         r = import_file_into_properties(event, rules, rule, cur, import);
                         if (r < 0)
                                 return r;
