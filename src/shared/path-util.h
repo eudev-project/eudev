@@ -60,6 +60,12 @@ int chase(const char *path, const char *root, ChaseFlags flags, char **ret_path)
 char* path_extend_internal(char **x, ...);
 
 int path_find_first_component(const char **p, bool accept_dot_dot, const char **ret);
+int path_find_last_component(const char *path, bool accept_dot_dot, const char **next, const char **ret);
+/* Like systemd's path_extract_filename(): the last component of path, which is a valid file name, i.e.
+ * neither "." nor "..". Returns -EINVAL if path is not valid or ends with "..", -EADDRNOTAVAIL if it
+ * has no file name, i.e. it is the root directory or ".", and else O_DIRECTORY if path ends with a
+ * slash, or 0. */
+int path_extract_filename(const char *path, char **ret);
 char* path_simplify(char *path);
 int path_simplify_alloc(const char *path, char **ret);
 bool path_is_valid_full(const char *p, bool accept_dot_dot) _pure_;

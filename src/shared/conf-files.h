@@ -48,7 +48,8 @@ void conf_file_free_array(ConfFile **files, size_t n_files);
 
 /* Like systemd's conf_file_new(): the file path, below root, checked as flags ask. Returns -ERFKILL
  * for a mask, -ENOENT if it does not exist, -EISDIR for a directory, -EBADFD for another file that is
- * not a regular file, with CONF_FILES_REGULAR, or another negative errno. */
+ * not a regular file, with CONF_FILES_REGULAR, -EADDRNOTAVAIL if path has no file name, i.e. it is
+ * the root directory, or "." below root, -EINVAL if it ends with "..", or another negative errno. */
 int conf_file_new(const char *path, const char *root, ConfFilesFlags flags, ConfFile **ret);
 
 /* Like systemd's conf_files_list_strv() and conf_files_list_strv_full(): the files with the suffix in

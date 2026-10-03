@@ -169,9 +169,9 @@ static ConfFile *conf_file_make(const char *filename, char **result, char **orig
 
 int conf_file_new(const char *path, const char *root, ConfFilesFlags flags, ConfFile **ret) {
         _cleanup_free_ char *path_abs = NULL, *p = NULL, *dirpath = NULL, *resolved_dirpath = NULL,
-                *original_path = NULL, *result = NULL, *resolved_path = NULL;
+                *original_path = NULL, *result = NULL, *resolved_path = NULL, *filename = NULL;
         int log_level = conf_files_log_level(flags);
-        const char *filename, *e;
+        const char *e;
         ConfFile *c;
         int r;
 
@@ -190,6 +190,14 @@ int conf_file_new(const char *path, const char *root, ConfFilesFlags flags, Conf
                 path = path_abs;
         }
 
+        /* Like systemd's conf_file_new_at(): the path must name a file, i.e. it must not be the root
+         * directory, "." below root, or end with "..". */
+        r = path_extract_filename(path, &filename);
+        if (r == -ENOMEM)
+                return log_oom();
+        if (r < 0)
+                return log_full_errno(log_level, r, "Failed to extract filename from '%s': %m", path);
+
         p = strdup(path);
         original_path = prefix_root(root, path);
         if (!p || !original_path)
@@ -197,15 +205,11 @@ int conf_file_new(const char *path, const char *root, ConfFilesFlags flags, Conf
         path_simplify(p);
         path_simplify(original_path);
 
+        /* the simplified path ends with the file name */
         e = strrchr(p, '/');
-        filename = e ? e + 1 : p;
         dirpath = e ? strndup(p, e - p) : strdup("");
         if (!dirpath)
                 return log_oom();
-
-        /* "/" and "..", which have no file name, are directories */
-        if (isempty(filename) || streq(filename, ".."))
-                return log_debug_errno(EISDIR, "File '%s' is not a regular file: %m", original_path);
 
         r = chase(dirpath, root, conf_files_chase_flags(flags), &resolved_dirpath);
         if (r < 0) {

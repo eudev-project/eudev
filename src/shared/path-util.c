@@ -908,6 +908,139 @@ int path_find_first_component(const char **p, bool accept_dot_dot, const char **
         return len;
 }
 
+static const char* skip_slash_or_dot_backward(const char *path, const char *q) {
+        assert(path);
+        assert(!q || q >= path);
+
+        for (; q; q = q > path ? q - 1 : NULL) {
+                if (*q == '/')
+                        continue;
+                if (q > path && strneq(q - 1, "/.", 2))
+                        continue;
+                if (q == path && *q == '.')
+                        continue;
+                break;
+        }
+        return q;
+}
+
+int path_find_last_component(const char *path, bool accept_dot_dot, const char **next, const char **ret) {
+        const char *q, *last_end, *last_begin;
+        size_t len;
+
+        /* Similar to path_find_first_component(), but search components from the end.
+        *
+        * Examples
+        *   Input:  path: "//.//aaa///bbbbb/cc//././"
+        *           next: NULL
+        *   Output: next: "/cc//././"
+        *           ret: "cc//././"
+        *           return value: 2 (== strlen("cc"))
+        *
+        *   Input:  path: "//.//aaa///bbbbb/cc//././"
+        *           next: "/cc//././"
+        *   Output: next: "///bbbbb/cc//././"
+        *           ret: "bbbbb/cc//././"
+        *           return value: 5 (== strlen("bbbbb"))
+        *
+        *   Input:  path: "//.//aaa///bbbbb/cc//././"
+        *           next: "///bbbbb/cc//././"
+        *   Output: next: "//.//aaa///bbbbb/cc//././" (next == path)
+        *           ret: "aaa///bbbbb/cc//././"
+        *           return value: 3 (== strlen("aaa"))
+        *
+        *   Input:  path: "/", ".", "", or NULL
+        *   Output: next: equivalent to path
+        *           ret: NULL
+        *           return value: 0
+        *
+        *   Input:  path: "(too long component)"
+        *   Output: return value: -EINVAL
+        *
+        *   (when accept_dot_dot is false)
+        *   Input:  path: "//..//aaa///bbbbb/cc/..//"
+        *   Output: return value: -EINVAL
+        */
+
+        if (isempty(path)) {
+                if (next)
+                        *next = path;
+                if (ret)
+                        *ret = NULL;
+                return 0;
+        }
+
+        if (next && *next) {
+                if (*next < path || *next > path + strlen(path))
+                        return -EINVAL;
+                if (*next == path) {
+                        if (ret)
+                                *ret = NULL;
+                        return 0;
+                }
+                if (!IN_SET(**next, '\0', '/'))
+                        return -EINVAL;
+                q = *next - 1;
+        } else
+                q = path + strlen(path) - 1;
+
+        q = skip_slash_or_dot_backward(path, q);
+        if (!q) { /* the root directory, "." or "./" */
+                if (next)
+                        *next = path;
+                if (ret)
+                        *ret = NULL;
+                return 0;
+        }
+
+        last_end = q + 1;
+
+        while (q && *q != '/')
+                q = q > path ? q - 1 : NULL;
+
+        last_begin = q ? q + 1 : path;
+        len = last_end - last_begin;
+
+        if (len > NAME_MAX)
+                return -EINVAL;
+        if (!accept_dot_dot && len == 2 && strneq(last_begin, "..", 2))
+                return -EINVAL;
+
+        if (next) {
+                q = skip_slash_or_dot_backward(path, q);
+                *next = q ? q + 1 : path;
+        }
+
+        if (ret)
+                *ret = last_begin;
+        return len;
+}
+
+int path_extract_filename(const char *path, char **ret) {
+        const char *c;
+        int r;
+
+        assert(ret);
+
+        if (isempty(path))
+                return -EINVAL;
+
+        r = path_find_last_component(path, /* accept_dot_dot= */ false, NULL, &c);
+        if (r < 0)
+                return r;
+        if (r == 0) /* root directory or "." */
+                return -EADDRNOTAVAIL;
+
+        if (!path_is_valid(path))
+                return -EINVAL;
+
+        *ret = strndup(c, r);
+        if (!*ret)
+                return -ENOMEM;
+
+        return strlen(c) > (size_t) r ? O_DIRECTORY : 0;
+}
+
 char* path_simplify(char *path) {
         bool add_slash = false, absolute, beginning = true;
         char *f = path;
