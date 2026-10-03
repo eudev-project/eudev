@@ -453,11 +453,10 @@ static int log_dispatch(
                         }
                 }
 
-                if (k <= 0) {
-                        k = write_to_console(level, error, file, line, func, object_field, object, buffer);
-                        if (k < 0)
-                                return k;
-                }
+                /* like systemd, a failure to write to the console is ignored, and the error that was
+                 * passed is returned */
+                if (k <= 0)
+                        (void) write_to_console(level, error, file, line, func, object_field, object, buffer);
 
                 buffer = e;
         } while (buffer);
