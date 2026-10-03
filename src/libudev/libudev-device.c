@@ -3256,47 +3256,47 @@ _public_ int udev_device_has_current_tag(struct udev_device *udev_device, const 
  * libudev monitors, and the environment of the programs udevd runs, which points into the buffer.
  * Like systemd's device_update_properties_bufs(), without a fixed limit of their size. Like there,
  * private properties, with a leading ".", are included; they are only not stored in the database. */
+/* Like device_update_properties_bufs() of systemd: the properties as "KEY=VALUE" strings, after the database
+ * version, one after the other in a buffer for monitor messages, and as an array for the environment of
+ * programs. The properties are walked only once, so that the buffer always fits them, also when getting them
+ * reads the database, which may add properties. */
 static int update_envp_monitor_buf(struct udev_device *udev_device)
 {
         char version[STRLEN("UDEV_DATABASE_VERSION=") + DECIMAL_STR_MAX(unsigned) + 1];
         struct udev_list_entry *list_entry;
-        size_t len, n = 1, i = 0;
-        char **envp;
-        char *buf, *s;
+        _cleanup_free_ char *buf = NULL;
+        size_t allocated = 0, len, n = 1, i;
+        char **envp, *s;
 
         snprintf(version, sizeof(version), "UDEV_DATABASE_VERSION=%u", LATEST_UDEV_DATABASE_VERSION);
         len = strlen(version) + 1;
+        if (!GREEDY_REALLOC(buf, allocated, len))
+                return -ENOMEM;
+        memcpy(buf, version, len);
 
         udev_list_entry_foreach(list_entry, udev_device_get_properties_list_entry(udev_device)) {
-                len += strlen(udev_list_entry_get_name(list_entry)) + 1 +
-                       strlen(udev_list_entry_get_value(list_entry)) + 1;
+                const char *key = udev_list_entry_get_name(list_entry);
+                const char *value = udev_list_entry_get_value(list_entry);
+                size_t l = strlen(key) + 1 + strlen(value) + 1;
+
+                if (!GREEDY_REALLOC(buf, allocated, len + l))
+                        return -ENOMEM;
+                stpcpy(stpcpy(stpcpy(buf + len, key), "="), value);
+                len += l;
                 n++;
         }
 
-        buf = malloc(len);
         envp = new(char *, n + 1);
-        if (!buf || !envp) {
-                free(buf);
-                free(envp);
+        if (!envp)
                 return -ENOMEM;
-        }
-
-        /* append udev database version */
-        s = buf;
-        envp[i++] = s;
-        s = stpcpy(s, version) + 1;
-
-        udev_list_entry_foreach(list_entry, udev_device_get_properties_list_entry(udev_device)) {
-                envp[i++] = s;
-                s = stpcpy(stpcpy(stpcpy(s, udev_list_entry_get_name(list_entry)), "="),
-                           udev_list_entry_get_value(list_entry)) + 1;
-        }
-        envp[i] = NULL;
+        for (i = 0, s = buf; i < n; i++, s += strlen(s) + 1)
+                envp[i] = s;
+        envp[n] = NULL;
         assert((size_t) (s - buf) == len);
 
         free(udev_device->monitor_buf);
         free(udev_device->envp);
-        udev_device->monitor_buf = buf;
+        udev_device->monitor_buf = TAKE_PTR(buf);
         udev_device->monitor_buf_len = len;
         udev_device->envp = envp;
         udev_device->envp_uptodate = true;

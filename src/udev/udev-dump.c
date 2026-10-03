@@ -33,30 +33,35 @@ static int str_compare(const void *a, const void *b) {
 
 /* Returns the properties as "KEY=VALUE" strings, like systemd's device_get_properties_strv(): the
  * database version, which udevd passes with the properties, and all properties, sorted as strings,
- * as systemd's dump does. */
+ * as systemd's dump does. Like there, the properties are walked only once, so that the list always fits
+ * them, also when getting them reads the database, which may add properties. */
 static char **dump_properties_strv(struct udev_device *dev) {
         _cleanup_strv_free_ char **l = NULL;
         struct udev_list_entry *entry;
-        size_t n = 1, i = 0;
+        size_t allocated = 0, n = 0;
+        char *s;
 
-        udev_list_entry_foreach(entry, udev_device_get_properties_list_entry(dev))
-                n++;
-
-        l = new0(char *, n + 1);
-        if (!l)
+        if (!GREEDY_REALLOC(l, allocated, 2))
                 return NULL;
-
-        if (asprintf(&l[i++], "UDEV_DATABASE_VERSION=%u", LATEST_UDEV_DATABASE_VERSION) < 0)
+        l[0] = NULL;
+        if (asprintf(&s, "UDEV_DATABASE_VERSION=%u", LATEST_UDEV_DATABASE_VERSION) < 0)
                 return NULL;
+        l[n++] = s;
+        l[n] = NULL;
 
         udev_list_entry_foreach(entry, udev_device_get_properties_list_entry(dev)) {
-                l[i] = strjoin(udev_list_entry_get_name(entry), "=", udev_list_entry_get_value(entry), NULL);
-                if (!l[i])
+                s = strjoin(udev_list_entry_get_name(entry), "=", udev_list_entry_get_value(entry), NULL);
+                if (!s)
                         return NULL;
-                i++;
+                if (!GREEDY_REALLOC(l, allocated, n + 2)) {
+                        free(s);
+                        return NULL;
+                }
+                l[n++] = s;
+                l[n] = NULL;
         }
 
-        qsort(l, i, sizeof(char *), str_compare);
+        qsort(l, n, sizeof(char *), str_compare);
         return TAKE_PTR(l);
 }
 
