@@ -91,7 +91,7 @@
       <para>A matching rule may rename a network interface, add symlinks
       pointing to the device node, or run a specified program as part of
       the event handling. Like in systemd, <varname>NAME</varname> is ignored with a
-      warning for a device that is neither a network interface nor has a device node,
+      warning for a device that is not a network interface, also for one with a device node,
       and <varname>SYMLINK</varname> is ignored for a device without a device node; the
       other keys of the rule line still apply. <varname>OWNER</varname>,
       <varname>GROUP</varname> and <varname>MODE</varname> have no effect on such a

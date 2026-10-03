@@ -3825,45 +3825,27 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                                 break;
                         if (cur->key.op == OP_ASSIGN_FINAL)
                                 event->name_final = true;
-                        /* Like systemd, ignore NAME for a device that is neither a network interface nor has a
-                         * device node; the name of a device node is checked below. */
-                        if (udev_device_get_ifindex(event->dev) <= 0 && major(udev_device_get_devnum(event->dev)) == 0) {
+                        /* Like systemd, ignore NAME for a device that is not a network interface; the name of
+                         * the device node of a block or character device cannot be changed. */
+                        if (udev_device_get_ifindex(event->dev) <= 0) {
                                 log_event_warning(event, rules, rule, cur, "Only network interfaces can be renamed, ignoring.");
                                 break;
                         }
                         if (!apply_format(event, rules, rule, cur, name, name_str, sizeof(name_str), false, properties_list,
-                                          udev_device_get_ifindex(event->dev) > 0 ? "network interface name" : "device name"))
+                                          "network interface name"))
                                 break;
                         if (esc == ESCAPE_UNSET || esc == ESCAPE_REPLACE) {
-                                if (udev_device_get_ifindex(event->dev) > 0) {
-                                        count = udev_replace_ifname(event->udev, name_str);
-                                        if (count > 0)
-                                                log_event_trace(event, rules, rule, cur,
-                                                                "Replaced %i character(s) from network interface name, results to \"%s\"",
-                                                                count, name_str);
-                                } else {
-                                        count = util_replace_chars(name_str, "/");
-                                        if (count > 0)
-                                                log_event_trace(event, rules, rule, cur,
-                                                                "Replaced %i character(s) from device name, results to \"%s\"",
-                                                                count, name_str);
-                                }
-                        }
-                        if (major(udev_device_get_devnum(event->dev)) &&
-                            (!streq(name_str, udev_device_get_devnode(event->dev) + strlen("/dev/")))) {
-                                log_event_error(event, rules, rule, cur,
-                                                "NAME=\"%s\" ignored, kernel device nodes can not be renamed; please fix the rule.",
-                                                name);
-                                break;
+                                count = udev_replace_ifname(event->udev, name_str);
+                                if (count > 0)
+                                        log_event_trace(event, rules, rule, cur,
+                                                        "Replaced %i character(s) from network interface name, results to \"%s\"",
+                                                        count, name_str);
                         }
                         /* like systemd, running out of memory stops the processing of the event */
                         r = free_and_strdup(&event->name, name_str);
                         if (r < 0)
                                 return log_oom();
-                        if (udev_device_get_ifindex(event->dev) > 0)
-                                log_event_debug(event, rules, rule, cur, "Set network interface name: %s", strna(event->name));
-                        else
-                                log_event_debug(event, rules, rule, cur, "Set device name: %s", strna(event->name));
+                        log_event_debug(event, rules, rule, cur, "Set network interface name: %s", strna(event->name));
                         break;
                 }
                 case TK_A_DEVLINK: {
