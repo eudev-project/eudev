@@ -474,6 +474,10 @@ static int trie_store(struct trie *trie, const char *filename) {
         return 0;
 }
 
+/* Like systemd's log_syntax() for a line of a file: "FILE:LINE: message". */
+#define log_syntax(level, filename, line_number, fmt, ...) \
+        log_full(level, "%s:%u: " fmt, filename, (unsigned) (line_number), ##__VA_ARGS__)
+
 /* Returns 0, 1 if the line has a syntax error, which is logged and the line ignored, or a negative errno,
  * e.g. -ENOMEM, if the data cannot be inserted. */
 static int insert_data(struct trie *trie, struct udev_list *match_list,
@@ -486,7 +490,8 @@ static int insert_data(struct trie *trie, struct udev_list *match_list,
 
         value = strchr(line, '=');
         if (!value) {
-                log_error("Warning, key-value pair expected but got \"%s\", ignoring", line);
+                log_syntax(LOG_WARNING, filename, line_number,
+                           "Key-value pair expected but got \"%s\", ignoring.", line);
                 return 1;
         }
 
@@ -498,8 +503,8 @@ static int insert_data(struct trie *trie, struct udev_list *match_list,
                 line++;
 
         if (isempty(line + 1)) {
-                log_error("Warning, empty key in \"%s=%s\", ignoring",
-                          line, value);
+                log_syntax(LOG_WARNING, filename, line_number,
+                           "Empty key in \"%s=%s\", ignoring.", line, value);
                 return 1;
         }
 
@@ -574,7 +579,8 @@ static int import_file(struct udev *udev, struct trie *trie, const char *filenam
                                 break;
 
                         if (line[0] == ' ') {
-                                log_error("Warning, match expected but got indented property \"%s\", ignoring line", line);
+                                log_syntax(LOG_WARNING, path_in_root, line_number,
+                                           "Match expected but got indented property \"%s\", ignoring line.", line);
                                 syntax_errors = true;
                                 break;
                         }
@@ -589,7 +595,8 @@ static int import_file(struct udev *udev, struct trie *trie, const char *filenam
 
                 case HW_MATCH:
                         if (len == 0) {
-                                log_error("Warning, property expected, ignoring record with no properties");
+                                log_syntax(LOG_WARNING, path_in_root, line_number,
+                                           "Property expected, ignoring record with no properties.");
                                 syntax_errors = true;
                                 state = HW_NONE;
                                 udev_list_cleanup(&match_list);
@@ -626,7 +633,8 @@ static int import_file(struct udev *udev, struct trie *trie, const char *filenam
                         }
 
                         if (line[0] != ' ') {
-                                log_error("Warning, property or empty line expected, got \"%s\", ignoring record", line);
+                                log_syntax(LOG_WARNING, path_in_root, line_number,
+                                           "Property or empty line expected, got \"%s\", ignoring record.", line);
                                 syntax_errors = true;
                                 state = HW_NONE;
                                 udev_list_cleanup(&match_list);
@@ -646,7 +654,8 @@ static int import_file(struct udev *udev, struct trie *trie, const char *filenam
         }
 
         if (state == HW_MATCH) {
-                log_error("Warning, property expected, ignoring record with no properties");
+                log_syntax(LOG_WARNING, path_in_root, line_number,
+                           "Property expected, ignoring record with no properties.");
                 syntax_errors = true;
         }
 
