@@ -1756,28 +1756,35 @@ _public_ struct udev_device *udev_device_new_from_environment(struct udev *udev)
         return udev_device;
 }
 
-static struct udev_device *device_new_from_parent(struct udev_device *udev_device)
+/* Like device_new_from_child() of systemd: the parent is the first directory above the device, up to the
+ * directories directly below /sys, that is a device itself, see udev_device_new_from_syspath(). The walk
+ * stops with ENODEV when there is none, and with any other error of udev_device_new_from_syspath(), e.g.
+ * EACCES or ENOMEM. */
+static int device_new_from_parent(struct udev_device *udev_device, struct udev_device **ret)
 {
-        struct udev_device *udev_device_parent = NULL;
-        char path[UTIL_PATH_SIZE];
-        char *subdir;
+        _cleanup_free_ char *path = NULL;
 
-        strscpy(path, sizeof(path), udev_device->syspath);
-        subdir = path + strlen("/sys/");
+        path = strdup(udev_device->syspath);
+        if (!path)
+                return -ENOMEM;
+
         for (;;) {
+                struct udev_device *parent;
                 char *pos;
 
-                pos = strrchr(subdir, '/');
-                if (pos == NULL || pos < &subdir[2])
-                        break;
-                pos[0] = '\0';
-                udev_device_parent = udev_device_new_from_syspath(udev_device->udev, path);
-                if (udev_device_parent != NULL)
-                        return udev_device_parent;
-        }
+                pos = strrchr(path, '/');
+                if (!pos || pos == path + strlen("/sys"))
+                        return -ENODEV;
+                *pos = '\0';
 
-        errno = ENOENT;
-        return NULL;
+                parent = udev_device_new_from_syspath(udev_device->udev, path);
+                if (parent) {
+                        *ret = parent;
+                        return 0;
+                }
+                if (errno != ENODEV)
+                        return -errno;
+        }
 }
 
 /**
@@ -1805,8 +1812,18 @@ _public_ struct udev_device *udev_device_get_parent(struct udev_device *udev_dev
                 return NULL;
         }
         if (!udev_device->parent_set) {
+                struct udev_device *parent = NULL;
+                int r;
+
+                /* like sd_device_get_parent() of systemd, an error is returned, but not cached, so that
+                 * the next call tries again; that there is no parent is cached */
+                r = device_new_from_parent(udev_device, &parent);
+                if (r < 0 && r != -ENODEV) {
+                        errno = -r;
+                        return NULL;
+                }
+                udev_device->parent_device = parent;
                 udev_device->parent_set = true;
-                udev_device->parent_device = device_new_from_parent(udev_device);
         }
         /* the lookup of the parent is cached, also set errno on subsequent calls */
         if (udev_device->parent_device == NULL)
@@ -1860,9 +1877,8 @@ _public_ struct udev_device *udev_device_get_parent_with_subsystem_devtype(struc
                 parent = udev_device_get_parent(parent);
         }
 
-        if (!parent)
-                errno = ENOENT;
-
+        /* without a matching parent, errno is the one of the last udev_device_get_parent(): ENOENT, or the
+         * error that stopped the walk, like sd_device_get_parent_with_subsystem_devtype() of systemd */
         return parent;
 }
 
