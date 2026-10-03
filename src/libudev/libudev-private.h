@@ -194,4 +194,5 @@ unsigned int util_string_hash32(const char *key);
 uint64_t util_string_bloom64(const char *str);
 
 /* libudev-util-private.c */
-int util_resolve_subsys_kernel(struct udev *udev, const char *string, char *result, size_t maxsize, int read_value);
+int util_resolve_subsys_kernel(struct udev *udev, const char *string, char *result, size_t maxsize);
+int util_resolve_subsys_kernel_value(struct udev *udev, const char *string, char **ret_value);

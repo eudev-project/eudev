@@ -48,66 +48,113 @@
  * Utilities useful when dealing with devices and device node names.
  */
 
-/* handle "[<SUBSYSTEM>/<KERNEL>]<attribute>" format */
-int util_resolve_subsys_kernel(struct udev *udev, const char *string,
-                               char *result, size_t maxsize, int read_value)
+/* Like udev_resolve_subsys_kernel() of systemd: splits "[<SUBSYSTEM>/<KERNEL>]<attribute>", and looks up the
+ * device. Returns the device, and a copy of the attribute, NULL if there is none. Returns -EINVAL if the string
+ * does not have the format, or no attribute when need_attr, and the error of the lookup if the device does not
+ * exist. */
+static int resolve_subsys_kernel(struct udev *udev, const char *string, bool need_attr,
+                                 struct udev_device **ret_device, char **ret_attr)
 {
-        char temp[UTIL_PATH_SIZE];
-        char *subsys;
-        char *sysname;
+        _cleanup_free_ char *temp = NULL;
+        char *subsys, *sysname, *attr, *a = NULL;
         struct udev_device *dev;
-        char *attr;
 
         if (string[0] != '[')
-                return -1;
+                return -EINVAL;
 
-        strscpy(temp, sizeof(temp), string);
+        temp = strdup(string);
+        if (!temp)
+                return -ENOMEM;
 
         subsys = &temp[1];
 
         sysname = strchr(subsys, '/');
         if (sysname == NULL)
-                return -1;
+                return -EINVAL;
         sysname[0] = '\0';
         sysname = &sysname[1];
 
         attr = strchr(sysname, ']');
         if (attr == NULL)
-                return -1;
+                return -EINVAL;
         attr[0] = '\0';
         attr = &attr[1];
         if (attr[0] == '/')
                 attr = &attr[1];
-        if (attr[0] == '\0')
-                attr = NULL;
-
-        if (read_value && attr == NULL)
-                return -1;
+        if (attr[0] != '\0') {
+                a = strdup(attr);
+                if (!a)
+                        return -ENOMEM;
+        } else if (need_attr)
+                return -EINVAL;
 
         dev = udev_device_new_from_subsystem_sysname(udev, subsys, sysname);
-        if (dev == NULL)
-                return -1;
-
-        if (read_value) {
-                const char *val;
-
-                val = udev_device_get_sysattr_value(dev, attr);
-                if (val != NULL)
-                        strscpy(result, maxsize, val);
-                else
-                        result[0] = '\0';
-                log_debug("value '[%s/%s]%s' is '%s'", subsys, sysname, attr, result);
-        } else {
-                size_t l;
-                char *s;
-
-                s = result;
-                l = strpcpyl(&s, maxsize, udev_device_get_syspath(dev), NULL);
-                if (attr != NULL)
-                        strpcpyl(&s, l, "/", attr, NULL);
-                log_debug("path '[%s/%s]%s' is '%s'", subsys, sysname, attr, result);
+        if (dev == NULL) {
+                free(a);
+                return -errno;
         }
+
+        *ret_device = dev;
+        *ret_attr = a;
+        return 0;
+}
+
+/* handle "[<SUBSYSTEM>/<KERNEL>]<attribute>" format: the path of the attribute, or of the device when there is
+ * no attribute, in result. Returns 0, or a negative errno, see resolve_subsys_kernel(). */
+int util_resolve_subsys_kernel(struct udev *udev, const char *string, char *result, size_t maxsize)
+{
+        _cleanup_free_ char *attr = NULL;
+        struct udev_device *dev;
+        size_t l;
+        char *s;
+        int r;
+
+        r = resolve_subsys_kernel(udev, string, false, &dev, &attr);
+        if (r < 0)
+                return r;
+
+        /* result may be string */
+        s = result;
+        l = strpcpyl(&s, maxsize, udev_device_get_syspath(dev), NULL);
+        if (attr != NULL)
+                strpcpyl(&s, l, "/", attr, NULL);
+        log_debug("path '[%s/%s]%s' is '%s'", strna(udev_device_get_subsystem(dev)), udev_device_get_sysname(dev),
+                  attr ?: "", result);
         udev_device_unref(dev);
+        return 0;
+}
+
+/* handle "[<SUBSYSTEM>/<KERNEL>]<attribute>" format: the whole value of the attribute, which may be longer than
+ * any buffer, in a new string. Like in systemd, an attribute that does not exist or cannot be read for lack of
+ * privileges has an empty value. Returns 0, -EINVAL if there is no attribute, another error of reading the
+ * attribute, or one of resolve_subsys_kernel(). */
+int util_resolve_subsys_kernel_value(struct udev *udev, const char *string, char **ret_value)
+{
+        _cleanup_free_ char *attr = NULL;
+        struct udev_device *dev;
+        const char *val;
+        char *v;
+        int r;
+
+        r = resolve_subsys_kernel(udev, string, true, &dev, &attr);
+        if (r < 0)
+                return r;
+
+        val = udev_device_get_sysattr_value(dev, attr);
+        if (val == NULL && !IN_SET(errno, EPERM, EACCES, ENOENT)) {
+                r = -errno;
+                udev_device_unref(dev);
+                return r;
+        }
+
+        /* the value belongs to the device */
+        v = strdup(val ?: "");
+        udev_device_unref(dev);
+        if (!v)
+                return -ENOMEM;
+
+        log_debug("value '%s' is '%s'", string, v);
+        *ret_value = v;
         return 0;
 }
 

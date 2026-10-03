@@ -3010,12 +3010,12 @@ static bool apply_format(struct udev_event *event, struct udev_rules *rules, str
 /* Returns 0 when the attribute matches, -1 when not, and -ENOMEM when out of memory. */
 static int match_attr(struct udev_rules *rules, struct udev_device *dev, struct udev_event *event,
                       struct token *rule, struct token *cur, struct udev_list *properties_list) {
-        _cleanup_free_ char *stripped = NULL;
+        _cleanup_free_ char *stripped = NULL, *subsys_value = NULL;
         const char *name;
         char nbuf[UTIL_NAME_SIZE];
         const char *value;
-        char vbuf[UTIL_NAME_SIZE];
         size_t len;
+        int r;
 
         name = rules_str(rules, cur->key.attr_off);
         switch (cur->key.attrsubst) {
@@ -3031,9 +3031,13 @@ static int match_attr(struct udev_rules *rules, struct udev_device *dev, struct 
                         return -1;
                 break;
         case SB_SUBSYS:
-                if (util_resolve_subsys_kernel(event->udev, name, vbuf, sizeof(vbuf), 1) != 0)
+                /* unlike systemd, which cuts it at 511 bytes, the whole value */
+                r = util_resolve_subsys_kernel_value(event->udev, name, &subsys_value);
+                if (r == -ENOMEM)
+                        return log_oom();
+                if (r < 0)
                         return -1;
-                value = vbuf;
+                value = subsys_value;
                 break;
         default:
                 return -1;
@@ -3053,8 +3057,8 @@ static int match_attr(struct udev_rules *rules, struct udev_device *dev, struct 
 
                         /* Unlike systemd, which copies the value into a buffer of UDEV_NAME_SIZE, a
                          * longer value is not cut at 511 bytes. */
-                        if (value == vbuf)
-                                vbuf[len] = '\0';
+                        if (value == subsys_value)
+                                subsys_value[len] = '\0';
                         else {
                                 stripped = strndup(value, len);
                                 if (!stripped)
@@ -3348,7 +3352,7 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                         if (!apply_format(event, rules, rule, cur, rules_str(rules, cur->key.value_off), filename, sizeof(filename),
                                           false, properties_list, "file name"))
                                 goto nomatch;
-                        if (util_resolve_subsys_kernel(event->udev, filename, filename, sizeof(filename), 0) != 0) {
+                        if (util_resolve_subsys_kernel(event->udev, filename, filename, sizeof(filename)) < 0) {
                                 if (filename[0] != '/') {
                                         char tmp[UTIL_PATH_SIZE];
                                         bool truncated;
@@ -3921,7 +3925,7 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                         int r;
 
                         /* First, try to resolve "[<SUBSYSTEM>/<KERNEL>]<attribute>" format. */
-                        if (util_resolve_subsys_kernel(event->udev, key_name, attr, sizeof(attr), 0) != 0) {
+                        if (util_resolve_subsys_kernel(event->udev, key_name, attr, sizeof(attr)) < 0) {
                                 if (key_name[0] == '[') {
                                         log_event_warning(event, rules, rule, cur, "Failed to resolve sysfs attribute \"%s\", ignoring.",
                                                           key_name);

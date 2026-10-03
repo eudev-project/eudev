@@ -400,6 +400,7 @@ static ssize_t udev_event_subst_format(struct udev_event *event, enum subst_type
                 break;
         }
         case SUBST_ATTR: {
+                _cleanup_free_ char *subsys_value = NULL;
                 char vbuf[UTIL_NAME_SIZE];
                 size_t len;
                 int count;
@@ -408,9 +409,11 @@ static ssize_t udev_event_subst_format(struct udev_event *event, enum subst_type
                 if (isempty(attr))
                         return -EINVAL;
 
-                /* try to read the value specified by "[dmi/id]product_name" */
-                if (util_resolve_subsys_kernel(event->udev, attr, vbuf, sizeof(vbuf), 1) == 0)
-                        val = vbuf;
+                /* try to read the value specified by "[dmi/id]product_name"; unlike systemd, which cuts it
+                 * at 511 bytes silently, the whole value, so that a longer one is truncated below like the
+                 * value of an attribute of the device */
+                if (util_resolve_subsys_kernel_value(event->udev, attr, &subsys_value) >= 0)
+                        val = subsys_value;
 
                 /* try to read the attribute the device */
                 if (!val)
@@ -424,8 +427,7 @@ static ssize_t udev_event_subst_format(struct udev_event *event, enum subst_type
                         goto null_terminate;
 
                 /* strip trailing whitespace, and replace unwanted characters */
-                if (val != vbuf)
-                        strscpy_full(vbuf, sizeof(vbuf), val, &truncated);
+                strscpy_full(vbuf, sizeof(vbuf), val, &truncated);
                 len = strlen(vbuf);
                 while (len > 0 && isspace((unsigned char) vbuf[--len]))
                         vbuf[len] = '\0';

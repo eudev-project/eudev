@@ -1946,6 +1946,20 @@ KERNEL=="sda", RUN+="/bin/rm -f /sys%p/t1-long"
 EOF
         },
         {
+                desc            => "[SUBSYSTEM/KERNEL]attribute values are not cut at 511 bytes",
+                devpath         => "/devices/pci0000:00/0000:00:1f.2/host0/target0:0:0/0:0:0:0/block/sda",
+                exp_name        => "found",
+                not_exp_name    => "bad",
+                rules           => <<EOF
+KERNEL=="sda", PROGRAM=="/bin/sh -c 'printf \\"%%0600d\\" 0 | tr 0 a >/sys%p/u1-long'"
+KERNEL=="sda", ATTR{[block/sda]u1-long}=="@{[ "a" x 600 ]}", ATTR{[block/sda]u1-long}=="*aa", SYMLINK+="found"
+KERNEL=="sda", ATTR{[block/sda]u1-long}=="@{[ "a" x 511 ]}", SYMLINK+="bad"
+KERNEL=="sda", ENV{U1_SUBST}="\$attr{[block/sda]u1-long}"
+KERNEL=="sda", ENV{U1_SUBST}=="?*", SYMLINK+="bad"
+KERNEL=="sda", RUN+="/bin/rm -f /sys%p/u1-long"
+EOF
+        },
+        {
                 desc            => "an IMPORT{file} error stops the processing of the event",
                 devpath         => "/devices/pci0000:00/0000:00:1f.2/host0/target0:0:0/0:0:0:0/block/sda",
                 exp_name        => "sda",
