@@ -67,7 +67,8 @@ static inline struct _mate *node_to_mate(struct udev_list_node *node)
 
 noreturn static void sig_alrm(int signo __attribute__((unused)))
 {
-        exit(4);
+        /* exit() is not async-signal-safe */
+        _exit(4);
 }
 
 static void usage(void)
