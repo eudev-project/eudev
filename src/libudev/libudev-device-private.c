@@ -571,6 +571,20 @@ static int synthetic_uuid_supported = -1;
  * the netlink socket already; the time is only spent on kernels without UUIDs. */
 #define SYNTHETIC_UUID_PROBE_USEC (1 * USEC_PER_SEC)
 
+/* Whether the kernel sends a uevent when one is triggered with the uevent attribute of the kobject with the
+ * syspath: not for a device without a subsystem, i.e. without a bus or class (dev_uevent_filter()). Only devices
+ * are checked, as the other kobjects with an uevent attribute, e.g. buses, drivers and modules, have no subsystem
+ * link, but send uevents. */
+bool syspath_sends_uevents(const char *syspath)
+{
+        assert(syspath);
+
+        if (!startswith(syspath, "/sys/devices/"))
+                return true;
+
+        return access(strjoina(syspath, "/subsystem"), F_OK) >= 0;
+}
+
 /* Triggers a synthetic uevent of the device with the syspath, like device_trigger() with the UUID, as long as
  * the kernel supports UUIDs, and otherwise without it. Kernels before 4.13 accept the write of an action with
  * a UUID, log "uevent: unknown action-string", and send no uevent at all, so their missing support cannot be
@@ -604,20 +618,9 @@ int uevent_trigger_with_uuid(struct udev *udev, const char *syspath, const char 
                 return r < 0 ? r : 0;
         }
 
-        /* The kernel does not send uevents of a device without a bus or class (dev_uevent_filter()). Only
-         * devices are checked, as the other kobjects with an uevent attribute, e.g. buses, drivers and
-         * modules, have no subsystem link, but send uevents. */
-        if (startswith(syspath, "/sys/devices/")) {
-                _cleanup_free_ char *subsystem = NULL;
-
-                subsystem = strjoin(syspath, "/subsystem", NULL);
-                if (!subsystem)
-                        return -ENOMEM;
-
-                if (access(subsystem, F_OK) < 0) {
-                        r = uevent_trigger(syspath, action, uuid);
-                        return r < 0 ? r : 1;
-                }
+        if (!syspath_sends_uevents(syspath)) {
+                r = uevent_trigger(syspath, action, uuid);
+                return r < 0 ? r : 1;
         }
 
         /* The socket must be bound before the uevent is triggered. */

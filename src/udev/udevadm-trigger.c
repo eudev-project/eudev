@@ -372,7 +372,7 @@ static int exec_list(struct udev *udev, char **list, const char *action, Set *se
                 char filename[UTIL_PATH_SIZE];
                 char id[UUID_STRING_MAX] = "";
                 const char *syspath;
-                bool with_uuid = false;
+                bool with_uuid = false, sends;
 
                 syspath = *entry;
                 if (verbose)
@@ -389,8 +389,13 @@ static int exec_list(struct udev *udev, char **list, const char *action, Set *se
                  * the write with EINVAL, and then triggers the uevents without UUIDs. But they accept it,
                  * and send no uevent at all, so --settle would wait forever. uevent_trigger_with_uuid()
                  * finds out with the first uevent whether the kernel supports UUIDs, and triggers the
-                 * uevents without them if it does not; then --settle waits for an event of the device. */
-                if (arg_uuid || arg_settle) {
+                 * uevents without them if it does not; then --settle waits for an event of the device.
+                 *
+                 * Also unlike systemd, which then prints a UUID and waits forever with --settle, a device
+                 * without a subsystem, for which the kernel sends no uevent, is triggered without a UUID, and
+                 * not waited for. */
+                sends = !(arg_uuid || arg_settle) || syspath_sends_uevents(syspath);
+                if ((arg_uuid || arg_settle) && sends) {
                         random_uuid(id);
                         r = uevent_trigger_with_uuid(udev, syspath, action, id);
                         with_uuid = r > 0;
@@ -447,7 +452,10 @@ static int exec_list(struct udev *udev, char **list, const char *action, Set *se
 
                 /* Wait for the UUID if the kernel supports it, as the device may be renamed while the
                  * event is processed. Otherwise, wait for an event for the device. */
-                if (settle_set != NULL && set_put_strdup(settle_set, with_uuid ? id : syspath) < 0)
+                if (settle_set != NULL && !sends)
+                        log_debug("%s: The device has no subsystem, the kernel sends no uevent for it, not waiting for it.",
+                                  eudev_basename(syspath));
+                else if (settle_set != NULL && set_put_strdup(settle_set, with_uuid ? id : syspath) < 0)
                         return log_oom();
         }
 

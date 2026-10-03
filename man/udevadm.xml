@@ -619,7 +619,10 @@
             the first event whether the kernel passes the UUID on, which
             takes up to a second with older kernels, and triggers the events
             without UUIDs then, and waits for an event of each triggered
-            device instead.</para>
+            device instead. Devices without a subsystem, e.g.
+            <filename>/sys/devices/platform</filename> with
+            <option>--include-parents</option>, are not waited for, as the
+            kernel sends no events for them.</para>
           </listitem>
         </varlistentry>
         <varlistentry>
@@ -630,7 +633,8 @@
             environment block (in the <literal>SYNTH_UUID=</literal> property) and may be used to track
             delivery of the generated events. This requires Linux 4.13 or newer: with older kernels,
             the events are triggered without UUIDs, with a warning, and no UUIDs are printed, see
-            <option>--settle</option>.</para>
+            <option>--settle</option>. No UUID is printed for a device without a subsystem, which is
+            triggered without one, as the kernel sends no event for it.</para>
           </listitem>
         </varlistentry>
         <varlistentry>
