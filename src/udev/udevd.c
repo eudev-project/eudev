@@ -643,7 +643,7 @@ static void worker_spawn(struct event *event) {
 
                         /* apply rules, create node, symlinks */
                         r = udev_event_execute_rules(udev_event,
-                                                     arg_event_timeout_usec, arg_event_timeout_warn_usec,
+                                                     arg_event_timeout_usec,
                                                      &properties_list,
                                                      rules,
                                                      &sigmask_orig);
@@ -656,7 +656,7 @@ static void worker_spawn(struct event *event) {
                                                   udev_device_get_sysname(dev));
                         else {
                                 udev_event_execute_run(udev_event,
-                                                       arg_event_timeout_usec, arg_event_timeout_warn_usec,
+                                                       arg_event_timeout_usec,
                                                        &sigmask_orig);
 
                                 /* apply/restore inotify watch; some udev rule may erroneously set

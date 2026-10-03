@@ -1362,7 +1362,6 @@ static int import_file_into_properties(struct udev_event *event, struct udev_rul
 static int import_program_into_properties(struct udev_event *event, struct udev_rules *rules, struct token *rule,
                                           struct token *token,
                                           usec_t timeout_usec,
-                                          usec_t timeout_warn_usec,
                                           const char *program, const sigset_t *sigmask) {
         struct udev_device *dev = event->dev;
         char **envp;
@@ -1376,7 +1375,7 @@ static int import_program_into_properties(struct udev_event *event, struct udev_
                 return log_oom();
 
         envp = udev_device_get_properties_envp(dev);
-        err = udev_event_spawn(event, timeout_usec, timeout_warn_usec, program, envp, sigmask, result, IMPORT_PROGRAM_SIZE, &truncated);
+        err = udev_event_spawn(event, timeout_usec, program, envp, sigmask, result, IMPORT_PROGRAM_SIZE, &truncated);
         if (err < 0)
                 return 0;
 
@@ -3264,7 +3263,6 @@ static int udev_replace_ifname(struct udev *udev, char *str) {
 int udev_rules_apply_to_event(struct udev_rules *rules,
                               struct udev_event *event,
                               usec_t timeout_usec,
-                              usec_t timeout_warn_usec,
                               struct udev_list *properties_list,
                               const sigset_t *sigmask) {
         struct token *cur;
@@ -3503,7 +3501,7 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                         envp = udev_device_get_properties_envp(event->dev);
                         log_event_debug(event, rules, rule, cur, "Running command \"%s\"", program);
 
-                        if (udev_event_spawn(event, timeout_usec, timeout_warn_usec, program, envp, sigmask, result, sizeof(result), NULL) < 0) {
+                        if (udev_event_spawn(event, timeout_usec, program, envp, sigmask, result, sizeof(result), NULL) < 0) {
                                 if (!log_event_result(event, rules, rule, cur, cur->key.op == OP_NOMATCH))
                                         goto nomatch;
                         } else {
@@ -3545,7 +3543,7 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                                 goto nomatch;
                         log_event_debug(event, rules, rule, cur, "Importing properties from results of \"%s\"", import);
 
-                        r = import_program_into_properties(event, rules, rule, cur, timeout_usec, timeout_warn_usec,
+                        r = import_program_into_properties(event, rules, rule, cur, timeout_usec,
                                                            import, sigmask);
                         if (r < 0)
                                 return r;

@@ -273,12 +273,12 @@ int main(int argc __attribute__((unused)), char *argv[]) {
 
         /* like udevd, which does not run RUN when the rules fail */
         if (udev_event_execute_rules(event,
-                                     3 * USEC_PER_SEC, USEC_PER_SEC,
+                                     3 * USEC_PER_SEC,
                                      NULL,
                                      rules,
                                      &sigmask_orig) >= 0) {
                 udev_event_execute_run(event,
-                                       3 * USEC_PER_SEC, USEC_PER_SEC,
+                                       3 * USEC_PER_SEC,
                                        NULL);
 
                 /* Finalize the database like the udevd worker does after RUN, so that ID_PROCESSING=1 is not

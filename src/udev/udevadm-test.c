@@ -209,7 +209,7 @@ static int adm_test(struct udev *udev, int argc, char *argv[]) {
         maybe_insert_empty_line();
         log_info("Processing udev rules%s...", verbose ? "" : " (verbose logs can be shown by -v/--verbose)");
         r = udev_event_execute_rules(event,
-                                     60 * USEC_PER_SEC, 20 * USEC_PER_SEC,
+                                     60 * USEC_PER_SEC,
                                      NULL,
                                      rules,
                                      &sigmask_orig);

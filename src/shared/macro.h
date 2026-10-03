@@ -82,6 +82,16 @@ static inline size_t ALIGN_TO(size_t l, size_t ali) {
         return ((l + ali - 1) & ~(ali - 1));
 }
 
+/* Like DIV_ROUND_UP() of systemd: [(x + y - 1) / y] suffers from an integer overflow, even though the
+ * computation should be possible in the given type. Therefore, we use [x / y + !!(x % y)]. */
+#define DIV_ROUND_UP(x, y) __DIV_ROUND_UP(UNIQ, x, UNIQ, y)
+#define __DIV_ROUND_UP(xq, x, yq, y)                                    \
+        ({                                                              \
+                const typeof(x) UNIQ_T(X, xq) = (x);                    \
+                const typeof(y) UNIQ_T(Y, yq) = (y);                    \
+                (UNIQ_T(X, xq) / UNIQ_T(Y, yq) + !!(UNIQ_T(X, xq) % UNIQ_T(Y, yq))); \
+        })
+
 
 #define ELEMENTSOF(x) (sizeof(x)/sizeof((x)[0]))
 
