@@ -1269,10 +1269,13 @@ static int rename_netif_dev_fromname_toname(struct udev_event *event, const char
         log_debug("collision on rename of network interface %s to %s , retrying until timeout\n",
                 ifr.ifr_name, ifr.ifr_newname);
 
-        /* there has been a collision so rename my name to a temporal name, letting other one to rename to my name, freeying its name... */
+        /* there has been a collision so rename my name to a temporal name, letting other one to rename to my name, freeying its name...
+         * The temporary name is "rename_<oldname>", or, when that does not fit, "rename<ifindex>", like the one
+         * of udev before this code: cutting the name could give two interfaces the same temporary name. */
         memzero(&ifr_tmp, sizeof(struct ifreq));
         strscpy(ifr_tmp.ifr_name, IFNAMSIZ, oldname);
-        snprintf(ifr_tmp.ifr_newname, IFNAMSIZ, "rename_%s", oldname);
+        if (snprintf(ifr_tmp.ifr_newname, IFNAMSIZ, "rename_%s", oldname) >= IFNAMSIZ)
+                snprintf(ifr_tmp.ifr_newname, IFNAMSIZ, "rename%i", udev_device_get_ifindex(event->dev));
         if (ioctl(sk, SIOCSIFNAME, &ifr_tmp) < 0) {
                 r = -errno;
                 log_debug_errno(r, "could not temporarily rename network interface %s to %s: %m",
