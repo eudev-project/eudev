@@ -22,7 +22,7 @@
 #include <stdbool.h>
 
 #include "macro.h"
- 
+
 bool unichar_is_valid(uint32_t c);
 
 char *utf8_is_valid(const char *s) _pure_;

@@ -4372,4 +4372,3 @@ int udev_rules_assigning_name_to(struct udev_rules *rules, const char *match_nam
         }
 }
 #endif
-

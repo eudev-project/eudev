@@ -18,4 +18,3 @@ fido_id_SOURCES =\
 fido_id_LDADD = \
 	$(top_builddir)/src/libudev/libudev-private.la \
 	$(top_builddir)/src/udev/libudev-core.la
-

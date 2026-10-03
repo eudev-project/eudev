@@ -17,7 +17,7 @@ contributors (alphabetical order).
 
 Homepage: https://github.com/eudev-project/eudev
 
-Tarballs of releases: https://github.com/eudev-project/eudev/releases  
+Tarballs of releases: https://github.com/eudev-project/eudev/releases\
 Old releases (archive): http://dev.gentoo.org/~blueness/eudev/
 
 Gentoo: eudev is no longer in the main tree. The third-party
@@ -25,8 +25,8 @@ Gentoo: eudev is no longer in the main tree. The third-party
 provides `sys-fs/eudev` and a `virtual/udev` that accepts it; it is not
 maintained by this project.
 
-The eudev community gathers on [Libera.Chat](https://libera.chat/):  
-ircs://irc.libera.chat:6697/#eudev  
+The eudev community gathers on [Libera.Chat](https://libera.chat/):\
+ircs://irc.libera.chat:6697/#eudev\
 https://web.libera.chat/#eudev
 
 Active team members (alphabetical order by last name):

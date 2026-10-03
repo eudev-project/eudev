@@ -351,4 +351,3 @@ int parse_time(const char *t, usec_t *ret, usec_t default_unit) {
 int parse_sec(const char *t, usec_t *ret) {
         return parse_time(t, ret, USEC_PER_SEC);
 }
-
