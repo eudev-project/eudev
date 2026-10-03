@@ -123,18 +123,13 @@ int udev_ctrl_enable_receiving(struct udev_ctrl *uctrl) {
                         err = bind(uctrl->sock, &uctrl->saddr.sa, uctrl->addrlen);
                 }
 
-                if (err < 0) {
-                        err = -errno;
-                        log_error_errno(errno, "bind failed: %m");
-                        return err;
-                }
+                /* the caller logs the error */
+                if (err < 0)
+                        return -errno;
 
                 err = listen(uctrl->sock, 0);
-                if (err < 0) {
-                        err = -errno;
-                        log_error_errno(errno, "listen failed: %m");
-                        return err;
-                }
+                if (err < 0)
+                        return -errno;
 
                 uctrl->bound = true;
                 uctrl->cleanup_socket = true;
