@@ -1392,6 +1392,11 @@ _public_ struct udev_device *udev_device_new_from_syspath(struct udev *udev, con
  * by its major/minor number and type. Character and block device
  * numbers are not unique across the two types.
  *
+ * Like in systemd, a device number with the major number 0 fails with
+ * ENODEV, and the device that is found must have the device number and
+ * the type, a block device being one of the "block" subsystem, otherwise
+ * the call fails with ENXIO.
+ *
  * The initial refcount is 1, and needs to be decremented to
  * release the resources of the udev device.
  *
@@ -1399,7 +1404,8 @@ _public_ struct udev_device *udev_device_new_from_syspath(struct udev *udev, con
  **/
 _public_ struct udev_device *udev_device_new_from_devnum(struct udev *udev, char type, dev_t devnum)
 {
-        char path[UTIL_PATH_SIZE];
+        char path[STRLEN("/sys/dev/block/") + DECIMAL_STR_MAX(unsigned) * 2 + 2];
+        struct udev_device *dev;
         const char *type_str;
 
         if (type == 'b')
@@ -1411,10 +1417,27 @@ _public_ struct udev_device *udev_device_new_from_devnum(struct udev *udev, char
                 return NULL;
         }
 
+        /* like device_new_from_mode_and_devnum() of systemd */
+        if (major(devnum) == 0) {
+                errno = ENODEV;
+                return NULL;
+        }
+
         /* use /sys/dev/{block,char}/<maj>:<min> link */
-        snprintf(path, sizeof(path), "/sys/dev/%s/%u:%u",
-                 type_str, major(devnum), minor(devnum));
-        return udev_device_new_from_syspath(udev, path);
+        xsprintf(path, "/sys/dev/%s/%u:%u", type_str, major(devnum), minor(devnum));
+        dev = udev_device_new_from_syspath(udev, path);
+        if (!dev)
+                return NULL;
+
+        /* the device must have the number, and the type */
+        if (udev_device_get_devnum(dev) != devnum ||
+            streq_ptr(udev_device_get_subsystem(dev), "block") != (type == 'b')) {
+                udev_device_unref(dev);
+                errno = ENXIO;
+                return NULL;
+        }
+
+        return dev;
 }
 
 /* Like parse_devnum() of systemd: "MAJOR:MINOR" in decimal, the major number made of digits only, both
