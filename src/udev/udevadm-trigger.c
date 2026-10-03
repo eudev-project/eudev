@@ -758,8 +758,8 @@ static int adm_trigger(struct udev *udev, int argc, char *argv[]) {
 
                 dev = find_device(udev, *m, "/sys");
                 if (dev == NULL) {
-                        log_error("unable to open the device '%s'", *m);
-                        return 2;
+                        log_error_errno(errno > 0 ? errno : ENODEV, "Failed to open the device '%s': %m", *m);
+                        return 1;
                 }
 
                 if (strv_extend(&parents, udev_device_get_syspath(dev)) < 0) {
@@ -773,8 +773,8 @@ static int adm_trigger(struct udev *udev, int argc, char *argv[]) {
 
                 dev = find_device(udev, *m, "/dev/");
                 if (dev == NULL) {
-                        log_error("unable to open the device '%s'", *m);
-                        return 2;
+                        log_error_errno(errno > 0 ? errno : ENODEV, "Failed to open the device '%s': %m", *m);
+                        return 1;
                 }
 
                 if (strv_extend(&parents, udev_device_get_syspath(dev)) < 0) {
@@ -811,8 +811,9 @@ static int adm_trigger(struct udev *udev, int argc, char *argv[]) {
 
                 dev = find_device(udev, argv[optind], NULL);
                 if (dev == NULL) {
-                        log_error("unable to open the device '%s'", argv[optind]);
-                        return 2;
+                        log_error_errno(errno > 0 ? errno : ENODEV, "Failed to open the device '%s': %m",
+                                        argv[optind]);
+                        return 1;
                 }
 
                 if (strv_extend(&parents, udev_device_get_syspath(dev)) < 0) {
