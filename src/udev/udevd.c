@@ -1284,12 +1284,12 @@ static usec_t manager_kill_worker_timeout(void) {
         return usec_add(arg_event_timeout_usec, extra_timeout_usec());
 }
 
-/* Like the timers of systemd's worker_attach_event(), on_worker_timeout_warning() and on_worker_timeout_kill():
- * warns when the event of a worker takes a third of the event timeout, and sends the timeout signal to the worker
- * after the event timeout and the extra time. Called on every iteration of the main loop, and not only when it
- * times out, so that a hanging worker is also killed when the loop never waits that long, e.g. as uevents or
- * messages keep arriving. Returns the time in milliseconds until the next of these is due, rounded up, or -1 if
- * there is none. */
+/* Like the timers of systemd's worker_attach_event(), on_worker_timeout_warning() and on_worker_timeout_kill(),
+ * with their messages: warns when the event of a worker takes a third of the event timeout, and sends the timeout
+ * signal to the worker after the event timeout and the extra time. Called on every iteration of the main loop,
+ * and not only when it times out, so that a hanging worker is also killed when the loop never waits that long,
+ * e.g. as uevents or messages keep arriving. Returns the time in milliseconds until the next of these is due,
+ * rounded up, or -1 if there is none. */
 static int manager_check_worker_timeouts(void) {
         struct worker *worker;
         usec_t now_usec, next_usec = USEC_INFINITY;
@@ -1311,11 +1311,11 @@ static int manager_check_worker_timeouts(void) {
 
                 usec = usec_add(event->start_usec, manager_kill_worker_timeout());
                 if (usec <= now_usec) {
-                        log_error("worker ["PID_FMT"] %s timeout; kill it", worker->pid, event->devpath);
                         (void) kill_and_sigcont(worker->pid, arg_timeout_signal);
                         worker->state = WORKER_KILLED;
 
-                        log_error("seq %llu '%s' killed", udev_device_get_seqnum(event->dev), event->devpath);
+                        log_device_error(event->dev, "Worker ["PID_FMT"] processing SEQNUM=%llu killed.",
+                                         worker->pid, event->seqnum);
                         continue;
                 }
                 next_usec = MIN(next_usec, usec);
@@ -1325,7 +1325,8 @@ static int manager_check_worker_timeouts(void) {
 
                 usec = usec_add(event->start_usec, arg_event_timeout_warn_usec);
                 if (usec <= now_usec) {
-                        log_warning("worker ["PID_FMT"] %s is taking a long time", worker->pid, event->devpath);
+                        log_device_warning(event->dev, "Worker ["PID_FMT"] processing SEQNUM=%llu is taking a long time.",
+                                           worker->pid, event->seqnum);
                         event->warned = true;
                 } else
                         next_usec = MIN(next_usec, usec);
