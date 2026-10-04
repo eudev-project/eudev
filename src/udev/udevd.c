@@ -1852,16 +1852,6 @@ static void cmdline_log_flush(void) {
         cmdline_messages = NULL;
 }
 
-/* Like proc_cmdline_value_missing() of systemd: warns and returns true if the key has no value, with the message
- * kept for cmdline_log_flush(). */
-static bool cmdline_value_missing(const char *key, const char *value) {
-        if (value)
-                return false;
-
-        cmdline_log(LOG_WARNING, 0, "Missing argument for %s= kernel command line switch, ignoring.", key);
-        return true;
-}
-
 /*
  * read the kernel command line, in case we need to get into debug mode
  *   udev.log_level=<level>                    syslog priority
@@ -1887,7 +1877,7 @@ static int parse_proc_cmdline_item(const char *key, const char *value) {
         if (proc_cmdline_key_streq(key, "udev.log_level") ||
             proc_cmdline_key_streq(key, "udev.log_priority")) { /* kept for backward compatibility */
 
-                if (cmdline_value_missing(key, value))
+                if (proc_cmdline_value_missing_full(key, value, cmdline_log))
                         return 0;
 
                 r = util_log_priority(value);
@@ -1896,28 +1886,28 @@ static int parse_proc_cmdline_item(const char *key, const char *value) {
 
         } else if (proc_cmdline_key_streq(key, "udev.event_timeout")) {
 
-                if (cmdline_value_missing(key, value))
+                if (proc_cmdline_value_missing_full(key, value, cmdline_log))
                         return 0;
 
                 r = parse_sec(value, &config_by_kernel.timeout_usec);
 
         } else if (proc_cmdline_key_streq(key, "udev.children_max")) {
 
-                if (cmdline_value_missing(key, value))
+                if (proc_cmdline_value_missing_full(key, value, cmdline_log))
                         return 0;
 
                 r = safe_atou(value, &config_by_kernel.children_max);
 
         } else if (proc_cmdline_key_streq(key, "udev.exec_delay")) {
 
-                if (cmdline_value_missing(key, value))
+                if (proc_cmdline_value_missing_full(key, value, cmdline_log))
                         return 0;
 
                 r = parse_sec(value, &config_by_kernel.exec_delay_usec);
 
         } else if (proc_cmdline_key_streq(key, "udev.timeout_signal")) {
 
-                if (cmdline_value_missing(key, value))
+                if (proc_cmdline_value_missing_full(key, value, cmdline_log))
                         return 0;
 
                 r = signal_from_string(value);

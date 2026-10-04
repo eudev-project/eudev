@@ -2854,15 +2854,22 @@ bool proc_cmdline_key_streq(const char *x, const char *y) {
         }
 }
 
-bool proc_cmdline_value_missing(const char *key, const char *value) {
+/* Like proc_cmdline_value_missing() of systemd, with its message, which is logged with log_func when it is not
+ * NULL, e.g. by udevd, which keeps the messages about the kernel command line, to log them later. */
+bool proc_cmdline_value_missing_full(const char *key, const char *value, proc_cmdline_log_func_t log_func) {
+#define PROC_CMDLINE_VALUE_MISSING_MESSAGE "Missing argument for %s= kernel command line switch, ignoring."
         assert(key);
 
-        if (!value) {
-                log_warning("Missing argument for %s= kernel command line switch, ignoring.", key);
-                return true;
-        }
+        if (value)
+                return false;
 
-        return false;
+        if (log_func)
+                log_func(LOG_WARNING, 0, PROC_CMDLINE_VALUE_MISSING_MESSAGE, key);
+        else
+                log_warning(PROC_CMDLINE_VALUE_MISSING_MESSAGE, key);
+
+        return true;
+#undef PROC_CMDLINE_VALUE_MISSING_MESSAGE
 }
 
 static const char *proc_cmdline_key_startswith(const char *s, const char *prefix) {

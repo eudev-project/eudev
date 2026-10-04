@@ -637,8 +637,13 @@ static inline void qsort_safe(void *base, size_t nmemb, size_t size,
 int proc_cmdline(char **ret);
 /* Like streq(), but considers "-" and "_" the same, for the keys of the kernel command line */
 bool proc_cmdline_key_streq(const char *x, const char *y);
-/* Warns and returns true if the key has no value */
-bool proc_cmdline_value_missing(const char *key, const char *value);
+/* A function that logs a message like log_full_errno(), see proc_cmdline_value_missing_full() */
+typedef void (*proc_cmdline_log_func_t)(int level, int error, const char *format, ...) _printf_(3, 4);
+/* Warns and returns true if the key has no value; with log_func, the warning is logged with it */
+bool proc_cmdline_value_missing_full(const char *key, const char *value, proc_cmdline_log_func_t log_func);
+static inline bool proc_cmdline_value_missing(const char *key, const char *value) {
+        return proc_cmdline_value_missing_full(key, value, NULL);
+}
 int proc_cmdline_get_key(const char *key, char **value);
 int proc_cmdline_get_bool(const char *key, bool *ret);
 int parse_proc_cmdline(int (*parse_word)(const char *key, const char *value));
