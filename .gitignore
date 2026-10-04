@@ -25,6 +25,9 @@ rule_generator/write_net_rules
 
 rules/64-btrfs.rules
 
+# the work directory of "make regenerate-hwdb", left behind only if it was killed with SIGKILL
+hwdb.d/regenerate-hwdb.tmp/
+
 src/ata_id/ata_id
 src/cdrom_id/cdrom_id
 src/collect/collect
