@@ -357,7 +357,8 @@ Match the driver name of the event device\&. Only set this key for devices which
 \fIATTR{\fR\fI\fIfilename\fR\fR\fI}\fR, \fISYSCTL{\fR\fI\fIkernel parameter\fR\fR\fI}\fR
 .RS 4
 Match sysfs attribute values of the event device\&. Trailing whitespace in the attribute values is ignored unless the specified match value itself contains trailing whitespace\&.
-Match a kernel parameter value\&. Like in systemd, the whitespace around the value is removed, and a kernel parameter that does not exist has an empty value\&.
+Match a kernel parameter value\&. Like in systemd, the whitespace around the value is removed, and a kernel parameter that does not exist has an empty value\&. Like in systemd, a kernel parameter that cannot be read stops the processing of the rules for the event; unlike systemd, which waits for it, this includes one that is not a regular file, e\&.g\&. a FIFO reached through
+\&.\&.\&.
 .RE
 .PP
 \fIKERNELS\fR
@@ -765,7 +766,7 @@ program, but use one of the built\-in programs rather than an external one\&.
 .PP
 file
 .RS 4
-Import a text file specified as the assigned value, the content of which must be in environment key format\&. A line may be up to 1 MiB long; a longer line stops the import, and the key is false, while the properties imported before it are kept\&.
+Import a text file specified as the assigned value, the content of which must be in environment key format\&. A line may be up to 1 MiB long; a longer line stops the import, and the key is false, while the properties imported before it are kept\&. Unlike systemd, which waits for them, a file that is neither a regular file nor a directory, e\&.g\&. a FIFO or a character device, is not read, and the key is false\&.
 .RE
 .PP
 db

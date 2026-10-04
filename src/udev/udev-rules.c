@@ -1282,17 +1282,36 @@ static int import_property_from_string(struct udev_event *event, struct udev_rul
 
 /* Like IMPORT{file} of systemd-udevd: returns 1 when the file was imported, 0 when it does not exist
  * or could not be read, and the key does not match, or a negative error when it cannot be opened or
- * when out of memory, which stops the processing of the rules for the event. */
+ * when out of memory, which stops the processing of the rules for the event. Unlike systemd, which waits
+ * for a writer and for data, a file that may block, e.g. a FIFO or a character device, is not read, like a
+ * file that cannot be read, see read_virtual_file(); a directory fails to be read with EISDIR as in systemd. */
 static int import_file_into_properties(struct udev_event *event, struct udev_rules *rules, struct token *rule,
                                        struct token *token, const char *import) {
         _cleanup_fclose_ FILE *f = NULL;
+        _cleanup_close_ int fd = -1;
+        struct stat st;
 
-        f = fopen(import, "re");
-        if (f == NULL) {
+        /* O_NONBLOCK makes no difference for regular files and directories, and nothing else is read */
+        fd = open(import, O_RDONLY|O_NOCTTY|O_CLOEXEC|O_NONBLOCK);
+        if (fd < 0) {
                 if (errno == ENOENT)
                         return 0;
                 return log_event_error_errno(event, rules, rule, token, errno, "Failed to open \"%s\": %m", import);
         }
+
+        if (fstat(fd, &st) < 0)
+                return log_event_error_errno(event, rules, rule, token, errno, "Failed to open \"%s\": %m", import);
+
+        if (!S_ISREG(st.st_mode) && !S_ISDIR(st.st_mode)) {
+                /* like read_virtual_file() */
+                log_event_debug_errno(event, rules, rule, token, EBADF, "Failed to read \"%s\", ignoring: %m", import);
+                return 0;
+        }
+
+        f = fdopen(fd, "r");
+        if (!f)
+                return log_event_error_errno(event, rules, rule, token, errno, "Failed to open \"%s\": %m", import);
+        fd = -1;
 
         /* Like systemd-udevd: lines of up to 1 MiB. A longer line, or a read error, stops the import,
          * and the key does not match; the properties imported before stay. */

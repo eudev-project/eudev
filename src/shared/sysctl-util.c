@@ -68,12 +68,17 @@ int sysctl_write(const char *property, const char *value) {
         return write_string_file(p, value);
 }
 
+/* Like sysctl_read() of systemd, which reads the entry with read_full_virtual_file(). Unlike there, the file is
+ * opened with O_NONBLOCK by read_virtual_file(), so that a property that names something else than a regular
+ * file, e.g. a FIFO through "..", fails with EBADF instead of blocking. */
 int sysctl_read(const char *property, char **content) {
         char *p;
+        int r;
 
         assert(property);
         assert(content);
 
         p = strjoina("/proc/sys/", property);
-        return read_full_file(p, content, NULL);
+        r = read_virtual_file(p, SIZE_MAX, content, NULL);
+        return r < 0 ? r : 0;
 }
