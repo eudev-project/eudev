@@ -50,7 +50,7 @@ static int parse_argv(int argc, char *argv[]) {
 
         int r, c;
 
-        while ((c = getopt_long(argc, argv, "hV", options, NULL)) >= 0)
+        while ((c = udevadm_getopt_long(argc, argv, "hV", options)) >= 0)
                 switch (c) {
                 case 'h':
                         help();

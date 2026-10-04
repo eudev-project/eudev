@@ -165,7 +165,7 @@ static int adm_control(struct udev *udev, int argc, char *argv[]) {
         /* Like systemd, parse all options before anything is sent, so that --help and --version work without
          * root privileges, and an invalid option sends nothing. For the options that are given more than once,
          * the last one counts, except that all the properties of --property are set. */
-        while ((c = getopt_long(argc, argv, "el:sSRp:m:t:hV", options, NULL)) >= 0)
+        while ((c = udevadm_getopt_long(argc, argv, "el:sSRp:m:t:hV", options)) >= 0)
                 switch (c) {
                 case 'e':
                         arg_exit = true;

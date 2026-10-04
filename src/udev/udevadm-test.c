@@ -88,7 +88,7 @@ static int adm_test(struct udev *udev, int argc, char *argv[]) {
                 {}
         };
 
-        while((c = getopt_long(argc, argv, "a:N:D:vhV", options, NULL)) >= 0)
+        while((c = udevadm_getopt_long(argc, argv, "a:N:D:vhV", options)) >= 0)
                 switch (c) {
                 case 'a':
                         r = parse_device_action(optarg, &action);

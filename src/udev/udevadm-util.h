@@ -17,6 +17,8 @@
 
 #pragma once
 
+#include <getopt.h>
+
 #include "json-writer.h"
 #include "terminal-util.h"
 #include "udev.h"
@@ -70,3 +72,10 @@ int parse_resolve_name_timing(const char *str, int *ret);
 /* The last line of the help texts, like systemd's: "See the udevadm(8) man page for details.",
  * with a link to the man page if links are enabled. */
 void print_man_page_link(void);
+
+/* getopt_long() with the messages of systemd's option parser instead of the ones of the C library,
+ * e.g. "udevadm: unrecognized option '-Z'", "udevadm: option '--name' requires an argument" or
+ * "udevadm: option '--exp' is ambiguous; possibilities: --export, --export-prefix, --export-db".
+ * Like that parser, an abbreviated long option is ambiguous whenever the names of several long
+ * options begin with it, also if they are aliases. Returns '?' after logging an invalid option. */
+int udevadm_getopt_long(int argc, char *argv[], const char *optstring, const struct option *longopts);
