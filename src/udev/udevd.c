@@ -2027,7 +2027,7 @@ static int parse_argv(int argc, char *argv[]) {
                 case 'c':
                         r = safe_atou(optarg, &config_by_command.children_max);
                         if (r < 0)
-                                log_warning("Invalid --children-max ignored: %s", optarg);
+                                log_warning_errno(r, "Failed to parse --children-max= value '%s', ignoring: %m", optarg);
                         break;
                 case 'e':
                         r = parse_sec(optarg, &config_by_command.exec_delay_usec);
@@ -2059,12 +2059,14 @@ static int parse_argv(int argc, char *argv[]) {
                                 log_warning("Invalid --resolve-names= value '%s', ignoring.", optarg);
                         break;
                 case 'r':
+                        /* eudev only; the message is like the ones of systemd for the other options */
                         r = safe_atou(optarg, &fd_ready_u);
-                        if (r < 0 || fd_ready_u > INT_MAX) {
-                                log_warning("Invalid --ready-notify ignored: %s", optarg);
-                        } else {
+                        if (r >= 0 && fd_ready_u > INT_MAX)
+                                r = -ERANGE;
+                        if (r < 0)
+                                log_warning_errno(r, "Failed to parse --ready-notify= value '%s', ignoring: %m", optarg);
+                        else
                                 fd_ready = fd_ready_u;
-                        }
                         break;
                 case 'h':
                         help();
