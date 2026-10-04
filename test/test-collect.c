@@ -20,6 +20,10 @@
 #undef main
 
 #include <ftw.h>
+#include <sys/resource.h>
+
+/* the limit of the size of the files that collect's main() writes */
+static rlim_t fsize_limit = RLIM_INFINITY;
 
 static int test_checkout(const char *name, const char *content, size_t size, const char *expected) {
         _cleanup_free_ char *words = NULL;
@@ -112,6 +116,7 @@ static int test_collect(const char *name, int expected_rc, const char *expected_
         char *argv[16] = { (char *) "collect" };
         char out[4096], err[4096];
         int argc = 1, fd_out, fd_err, saved_out, saved_err, next_fd, rc;
+        struct rlimit saved_rl;
         va_list ap;
 
         va_start(ap, expected_err);
@@ -119,6 +124,11 @@ static int test_collect(const char *name, int expected_rc, const char *expected_
                 argc++;
         va_end(ap);
         argv[argc] = NULL;
+
+        if (getrlimit(RLIMIT_FSIZE, &saved_rl) < 0) {
+                fprintf(stderr, "%s: cannot get the limit of the file size: %m\n", name);
+                return -1;
+        }
 
         fflush(stdout);
         fflush(stderr);
@@ -139,8 +149,15 @@ static int test_collect(const char *name, int expected_rc, const char *expected_
         if (next_fd >= 0)
                 close(next_fd);
 
+        /* a failure shows as a wrong exit code */
+        if (fsize_limit != RLIM_INFINITY)
+                (void) setrlimit(RLIMIT_FSIZE, &(struct rlimit) { .rlim_cur = fsize_limit, .rlim_max = saved_rl.rlim_max });
+
         optind = 0;
         rc = collect_main(argc, argv);
+
+        if (fsize_limit != RLIM_INFINITY)
+                (void) setrlimit(RLIMIT_FSIZE, &saved_rl);
 
         fflush(stdout);
         fflush(stderr);
@@ -279,6 +296,19 @@ int main(void) {
         r |= test_collect("missing parameters", 1, "Missing parameter(s)\n", "", "cp", NULL);
         r |= test_collect("unknown option", 1, "", NULL, "--bogus", "cp", "a", "a", NULL);
         r |= test_collect("too long checkpoint name", 3, "", "is too long", longname, "a", "a", NULL);
+
+        /* write() fails beyond the limit of the file size (with SIGXFSZ ignored), also after a short write */
+        {
+                char id[201];
+
+                memset(id, 'i', sizeof(id) - 1);
+                id[sizeof(id) - 1] = '\0';
+                signal(SIGXFSZ, SIG_IGN);
+                fsize_limit = 100;
+                r |= test_collect("file size limit", -1, "", "Cannot write run/udev/collect/cpbig: File too large",
+                                  "cpbig", id, id, NULL);
+                fsize_limit = RLIM_INFINITY;
+        }
 
         if (chdir("/") < 0 || nftw(dir, remove_entry, 16, FTW_DEPTH|FTW_PHYS) < 0) {
                 fprintf(stderr, "cannot remove %s: %m\n", dir);

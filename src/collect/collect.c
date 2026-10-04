@@ -345,7 +345,7 @@ static void kickout(void)
 static int missing(int fd)
 {
         char *buf;
-        int ret = 0;
+        int ret = 0, r;
         struct udev_list_node *him_node;
 
         buf = malloc(bufsize);
@@ -370,9 +370,10 @@ static int missing(int fd)
                                 buf = tmpbuf;
                         }
                         snprintf(buf, strlen(him->name)+2, "%s ", him->name);
-                        if (write(fd, buf, strlen(buf)) < 0) {
+                        r = loop_write(fd, buf, strlen(buf), false);
+                        if (r < 0) {
                                 free(buf);
-                                return -1;
+                                return r;
                         }
                 }
         }
@@ -563,11 +564,15 @@ int main(int argc, char **argv)
                 ret = -1;
                 goto out;
         }
-        ret = missing(fd);
-        if (ret == -ENOMEM) /* missing() logged it */
+        r = missing(fd);
+        if (r == -ENOMEM) /* missing() logged it */
                 ret = 2;
-        else if (ret >= 0)
-                count = ret;
+        else if (r < 0) {
+                errno = -r;
+                fprintf(stderr, "Cannot write %s/%s: %m\n", tmpdir, checkpoint);
+                ret = -1;
+        } else
+                ret = count = r;
 
         if (lockf(fd, F_ULOCK, 0)) {
                 /* this error can be safely ignored */
