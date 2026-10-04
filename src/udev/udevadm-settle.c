@@ -135,29 +135,31 @@ static int adm_settle(struct udev *udev, int argc, char *argv[]) {
         /* guarantee that the udev daemon isn't pre-processing */
         if (getuid() == 0) {
                 struct udev_ctrl *uctrl;
+                usec_t ping_usec = MAX(5 * USEC_PER_SEC, timeout_usec);
+                int ping_timeout;
 
+                /* Like systemd v261, the last version that pings udevd through the control socket, fail
+                 * if it cannot be created. */
+                errno = 0;
                 uctrl = udev_ctrl_new(udev);
-                if (uctrl == NULL)
-                        /* as before, wait for the queue without the ping */
+                if (uctrl == NULL) {
                         log_error_errno(errno > 0 ? errno : ENOMEM, "Failed to initialize udev control: %m");
-                else {
-                        usec_t ping_usec = MAX(5 * USEC_PER_SEC, timeout_usec);
-                        int ping_timeout;
-
-                        /* The control socket takes the timeout in seconds, round up, and -1 waits
-                         * without a limit. */
-                        if (ping_usec == USEC_INFINITY || ping_usec / USEC_PER_SEC >= INT_MAX / MSEC_PER_SEC)
-                                ping_timeout = -1;
-                        else
-                                ping_timeout = (ping_usec + USEC_PER_SEC - 1) / USEC_PER_SEC;
-
-                        if (udev_ctrl_send_ping(uctrl, ping_timeout) < 0) {
-                                log_debug("no connection to daemon");
-                                udev_ctrl_unref(uctrl);
-                                return EXIT_SUCCESS;
-                        }
-                        udev_ctrl_unref(uctrl);
+                        return EXIT_FAILURE;
                 }
+
+                /* The control socket takes the timeout in seconds, round up, and -1 waits without a
+                 * limit. */
+                if (ping_usec == USEC_INFINITY || ping_usec / USEC_PER_SEC >= INT_MAX / MSEC_PER_SEC)
+                        ping_timeout = -1;
+                else
+                        ping_timeout = (ping_usec + USEC_PER_SEC - 1) / USEC_PER_SEC;
+
+                if (udev_ctrl_send_ping(uctrl, ping_timeout) < 0) {
+                        log_debug("no connection to daemon");
+                        udev_ctrl_unref(uctrl);
+                        return EXIT_SUCCESS;
+                }
+                udev_ctrl_unref(uctrl);
         } else if (access(UDEV_ROOT_RUN "/udev/control", F_OK) < 0) {
                 /* Like systemd, for non-privileged users, at least check if udevd is running. */
                 if (errno == ENOENT)
