@@ -168,26 +168,29 @@ static const char* const rules_dirs_all[] = {
 
 /* The directories of rules_dirs_all, each path only once, where it comes first. udevadm cat and verify use
  * them, also below another root directory; the rules of this system are read from the ones of
- * udev_rules_get_dirs_runtime(). */
-const char* const* udev_rules_get_dirs(void) {
-        static const char *dirs[ELEMENTSOF(rules_dirs_all)];
-        static bool initialized = false;
+ * udev_rules_get_dirs_runtime(). Returns a new list, or NULL when out of memory. */
+char **udev_rules_get_dirs(void) {
+        _cleanup_strv_free_ char **dirs = NULL;
         size_t i, j, n = 0;
 
-        if (initialized)
-                return dirs;
+        dirs = new0(char *, ELEMENTSOF(rules_dirs_all));
+        if (!dirs)
+                return NULL;
 
         for (i = 0; rules_dirs_all[i]; i++) {
                 for (j = 0; j < n; j++)
                         if (path_equal(dirs[j], rules_dirs_all[i]))
                                 break;
-                if (j == n)
-                        dirs[n++] = rules_dirs_all[i];
-        }
-        dirs[n] = NULL;
-        initialized = true;
+                if (j < n)
+                        continue;
 
-        return dirs;
+                dirs[n] = strdup(rules_dirs_all[i]);
+                if (!dirs[n])
+                        return NULL;
+                n++;
+        }
+
+        return TAKE_PTR(dirs);
 }
 
 /* The directories of udev_rules_get_dirs(), where a directory that exists is listed only once, at its first
@@ -200,15 +203,19 @@ const char* const* udev_rules_get_dirs(void) {
 char **udev_rules_get_dirs_runtime(void) {
         struct stat st[ELEMENTSOF(rules_dirs_all)];
         bool exists[ELEMENTSOF(rules_dirs_all)];
-        _cleanup_strv_free_ char **dirs = NULL;
-        const char* const* d;
+        _cleanup_strv_free_ char **dirs = NULL, **all = NULL;
+        char **d;
         size_t j, n = 0;
+
+        all = udev_rules_get_dirs();
+        if (!all)
+                return NULL;
 
         dirs = new0(char *, ELEMENTSOF(rules_dirs_all));
         if (!dirs)
                 return NULL;
 
-        for (d = udev_rules_get_dirs(); *d; d++) {
+        for (d = all; *d; d++) {
                 struct stat s;
                 bool e = stat(*d, &s) >= 0;
 

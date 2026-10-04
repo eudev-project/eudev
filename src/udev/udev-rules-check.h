@@ -39,8 +39,9 @@ int udev_rules_check_file(struct udev *udev, struct udev_rules_check *c, const c
 /* The levels of the messages about the last checked file, as a mask of (1 << level). */
 unsigned udev_rules_check_get_issues(struct udev_rules_check *c);
 
-/* The directories of the rules files, in the order of precedence, each path only once. */
-const char* const* udev_rules_get_dirs(void);
+/* The directories of the rules files, in the order of precedence, each path only once. Returns a new list, or
+ * NULL when out of memory. */
+char **udev_rules_get_dirs(void);
 /* The same, but each directory of this system only once, also when it has several of the paths, e.g.
  * /lib/udev/rules.d and /usr/lib/udev/rules.d on a merged /usr; for the rules of this system, not of
  * another root directory. Returns a new list, or NULL when out of memory. */

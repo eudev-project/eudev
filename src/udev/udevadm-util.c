@@ -272,7 +272,8 @@ static int log_chase_error(int r, const char *name) {
 
 static int search_rules_file_in_dirs(const char *s, const char *root, char ***names, char ***paths) {
         _cleanup_free_ char *with_suffix = NULL;
-        const char* const* dir;
+        _cleanup_strv_free_ char **dirs = NULL;
+        char **dir;
         int r;
 
         if (isempty(s) || strchr(s, '/'))
@@ -289,7 +290,11 @@ static int search_rules_file_in_dirs(const char *s, const char *root, char ***na
         if (!filename_is_valid(s))
                 return 0;
 
-        for (dir = udev_rules_get_dirs(); *dir; dir++) {
+        dirs = udev_rules_get_dirs();
+        if (!dirs)
+                return log_oom();
+
+        STRV_FOREACH(dir, dirs) {
                 _cleanup_free_ char *name = NULL, *p = NULL;
                 ConfFile *c = NULL;
 
@@ -382,14 +387,19 @@ int search_rules_files(char * const *args, const char *root, char ***ret_names, 
         assert(ret_paths);
 
         if (strv_isempty(args)) {
+                _cleanup_strv_free_ char **dirs = NULL;
                 ConfFile **files = NULL;
                 size_t n_files = 0, i;
+
+                dirs = udev_rules_get_dirs();
+                if (!dirs)
+                        return log_oom();
 
                 /* Like systemd, a dangling symlink is skipped with a warning, and a file that is not a
                  * regular file, e.g. a directory, too, and then the file in the next directory is used. */
                 r = conf_files_list_strv_full(".rules", root,
                                               CONF_FILES_REGULAR | CONF_FILES_FILTER_MASKED | CONF_FILES_WARN,
-                                              udev_rules_get_dirs(), &files, &n_files);
+                                              (const char * const *) dirs, &files, &n_files);
                 if (r < 0)
                         return log_error_errno(r, "Failed to enumerate rules files: %m");
 
