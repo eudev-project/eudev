@@ -456,20 +456,6 @@ _alloc_(2, 3) static inline void *realloc_multiply(void *p, size_t a, size_t b) 
                 alloca(_nn_ == 0 ? 1 : _nn_);                           \
         })                                                              \
 
-#define newa(t, n)                                                      \
-        ({                                                              \
-                size_t _n_ = n;                                         \
-                assert(!size_multiply_overflow(sizeof(t), _n_));        \
-                (t*) alloca_safe(sizeof(t)*_n_);                        \
-        })
-
-#define newa0(t, n)                                                     \
-        ({                                                              \
-                size_t _n_ = n;                                         \
-                assert(!size_multiply_overflow(sizeof(t), _n_));        \
-                (t*) alloca0((sizeof(t)*_n_));                          \
-        })
-
 #define newdup(t, p, n) ((t*) memdup_multiply(p, sizeof(t), (n)))
 
 #define newdup_suffix0(t, p, n) ((t*) memdup_suffix0_multiply(p, sizeof(t), (n)))
