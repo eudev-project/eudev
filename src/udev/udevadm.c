@@ -45,21 +45,23 @@ static const struct udevadm_cmd udevadm_help = {
         .cmd = adm_help,
 };
 
+/* in the order of the verbs of systemd's udevadm, which its messages about a missing or unknown command
+ * list, see find_closest_command() */
 static const struct udevadm_cmd *udevadm_cmds[] = {
+        &udevadm_help,
         &udevadm_info,
         &udevadm_trigger,
         &udevadm_settle,
         &udevadm_control,
         &udevadm_monitor,
-        &udevadm_hwdb,
         &udevadm_test,
         &udevadm_test_builtin,
         &udevadm_verify,
         &udevadm_cat,
         &udevadm_wait,
         &udevadm_lock,
+        &udevadm_hwdb,
         &udevadm_version,
-        &udevadm_help,
 };
 
 static int adm_help(struct udev *udev __attribute__((unused)), int argc __attribute__((unused)), char *argv[] __attribute__((unused))) {
@@ -84,6 +86,124 @@ static int adm_help(struct udev *udev __attribute__((unused)), int argc __attrib
         return 0;
 }
 
+/* Like strlevenshtein() of systemd: the Damerau-Levenshtein distance of x and y, or -ENOMEM. */
+static ssize_t strlevenshtein(const char *x, const char *y) {
+        _cleanup_free_ size_t *t0 = NULL, *t1 = NULL, *t2 = NULL;
+        size_t xl, yl, i, j, *dummy;
+
+        if (streq(x, y))
+                return 0;
+
+        xl = strlen(x);
+        yl = strlen(y);
+
+        if (xl == 0)
+                return yl;
+        if (yl == 0)
+                return xl;
+
+        t0 = new0(size_t, yl + 1);
+        t1 = new0(size_t, yl + 1);
+        t2 = new0(size_t, yl + 1);
+        if (!t0 || !t1 || !t2)
+                return -ENOMEM;
+
+        for (i = 0; i <= yl; i++)
+                t1[i] = i;
+
+        for (i = 0; i < xl; i++) {
+                t2[0] = i + 1;
+
+                for (j = 0; j < yl; j++) {
+                        /* Substitution */
+                        t2[j+1] = t1[j] + (x[i] != y[j]);
+
+                        /* Swap */
+                        if (i > 0 && j > 0 && x[i-1] == y[j] && x[i] == y[j-1] && t2[j+1] > t0[j-1] + 1)
+                                t2[j+1] = t0[j-1] + 1;
+
+                        /* Deletion */
+                        if (t2[j+1] > t1[j+1] + 1)
+                                t2[j+1] = t1[j+1] + 1;
+
+                        /* Insertion */
+                        if (t2[j+1] > t2[j] + 1)
+                                t2[j+1] = t2[j] + 1;
+                }
+
+                dummy = t0;
+                t0 = t1;
+                t1 = t2;
+                t2 = dummy;
+        }
+
+        return t1[yl];
+}
+
+/* Like strv_find_closest() of systemd for the names of the commands: the command whose name begins
+ * with name, the shortest one if there are several, or else the one with the smallest Levenshtein
+ * distance to name, if that is at most 5; the first one if there are several, or NULL. */
+static const char *find_closest_command(const char *name) {
+        const char *best = NULL;
+        size_t best_length = SIZE_MAX, i;
+        ssize_t best_distance = SSIZE_MAX;
+
+        for (i = 0; i < ELEMENTSOF(udevadm_cmds); i++) {
+                const char *e = startswith(udevadm_cmds[i]->name, name);
+
+                if (e && strlen(e) < best_length) {
+                        best_length = strlen(e);
+                        best = udevadm_cmds[i]->name;
+                }
+        }
+        if (best)
+                return best;
+
+        for (i = 0; i < ELEMENTSOF(udevadm_cmds); i++) {
+                ssize_t distance = strlevenshtein(udevadm_cmds[i]->name, name);
+
+                if (distance < 0) {
+                        log_debug_errno(distance, "Failed to determine Levenshtein distance between %s and %s: %m",
+                                        udevadm_cmds[i]->name, name);
+                        return NULL;
+                }
+
+                /* If the distance is just too far off, don't make a bad suggestion */
+                if (distance > 5)
+                        continue;
+
+                if (distance < best_distance) {
+                        best_distance = distance;
+                        best = udevadm_cmds[i]->name;
+                }
+        }
+
+        return best;
+}
+
+/* Like _dispatch_verb() of systemd: "Command verb required (one of help, info, …)." */
+static void log_command_required(void) {
+        _cleanup_free_ char *list = NULL;
+        size_t n = 0, i;
+        char *p;
+
+        for (i = 0; i < ELEMENTSOF(udevadm_cmds); i++)
+                n += strlen(", ") + strlen(udevadm_cmds[i]->name);
+
+        list = new(char, n + 1);
+        if (!list) {
+                log_oom();
+                return;
+        }
+
+        p = list;
+        for (i = 0; i < ELEMENTSOF(udevadm_cmds); i++)
+                p = stpcpy(stpcpy(p, i == 0 ? "" : ", "), udevadm_cmds[i]->name);
+        *p = '\0';
+
+        log_error("Command verb required (one of %s).", list);
+}
+
 static int run_command(struct udev *udev, const struct udevadm_cmd *cmd, int argc, char *argv[]) {
         if (cmd->debug)
                 log_set_max_level(LOG_DEBUG);
@@ -99,7 +219,7 @@ int main(int argc, char *argv[]) {
                 { "debug", no_argument, NULL, 'd' },
                 {}
         };
-        const char *command;
+        const char *command, *closest;
         unsigned int i;
         bool debug = false;
         int rc = 1, c, level;
@@ -141,23 +261,30 @@ int main(int argc, char *argv[]) {
                 log_set_max_level(level);
 
         command = argv[optind];
+        if (command == NULL) {
+                log_command_required();
+                goto out;
+        }
 
-        if (command != NULL)
-                for (i = 0; i < ELEMENTSOF(udevadm_cmds); i++)
-                        if (streq(udevadm_cmds[i]->name, command)) {
-                                argc -= optind;
-                                argv += optind;
-                                /* we need '0' here to reset the internal state */
-                                optind = 0;
-                                rc = run_command(udev, udevadm_cmds[i], argc, argv);
-                                /* also if the pager, which is closed at exit, was quit before all output
-                                 * was written */
-                                pager_set_exit_status(rc);
-                                goto out;
-                        }
+        for (i = 0; i < ELEMENTSOF(udevadm_cmds); i++)
+                if (streq(udevadm_cmds[i]->name, command)) {
+                        argc -= optind;
+                        argv += optind;
+                        /* we need '0' here to reset the internal state */
+                        optind = 0;
+                        rc = run_command(udev, udevadm_cmds[i], argc, argv);
+                        /* also if the pager, which is closed at exit, was quit before all output was
+                         * written */
+                        pager_set_exit_status(rc);
+                        goto out;
+                }
 
-        fprintf(stderr, "%s: missing or unknown command\n", program_invocation_short_name);
-        rc = 2;
+        /* like systemd, with a hint what may have been meant */
+        closest = find_closest_command(command);
+        if (closest)
+                log_error("Unknown command verb '%s', did you mean '%s'?", command, closest);
+        else
+                log_error("Unknown command verb '%s'.", command);
 out:
         mac_selinux_finish();
         udev_unref(udev);
