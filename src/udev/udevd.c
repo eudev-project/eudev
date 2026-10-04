@@ -143,6 +143,10 @@ static Set *synthesize_change_children;
  * waiting for them, see synthesize_change_one() */
 static Set *synthesized_events;
 static usec_t synthesized_events_clear_usec;
+/* when udevd gives up waiting for the workers on exit, 30 seconds after the exit started, and when it kills the
+ * idle workers, 3 seconds after the event queue became empty, or 0, see main() */
+static usec_t exit_timeout_usec;
+static usec_t idle_timeout_usec;
 static struct udev_list properties_list;
 static bool udev_exit;
 static char udevd_ready_string[] = "udevd ready\n";
@@ -202,9 +206,10 @@ struct worker {
         struct udev_monitor *monitor;
         enum worker_state state;
         struct event *event;
-        /* when the worker gets SIGKILL, as it was sent the timeout signal and did not finish its event, or 0,
-         * see manager_check_worker_timeouts() */
+        /* when the worker gets SIGKILL, as it was sent sigkill_after, the timeout signal, or SIGTERM on exit, and
+         * did not finish its event, or 0, see worker_schedule_sigkill() */
         usec_t sigkill_usec;
+        int sigkill_after;
 };
 
 /* passed from worker to main process */
@@ -858,8 +863,21 @@ static int event_queue_insert(struct udev_device *dev) {
         return 0;
 }
 
+/* Schedules SIGKILL for a worker that was sent the signal while it processes an event, unless it finishes the event
+ * before, see manager_check_worker_timeouts(). This is WORKER_SIGKILL_DELAY_USEC after the signal, or
+ * WORKER_SIGKILL_DELAY_COREDUMP_USEC after a signal that dumps core. */
+static void worker_schedule_sigkill(struct worker *worker, int sig, usec_t now_usec) {
+        if (sig == SIGKILL || !worker->event)
+                return;
+
+        worker->sigkill_after = sig;
+        worker->sigkill_usec = usec_add(now_usec, signal_dumps_core(sig) ? WORKER_SIGKILL_DELAY_COREDUMP_USEC :
+                                                                             WORKER_SIGKILL_DELAY_USEC);
+}
+
 static void worker_kill(bool force) {
         struct worker *worker;
+        usec_t now_usec = 0;
         Iterator i;
 
         HASHMAP_FOREACH(worker, workers, i) {
@@ -874,6 +892,15 @@ static void worker_kill(bool force) {
 
                 worker->state = WORKER_KILLED;
                 kill(worker->pid, SIGTERM);
+
+                /* On exit, a worker that is still processing its event may hang, as it blocks SIGTERM, and reads
+                 * it only between events or while it waits for a program, and then waits for the program; like
+                 * after the timeout signal, it gets SIGKILL when it has not finished the event in time. */
+                if (worker->event) {
+                        if (now_usec == 0)
+                                now_usec = now(CLOCK_MONOTONIC);
+                        worker_schedule_sigkill(worker, SIGTERM, now_usec);
+                }
         }
 }
 
@@ -979,6 +1006,18 @@ static void event_broadcast_on_error(struct event *event) {
          * on exit, the monitor is already closed */
         if (monitor)
                 udev_monitor_send_device(monitor, NULL, event->dev);
+}
+
+/* Returns the time in milliseconds from now_usec until usec (CLOCK_MONOTONIC), rounded up, so that it has passed
+ * when epoll_wait() times out, or 0 if it has passed already. */
+static int timeout_until(usec_t usec, usec_t now_usec) {
+        usec_t msec;
+
+        if (usec <= now_usec)
+                return 0;
+
+        msec = DIV_ROUND_UP(usec - now_usec, USEC_PER_MSEC);
+        return msec > INT_MAX ? INT_MAX : (int) msec;
 }
 
 /* Returns the time in milliseconds until the next locked event is to be requeued, 0 if one is due now, or -1
@@ -1332,7 +1371,7 @@ static int manager_check_worker_timeouts(void) {
                 if (worker->sigkill_usec > 0 && event) {
                         if (worker->sigkill_usec <= now_usec) {
                                 log_device_error(event->dev, "Worker ["PID_FMT"] processing SEQNUM=%llu did not exit after SIG%s, killing it with SIGKILL.",
-                                                 worker->pid, event->seqnum, signal_to_string(arg_timeout_signal));
+                                                 worker->pid, event->seqnum, signal_to_string(worker->sigkill_after));
                                 (void) kill(worker->pid, SIGKILL);
                                 worker->sigkill_usec = 0;
                         } else
@@ -1352,13 +1391,9 @@ static int manager_check_worker_timeouts(void) {
                         log_device_error(event->dev, "Worker ["PID_FMT"] processing SEQNUM=%llu killed.",
                                          worker->pid, event->seqnum);
 
-                        if (arg_timeout_signal != SIGKILL) {
-                                worker->sigkill_usec = usec_add(now_usec,
-                                                                signal_dumps_core(arg_timeout_signal) ?
-                                                                WORKER_SIGKILL_DELAY_COREDUMP_USEC :
-                                                                WORKER_SIGKILL_DELAY_USEC);
+                        worker_schedule_sigkill(worker, arg_timeout_signal, now_usec);
+                        if (worker->sigkill_usec > 0)
                                 next_usec = MIN(next_usec, worker->sigkill_usec);
-                        }
                         continue;
                 }
                 next_usec = MIN(next_usec, usec);
@@ -2415,8 +2450,7 @@ int main(int argc, char *argv[]) {
                 int fdcount;
                 int timeout, worker_timeout;
                 bool is_worker, is_signal, is_inotify, is_netlink, is_ctrl;
-                /* the timeout of the main loop is the next deadline of a worker, see below */
-                bool worker_wakeup = false;
+                usec_t now_usec;
                 int i;
 
                 if (udev_exit) {
@@ -2445,15 +2479,31 @@ int main(int argc, char *argv[]) {
                         if (udev_list_node_is_empty(&event_list) && hashmap_isempty(workers))
                                 break;
 
-                        /* timeout at exit for workers to finish */
-                        timeout = 30 * MSEC_PER_SEC;
+                        /* Wait 30 seconds for the workers to finish, counted from the start of the exit, and not
+                         * again from every wakeup, e.g. when a worker exits, or the SIGKILL of a hanging worker
+                         * is due. */
+                        now_usec = now(CLOCK_MONOTONIC);
+                        if (exit_timeout_usec == 0)
+                                exit_timeout_usec = usec_add(now_usec, 30 * USEC_PER_SEC);
+                        timeout = timeout_until(exit_timeout_usec, now_usec);
                 } else if (udev_list_node_is_empty(&event_list) && hashmap_isempty(workers)) {
                         /* we are idle */
                         timeout = -1;
+                        idle_timeout_usec = 0;
+                } else if (udev_list_node_is_empty(&event_list)) {
+                        /* Kill the idle workers 3 seconds after the last event finished, counted from then, and
+                         * not again from every wakeup, e.g. on a control message, like the timer of systemd. */
+                        now_usec = now(CLOCK_MONOTONIC);
+                        if (idle_timeout_usec == 0)
+                                idle_timeout_usec = usec_add(now_usec, 3 * USEC_PER_SEC);
+                        timeout = timeout_until(idle_timeout_usec, now_usec);
                 } else {
                         int requeue_timeout;
 
-                        /* kill idle workers */
+                        idle_timeout_usec = 0;
+
+                        /* try to start the queued events again at least every 3 seconds, e.g. when a worker
+                         * could not be started */
                         timeout = 3 * MSEC_PER_SEC;
 
                         /* requeue the events of locked block devices after a delay */
@@ -2484,10 +2534,8 @@ int main(int argc, char *argv[]) {
 
                 /* warn about and kill hanging workers, and wake up when that is due next */
                 worker_timeout = manager_check_worker_timeouts();
-                if (worker_timeout >= 0 && (timeout < 0 || worker_timeout < timeout)) {
+                if (worker_timeout >= 0 && (timeout < 0 || worker_timeout < timeout))
                         timeout = worker_timeout;
-                        worker_wakeup = true;
-                }
 
                 /* tell settle that we are busy or idle */
                 event_queue_update();
@@ -2496,13 +2544,15 @@ int main(int argc, char *argv[]) {
                 if (fdcount < 0)
                         continue;
 
-                /* timeout, unless only a deadline of a worker is due, which manager_check_worker_timeouts()
-                 * handles in the next iteration */
-                if (fdcount == 0 && !worker_wakeup) {
-                        if (udev_exit) {
-                                log_error("timeout, giving up waiting for workers to finish");
-                                break;
-                        }
+                /* the deadlines above, whether they woke up the main loop or not; the ones of the workers are
+                 * handled by manager_check_worker_timeouts() in the next iteration */
+                if (udev_exit && exit_timeout_usec > 0 && now(CLOCK_MONOTONIC) >= exit_timeout_usec) {
+                        log_error("timeout, giving up waiting for workers to finish");
+                        break;
+                }
+
+                if (!udev_exit && idle_timeout_usec > 0 && now(CLOCK_MONOTONIC) >= idle_timeout_usec) {
+                        idle_timeout_usec = 0;
 
                         /* kill idle workers */
                         if (udev_list_node_is_empty(&event_list)) {

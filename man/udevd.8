@@ -35,6 +35,15 @@ listens to kernel uevents\&. For every event, udevd executes matching instructio
 The behavior of the daemon can be configured using
 \fBudev.conf\fR(5), its command\-line options, environment variables, and on the kernel command\-line, or changed dynamically with
 \fBudevadm control\fR\&.
+.PP
+On
+\fBSIGTERM\fR
+or
+\fBSIGINT\fR, or with
+\fBudevadm control \-\-exit\fR,
+\fBudevd\fR
+discards the queued events, tells its workers to exit, and waits up to 30 seconds for the events being processed\&. A worker that has not finished its event 5 seconds later is killed with
+\fBSIGKILL\fR\&.
 .SH "OPTIONS"
 .PP
 \fB\-d\fR, \fB\-\-daemon\fR
