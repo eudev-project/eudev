@@ -196,11 +196,16 @@ static int checkout(int fd)
         buf[bufsize] = '\0';
 
         ptr = buf + len;
-        while ((n = read(fd, buf + len, len)) > 0) {
+        for (;;) {
+                n = read(fd, buf + len, len);
+                if (n < 0)
+                        break;
                 for (i = 0; i < n; i++)
                         if (buf[len + i] == '\0')
                                 buf[len + i] = ' ';
 
+                /* At the end of the file, the upper half is all spaces, which end the last ID if
+                 * the file has no separator after it. */
                 while (ptr && *ptr) {
                         word = ptr;
                         ptr = strpbrk(word," \n\t\r");
@@ -239,6 +244,8 @@ static int checkout(int fd)
                                 word = NULL;
                         }
                 }
+                if (n == 0)
+                        break;
                 memcpy(buf, buf + len, len);
                 memset(buf + len, ' ', len);
 

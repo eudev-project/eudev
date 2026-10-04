@@ -216,6 +216,11 @@ int main(void) {
                            "aaaa bbbb cccc dd eeeeeeee ffff gggg hhhh iiii jjjj");
         r |= TEST_CHECKOUT("NUL bytes only", "\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0", "");
         r |= TEST_CHECKOUT("NUL bytes at every position", "a\0b\0\0cc\0\0\0ddd\0\0\0\0eeee\0", "a b cc ddd eeee");
+        /* the last ID without a separator after it, at the end of a read of a half of the buffer */
+        r |= TEST_CHECKOUT("no separator at the end, first read", "aaaa bbb", "aaaa bbb");
+        r |= TEST_CHECKOUT("no separator at the end, second read", "aa bb cc dd eeee", "aa bb cc dd eeee");
+        r |= TEST_CHECKOUT("no separator at the end, the buffer grows", "aaaaaaaaaaaaaaaa", "aaaaaaaaaaaaaaaa");
+        r |= TEST_CHECKOUT("no separator at the end, short read", "aaaa bb", "aaaa bb");
 
         /* read() fails on a file that is open only for writing */
         fd = open("checkout", O_WRONLY|O_CREAT|O_TRUNC|O_CLOEXEC, 0600);
