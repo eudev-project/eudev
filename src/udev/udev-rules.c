@@ -1204,7 +1204,7 @@ static int import_property(struct udev_event *event, struct udev_rules *rules, s
         if (r == -ENOMEM)
                 return log_oom();
         if (r < 0) {
-                _cleanup_free_ char *k = cescape(key), *v = cescape(val ?: "");
+                _cleanup_free_ char *k = utf8_escape_non_printable(key), *v = utf8_escape_non_printable(val ?: "");
 
                 log_event_warning_errno(event, rules, rule, token, r, "Failed to import property \"%s=%s\", ignoring: %m",
                                         k ?: key, v ?: "");
@@ -1264,7 +1264,7 @@ static int import_property_from_string(struct udev_event *event, struct udev_rul
         /* unquote */
         if (val[0] == '"' || val[0] == '\'') {
                 if (len == 1 || val[len-1] != val[0]) {
-                        _cleanup_free_ char *escaped = cescape(val);
+                        _cleanup_free_ char *escaped = utf8_escape_non_printable(val);
 
                         /* the line is split into the key and the value by now */
                         log_event_debug_errno(event, rules, rule, token, EINVAL,
@@ -1879,7 +1879,7 @@ static int parse_options(struct rule_tmp *rule_tmp, enum operation_type op, cons
                                 return -EOPNOTSUPP;
                         }
 
-                        escaped = cescape(word);
+                        escaped = utf8_escape_non_printable(word);
                         log_rule_warning("Invalid value for OPTIONS key, ignoring: '%s'", escaped ?: word);
                 } else
                         switch (o->id) {
@@ -3189,7 +3189,7 @@ static int apply_devlink(struct udev_event *event, struct udev_rules *rules, str
         if (r == -ENOMEM)
                 return log_oom();
 
-        escaped = cescape(link);
+        escaped = utf8_escape_non_printable(link);
         if (op == OP_REMOVE)
                 log_event_warning_errno(event, rules, rule, token, r,
                                         "Failed to remove device node symlink \"%s\", ignoring: %m", escaped ?: link);
@@ -3877,10 +3877,11 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                         if (r == -ENOMEM)
                                 return log_oom();
                         if (r < 0) {
-                                _cleanup_free_ char *v = cescape(value_new);
+                                _cleanup_free_ char *n = utf8_escape_non_printable(name),
+                                        *v = utf8_escape_non_printable(value_new);
 
                                 log_event_warning_errno(event, rules, rule, cur, r, "Failed to set property \"%s=%s\", ignoring: %m",
-                                                        name, v ?: "");
+                                                        n ?: name, v ?: "");
                         } else
                                 log_event_trace(event, rules, rule, cur, "Set property \"%s=%s\".", name, value_new);
                         break;

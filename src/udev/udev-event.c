@@ -40,6 +40,7 @@
 #include "path-util.h"
 #include "socket-util.h"
 #include "udev-netlink.h"
+#include "utf8.h"
 
 struct udev_event *udev_event_new(struct udev_device *dev, enum udev_event_mode mode) {
         struct udev *udev = udev_device_get_udev(dev);
@@ -1495,7 +1496,7 @@ void udev_event_check_config(struct udev *udev) {
                 return;
         }
 
-        escaped = cescape(value);
+        escaped = utf8_escape_non_printable(value);
         log_warning("Invalid net_altnames=\"%s\" in udev.conf, using the default: yes.", escaped ?: value);
 }
 

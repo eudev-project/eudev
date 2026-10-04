@@ -34,6 +34,7 @@
 #include "conf-files.h"
 #include "missing.h"
 #include "strv.h"
+#include "utf8.h"
 
 /**
  * SECTION:libudev
@@ -119,7 +120,7 @@ static void udev_conf_parse_error(struct udev *udev, const char *filename, unsig
         char *m;
         int r;
 
-        escaped = cescape(value);
+        escaped = utf8_escape_non_printable(value);
         errno = abs(error);
         if (error == 0)
                 r = asprintf(&m, "%s:%u: %s=%s cannot terminate a process, ignoring.", filename, line, key, escaped ?: value);

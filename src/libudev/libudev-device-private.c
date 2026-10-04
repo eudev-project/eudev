@@ -168,7 +168,7 @@ static bool db_entry_is_safe(struct udev_device *udev_device, const char *key, c
         if (!string_has_cc(name, NULL) && (!value || !string_has_cc(value, NULL)) && len < LONG_LINE_MAX)
                 return true;
 
-        escaped = cescape(name);
+        escaped = utf8_escape_non_printable(name);
         log_debug("%s: not writing invalid or too long %s: entry '%s' to the db, ignoring",
                   udev_device_get_sysname(udev_device), key, escaped ?: "");
         return false;

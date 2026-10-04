@@ -411,8 +411,8 @@ static int udev_device_add_property_internal_full(struct udev_device *udev_devic
 
         if (!property_is_valid(key, value)) {
                 if (log_get_max_level() >= LOG_DEBUG) {
-                        _cleanup_free_ char *escaped_key = cescape(key ?: ""),
-                                *escaped_value = cescape(value ?: "");
+                        _cleanup_free_ char *escaped_key = utf8_escape_non_printable(key ?: ""),
+                                *escaped_value = utf8_escape_non_printable(value ?: "");
                         log_debug("%s%sRefusing invalid property: %s=%s",
                                   udev_device->sysname ?: "", udev_device->sysname ? ": " : "",
                                   escaped_key ?: "(null)", escaped_value ?: "(null)");
@@ -830,7 +830,7 @@ static int udev_device_add_property_from_string_parse(struct udev_device *udev_d
         eq = strchr(property, '=');
         if (!eq) {
                 if (log_get_max_level() >= LOG_DEBUG) {
-                        _cleanup_free_ char *escaped = cescape(property);
+                        _cleanup_free_ char *escaped = utf8_escape_non_printable(property);
 
                         log_debug("%s%sNot a key-value pair: '%s'",
                                   udev_device->sysname ?: "", udev_device->sysname ? ": " : "",
@@ -912,7 +912,7 @@ static int udev_device_add_property_from_string_parse(struct udev_device *udev_d
                  * serial devices. Ignore only such key-value pairs. */
                 if (!property_is_valid(key, value)) {
                         if (log_get_max_level() >= LOG_DEBUG) {
-                                _cleanup_free_ char *escaped = cescape(property);
+                                _cleanup_free_ char *escaped = utf8_escape_non_printable(property);
 
                                 log_debug("%s%sInvalid property '%s', ignoring",
                                           udev_device->sysname ?: "", udev_device->sysname ? ": " : "",
@@ -931,7 +931,7 @@ static int udev_device_add_property_from_string_parse(struct udev_device *udev_d
         }
 
         if (r < 0 && log_get_max_level() >= LOG_DEBUG) {
-                _cleanup_free_ char *escaped = cescape(property);
+                _cleanup_free_ char *escaped = utf8_escape_non_printable(property);
 
                 log_debug_errno(r, "%s%sFailed to set '%s': %m",
                                 udev_device->sysname ?: "", udev_device->sysname ? ": " : "",
@@ -1192,7 +1192,7 @@ static int udev_device_read_uevent_file(struct udev_device *udev_device)
                 eq = strchr(line, '=');
                 if (!eq) {
                         if (log_get_max_level() >= LOG_DEBUG) {
-                                _cleanup_free_ char *escaped = cescape(line);
+                                _cleanup_free_ char *escaped = utf8_escape_non_printable(line);
 
                                 log_debug("%s: Invalid uevent line, ignoring: %s",
                                           udev_device->sysname ?: "n/a", escaped ?: "(null)");
@@ -1204,7 +1204,7 @@ static int udev_device_read_uevent_file(struct udev_device *udev_device)
                 r = udev_device_handle_uevent_line(udev_device, line, eq + 1);
                 *eq = '=';
                 if (r < 0 && log_get_max_level() >= LOG_DEBUG) {
-                        _cleanup_free_ char *escaped = cescape(line);
+                        _cleanup_free_ char *escaped = utf8_escape_non_printable(line);
 
                         log_debug_errno(r, "%s: Failed to handle uevent entry '%s', ignoring: %m",
                                         udev_device->sysname ?: "n/a", escaped ?: "(null)");
