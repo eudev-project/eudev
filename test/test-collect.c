@@ -72,6 +72,25 @@ static int test_checkout(const char *name, const char *content, size_t size, con
 
 #define TEST_CHECKOUT(name, content, expected) test_checkout(name, content, sizeof(content) - 1, expected)
 
+/* checkout() must return the error of read() or lseek(), not take it as the end of the file */
+static int test_checkout_error(const char *name, int fd, int expected) {
+        int r;
+
+        udev_list_node_init(&bunch);
+        bufsize = BUFSIZE;
+
+        r = checkout(fd);
+        kickall();
+        if (r != expected) {
+                fprintf(stderr, "%s: checkout() returned %i (%s), expected %i (%s)\n",
+                        name, r, r < 0 ? strerror(-r) : "-", expected, strerror(-expected));
+                return -1;
+        }
+
+        printf("%s: %s\n", name, strerror(-r));
+        return 0;
+}
+
 static int read_file(const char *path, char *buf, size_t size) {
         _cleanup_close_ int fd = -1;
         ssize_t n;
@@ -197,6 +216,30 @@ int main(void) {
                            "aaaa bbbb cccc dd eeeeeeee ffff gggg hhhh iiii jjjj");
         r |= TEST_CHECKOUT("NUL bytes only", "\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0", "");
         r |= TEST_CHECKOUT("NUL bytes at every position", "a\0b\0\0cc\0\0\0ddd\0\0\0\0eeee\0", "a b cc ddd eeee");
+
+        /* read() fails on a file that is open only for writing */
+        fd = open("checkout", O_WRONLY|O_CREAT|O_TRUNC|O_CLOEXEC, 0600);
+        if (fd < 0 || write(fd, "aa bb\n", 6) != 6) {
+                fprintf(stderr, "cannot write the checkpoint file: %m\n");
+                r = -1;
+        } else
+                r |= test_checkout_error("read error", fd, -EBADF);
+        if (fd >= 0)
+                close(fd);
+        /* lseek() fails on a pipe, when checkout() reads the file again for a long ID */
+        {
+                static const char content[] = "aa bb cccccccccccccccccccccccccccccccccccccccc dd\n";
+                int p[2];
+
+                if (pipe2(p, O_CLOEXEC) < 0 || write(p[1], content, sizeof(content) - 1) != sizeof(content) - 1) {
+                        fprintf(stderr, "cannot write into a pipe: %m\n");
+                        r = -1;
+                } else {
+                        close(p[1]);
+                        r |= test_checkout_error("lseek error", p[0], -ESPIPE);
+                        close(p[0]);
+                }
+        }
 
         /* prepare() refuses a path that does not fit, with a message */
         memset(longname, 'x', sizeof(longname) - 1);

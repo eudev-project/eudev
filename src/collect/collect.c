@@ -182,7 +182,7 @@ static int prepare(char *dir, char *filename)
  */
 static int checkout(int fd)
 {
-        int len;
+        int len, r;
         ssize_t n, i;
         char *buf, *ptr, *word = NULL;
         struct _mate *him;
@@ -211,7 +211,8 @@ static int checkout(int fd)
                                 free(buf);
                                 /* the IDs found so far are read again */
                                 kickall();
-                                lseek(fd, 0, SEEK_SET);
+                                if (lseek(fd, 0, SEEK_SET) < 0)
+                                        return -errno;
                                 goto restart;
                         }
                         if (ptr) {
@@ -247,9 +248,10 @@ static int checkout(int fd)
                         break;
                 ptr -= len;
         }
+        r = n < 0 ? -errno : 0;
 
         free(buf);
-        return 0;
+        return r;
 }
 
 /*
@@ -416,7 +418,7 @@ int main(int argc, char **argv)
         int argi;
         char *checkpoint, *us;
         int fd;
-        int i;
+        int i, r;
         int ret = EXIT_SUCCESS;
         int count = -1; /* the number of missing IDs, printed only when it is known */
         int prune = 0;
@@ -485,8 +487,15 @@ int main(int argc, char **argv)
                 goto out;
         }
 
-        if (checkout(fd) < 0) {
+        r = checkout(fd);
+        if (r == -ENOMEM) { /* checkout() logged it */
                 ret = 2;
+                goto out;
+        }
+        if (r < 0) {
+                errno = -r;
+                fprintf(stderr, "Cannot read %s/%s: %m\n", tmpdir, checkpoint);
+                ret = -1;
                 goto out;
         }
 
