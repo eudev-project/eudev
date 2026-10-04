@@ -183,6 +183,50 @@ char *utf8_is_valid(const char *str) {
         return (char*) str;
 }
 
+static char *escape_byte(char *t, char c) {
+        *(t++) = '\\';
+        *(t++) = 'x';
+        *(t++) = hexchar((unsigned char) c >> 4);
+        *(t++) = hexchar((unsigned char) c);
+        return t;
+}
+
+char *utf8_escape_non_printable_full(const char *str, bool escape_quote) {
+        char *buf, *t;
+
+        assert(str);
+
+        buf = new(char, strlen(str) * 4 + 1);
+        if (!buf)
+                return NULL;
+
+        for (t = buf; *str; ) {
+                int len, c;
+
+                len = utf8_encoded_valid_unichar(str);
+                if (len <= 0) {
+                        /* invalid UTF-8: escape this byte and look at the next one */
+                        t = escape_byte(t, *(str++));
+                        continue;
+                }
+
+                c = utf8_encoded_to_unichar(str);
+                if (c < ' ' || (c >= 0x7f && c <= 0x9f))
+                        for (; len > 0; len--)
+                                t = escape_byte(t, *(str++));
+                else if (escape_quote && c == '"') {
+                        *(t++) = '\\';
+                        *(t++) = *(str++);
+                } else {
+                        t = mempcpy(t, str, len);
+                        str += len;
+                }
+        }
+        *t = '\0';
+
+        return buf;
+}
+
 char *ascii_is_valid(const char *str) {
         const char *p;
 

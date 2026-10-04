@@ -33,6 +33,17 @@ _pure_ static inline bool utf8_is_printable(const char* str, size_t length) {
         return utf8_is_printable_newline(str, length, true);
 }
 
+/* Like utf8_escape_non_printable() of systemd: escapes a string for a log message, where it is shown in one
+ * line, as it is: the control characters, also tab and newline, DEL and the C1 control characters, are written
+ * as \xNN, and everything else, valid UTF-8, also a backslash, is kept, so that e.g. an "a" with umlaut stays
+ * readable and a value of the rules is shown as written. Unlike in systemd, where they become U+FFFD, also the
+ * bytes of invalid UTF-8 are written as \xNN, so that they can be told apart. With escape_quote, a '"' is
+ * written as \", as in the values of the rules. Returns a new string, or NULL when out of memory. */
+char *utf8_escape_non_printable_full(const char *str, bool escape_quote);
+static inline char *utf8_escape_non_printable(const char *str) {
+        return utf8_escape_non_printable_full(str, false);
+}
+
 size_t utf8_encode_unichar(char *out_utf8, uint32_t g);
 char *utf16_to_utf8(const void *s, size_t length);
 

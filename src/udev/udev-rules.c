@@ -652,61 +652,18 @@ static struct udev_device *event_log_device(struct udev_event *event, struct tok
         return event->dev;
 }
 
-static char *escape_byte(char *t, char c) {
-        *(t++) = '\\';
-        *(t++) = 'x';
-        *(t++) = hexchar((unsigned char) c >> 4);
-        *(t++) = hexchar((unsigned char) c);
-        return t;
-}
-
-/* Escapes a string of the rules for the messages about the keys: valid UTF-8 is kept as it is, so that e.g.
- * an "ä" stays readable, and control characters (also tab and newline, and the C1 ones) are written as
- * \xNN, like utf8_escape_non_printable() of systemd does. Unlike there, also the bytes of invalid UTF-8
- * are written as \xNN instead of U+FFFD, and a backslash and a '"' are written as \\ and \", so that the
- * escapes are unambiguous. In the rules, a '"' is written as \" too, but a backslash is written as \\
- * only in values with the "e" prefix, and as a single one in the other values. */
+/* Escapes a string of the rules for the messages about the keys, see utf8_escape_non_printable(): it is shown as
+ * written in the rules, apart from control characters and invalid UTF-8, which are written as \xNN. A '"' is
+ * written as \" as in the rules, and a backslash as it is, which is how it is written in the values without
+ * the "e" prefix; in the values with it, the escape sequences are resolved when the rules are read. */
 static char *escape_key_text(const char *s) {
-        char *buf, *t;
-
-        assert(s);
-
-        buf = new(char, strlen(s) * 4 + 1);
-        if (!buf)
-                return NULL;
-
-        for (t = buf; *s; ) {
-                int len, c;
-
-                len = utf8_encoded_valid_unichar(s);
-                if (len <= 0) {
-                        /* invalid UTF-8: escape this byte and look at the next one */
-                        t = escape_byte(t, *(s++));
-                        continue;
-                }
-
-                c = utf8_encoded_to_unichar(s);
-                if (c < ' ' || (c >= 0x7f && c <= 0x9f))
-                        for (; len > 0; len--)
-                                t = escape_byte(t, *(s++));
-                else if (IN_SET(c, '\\', '"')) {
-                        *(t++) = '\\';
-                        *(t++) = *(s++);
-                } else {
-                        t = mempcpy(t, s, len);
-                        s += len;
-                }
-        }
-        *t = '\0';
-
-        return buf;
+        return utf8_escape_non_printable_full(s, /* escape_quote= */ true);
 }
 
 /* Formats a token like the key of the rule line it comes from, e.g. KERNEL=="sd*", for the trace
  * logs. The text of the rules is not kept, so OPTIONS are shown one by one, and RUN with its type.
  * Unlike the token text of systemd, the attribute and the value are escaped with escape_key_text(), so
- * that control characters and invalid UTF-8 of the rules do not get into the logs, and a '"' is shown
- * as \", as it is written in the rules. */
+ * that control characters and invalid UTF-8 of the rules do not get into the logs. */
 static char *token_to_string(struct udev_rules *rules, struct token *token) {
         const char *op = operation_key_str(token->key.op);
         _cleanup_free_ char *value = NULL, *attr = NULL;
