@@ -921,6 +921,16 @@ static inline int errno_or_else(int fallback) {
 /* Device is absent or "empty". We get -ENOMEDIUM from CD/DVD devices, also in VMs. */
 #define ERRNO_IS_DEVICE_ABSENT_OR_EMPTY(r) (ERRNO_IS_DEVICE_ABSENT(r) || abs(r) == ENOMEDIUM)
 
+/* Like RET_GATHER() of systemd: collect possible errors in <acc>, so that the first error can be returned.
+ * Returns (possibly updated) <acc>, which is evaluated only once. */
+#define RET_GATHER(acc, err)                    \
+        ({                                      \
+                int *__a = &(acc), __e = (err); \
+                if (*__a >= 0 && __e < 0)       \
+                        *__a = __e;             \
+                *__a;                           \
+        })
+
 /* Like startswith(), but operates on arbitrary memory blocks */
 static inline void *memory_startswith(const void *p, size_t sz, const char *token) {
         assert(token);

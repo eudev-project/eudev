@@ -24,15 +24,6 @@
 #include "udev-util.h"
 #include "util.h"
 
-/* After RET_GATHER() of systemd: keeps the first error. */
-#define RET_GATHER(ret, err)                    \
-        ({                                      \
-                int _err = (err);               \
-                if ((ret) >= 0 && _err < 0)     \
-                        (ret) = _err;           \
-                (ret);                          \
-        })
-
 /* Like sd_device_open() of systemd: opens the device node of the block device, and checks that it is the
  * block device node with the device number of the device. */
 static int device_open(struct udev_device *dev, int flags) {
