@@ -1170,6 +1170,12 @@ static int udev_device_read_uevent_file(struct udev_device *udev_device)
         if (r == -EACCES)
                 /* empty uevent files may be write-only */
                 return 0;
+        if (r == -EBADF) {
+                /* Not a regular file: like systemd, which does not read the file again after any failure,
+                 * remember it, so that the getters do not try again every time. */
+                udev_device->uevent_loaded = true;
+                return log_debug_errno(r, "%s: Failed to read uevent file: %m", udev_device->sysname ?: "n/a");
+        }
         if (r < 0)
                 return r;
         udev_device->uevent_loaded = true;
