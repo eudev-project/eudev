@@ -218,6 +218,8 @@ int main(void) {
         }
 
         /* main() */
+        r |= test_collect("no run/udev", 3, "", "Cannot create run/udev/collect: No such file or directory",
+                          "cp", "a", "a", "b", NULL);
         if (mkdir("run", 0700) < 0 || mkdir("run/udev", 0700) < 0) {
                 fprintf(stderr, "cannot create run/udev: %m\n");
                 r = -1;

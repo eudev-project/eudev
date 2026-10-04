@@ -118,8 +118,11 @@ static int prepare(char *dir, char *filename)
         int r, fd;
 
         r = mkdir(dir, 0700);
-        if (r < 0 && errno != EEXIST)
-                return -errno;
+        if (r < 0 && errno != EEXIST) {
+                r = -errno;
+                fprintf(stderr, "Cannot create %s: %m\n", dir);
+                return r;
+        }
 
         /* Refuse to write to a truncated file path */
         r = snprintf(buf, sizeof(buf), "%s/%s", dir, filename);
