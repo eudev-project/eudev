@@ -159,8 +159,8 @@ static int builtin_kmod_init(struct udev *udev) {
         if (!ctx)
                 return log_error_errno(ENOMEM, "Failed to initialize libkmod context: %m");
 
-        kmod_set_log_fn(ctx, udev_kmod_log, udev);
         (void) kmod_load_resources(ctx);
+        kmod_set_log_fn(ctx, udev_kmod_log, udev);
         log_debug("Loaded kernel module index.");
         return 0;
 }
