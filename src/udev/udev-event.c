@@ -38,6 +38,7 @@
 #include "udev.h"
 #include "netif-naming-scheme.h"
 #include "path-util.h"
+#include "process-util.h"
 #include "socket-util.h"
 #include "udev-netlink.h"
 #include "utf8.h"
@@ -588,9 +589,11 @@ size_t udev_event_apply_format(struct udev_event *event,
 }
 
 static int spawn_exec(struct udev_event *event __attribute__((unused)),
-                      const char *cmd, char *const argv[], char **envp, const sigset_t *sigmask,
+                      const char *cmd, char *const argv[], char **envp,
+                      const sigset_t *sigmask __attribute__((unused)),
                       int fd_stdout, int fd_stderr) {
         _cleanup_close_ int fd = -1;
+        int r;
 
         /* discard child output or connect to pipe */
         fd = open("/dev/null", O_RDWR);
@@ -616,9 +619,17 @@ static int spawn_exec(struct udev_event *event __attribute__((unused)),
         /* terminate child in case parent goes away */
         prctl(PR_SET_PDEATHSIG, SIGTERM);
 
-        /* restore original udev sigmask before exec */
-        if (sigmask)
-                sigprocmask(SIG_SETMASK, sigmask, NULL);
+        /* Like FORK_RESET_SIGNALS of systemd: the program starts with the default action for every signal and
+         * an empty signal mask, whatever udevd inherited. Otherwise, a signal that whoever started udevd
+         * ignored stays ignored across exec, e.g. SIGINT for a background job of a shell (the worker resets
+         * only the timeout signal), and the signal mask that udevd started with was restored. */
+        r = reset_all_signal_handlers();
+        if (r < 0)
+                return log_error_errno(r, "Failed to reset signal handlers: %m");
+
+        r = reset_signal_mask();
+        if (r < 0)
+                return log_error_errno(r, "Failed to reset signal mask: %m");
 
         execve(argv[0], argv, envp);
 
