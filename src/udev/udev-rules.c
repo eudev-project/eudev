@@ -3435,7 +3435,15 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                         if (!apply_format(event, rules, rule, cur, rules_str(rules, cur->key.value_off), filename, sizeof(filename),
                                           false, properties_list, "file name"))
                                 goto nomatch;
-                        if (util_resolve_subsys_kernel(event->udev, filename, filename, sizeof(filename)) < 0) {
+                        r = util_resolve_subsys_kernel(event->udev, filename, filename, sizeof(filename));
+                        if (r == -ENAMETOOLONG) {
+                                /* unlike systemd, which cuts the path, like a truncated substitution */
+                                log_event_debug(event, rules, rule, cur,
+                                                "The path of the file name \"%s\" is too long, assuming the token fails.",
+                                                rules_str(rules, cur->key.value_off));
+                                goto nomatch;
+                        }
+                        if (r < 0) {
                                 if (filename[0] != '/') {
                                         char tmp[UTIL_PATH_SIZE];
                                         bool truncated;
@@ -4038,7 +4046,15 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                         int r;
 
                         /* First, try to resolve "[<SUBSYSTEM>/<KERNEL>]<attribute>" format. */
-                        if (util_resolve_subsys_kernel(event->udev, key_name, attr, sizeof(attr)) < 0) {
+                        r = util_resolve_subsys_kernel(event->udev, key_name, attr, sizeof(attr));
+                        if (r == -ENAMETOOLONG) {
+                                /* unlike systemd, which cuts the path */
+                                log_event_warning(event, rules, rule, cur,
+                                                  "The path to the attribute \"%s\" is too long, refusing to set the attribute.",
+                                                  key_name);
+                                break;
+                        }
+                        if (r < 0) {
                                 if (key_name[0] == '[') {
                                         log_event_warning(event, rules, rule, cur, "Failed to resolve sysfs attribute \"%s\", ignoring.",
                                                           key_name);

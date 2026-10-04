@@ -100,24 +100,28 @@ static int resolve_subsys_kernel(struct udev *udev, const char *string, bool nee
 }
 
 /* handle "[<SUBSYSTEM>/<KERNEL>]<attribute>" format: the path of the attribute, or of the device when there is
- * no attribute, in result. Returns 0, or a negative errno, see resolve_subsys_kernel(). */
+ * no attribute, in result. Returns 0, or a negative errno, see resolve_subsys_kernel(). Unlike systemd, which
+ * cuts it silently, a path that does not fit into result is refused with -ENAMETOOLONG, like the other
+ * truncations of the rules; result may be cut then. */
 int util_resolve_subsys_kernel(struct udev *udev, const char *string, char *result, size_t maxsize)
 {
         _cleanup_free_ char *attr = NULL;
         struct udev_device *dev;
-        size_t l;
-        char *s;
+        bool truncated;
         int r;
 
         r = resolve_subsys_kernel(udev, string, false, &dev, &attr);
         if (r < 0)
                 return r;
 
-        /* result may be string */
-        s = result;
-        l = strpcpyl(&s, maxsize, udev_device_get_syspath(dev), NULL);
-        if (attr != NULL)
-                strpcpyl(&s, l, "/", attr, NULL);
+        /* result may be string, which resolve_subsys_kernel() does not use any more */
+        strscpyl_full(result, maxsize, &truncated, udev_device_get_syspath(dev), attr ? "/" : NULL, attr, NULL);
+        if (truncated) {
+                log_debug("path '[%s/%s]%s' is too long, refusing.", strna(udev_device_get_subsystem(dev)),
+                          udev_device_get_sysname(dev), attr ?: "");
+                udev_device_unref(dev);
+                return -ENAMETOOLONG;
+        }
         log_debug("path '[%s/%s]%s' is '%s'", strna(udev_device_get_subsystem(dev)), udev_device_get_sysname(dev),
                   attr ?: "", result);
         udev_device_unref(dev);
