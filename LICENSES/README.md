@@ -59,10 +59,12 @@ below, under LGPL-2.1-or-later.
    effectively distributed under GPL-2.0-only. eudev keeps the notice as it
    is; systemd marks its copy as GPL-2.0-or-later.
  * **GPL-2.0-only WITH Linux-syscall-note** (GPL-2.0-or-later.txt and
-   Linux-syscall-note.txt): src/include/uapi/linux/input-event-codes.h, a
-   header of the user space API of Linux, copied verbatim from the same
-   directory of systemd, which copies it from Linux. It is used within the
-   scope of the exception of the syscall note.
+   Linux-syscall-note.txt): src/include/uapi/linux/input.h and
+   src/include/uapi/linux/input-event-codes.h, headers of the user space API
+   of Linux, copied verbatim from the same directory of systemd, which copies
+   them from Linux (the notice of input.h says "GPL-2.0", the older SPDX
+   identifier of GPL-2.0-only). They are used within the scope of the
+   exception of the syscall note.
  * **LGPL-2.0-or-later** (GNU Library General Public License v2.0 or later,
    LGPL-2.0-or-later.txt): the parts of src/shared/utf8.c that are based on
    gutf8.c of GLib, as the original notice in the file says; the file as a
