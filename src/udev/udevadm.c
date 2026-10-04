@@ -94,9 +94,9 @@ static int run_command(struct udev *udev, const struct udevadm_cmd *cmd, int arg
 int main(int argc, char *argv[]) {
         struct udev *udev = NULL;
         static const struct option options[] = {
-                { "debug", no_argument, NULL, 'd' },
                 { "help", no_argument, NULL, 'h' },
                 { "version", no_argument, NULL, 'V' },
+                { "debug", no_argument, NULL, 'd' },
                 {}
         };
         const char *command;

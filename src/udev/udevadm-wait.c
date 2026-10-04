@@ -185,12 +185,12 @@ static int parse_argv(int argc, char *argv[]) {
         };
 
         static const struct option options[] = {
+                { "help",        no_argument,       NULL, 'h'             },
+                { "version",     no_argument,       NULL, 'V'             },
                 { "timeout",     required_argument, NULL, 't'             },
                 { "initialized", required_argument, NULL, ARG_INITIALIZED },
                 { "removed",     no_argument,       NULL, ARG_REMOVED     },
                 { "settle",      no_argument,       NULL, ARG_SETTLE      },
-                { "help",        no_argument,       NULL, 'h'             },
-                { "version",     no_argument,       NULL, 'V'             },
                 {}
         };
 

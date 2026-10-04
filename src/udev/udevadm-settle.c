@@ -56,10 +56,10 @@ static void help(void) {
 
 static int adm_settle(struct udev *udev, int argc, char *argv[]) {
         static const struct option options[] = {
-                { "timeout",        required_argument, NULL, 't' },
-                { "exit-if-exists", required_argument, NULL, 'E' },
                 { "help",           no_argument,       NULL, 'h' },
                 { "version",        no_argument,       NULL, 'V' },
+                { "timeout",        required_argument, NULL, 't' },
+                { "exit-if-exists", required_argument, NULL, 'E' },
                 { "seq-start",      required_argument, NULL, 's' }, /* removed */
                 { "seq-end",        required_argument, NULL, 'e' }, /* removed */
                 { "quiet",          no_argument,       NULL, 'q' }, /* removed */

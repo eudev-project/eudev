@@ -576,6 +576,8 @@ static int adm_trigger(struct udev *udev, int argc, char *argv[]) {
         };
 
         static const struct option options[] = {
+                { "help",              no_argument,       NULL, 'h'      },
+                { "version",           no_argument,       NULL, 'V'      },
                 { "verbose",           no_argument,       NULL, 'v'      },
                 { "dry-run",           no_argument,       NULL, 'n'      },
                 { "quiet",             no_argument,       NULL, 'q'      },
@@ -595,8 +597,6 @@ static int adm_trigger(struct udev *udev, int argc, char *argv[]) {
                 { "initialized-nomatch", no_argument,     NULL, ARG_INITIALIZED_NOMATCH },
                 { "settle",            no_argument,       NULL, 'w'      },
                 { "wait-daemon",       optional_argument, NULL, ARG_PING },
-                { "help",              no_argument,       NULL, 'h'      },
-                { "version",           no_argument,       NULL, 'V'      },
                 { "uuid",              no_argument,       NULL, ARG_UUID },
                 { "prioritized-subsystem", required_argument, NULL, ARG_PRIORITIZED_SUBSYSTEM },
                 {}

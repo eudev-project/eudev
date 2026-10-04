@@ -78,13 +78,13 @@ static int adm_test(struct udev *udev, int argc, char *argv[]) {
         };
 
         static const struct option options[] = {
+                { "help", no_argument, NULL, 'h' },
+                { "version", no_argument, NULL, 'V' },
                 { "action", required_argument, NULL, 'a' },
                 { "resolve-names", required_argument, NULL, 'N' },
                 { "extra-rules-dir", required_argument, NULL, 'D' },
                 { "verbose", no_argument, NULL, 'v' },
                 { "json", required_argument, NULL, ARG_JSON },
-                { "help", no_argument, NULL, 'h' },
-                { "version", no_argument, NULL, 'V' },
                 {}
         };
 

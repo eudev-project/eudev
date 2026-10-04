@@ -98,14 +98,14 @@ static int adm_monitor(struct udev *udev, int argc, char *argv[]) {
         int c;
 
         static const struct option options[] = {
-                { "property",        no_argument,       NULL, 'p' },
+                { "help",            no_argument,       NULL, 'h' },
+                { "version",         no_argument,       NULL, 'V' },
                 { "environment",     no_argument,       NULL, 'e' }, /* alias for -p */
+                { "property",        no_argument,       NULL, 'p' },
                 { "kernel",          no_argument,       NULL, 'k' },
                 { "udev",            no_argument,       NULL, 'u' },
                 { "subsystem-match", required_argument, NULL, 's' },
                 { "tag-match",       required_argument, NULL, 't' },
-                { "help",            no_argument,       NULL, 'h' },
-                { "version",         no_argument,       NULL, 'V' },
                 {}
         };
 

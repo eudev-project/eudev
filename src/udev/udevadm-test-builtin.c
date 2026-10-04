@@ -53,9 +53,9 @@ static void help(struct udev *udev) {
 
 static int adm_builtin(struct udev *udev, int argc, char *argv[]) {
         static const struct option options[] = {
-                { "action",  required_argument, NULL, 'a' },
                 { "help",    no_argument,       NULL, 'h' },
                 { "version", no_argument,       NULL, 'V' },
+                { "action",  required_argument, NULL, 'a' },
                 {}
         };
         const char *action = "add";

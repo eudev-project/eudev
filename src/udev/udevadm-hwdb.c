@@ -56,14 +56,14 @@ static int adm_hwdb(struct udev *udev, int argc, char *argv[]) {
         };
 
         static const struct option options[] = {
+                { "help",   no_argument,       NULL, 'h' },
+                { "version", no_argument,      NULL, 'V' },
                 { "update", no_argument,       NULL, 'u' },
                 { "strict", no_argument,       NULL, 's' },
                 { "usr",    no_argument,       NULL, ARG_USR },
                 { "output", required_argument, NULL, 'o' },
                 { "test",   required_argument, NULL, 't' },
                 { "root",   required_argument, NULL, 'r' },
-                { "help",   no_argument,       NULL, 'h' },
-                { "version", no_argument,      NULL, 'V' },
                 {}
         };
         _cleanup_free_ char *root = NULL;

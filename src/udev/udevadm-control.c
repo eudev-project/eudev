@@ -143,22 +143,22 @@ static int adm_control(struct udev *udev, int argc, char *argv[]) {
         };
 
         static const struct option options[] = {
+                { "help",             no_argument,       NULL, 'h' },
+                { "version",          no_argument,       NULL, 'V' },
                 { "exit",             no_argument,       NULL, 'e' },
-                { "log-level",        required_argument, NULL, 'l' },
                 { "log-priority",     required_argument, NULL, 'l' }, /* for backward compatibility */
+                { "log-level",        required_argument, NULL, 'l' },
                 { "stop-exec-queue",  no_argument,       NULL, 's' },
                 { "start-exec-queue", no_argument,       NULL, 'S' },
-                { "reload",           no_argument,       NULL, 'R' },
                 { "reload-rules",     no_argument,       NULL, 'R' }, /* alias for -R */
-                { "property",         required_argument, NULL, 'p' },
+                { "reload",           no_argument,       NULL, 'R' },
                 { "env",              required_argument, NULL, 'p' }, /* alias for -p */
+                { "property",         required_argument, NULL, 'p' },
                 { "children-max",     required_argument, NULL, 'm' },
                 { "ping",             no_argument,       NULL, ARG_PING },
                 { "trace",            required_argument, NULL, ARG_TRACE },
                 { "revert",           no_argument,       NULL, ARG_REVERT },
                 { "timeout",          required_argument, NULL, 't' },
-                { "help",             no_argument,       NULL, 'h' },
-                { "version",          no_argument,       NULL, 'V' },
                 {}
         };
 

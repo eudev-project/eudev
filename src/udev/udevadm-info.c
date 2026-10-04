@@ -1251,22 +1251,24 @@ static int uinfo(struct udev *udev, int argc, char *argv[]) {
         };
 
         static const struct option options[] = {
-                { "name",              required_argument, NULL, 'n' },
-                { "path",              required_argument, NULL, 'p' },
+                { "help",              no_argument,       NULL, 'h' },
+                { "version",           no_argument,       NULL, 'V' },
                 { "query",             required_argument, NULL, 'q' },
+                { "property",          required_argument, NULL, ARG_PROPERTY },
+                { "value",             no_argument,       NULL, ARG_VALUE },
+                { "path",              required_argument, NULL, 'p' },
+                { "name",              required_argument, NULL, 'n' },
+                { "root",              no_argument,       NULL, 'r' },
                 { "attribute-walk",    no_argument,       NULL, 'a' },
                 { "tree",              no_argument,       NULL, 't' },
-                { "cleanup-db",        no_argument,       NULL, 'c' },
-                { "export-db",         no_argument,       NULL, 'e' },
-                { "root",              no_argument,       NULL, 'r' },
                 { "device-id-of-file", required_argument, NULL, 'd' },
                 { "export",            no_argument,       NULL, 'x' },
                 { "export-prefix",     required_argument, NULL, 'P' },
-                { "property",          required_argument, NULL, ARG_PROPERTY },
-                { "value",             no_argument,       NULL, ARG_VALUE },
-                { "json",              required_argument, NULL, ARG_JSON },
+                { "export-db",         no_argument,       NULL, 'e' },
+                { "cleanup-db",        no_argument,       NULL, 'c' },
                 { "wait-for-initialization", optional_argument, NULL, 'w' },
                 { "no-pager",          no_argument,       NULL, ARG_NO_PAGER },
+                { "json",              required_argument, NULL, ARG_JSON },
                 { "subsystem-match",   required_argument, NULL, ARG_SUBSYSTEM_MATCH },
                 { "subsystem-nomatch", required_argument, NULL, ARG_SUBSYSTEM_NOMATCH },
                 { "attr-match",        required_argument, NULL, ARG_ATTR_MATCH },
@@ -1278,8 +1280,6 @@ static int uinfo(struct udev *udev, int argc, char *argv[]) {
                 { "parent-match",      required_argument, NULL, ARG_PARENT_MATCH },
                 { "initialized-match", no_argument,       NULL, ARG_INITIALIZED_MATCH },
                 { "initialized-nomatch", no_argument,     NULL, ARG_INITIALIZED_NOMATCH },
-                { "version",           no_argument,       NULL, 'V' },
-                { "help",              no_argument,       NULL, 'h' },
                 {}
         };
 
