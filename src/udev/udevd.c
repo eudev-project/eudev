@@ -83,6 +83,8 @@ static bool stop_exec_queue;
 static bool start_exec_queue;
 static bool reload;
 static int arg_daemonize = false;
+/* -D/--debug, see argv_has_debug() */
+static bool arg_debug = false;
 /* the merged setting of resolve_names, see udev_parse_resolve_names() */
 static int arg_resolve_names = 1;
 /* udev.trace on the kernel command line */
@@ -1974,26 +1976,43 @@ static void help(void) {
                , program_invocation_short_name);
 }
 
+enum {
+        ARG_TIMEOUT_SIGNAL = 0x100,
+};
+
+static const struct option options[] = {
+        { "daemon",             no_argument,            NULL, 'd' },
+        { "debug",              no_argument,            NULL, 'D' },
+        { "ready-notify",       required_argument,      NULL, 'r' },
+        { "children-max",       required_argument,      NULL, 'c' },
+        { "exec-delay",         required_argument,      NULL, 'e' },
+        { "event-timeout",      required_argument,      NULL, 't' },
+        { "resolve-names",      required_argument,      NULL, 'N' },
+        { "help",               no_argument,            NULL, 'h' },
+        { "version",            no_argument,            NULL, 'V' },
+        { "timeout-signal",     required_argument,      NULL, ARG_TIMEOUT_SIGNAL },
+        {}
+};
+
+static const char optstring[] = "c:de:Dt:N:hVr:";
+
+/* Finds -D/--debug among the options, before anything is logged, see main(). getopt_long() reports invalid
+ * options only when they are parsed, see parse_argv(), which starts again with optind set to 0. */
+static bool argv_has_debug(int argc, char *argv[]) {
+        bool debug = false;
+        int c;
+
+        opterr = 0;
+        while ((c = getopt_long(argc, argv, optstring, options, NULL)) >= 0)
+                if (c == 'D')
+                        debug = true;
+        opterr = 1;
+        optind = 0;
+
+        return debug;
+}
+
 static int parse_argv(int argc, char *argv[]) {
-        enum {
-                ARG_TIMEOUT_SIGNAL = 0x100,
-        };
-
-        static const struct option options[] = {
-                { "daemon",             no_argument,            NULL, 'd' },
-                { "debug",              no_argument,            NULL, 'D' },
-                { "ready-notify",       required_argument,      NULL, 'r' },
-                { "children-max",       required_argument,      NULL, 'c' },
-                { "exec-delay",         required_argument,      NULL, 'e' },
-                { "event-timeout",      required_argument,      NULL, 't' },
-                { "resolve-names",      required_argument,      NULL, 'N' },
-                { "help",               no_argument,            NULL, 'h' },
-                { "version",            no_argument,            NULL, 'V' },
-                { "timeout-signal",     required_argument,      NULL, ARG_TIMEOUT_SIGNAL },
-                {}
-        };
-
-        static const char optstring[] = "c:de:Dt:N:hVr:";
         int c;
         unsigned fd_ready_u;
 
@@ -2001,20 +2020,15 @@ static int parse_argv(int argc, char *argv[]) {
         assert(argv);
 
         /* Unlike systemd, which logs to the console with --debug only after parsing all options and the
-         * kernel command line, find -D/--debug before the other options, so that the warnings about all of
-         * them, also about those that come before it, go to the console, and with the debug level, also
-         * when udev_log= in udev.conf, which udev_new() applied already, is lower. The final log level is
-         * set when the settings are merged, see main(). getopt_long() reports invalid options only in the
-         * second pass, and starts again with optind set to 0. */
-        opterr = 0;
-        while ((c = getopt_long(argc, argv, optstring, options, NULL)) >= 0)
-                if (c == 'D') {
-                        config_by_command.log_level = LOG_DEBUG;
-                        log_set_target(LOG_TARGET_CONSOLE);
-                        log_set_max_level(LOG_DEBUG);
-                }
-        opterr = 1;
-        optind = 0;
+         * kernel command line, -D/--debug is found before the other options, see argv_has_debug(), so that
+         * the warnings about all of them, also about those that come before it, go to the console, and with
+         * the debug level, also when udev_log= in udev.conf, which udev_new() applied already, is lower. The
+         * final log level is set when the settings are merged, see main(). */
+        if (arg_debug) {
+                config_by_command.log_level = LOG_DEBUG;
+                log_set_target(LOG_TARGET_CONSOLE);
+                log_set_max_level(LOG_DEBUG);
+        }
 
         while ((c = getopt_long(argc, argv, optstring, options, NULL)) >= 0) {
                 int r;
@@ -2098,6 +2112,7 @@ int main(int argc, char *argv[]) {
         struct epoll_event ep_netlink = { .events = EPOLLIN };
         struct epoll_event ep_worker = { .events = EPOLLIN };
         int r = 0, one = 1;
+        bool early_console;
         char **w;
 
         /*
@@ -2116,9 +2131,16 @@ int main(int argc, char *argv[]) {
         if (fd_stde > STDERR_FILENO)
                 close(fd_stde);
 
-        /* Like log_setup() of systemd-udevd, before udev.conf is read, so that its udev_log= takes
-         * precedence over $SYSTEMD_LOG_LEVEL, as in systemd. */
-        log_set_target(LOG_TARGET_AUTO);
+        arg_debug = argv_has_debug(argc, argv);
+
+        /* Like log_setup() of systemd-udevd, the auto target, which logs to the kernel log, and the log
+         * settings of the environment, before udev.conf is read, so that its udev_log= takes precedence over
+         * $SYSTEMD_LOG_LEVEL, as in systemd. Like before the environment was read here, the messages before
+         * and while udev.conf is read go to standard error instead, with --debug, and when it is a terminal,
+         * unless $UDEV_LOG_TARGET or $SYSTEMD_LOG_TARGET sets the target, see log_parse_environment(). */
+        early_console = (arg_debug || isatty(STDERR_FILENO)) &&
+                        !getenv("UDEV_LOG_TARGET") && !getenv("SYSTEMD_LOG_TARGET");
+        log_set_target(early_console ? LOG_TARGET_CONSOLE : LOG_TARGET_AUTO);
         log_parse_environment();
         log_open();
 
@@ -2126,6 +2148,13 @@ int main(int argc, char *argv[]) {
         if (!udev) {
                 r = log_error_errno(errno, "could not allocate udev context: %m");
                 goto exit;
+        }
+
+        /* the auto target from now on, also when standard error is a terminal; with --debug, parse_argv()
+         * keeps the console */
+        if (early_console && !arg_debug) {
+                log_set_target(LOG_TARGET_AUTO);
+                log_open();
         }
 
         r = parse_argv(argc, argv);
