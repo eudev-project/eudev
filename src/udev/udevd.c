@@ -1893,8 +1893,6 @@ static int parse_proc_cmdline_item(const char *key, const char *value) {
                 r = util_log_priority(value);
                 if (r >= 0)
                         config_by_kernel.log_level = r;
-                else if (r != -ERANGE)
-                        r = -EINVAL; /* not an errno from log_level_from_string() */
 
         } else if (proc_cmdline_key_streq(key, "udev.event_timeout")) {
 
