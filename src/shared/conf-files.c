@@ -102,7 +102,9 @@ static int conf_file_mask(Set *masked, const char *name, const char *original_pa
 /* Like systemd's conf_file_chase_and_verify(): resolves the symlinks of path below root, and checks the
  * file as flags ask. Returns 0 and the resolved path, prefixed with root, if the file is listed,
  * -ERFKILL if it is a mask, after adding name to masked, or another negative errno if it is skipped.
- * original_path is the path as found, prefixed with root, for the messages. */
+ * original_path is the path as found, prefixed with root, for the messages. Unlike systemd, -ENOMEM is
+ * not logged here, like the other allocation failures of the listing, so that the caller, which fails
+ * then, logs it once. */
 static int conf_file_chase_and_verify(const char *root, const char *original_path, const char *path,
                                       const char *name, Set *masked, ConfFilesFlags flags,
                                       char **ret_resolved) {
@@ -112,6 +114,8 @@ static int conf_file_chase_and_verify(const char *root, const char *original_pat
         int r;
 
         r = chase(path, root, conf_files_chase_flags(flags), &resolved);
+        if (r == -ENOMEM)
+                return r;
         if (r == -ENOENT && FLAGS_SET(flags, CONF_FILES_QUIET_MISSING))
                 return r;
         if (r < 0)
@@ -128,7 +132,8 @@ static int conf_file_chase_and_verify(const char *root, const char *original_pat
                 }
         } else if (conf_files_need_stat(flags)) {
                 if (stat(resolved, &st) < 0)
-                        return log_full_errno(log_level, errno, "Failed to stat '%s': %m", original_path);
+                        return errno == ENOMEM ? -ENOMEM :
+                                log_full_errno(log_level, errno, "Failed to stat '%s': %m", original_path);
 
                 if (FLAGS_SET(flags, CONF_FILES_FILTER_MASKED_BY_SYMLINK) &&
                     S_ISCHR(st.st_mode) && st.st_rdev == makedev(1, 3))
