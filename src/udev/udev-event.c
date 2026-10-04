@@ -1821,9 +1821,11 @@ int udev_event_execute_rules(struct udev_event *event,
 
                                         /* if sysname isn't already the tmpname (ie there is no numeric component), do the rename */
                                         if (!streq(newifname, curname)) {
-                                                /* no waiting when the temporary name is taken */
+                                                /* No waiting when the temporary name is taken. The result is not
+                                                 * kept in rename_r: when it fails, the interface keeps its name,
+                                                 * and gets its alternative names below, unless the renaming to
+                                                 * the final name, if one was requested, fails too. */
                                                 r = rename_netif_dev_fromname_toname(event, curname, newifname, 0, true, curname);
-                                                rename_r = r;
                                                 if (r == 0)
                                                         log_debug("renamed netif to '%s' for collision avoidance\n", newifname);
                                                 else if (r == -EEXIST)
