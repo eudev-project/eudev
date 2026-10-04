@@ -31,13 +31,45 @@
 
 #include "keyboard-keys-from-name.h"
 
+/* eudev: whether the force_release list of atkbd, e.g. "6,9-11", has the scan code. The kernel prints
+ * its bitmap of the codes as such a list; anything else is taken as not having it. */
+static bool force_release_has_code(const char *list, unsigned code) {
+        const char *p = list;
+
+        for (;;) {
+                unsigned long first, last;
+                char *end;
+
+                p += strspn(p, ", \t\n");
+                if (!ascii_isdigit(*p))
+                        return false;
+
+                errno = 0;
+                first = last = strtoul(p, &end, 10);
+                if (errno != 0)
+                        return false;
+                if (*end == '-') {
+                        p = end + 1;
+                        if (!ascii_isdigit(*p))
+                                return false;
+                        last = strtoul(p, &end, 10);
+                        if (errno != 0)
+                                return false;
+                }
+
+                if (code >= first && code <= last)
+                        return true;
+                p = end;
+        }
+}
+
 static int install_force_release(struct udev_device *dev, const unsigned *release, unsigned release_count) {
         struct udev_device *atkbd;
         const char *cur;
         char codes[4096];
         char *s;
         size_t l;
-        unsigned i;
+        unsigned i, added = 0;
         int ret;
 
         atkbd = udev_device_get_parent_with_subsystem_devtype(dev, "serio", NULL);
@@ -54,9 +86,20 @@ static int install_force_release(struct udev_device *dev, const unsigned *releas
         /* copy current content */
         l = strpcpy(&s, l, cur);
 
-        /* append new codes */
-        for (i = 0; i < release_count; i++)
-                l = strpcpyf(&s, l, ",%u", release[i]);
+        /* append new codes; eudev: only the ones that the list does not have yet, and without an empty
+         * first entry, while systemd appends all of them every time, after a comma */
+        for (i = 0; i < release_count; i++) {
+                if (force_release_has_code(codes, release[i]))
+                        continue;
+
+                l = strpcpyf(&s, l, "%s%u", s == codes ? "" : ",", release[i]);
+                added++;
+        }
+
+        if (added == 0) {
+                log_device_debug(atkbd, "keyboard: force-release list '%s' has all the codes already", cur);
+                return 0;
+        }
 
         log_device_debug(atkbd, "keyboard: updating force-release list with '%s'", codes);
         ret = udev_device_set_sysattr_value(atkbd, "force_release", codes);
