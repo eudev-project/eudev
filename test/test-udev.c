@@ -282,7 +282,8 @@ int main(int argc __attribute__((unused)), char *argv[]) {
                                        NULL);
 
                 /* Finalize the database like the udevd worker does after RUN, so that ID_PROCESSING=1 is not
-                 * left in it. The database was removed already on remove. */
+                 * left in it, and restore the previous database entry and the tag index like it, when that
+                 * fails. The database was removed already on remove. */
                 if (!streq(action, "remove")) {
                         err = udev_device_add_property(dev, "ID_PROCESSING", NULL);
                         if (err < 0)
@@ -292,6 +293,8 @@ int main(int argc __attribute__((unused)), char *argv[]) {
                                 if (err < 0)
                                         log_error_errno(err, "Failed to update database under " UDEV_ROOT_RUN "/udev/data/: %m");
                         }
+                        if (err < 0)
+                                udev_event_restore_db(event);
                 }
         }
 out:
