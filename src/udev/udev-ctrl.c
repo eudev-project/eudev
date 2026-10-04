@@ -123,13 +123,14 @@ int udev_ctrl_enable_receiving(struct udev_ctrl *uctrl) {
                         err = bind(uctrl->sock, &uctrl->saddr.sa, uctrl->addrlen);
                 }
 
-                /* the caller logs the error */
+                /* with the messages of udev-ctrl.c of systemd v261; udevd, the only caller, does not log the
+                 * error again */
                 if (err < 0)
-                        return -errno;
+                        return log_error_errno(errno, "Failed to bind udev control socket: %m");
 
                 err = listen(uctrl->sock, 0);
                 if (err < 0)
-                        return -errno;
+                        return log_error_errno(errno, "Failed to listen udev control socket: %m");
 
                 uctrl->bound = true;
                 uctrl->cleanup_socket = true;

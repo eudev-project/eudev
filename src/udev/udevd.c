@@ -2201,32 +2201,31 @@ int main(int argc, char *argv[]) {
                 }
         }
 
-        /* open control and netlink socket */
+        /* Open the control socket and the netlink socket, with the messages of systemd v261 and the error of
+         * the failed call. The functions that create them set errno. */
+        errno = 0;
         udev_ctrl = udev_ctrl_new(udev);
         if (!udev_ctrl) {
-                r = log_error_errno(errno > 0 ? errno : ENOMEM, "error initializing udev control socket: %m");
+                r = log_error_errno(errno_or_else(ENOMEM), "Failed to initialize udev control socket: %m");
                 goto exit;
         }
         fd_ctrl = udev_ctrl_get_fd(udev_ctrl);
 
+        /* like manager_init_device_monitor() of systemd v261, whose device_monitor_new_full() also binds the
+         * socket */
+        errno = 0;
         monitor = udev_monitor_new_from_netlink(udev, "kernel");
-        if (!monitor) {
-                r = log_error_errno(EINVAL, "error initializing netlink socket");
+        r = monitor ? udev_monitor_enable_receiving(monitor) : errno_or_else(ENOMEM);
+        if (r < 0) {
+                log_error_errno(r, "Failed to initialize device monitor: %m");
                 goto exit;
         }
         fd_netlink = udev_monitor_get_fd(monitor);
 
-        r = udev_monitor_enable_receiving(monitor);
-        if (r < 0) {
-                log_error_errno(r, "error binding netlink socket: %m");
-                goto exit;
-        }
-
+        /* logs a failure of bind() or listen() itself */
         r = udev_ctrl_enable_receiving(udev_ctrl);
-        if (r < 0) {
-                log_error_errno(r, "error binding udev control socket: %m");
+        if (r < 0)
                 goto exit;
-        }
 
         udev_monitor_set_receive_buffer_size(monitor, 128 * 1024 * 1024);
 
