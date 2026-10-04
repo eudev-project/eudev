@@ -4,8 +4,9 @@
  * The pager of systemd's src/shared/pager.c (as of systemd a446e8ff2c), adapted to eudev: the pager
  * process is forked directly, the owner of the login session, which systemd gets from logind, is the
  * audit login UID, pager_close() is also called at exit, and quitting the pager before all output is
- * written ends the program instead of SIGPIPE, with exit status 0, or with the failure code that the
- * program set with pager_set_exit_status() before.
+ * written ends the program instead of SIGPIPE, with exit status 0, or with a failure code: 1 after a
+ * message at error level was logged while the pager runs, or the code that the program set with
+ * pager_set_exit_status().
  */
 
 #include <errno.h>
@@ -138,8 +139,8 @@ static bool running_with_escalated_privileges(void) {
 
 /* Unlike systemd, where the program is killed by SIGPIPE (exit status 141 in the shell) when it writes
  * after the pager quit, end like after all output was shown: wait for the pager to exit, as
- * pager_close() does, and exit with status 0, or with the failure code set before with
- * pager_set_exit_status(). Only async-signal-safe functions are used here. */
+ * pager_close() does, and exit with status 0, or with the failure code set before, see
+ * pager_mark_failed() and pager_set_exit_status(). Only async-signal-safe functions are used here. */
 static void pager_sigpipe_handler(int sig) {
         if (getpid() != pager_parent) {
                 /* a child forked later, which did not open the pager */
@@ -156,6 +157,14 @@ static void pager_sigpipe_handler(int sig) {
 
 void pager_set_exit_status(int status) {
         sigpipe_exit_status = status;
+}
+
+/* The hook of log_set_error_hook() while the pager runs: a message at error level marks the run as
+ * failed, unless a failure code was set already, before the message is written, which may be the
+ * write that finds the pager quit. */
+static void pager_mark_failed(void) {
+        if (sigpipe_exit_status == EXIT_SUCCESS)
+                sigpipe_exit_status = EXIT_FAILURE;
 }
 
 void pager_open(PagerFlags flags) {
@@ -382,8 +391,10 @@ void pager_open(PagerFlags flags) {
                         .sa_flags = SA_RESTART,
                 };
 
-                if (sigaction(SIGPIPE, &sa, &old_sigpipe) >= 0)
+                if (sigaction(SIGPIPE, &sa, &old_sigpipe) >= 0) {
                         sigpipe_handled = true;
+                        log_set_error_hook(pager_mark_failed);
+                }
         }
 
         exe_name_pipe[1] = safe_close(exe_name_pipe[1]);
@@ -424,6 +435,7 @@ void pager_close(void) {
         stdout_redirected = stderr_redirected = false;
 
         if (sigpipe_handled) {
+                log_set_error_hook(NULL);
                 (void) sigaction(SIGPIPE, &old_sigpipe, NULL);
                 sigpipe_handled = false;
         }

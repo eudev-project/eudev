@@ -606,6 +606,18 @@ static int log_dispatch(
  * see write_to_kmsg(). */
 #define LOG_MESSAGE_MAX (128U * 1024U)
 
+/* see log_set_error_hook() */
+static void (*log_error_hook)(void) = NULL;
+
+void log_set_error_hook(void (*hook)(void)) {
+        log_error_hook = hook;
+}
+
+static void log_call_error_hook(int level) {
+        if (log_error_hook && LOG_PRI(level) <= LOG_ERR)
+                log_error_hook();
+}
+
 int log_internalv(
         int level,
         int error,
@@ -623,6 +635,8 @@ int log_internalv(
 
         if (error < 0)
                 error = -error;
+
+        log_call_error_hook(level);
 
         if (_likely_(LOG_PRI(level) > log_max_level))
                 return -error;
@@ -664,6 +678,8 @@ int log_internal_long(
 
         if (error < 0)
                 error = -error;
+
+        log_call_error_hook(level);
 
         if (_likely_(LOG_PRI(level) > log_max_level))
                 return -error;

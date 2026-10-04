@@ -114,11 +114,12 @@ noreturn void log_assert_failed_unreachable(
                 const char *func);
 
 
-/* Logging with level */
+/* Logging with level; the messages at error level or above always reach log_internal(), which calls
+ * the hook of log_set_error_hook() for them */
 #define log_full_errno(level, error, ...)                                         \
         ({                                                                        \
                 int _l = (level), _e = (error);                                   \
-                (log_get_max_level() >= LOG_PRI(_l))                              \
+                (log_get_max_level() >= LOG_PRI(_l) || LOG_PRI(_l) <= LOG_ERR)    \
                 ? log_internal(_l, _e, PROJECT_FILE, __LINE__, __func__, __VA_ARGS__) \
                 : -abs(_e); \
         })
@@ -128,7 +129,7 @@ noreturn void log_assert_failed_unreachable(
 #define log_full_long(level, message)                                             \
         ({                                                                        \
                 int _l = (level);                                                 \
-                (log_get_max_level() >= LOG_PRI(_l))                              \
+                (log_get_max_level() >= LOG_PRI(_l) || LOG_PRI(_l) <= LOG_ERR)    \
                 ? log_internal_long(_l, 0, PROJECT_FILE, __LINE__, __func__, (message)) \
                 : 0;                                                              \
         })
@@ -169,3 +170,8 @@ noreturn void log_assert_failed_unreachable(
 
 const char *log_target_to_string(LogTarget target) _const_;
 LogTarget log_target_from_string(const char *s) _pure_;
+
+/* eudev: sets a function that is called for every message at error level or above, also if the maximum
+ * log level hides it, before the message is written; NULL removes it. The pager uses it, see
+ * pager_open(). */
+void log_set_error_hook(void (*hook)(void));

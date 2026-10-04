@@ -16,6 +16,7 @@ void pager_close(void);
 bool pager_have(void);
 
 /* Unlike systemd, where the program is killed by SIGPIPE, the program ends when the pager is quit before
- * all output is written, with exit status 0, unless an error was recorded before: then with the failure
- * code given here, which the program would return at its end. */
+ * all output is written, with exit status 0, unless it failed before: then with status 1, if a message at
+ * error level was logged while the pager runs, or with the failure code given here, which the program
+ * would return at its end, also when it logs no error. */
 void pager_set_exit_status(int status);
