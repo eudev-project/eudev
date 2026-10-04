@@ -145,7 +145,8 @@ static int get_file_options(struct udev *udev __attribute__((unused)),
 
                 r = read_line(f, MAX_BUFFER_LEN, &buffer);
                 if (r < 0)
-                        return log_error_errno(r, "read_line() on line %d of %s failed: %m", lineno, config_file);
+                        /* eudev: the number of the line that cannot be read, systemd gives the one before */
+                        return log_error_errno(r, "read_line() on line %d of %s failed: %m", lineno + 1, config_file);
                 if (r == 0)
                         break;
                 buf = buffer;
