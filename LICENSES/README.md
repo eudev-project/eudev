@@ -24,7 +24,8 @@ Most of eudev comes from udev of systemd, whose files carry the same licenses.
      scsi.h) and src/v4l_id/
    - rule_generator/rule_generator.functions and
      rule_generator/write_net_rules.in
-   - test/test-collect.c, which includes src/collect/collect.c
+   - test/test-collect.c, which includes src/collect/collect.c, and
+     test/test-scsi_id.c, which includes src/scsi_id/scsi_id.c
    - test/rule-syntax-check.py, test/hwdb-test.sh, hwdb.d/dedup-hwdb.py and
      tools/gen-80-net-name-slot.py
 

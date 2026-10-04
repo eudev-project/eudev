@@ -17,7 +17,8 @@ noinst_PROGRAMS = \
 
 check_PROGRAMS = \
 	test-collect \
-	test-json-writer
+	test-json-writer \
+	test-scsi_id
 
 test_collect_SOURCES = \
 	test-collect.c
@@ -31,6 +32,17 @@ test_json_writer_SOURCES = \
 
 test_json_writer_LDADD = \
 	$(top_builddir)/src/shared/libudev_shared.la
+
+test_scsi_id_SOURCES = \
+	test-scsi_id.c
+
+test_scsi_id_LDADD = \
+	$(top_builddir)/src/libudev/libudev-private.la \
+	$(top_builddir)/src/udev/libudev-core.la
+
+test_scsi_id_CPPFLAGS = \
+	$(AM_CPPFLAGS) \
+	-DUDEV_VERSION=\"$(UDEV_VERSION)\"
 
 test_libudev_SOURCES = \
 	test-libudev.c
@@ -77,6 +89,7 @@ AM_TESTS_ENVIRONMENT = \
 TESTS = \
 	test-collect \
 	test-json-writer \
+	test-scsi_id \
 	udev-test.pl \
 	rules-test.sh \
 	udev-devlink-test.sh \
