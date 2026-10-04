@@ -151,14 +151,6 @@ static inline int name_to_handle_at(int fd, const char *name, struct file_handle
 }
 #endif
 
-#ifndef INPUT_PROP_POINTING_STICK
-#define INPUT_PROP_POINTING_STICK 0x05
-#endif
-
-#ifndef INPUT_PROP_ACCELEROMETER
-#define INPUT_PROP_ACCELEROMETER  0x06
-#endif
-
 #ifndef O_PATH
 #define O_PATH    010000000
 #endif
@@ -176,23 +168,6 @@ static inline int name_to_handle_at(int fd, const char *name, struct file_handle
     __new[__len] = '\0'; \
     (char *)memcpy(__new, __old, __len); \
   })
-#endif
-
-#ifndef BTN_TRIGGER_HAPPY
-#define BTN_TRIGGER_HAPPY 0x2c0
-#endif
-
-#ifndef INPUT_PROP_MAX
-#define INPUT_PROP_MAX 0x1f
-#endif
-
-#ifndef KEY_ALS_TOGGLE
-#define KEY_ALS_TOGGLE 0x7a
-#endif
-
-#ifndef BTN_DPAD_UP
-#define BTN_DPAD_UP 0x220
-#define BTN_DPAD_RIGHT 0x223
 #endif
 
 #ifndef HAVE_SECURE_GETENV
