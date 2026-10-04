@@ -2651,6 +2651,16 @@ bool signal_terminates(int signo) {
                !IN_SET(signo, SIGCHLD, SIGURG, SIGWINCH, SIGSTOP, SIGTSTP, SIGTTIN, SIGTTOU, SIGCONT);
 }
 
+/* Whether the default action of the signal terminates a process with a core dump, see signal(7). */
+bool signal_dumps_core(int signo) {
+#ifdef SIGEMT
+        /* on some architectures, e.g. MIPS, SPARC and Alpha */
+        if (signo == SIGEMT)
+                return true;
+#endif
+        return IN_SET(signo, SIGABRT, SIGBUS, SIGFPE, SIGILL, SIGQUIT, SIGSEGV, SIGSYS, SIGTRAP, SIGXCPU, SIGXFSZ);
+}
+
 int kill_and_sigcont(pid_t pid, int sig) {
         int r;
 

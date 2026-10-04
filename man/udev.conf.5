@@ -300,7 +300,8 @@ starts\&. This includes the signals whose default action does not terminate a pr
 \fBSIGURG\fR
 and
 \fBSIGWINCH\fR\&. A worker that has not finished its event 5 seconds after the signal is killed with
-\fBSIGKILL\fR\&.
+\fBSIGKILL\fR; after a signal whose default action dumps core, e\&.g\&.
+\fBSIGABRT\fR, 90 seconds, so that the core dump is not cut off\&.
 .RE
 .PP
 In addition,

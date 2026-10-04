@@ -68,6 +68,11 @@
 
 /* how long a killed worker has to exit after the timeout signal, before it gets SIGKILL */
 #define WORKER_SIGKILL_DELAY_USEC (5 * USEC_PER_SEC)
+/* The same, when the default action of the signal dumps core, e.g. SIGABRT, which udevd(8) suggests to debug
+ * worker timeouts: long enough not to cut off the core dump, also when core_pattern pipes it to a program that
+ * is slow to save it. This is how long systemd's service manager gives a service that it aborted on a watchdog
+ * timeout to write its core dump, by default: TimeoutAbortSec= falls back to DefaultTimeoutStopSec=, 90 s. */
+#define WORKER_SIGKILL_DELAY_COREDUMP_USEC (90 * USEC_PER_SEC)
 
 static struct udev_rules *rules;
 static struct udev_ctrl *udev_ctrl;
@@ -1303,12 +1308,12 @@ static usec_t manager_kill_worker_timeout(void) {
 /* Like the timers of systemd's worker_attach_event(), on_worker_timeout_warning() and on_worker_timeout_kill(),
  * with their messages: warns when the event of a worker takes a third of the event timeout, and sends the timeout
  * signal to the worker after the event timeout and the extra time. Unlike systemd, a worker that is still
- * processing its event WORKER_SIGKILL_DELAY_USEC after the timeout signal gets SIGKILL: the signal may not
- * terminate it, e.g. SIGTERM, which the worker blocks and reads from its signalfd only between events or while it
- * waits for a program, and then waits for the program. Called on every iteration of the main loop, and not only
- * when it times out, so that a hanging worker is also killed when the loop never waits that long, e.g. as uevents
- * or messages keep arriving. Returns the time in milliseconds until the next of these is due, rounded up, or -1 if
- * there is none. */
+ * processing its event WORKER_SIGKILL_DELAY_USEC (or WORKER_SIGKILL_DELAY_COREDUMP_USEC) after the timeout signal
+ * gets SIGKILL: the signal may not terminate it, e.g. SIGTERM, which the worker blocks and reads from its signalfd
+ * only between events or while it waits for a program, and then waits for the program, or it may still be dumping
+ * core. Called on every iteration of the main loop, and not only when it times out, so that a hanging worker is
+ * also killed when the loop never waits that long, e.g. as uevents or messages keep arriving. Returns the time in
+ * milliseconds until the next of these is due, rounded up, or -1 if there is none. */
 static int manager_check_worker_timeouts(void) {
         struct worker *worker;
         usec_t now_usec, next_usec = USEC_INFINITY;
@@ -1348,7 +1353,10 @@ static int manager_check_worker_timeouts(void) {
                                          worker->pid, event->seqnum);
 
                         if (arg_timeout_signal != SIGKILL) {
-                                worker->sigkill_usec = usec_add(now_usec, WORKER_SIGKILL_DELAY_USEC);
+                                worker->sigkill_usec = usec_add(now_usec,
+                                                                signal_dumps_core(arg_timeout_signal) ?
+                                                                WORKER_SIGKILL_DELAY_COREDUMP_USEC :
+                                                                WORKER_SIGKILL_DELAY_USEC);
                                 next_usec = MIN(next_usec, worker->sigkill_usec);
                         }
                         continue;

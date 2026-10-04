@@ -133,7 +133,8 @@ and
 \fBSIGWINCH\fR\&. A worker that has not finished its event 5 seconds after the signal, e\&.g\&. as it blocks
 \fBSIGTERM\fR
 while it processes an event, is killed with
-\fBSIGKILL\fR\&.
+\fBSIGKILL\fR; after a signal whose default action dumps core, e\&.g\&.
+\fBSIGABRT\fR, 90 seconds, so that the core dump is not cut off\&.
 .RE
 .PP
 \fB\-N\fR, \fB\-\-resolve\-names=\fR

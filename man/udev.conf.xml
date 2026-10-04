@@ -314,7 +314,9 @@
           <constant>SIGTTIN</constant>, <constant>SIGTTOU</constant>,
           <constant>SIGURG</constant> and <constant>SIGWINCH</constant>.
           A worker that has not finished its event 5 seconds after the signal
-          is killed with <constant>SIGKILL</constant>.</para>
+          is killed with <constant>SIGKILL</constant>; after a signal whose
+          default action dumps core, e.g. <constant>SIGABRT</constant>, 90
+          seconds, so that the core dump is not cut off.</para>
         </listitem>
       </varlistentry>
     </variablelist>
