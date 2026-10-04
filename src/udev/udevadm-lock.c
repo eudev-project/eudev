@@ -479,8 +479,10 @@ static int adm_lock(struct udev *udev, int argc, char *argv[]) {
         int r;
 
         r = parse_argv(argc, argv);
-        if (r > 0)
+        if (r > 0) {
+                log_command_call(&udevadm_lock);
                 r = lock_main(udev);
+        }
 
         arg_devices = strv_free(arg_devices);
         arg_backing = strv_free(arg_backing);

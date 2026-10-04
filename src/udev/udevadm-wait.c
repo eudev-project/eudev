@@ -398,8 +398,10 @@ static int adm_wait(struct udev *udev, int argc, char *argv[]) {
         int r;
 
         r = parse_argv(argc, argv);
-        if (r > 0)
+        if (r > 0) {
+                log_command_call(&udevadm_wait);
                 r = wait_main(udev);
+        }
 
         arg_devices = strv_free(arg_devices);
         return r < 0 ? 1 : 0;

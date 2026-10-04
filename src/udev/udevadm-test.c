@@ -149,6 +149,7 @@ static int adm_test(struct udev *udev, int argc, char *argv[]) {
         }
 
         /* after the arguments are checked, like systemd, which parses them first */
+        log_command_call(&udevadm_test);
         log_debug("version %s (udev %s)", VERSION, UDEV_VERSION);
 
         log_info("This program is for debugging only, it does not run any program\n"

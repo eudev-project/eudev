@@ -568,6 +568,12 @@ static void log_ambiguous_option(const struct option *longopts, const char *arg,
                   program_invocation_short_name, (int) (len + 2), arg, list);
 }
 
+void log_command_call(const struct udevadm_cmd *cmd) {
+        assert(cmd);
+
+        log_debug("calling: %s", cmd->name);
+}
+
 int udevadm_getopt_long(int argc, char *argv[], const char *optstring, const struct option *longopts) {
         const char *arg, *p;
         size_t len;

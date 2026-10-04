@@ -99,6 +99,8 @@ static int adm_builtin(struct udev *udev, int argc, char *argv[]) {
         command = argv[optind++];
         syspath = argv[optind++];
 
+        log_command_call(&udevadm_test_builtin);
+
         /* like udevadm test, the naming scheme that the init hook of net_id logs */
         naming_scheme_set_log_level(LOG_DEBUG);
 

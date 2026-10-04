@@ -130,6 +130,8 @@ static int adm_hwdb(struct udev *udev, int argc, char *argv[]) {
                 return EXIT_FAILURE;
         }
 
+        log_command_call(&udevadm_hwdb);
+
         if (update) {
                 if (!hwdb_bin) {
                         rc = EXIT_FAILURE;

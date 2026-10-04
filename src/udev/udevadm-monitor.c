@@ -151,6 +151,8 @@ static int adm_monitor(struct udev *udev, int argc, char *argv[]) {
                         return 1;
                 }
 
+        log_command_call(&udevadm_monitor);
+
         if (running_in_chroot() > 0) {
                 log_info("Running in chroot, ignoring request.");
                 return 0;

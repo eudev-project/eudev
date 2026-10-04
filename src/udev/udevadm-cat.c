@@ -202,6 +202,8 @@ static int adm_cat(struct udev *udev __attribute__((unused)), int argc, char *ar
         if (r <= 0)
                 goto finish;
 
+        log_command_call(&udevadm_cat);
+
         if (arg_config) {
                 r = cat_config(&newline);
                 goto finish;

@@ -79,3 +79,7 @@ void print_man_page_link(void);
  * Like that parser, an abbreviated long option is ambiguous whenever the names of several long
  * options begin with it, also if they are aliases. Returns '?' after logging an invalid option. */
 int udevadm_getopt_long(int argc, char *argv[], const char *optstring, const struct option *longopts);
+
+/* Logs at debug level which command runs, e.g. "calling: test". The commands call it after they checked
+ * their arguments, so that it does not come before a message about an invalid one. */
+void log_command_call(const struct udevadm_cmd *cmd);

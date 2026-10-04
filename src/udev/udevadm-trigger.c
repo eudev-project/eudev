@@ -746,6 +746,8 @@ static int adm_trigger(struct udev *udev, int argc, char *argv[]) {
                 }
         }
 
+        log_command_call(&udevadm_trigger);
+
         /* Unlike systemd, the options are parsed first, so that --help, --version and invalid options
          * work in a chroot too, and only the action is skipped there. */
         if (running_in_chroot() > 0) {

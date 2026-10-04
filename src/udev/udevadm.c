@@ -207,7 +207,9 @@ static void log_command_required(void) {
 static int run_command(struct udev *udev, const struct udevadm_cmd *cmd, int argc, char *argv[]) {
         if (cmd->debug)
                 log_set_max_level(LOG_DEBUG);
-        log_debug("calling: %s", cmd->name);
+        /* The other commands log this after they checked their arguments, see log_command_call(). */
+        if (cmd == &udevadm_help || cmd == &udevadm_version)
+                log_command_call(cmd);
         return cmd->cmd(udev, argc, argv);
 }
 

@@ -145,6 +145,8 @@ static int adm_verify(struct udev *udev, int argc, char *argv[]) {
         if (r <= 0)
                 goto finish;
 
+        log_command_call(&udevadm_verify);
+
         r = search_rules_files(argv + optind, arg_root, &names, &paths);
         if (r < 0)
                 goto finish;

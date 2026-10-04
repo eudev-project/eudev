@@ -1458,17 +1458,6 @@ static int uinfo(struct udev *udev, int argc, char *argv[]) {
                 return 1;
         }
 
-        if (action == ACTION_CLEANUP_DB) {
-                cleanup_db(udev);
-                return 0;
-        }
-
-        if (action == ACTION_DEVICE_ID_FILE) {
-                if (stat_device(name, export, export_prefix) != 0)
-                        return 1;
-                return 0;
-        }
-
         if (strv_isempty(devices)) {
                 if (action == ACTION_QUERY) {
                         pager_set_exit_status(2);
@@ -1485,6 +1474,19 @@ static int uinfo(struct udev *udev, int argc, char *argv[]) {
         if (IN_SET(action, ACTION_ATTRIBUTE_WALK, ACTION_TREE) && strv_length(devices) > 1) {
                 log_error("Only one device may be specified with -a/--attribute-walk and -t/--tree");
                 return 1;
+        }
+
+        log_command_call(&udevadm_info);
+
+        if (action == ACTION_CLEANUP_DB) {
+                cleanup_db(udev);
+                return 0;
+        }
+
+        if (action == ACTION_DEVICE_ID_FILE) {
+                if (stat_device(name, export, export_prefix) != 0)
+                        return 1;
+                return 0;
         }
 
         pager_flags = arg_pager_flags;

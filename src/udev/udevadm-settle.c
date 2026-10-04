@@ -123,6 +123,8 @@ static int adm_settle(struct udev *udev, int argc, char *argv[]) {
                 return EXIT_FAILURE;
         }
 
+        log_command_call(&udevadm_settle);
+
         if (running_in_chroot() > 0) {
                 log_info("Running in chroot, ignoring request.");
                 return 0;
