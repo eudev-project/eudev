@@ -171,6 +171,11 @@ static int get_file_options(struct udev *udev __attribute__((unused)),
                         vendor_in = TAKE_PTR(value);
 
                         key = mfree(key);
+                        /* eudev: white space after the comma is allowed, as in udev 3.2.x and before, e.g.
+                         * 'vendor="ATA", options=-g'; systemd takes it as a part of the next key. buf is
+                         * NULL at the end of the line. */
+                        if (buf)
+                                buf += strspn(buf, WHITESPACE);
                         r = extract_many_words(&buf, "=\",\n", 0, &key, &value);
                         if (r < 2)
                                 return log_error_errno(SYNTHETIC_ERRNO(EINVAL), "Error parsing config file line %d '%s'", lineno, buffer);
@@ -179,6 +184,8 @@ static int get_file_options(struct udev *udev __attribute__((unused)),
                                 model_in = TAKE_PTR(value);
 
                                 key = mfree(key);
+                                if (buf) /* eudev, see above */
+                                        buf += strspn(buf, WHITESPACE);
                                 r = extract_many_words(&buf, "=\",\n", 0, &key, &value);
                                 if (r < 2)
                                         return log_error_errno(SYNTHETIC_ERRNO(EINVAL), "Error parsing config file line %d '%s'", lineno, buffer);
