@@ -453,18 +453,24 @@ static char *get_hwdb_bin_paths (void) {
         return path;
 }
 
-/* Opens the first hwdb.bin of bin_paths, a nulstr, which is freed with the context. */
+/* Opens the first hwdb.bin of bin_paths, a nulstr, which is freed with the context. Like hwdb_new() of
+ * systemd's sd-hwdb, the reason of a failure is logged at debug level with the error; and like udev_hwdb_new()
+ * of systemd's libudev, errno is set to the error, e.g. ENOENT when there is no hwdb.bin. */
 static struct udev_hwdb *hwdb_new(struct udev *udev, char *bin_paths) {
         struct udev_hwdb *hwdb;
         const char *hwdb_bin_path;
         const char sig[] = HWDB_SIG;
+        int r;
 
-        if (bin_paths == NULL)
+        if (bin_paths == NULL) {
+                errno = ENOMEM;
                 return NULL;
+        }
 
         hwdb = new0(struct udev_hwdb, 1);
         if (!hwdb) {
                 free(bin_paths);
+                errno = ENOMEM;
                 return NULL;
         }
 
@@ -479,40 +485,37 @@ static struct udev_hwdb *hwdb_new(struct udev *udev, char *bin_paths) {
                 hwdb->f = fopen(hwdb_bin_path, "re");
                 if (hwdb->f)
                         break;
-                else if (errno == ENOENT)
-                        continue;
-                else {
-                        log_debug("error reading %s", hwdb_bin_path);
-                        udev_hwdb_unref(hwdb);
-                        return NULL;
+                if (errno != ENOENT) {
+                        r = log_debug_errno(errno, "Failed to open %s: %m", hwdb_bin_path);
+                        goto fail;
                 }
         }
 
         if (!hwdb->f) {
-                log_debug("hwdb.bin does not exist, please run 'udevadm hwdb --update'.");
-                udev_hwdb_unref(hwdb);
-                return NULL;
+                r = log_debug_errno(ENOENT, "hwdb.bin does not exist, please run 'udevadm hwdb --update'.");
+                goto fail;
         }
 
-        if (fstat(fileno(hwdb->f), &hwdb->st) < 0 ||
-            (size_t)hwdb->st.st_size < offsetof(struct trie_header_f, strings_len) + 8) {
-                log_debug_errno(errno, "error reading %s: %m", hwdb_bin_path);
-                udev_hwdb_unref(hwdb);
-                return NULL;
+        if (fstat(fileno(hwdb->f), &hwdb->st) < 0) {
+                r = log_debug_errno(errno, "Failed to stat %s: %m", hwdb_bin_path);
+                goto fail;
+        }
+        if ((size_t)hwdb->st.st_size < offsetof(struct trie_header_f, strings_len) + 8) {
+                r = log_debug_errno(EIO, "File %s is too short.", hwdb_bin_path);
+                goto fail;
         }
 
         hwdb->map = mmap(0, hwdb->st.st_size, PROT_READ, MAP_SHARED, fileno(hwdb->f), 0);
         if (hwdb->map == MAP_FAILED) {
-                log_debug_errno(errno, "error mapping %s: %m", hwdb_bin_path);
-                udev_hwdb_unref(hwdb);
-                return NULL;
+                r = log_debug_errno(errno, "Failed to map %s: %m", hwdb_bin_path);
+                hwdb->map = NULL;
+                goto fail;
         }
 
         if (memcmp(hwdb->map, sig, sizeof(hwdb->head->signature)) != 0 ||
             (size_t)hwdb->st.st_size != le64toh(hwdb->head->file_size)) {
-                log_debug("error recognizing the format of %s", hwdb_bin_path);
-                udev_hwdb_unref(hwdb);
-                return NULL;
+                r = log_debug_errno(EINVAL, "Failed to recognize the format of %s.", hwdb_bin_path);
+                goto fail;
         }
 
         log_debug("=== trie on-disk ===");
@@ -522,6 +525,11 @@ static struct udev_hwdb *hwdb_new(struct udev *udev, char *bin_paths) {
         log_debug("strings           %8"PRIu64" bytes", le64toh(hwdb->head->strings_len));
         log_debug("nodes             %8"PRIu64" bytes", le64toh(hwdb->head->nodes_len));
         return hwdb;
+
+fail:
+        udev_hwdb_unref(hwdb);
+        errno = -r;
+        return NULL;
 }
 
 /**
@@ -530,7 +538,7 @@ static struct udev_hwdb *hwdb_new(struct udev *udev, char *bin_paths) {
  *
  * Create a hardware database context to query properties for devices.
  *
- * Returns: a hwdb context.
+ * Returns: a hwdb context, or #NULL with errno set on error.
  **/
 _public_ struct udev_hwdb *udev_hwdb_new(struct udev *udev) {
         return hwdb_new(udev, get_hwdb_bin_paths());
