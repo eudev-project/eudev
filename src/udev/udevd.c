@@ -782,7 +782,9 @@ out:
                 close(fd_inotify);
                 close(worker_watch[WRITE_END]);
                 udev_rules_unref(rules);
-                udev_builtin_exit(udev);
+                /* Like the workers of systemd, do not unload the builtins, which udevd loaded before the
+                 * fork and keeps loaded, so that a worker does not log "Unloaded kernel module index." and
+                 * "Unloaded hardware database." when it exits; _exit() releases their resources. */
                 udev_unref(udev);
                 log_close();
                 _exit(r < 0 ? EXIT_FAILURE : EXIT_SUCCESS);
