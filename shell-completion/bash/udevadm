@@ -55,7 +55,12 @@ __get_root() {
             break
         fi
         if (( i > 0 )) && [[ "${COMP_WORDS[i-1]}" == "--root" ]]; then
-            echo "${COMP_WORDS[i]}"
+            # "--root=PATH" is split into "--root", "=" and "PATH" if COMP_WORDBREAKS contains "="
+            if [[ "${COMP_WORDS[i]}" == = ]]; then
+                (( i + 1 < COMP_CWORD )) && echo "${COMP_WORDS[i+1]}"
+            else
+                echo "${COMP_WORDS[i]}"
+            fi
             break
         fi
     done
@@ -77,8 +82,18 @@ __get_udev_rules_names() {
 }
 
 _udevadm() {
-    local i verb verb_i comps builtin command
+    local i verb verb_i comps builtin command optval
     local cur=${COMP_WORDS[COMP_CWORD]} prev=${COMP_WORDS[COMP_CWORD-1]}
+
+    # COMP_WORDBREAKS contains "=" by default, which splits "--opt=value" into "--opt", "=" and "value":
+    # complete the value like the argument after "--opt", also when the cursor is right after "="
+    if [[ $cur == = && $prev == --?* ]]; then
+        cur=''
+        optval=1
+    elif [[ $prev == = ]] && (( COMP_CWORD >= 2 )) && [[ ${COMP_WORDS[COMP_CWORD-2]} == --?* ]]; then
+        prev=${COMP_WORDS[COMP_CWORD-2]}
+        optval=1
+    fi
     local -A OPTS=(
         [COMMON]='-h --help -V --version'
         [DEBUG]='-d --debug'
@@ -114,6 +129,12 @@ _udevadm() {
     )
 
     local verbs=(help info trigger settle control monitor hwdb test-builtin test verify cat wait lock version)
+    # the options of each command that take an argument
+    local -A ARG_OPTS=(
+        [info]=INFO_ARG [trigger]=TRIGGER_ARG [settle]=SETTLE [control]=CONTROL_ARG [monitor]=MONITOR_ARG
+        [hwdb]=HWDB_ARG [test]=TEST_ARG [test-builtin]=TEST_BUILTIN [verify]=VERIFY_ARG [cat]=CAT_ARG
+        [wait]=WAIT_ARG [lock]=LOCK_ARG
+    )
     local builtins=(blkid btrfs factory_reset hwdb input_id keyboard kmod net_driver net_id path_id tpm2_id usb_id)
 
     for ((i=0; i < COMP_CWORD; i++)); do
@@ -123,6 +144,13 @@ _udevadm() {
             break
         fi
     done
+
+    # no value for "--opt=" if --opt takes none, or only an optional one, e.g. --wait-for-initialization=SECS
+    if [[ -n $optval ]] && { [[ -z ${verb-} || -z ${ARG_OPTS[$verb]-} ]] ||
+                             ! __contains_word "$prev" ${OPTS[${ARG_OPTS[$verb]}]}; }; then
+        COMPREPLY=()
+        return 0
+    fi
 
     if [[ -z ${verb-} ]]; then
         if [[ "$cur" = -* ]]; then
@@ -416,6 +444,8 @@ _udevadm() {
             # the first word that is neither an option nor its argument is the command to run, and
             # the rest are its arguments
             for ((i=verb_i+1; i < COMP_CWORD; i++)); do
+                # "=" and the value after it, of an "--opt=value" that COMP_WORDBREAKS split
+                [[ ${COMP_WORDS[i]} == = || ${COMP_WORDS[i-1]} == = ]] && continue
                 if [[ ${COMP_WORDS[i]} != -* ]] && ! __contains_word "${COMP_WORDS[i-1]}" ${OPTS[LOCK_ARG]}; then
                     command=${COMP_WORDS[i]}
                     break
