@@ -1414,9 +1414,10 @@ static int import_parent_into_properties(struct udev_event *event, struct udev_r
 /* Like attr_subst_subdir() of systemd: replaces the first path component "*" of attr with the first
  * subdirectory in which the rest of the path exists. Returns 0 when attr has no such component or it was
  * replaced, -ENOENT when no subdirectory has the rest of the path, or when the path would be too long, and
- * the error when the directory cannot be opened. Unlike systemd, where only as many characters as the
- * directory has are left for the subdirectory and the rest of the path, so that it hardly ever finds
- * anything since v243, the room of the whole buffer is used. */
+ * the error when the directory cannot be opened. The room of the whole buffer is used for the
+ * subdirectory and the rest of the path, as in systemd since d5b4357f8f ("udev-rules: fix remaining
+ * buffer size calculation", v262.1). In systemd a446e8ff2c, as since v243, only as many characters as the
+ * directory has are left for them, so that it hardly ever finds anything. */
 static int attr_subst_subdir(char attr[static UTIL_PATH_SIZE]) {
         _cleanup_closedir_ DIR *dir = NULL;
         char buf[UTIL_PATH_SIZE], *p;
