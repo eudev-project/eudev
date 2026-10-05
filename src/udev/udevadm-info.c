@@ -1212,9 +1212,11 @@ static int query_device(enum query_type query, struct udev_device *device,
         case QUERY_NAME: {
                 const char *node = udev_device_get_devnode(device);
 
+                /* Like systemd, through the log, also for the pager, see pager_open(), with the error of
+                 * sd_device_get_devname(). */
                 if (node == NULL) {
-                        fprintf(stderr, "no device node found\n");
-                        return 5;
+                        log_error_errno(ENOENT, "No device node found: %m");
+                        return 1;
                 }
 
                 if (root)
@@ -1418,8 +1420,8 @@ static int uinfo(struct udev *udev, int argc, char *argv[]) {
                         else if (streq(optarg, "all"))
                                 query = QUERY_ALL;
                         else {
-                                fprintf(stderr, "unknown query type\n");
-                                return 3;
+                                log_error("Unknown query type '%s'", optarg);
+                                return 1;
                         }
                         break;
                 case 'r':
@@ -1506,11 +1508,6 @@ static int uinfo(struct udev *udev, int argc, char *argv[]) {
                         return 1;
                 }
 
-        if (export && value) {
-                log_error("-x/--export or -P/--export-prefix cannot be used with --value");
-                return 1;
-        }
-
         for (; optind < argc; optind++) {
                 r = strv_extend(&devices, argv[optind]);
                 if (r < 0) {
@@ -1524,21 +1521,19 @@ static int uinfo(struct udev *udev, int argc, char *argv[]) {
                 return 1;
         }
 
-        if (strv_isempty(devices)) {
-                if (action == ACTION_QUERY) {
-                        pager_set_exit_status(2);
-                        help();
-                        return 2;
-                }
-
-                if (action == ACTION_ATTRIBUTE_WALK) {
-                        fprintf(stderr, "Unknown device, --name=, --path=, or absolute path in /dev/ or /sys expected.\n");
-                        return 4;
-                }
+        /* Like systemd, the checks in its order, and the messages through the log. */
+        if (IN_SET(action, ACTION_QUERY, ACTION_ATTRIBUTE_WALK) && strv_isempty(devices)) {
+                log_error("A device name or path is required");
+                return 1;
         }
 
         if (IN_SET(action, ACTION_ATTRIBUTE_WALK, ACTION_TREE) && strv_length(devices) > 1) {
                 log_error("Only one device may be specified with -a/--attribute-walk and -t/--tree");
+                return 1;
+        }
+
+        if (export && value) {
+                log_error("-x/--export or -P/--export-prefix cannot be used with --value");
                 return 1;
         }
 
