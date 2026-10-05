@@ -44,6 +44,7 @@ src/udev/keyboard-keys.txt
 src/udev/keyboard-keys-to-name.h
 
 test/test-collect
+test/test-event-device
 test/test-json-writer
 test/test-scsi_id
 test/test-libudev
@@ -55,6 +56,8 @@ test/rules-test.sh.log
 test/rules-test.sh.trs
 test/test-collect.log
 test/test-collect.trs
+test/test-event-device.log
+test/test-event-device.trs
 test/test-json-writer.log
 test/test-json-writer.trs
 test/test-scsi_id.log

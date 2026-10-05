@@ -17,6 +17,7 @@ noinst_PROGRAMS = \
 
 check_PROGRAMS = \
 	test-collect \
+	test-event-device \
 	test-json-writer \
 	test-scsi_id
 
@@ -24,6 +25,13 @@ test_collect_SOURCES = \
 	test-collect.c
 
 test_collect_LDADD = \
+	$(top_builddir)/src/libudev/libudev-private.la \
+	$(top_builddir)/src/udev/libudev-core.la
+
+test_event_device_SOURCES = \
+	test-event-device.c
+
+test_event_device_LDADD = \
 	$(top_builddir)/src/libudev/libudev-private.la \
 	$(top_builddir)/src/udev/libudev-core.la
 
@@ -88,6 +96,7 @@ AM_TESTS_ENVIRONMENT = \
 
 TESTS = \
 	test-collect \
+	test-event-device \
 	test-json-writer \
 	test-scsi_id \
 	udev-test.pl \

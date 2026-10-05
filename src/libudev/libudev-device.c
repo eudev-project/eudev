@@ -1846,8 +1846,11 @@ _public_ struct udev_device *udev_device_new_from_environment(struct udev *udev)
         if (udev_device_add_property_from_string_parse_finish(udev_device) < 0) {
                 log_debug("missing values, invalid device");
                 udev_device_unref(udev_device);
-                udev_device = NULL;
+                return NULL;
         }
+
+        /* the event brought the properties of the uevent file, see udev_device_new_from_nulstr() */
+        udev_device->uevent_loaded = true;
 
         return udev_device;
 }
@@ -3499,6 +3502,13 @@ struct udev_device *udev_device_new_from_nulstr(struct udev *udev, char *nulstr,
 
                 return NULL;
         }
+
+        /* The message brought the properties of the uevent file, as they were at the event. The file now
+         * describes the device as it is, maybe a new device with the same devpath, and reading it, e.g. in
+         * udev_device_get_devtype() of an event without DEVTYPE, would replace the values of the event and
+         * free the strings that the caller may still use. Like in systemd before v258, whose devices of an
+         * event are sealed, and do not read the file. */
+        device->uevent_loaded = true;
 
         return device;
 }
