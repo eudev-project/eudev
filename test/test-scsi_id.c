@@ -2,6 +2,10 @@
 /*
  * Tests of the configuration file parser of the helper program scsi_id, get_file_options(): white space
  * after the commas of a line is allowed as in udev 3.2.x, and the error messages name the right line.
+ *
+ * Also runs of scsi_id's main() with a fake disk: the global options come from the config file that
+ * -f/--config names, the command line overrides them, and --help and --version work with a broken
+ * default config file.
  */
 
 /* the functions of scsi_id, which are static, with its main() renamed */
@@ -9,14 +13,26 @@
 #include "../src/scsi_id/scsi_id.c"
 #undef main
 
-/* scsi_id's main() calls these functions of scsi_serial.c, which the tests do not need */
+#include <sys/wait.h>
+
+/* scsi_id's main() calls these functions of scsi_serial.c; instead of sending SCSI commands, they describe a
+ * fake disk: vendor "ATA", model "QEMU HARDDISK", and a serial that names the device and the page code that
+ * scsi_id asks for, so that the tests see which -p option applies */
 int scsi_std_inquiry(struct udev *udev, struct scsi_id_device *dev_scsi, const char *devname) {
-        return -ENOSYS;
+        strscpy(dev_scsi->vendor, sizeof(dev_scsi->vendor), "ATA");
+        strscpy(dev_scsi->model, sizeof(dev_scsi->model), "QEMU HARDDISK");
+        strscpy(dev_scsi->revision, sizeof(dev_scsi->revision), "2.5+");
+        dev_scsi->type = 0;
+        return 0;
 }
 
 int scsi_get_serial(struct udev *udev, struct scsi_id_device *dev_scsi, const char *devname,
                     int page_code, int len) {
-        return -ENOSYS;
+        snprintf(dev_scsi->serial, len, "1ATA_%.200s_page_%s", devname,
+                 page_code == PAGE_80 ? "0x80" :
+                 page_code == PAGE_83 ? "0x83" :
+                 page_code == PAGE_83_PRE_SPC3 ? "pre-spc3-83" : "unspecified");
+        return 0;
 }
 
 static char *dir;
@@ -94,6 +110,116 @@ static int test_config(const char *name, const char *content, size_t size, const
 #define TEST_CONFIG(name, content, vendor, model, expected, message) \
         test_config(name, content, sizeof(content) - 1, vendor, model, expected, message)
 
+static int read_file(const char *path, char *buf, size_t size) {
+        _cleanup_close_ int fd = -1;
+        ssize_t n;
+
+        fd = open(path, O_RDONLY|O_CLOEXEC);
+        if (fd < 0)
+                return -errno;
+        n = read(fd, buf, size - 1);
+        if (n < 0)
+                return -errno;
+        buf[n] = '\0';
+        return 0;
+}
+
+static int write_file(const char *path, const char *content) {
+        FILE *f;
+
+        if (!content)
+                return unlink(path) < 0 && errno != ENOENT ? -errno : 0;
+        f = fopen(path, "we");
+        if (!f)
+                return -errno;
+        if (fputs(content, f) < 0 || fclose(f) != 0)
+                return -EIO;
+        return 0;
+}
+
+/* Runs scsi_id's main() in a child process, with the arguments, which end with NULL; "FILE" stands for the path
+ * of a config file with the content f_content. The default config file, /etc/scsi_id.config in scsi_id, is a
+ * file of the test with the content default_content (NULL: it does not exist), so that the one of the system
+ * does not matter. Compares the exit code, the output and the messages with the expected ones: they must
+ * contain the expected text, or be empty for "", or are not compared for NULL. */
+static int test_main(const char *name, const char *default_content, const char *f_content,
+                     int expected_rc, const char *expected_out, const char *expected_err, ...) {
+        char *argv[16] = { (char *) "scsi_id" };
+        const char *default_conf, *f_conf, *outfile, *errfile;
+        char out[4096], err[4096];
+        int argc = 1, status, rc;
+        va_list ap;
+        pid_t pid;
+
+        default_conf = strjoina(dir, "/default.config");
+        f_conf = strjoina(dir, "/f.config");
+        outfile = strjoina(dir, "/stdout");
+        errfile = strjoina(dir, "/stderr");
+
+        va_start(ap, expected_err);
+        while (argc < (int) ELEMENTSOF(argv) - 1 && (argv[argc] = va_arg(ap, char *))) {
+                if (streq(argv[argc], "FILE"))
+                        argv[argc] = (char *) f_conf;
+                argc++;
+        }
+        va_end(ap);
+        argv[argc] = NULL;
+
+        if (write_file(default_conf, default_content) < 0 || write_file(f_conf, f_content) < 0) {
+                fprintf(stderr, "%s: cannot write the config files: %m\n", name);
+                return -1;
+        }
+
+        fflush(stdout);
+        fflush(stderr);
+        pid = fork();
+        if (pid < 0) {
+                fprintf(stderr, "%s: cannot fork: %m\n", name);
+                return -1;
+        }
+        if (pid == 0) {
+                int fd_out, fd_err;
+
+                fd_out = open(outfile, O_WRONLY|O_CREAT|O_TRUNC|O_CLOEXEC, 0600);
+                fd_err = open(errfile, O_WRONLY|O_CREAT|O_TRUNC|O_CLOEXEC, 0600);
+                if (fd_out < 0 || fd_err < 0 || dup2(fd_out, STDOUT_FILENO) < 0 || dup2(fd_err, STDERR_FILENO) < 0)
+                        _exit(EXIT_FAILURE);
+                strscpy(config_file, sizeof(config_file), default_conf);
+                exit(scsi_id_main(argc, argv));
+        }
+        if (waitpid(pid, &status, 0) < 0 || !WIFEXITED(status)) {
+                fprintf(stderr, "%s: the child process failed\n", name);
+                return -1;
+        }
+        rc = WEXITSTATUS(status);
+
+        if (read_file(outfile, out, sizeof(out)) < 0 || read_file(errfile, err, sizeof(err)) < 0) {
+                fprintf(stderr, "%s: cannot read the output: %m\n", name);
+                return -1;
+        }
+
+        if (rc != expected_rc) {
+                fprintf(stderr, "%s: exit code %i, expected %i; output \"%s\", messages \"%s\"\n",
+                        name, rc, expected_rc, out, err);
+                return -1;
+        }
+        if (expected_out && (*expected_out ? !strstr(out, expected_out) : *out != '\0')) {
+                fprintf(stderr, "%s: output \"%s\", expected \"%s\"\n", name, out, expected_out);
+                return -1;
+        }
+        if (expected_err && (*expected_err ? !strstr(err, expected_err) : *err != '\0')) {
+                fprintf(stderr, "%s: messages \"%s\", expected \"%s\"\n", name, err, expected_err);
+                return -1;
+        }
+
+        /* shown without the newline at the end, and long output cut */
+        delete_trailing_chars(out, "\n");
+        delete_trailing_chars(err, "\n");
+        printf("%s: exit code %i, output \"%.60s%s\"%s%.160s\n", name, rc, out, strlen(out) > 60 ? "..." : "",
+               *err ? ", messages: " : "", err);
+        return 0;
+}
+
 int main(void) {
         char longline[300];
         const char *tmp;
@@ -144,7 +270,57 @@ int main(void) {
         memcpy(longline, "# a\n\n", 5);
         r |= test_config("too long line 3", longline, sizeof(longline), NULL, NULL, "!", "read_line() on line 3 of ");
 
+        /* main(): the global options come from the config file given with -f */
+        r |= test_main("global options of the -f file", NULL, "options=-g\n",
+                       0, "1ATA_/dev/sda_page_unspecified\n", NULL, "-f", "FILE", "-d", "/dev/sda", NULL);
+        r |= test_main("global options of the -f file, --config=", NULL, "options=-g\n",
+                       0, "1ATA_/dev/sda_page_unspecified\n", NULL, "--config", "FILE", "/dev/sda", NULL);
+        r |= test_main("no global options from the default file with -f", "options=-g\n", "",
+                       1, "", NULL, "-f", "FILE", "-d", "/dev/sda", NULL);
+        r |= test_main("-f names a missing file", "options=-g\n", NULL,
+                       1, "", NULL, "-f", "FILE", "-d", "/dev/sda", NULL);
+        r |= test_main("global options of the default file without -f", "options=\"-g -p 0x83\"\n", NULL,
+                       0, "1ATA_/dev/sda_page_0x83\n", NULL, "-d", "/dev/sda", NULL);
+        r |= test_main("per-device options of the -f file", NULL, "vendor=\"ATA\",options=\"-g -p 0x80\"\n",
+                       0, "1ATA_/dev/sda_page_0x80\n", NULL, "-f", "FILE", "-d", "/dev/sda", NULL);
+        r |= test_main("per-device options of the -f file override its global ones", NULL,
+                       "vendor=\"ATA\",options=\"-p 0x80\"\noptions=\"-g -p 0x83\"\n",
+                       0, "1ATA_/dev/sda_page_0x80\n", NULL, "-f", "FILE", "/dev/sda", NULL);
+
+        /* main(): the command line overrides the global options of the config file */
+        r |= test_main("-p on the command line", NULL, "options=\"-g -p 0x80\"\n",
+                       0, "1ATA_/dev/sda_page_0x83\n", NULL, "-f", "FILE", "-p", "0x83", "-d", "/dev/sda", NULL);
+        r |= test_main("-b on the command line", NULL, "options=-g\n",
+                       1, "", NULL, "-f", "FILE", "-b", "-d", "/dev/sda", NULL);
+        r |= test_main("-g on the command line", NULL, "options=-b\n",
+                       0, "1ATA_/dev/sdb_page_unspecified\n", NULL, "-f", "FILE", "-g", "/dev/sdb", NULL);
+        r |= test_main("-d in the global options beats a positional device", NULL, "options=\"-g -d /dev/sdc\"\n",
+                       0, "1ATA_/dev/sdc_page_unspecified\n", NULL, "-f", "FILE", "/dev/sda", NULL);
+        r |= test_main("-d on the command line beats -d in the global options", NULL, "options=\"-g -d /dev/sdc\"\n",
+                       0, "1ATA_/dev/sda_page_unspecified\n", NULL, "-f", "FILE", "-d", "/dev/sda", NULL);
+
+        /* main(): a broken default config file does not matter with -f, --help or --version */
+        r |= test_main("broken default file, -f", "garbage\n", "options=-g\n",
+                       0, "1ATA_/dev/sda_page_unspecified\n", NULL, "-f", "FILE", "-d", "/dev/sda", NULL);
+        r |= test_main("broken default file, --help", "garbage\n", NULL,
+                       0, "Usage: ", NULL, "--help", NULL);
+        r |= test_main("broken default file, --version", "garbage\n", NULL,
+                       0, UDEV_VERSION "\n", NULL, "--version", NULL);
+        r |= test_main("broken default file", "garbage\n", NULL,
+                       1, "", "Error parsing config file line 1 'garbage'", "-d", "/dev/sda", NULL);
+
+        /* main(): errors */
+        r |= test_main("bad page code in the global options", NULL, "options=\"-p 0x99\"\n",
+                       2, "", "Unknown page code '0x99'", "-f", "FILE", "-d", "/dev/sda", NULL);
+        r |= test_main("bad page code on the command line, broken default file", "garbage\n", NULL,
+                       1, "", "Unknown page code '0x88'", "-p", "0x88", "-d", "/dev/sda", NULL);
+        r |= test_main("no device", NULL, "options=-g\n",
+                       1, "", "No device specified.", "-f", "FILE", NULL);
+
         (void) unlink(strjoina(dir, "/scsi_id.config"));
+        (void) unlink(strjoina(dir, "/default.config"));
+        (void) unlink(strjoina(dir, "/f.config"));
+        (void) unlink(strjoina(dir, "/stdout"));
         (void) unlink(strjoina(dir, "/stderr"));
         (void) rmdir(dir);
 

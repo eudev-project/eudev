@@ -528,6 +528,14 @@ int main(int argc, char **argv)
         }
 
         /*
+         * Get command line options first, so that the global options are read from the config file given
+         * with -f/--config, and --help and --version work with a broken config file. (eudev; systemd reads
+         * the global options from the default config file before it looks at the command line.)
+         */
+        if (set_options(udev, argc, argv, maj_min_dev) < 0)
+                exit(1);
+
+        /*
          * Get config file options.
          */
         retval = get_file_options(udev, NULL, NULL, &newargc, &newargv);
@@ -542,13 +550,13 @@ int main(int argc, char **argv)
                         retval = 2;
                         goto exit;
                 }
-        }
 
-        /*
-         * Get command line options (overriding any config file settings).
-         */
-        if (set_options(udev, argc, argv, maj_min_dev) < 0)
-                exit(1);
+                /*
+                 * Get command line options again, they override any config file settings.
+                 */
+                if (set_options(udev, argc, argv, maj_min_dev) < 0)
+                        exit(1);
+        }
 
         if (!dev_specified) {
                 log_error("No device specified.");
