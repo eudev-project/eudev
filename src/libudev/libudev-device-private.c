@@ -681,13 +681,29 @@ int device_new_from_path(struct udev *udev, const char *path, struct udev_device
 
 /* Whether the kernel passes the UUID of a synthetic uevent on as SYNTH_UUID=, which it does since Linux 4.13,
  * as found out by uevent_trigger_with_uuid(); -1 as long as it is not known. It is in a shared mapping after
- * uevent_trigger_share_uuid_supported(). */
+ * uevent_trigger_share_uuid_supported(). It is only read and written with atomic operations, as several
+ * processes may probe at the same time, see uevent_trigger_set_uuid_supported(). */
 static int synthetic_uuid_supported_private = -1;
 static volatile int *synthetic_uuid_supported = &synthetic_uuid_supported_private;
 
 int uevent_trigger_uuid_supported(void)
 {
-        return *synthetic_uuid_supported;
+        return __atomic_load_n(synthetic_uuid_supported, __ATOMIC_ACQUIRE);
+}
+
+/* Stores the result of a probe of uevent_trigger_with_uuid(), but only while it is not known: the processes that
+ * share it, e.g. udevd and its workers, may probe at the same time, e.g. a worker on a disk whose uevents the
+ * kernel suppresses and udevd on another device, and then the result that is stored first stays, so that a
+ * later negative cannot overwrite a positive. Returns the result that is stored now. */
+static int uevent_trigger_set_uuid_supported(int supported)
+{
+        int expected = -1;
+
+        if (!__atomic_compare_exchange_n(synthetic_uuid_supported, &expected, supported, false,
+                                         __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE))
+                return expected;
+
+        return supported;
 }
 
 /* Moves the result of the probe of uevent_trigger_with_uuid() to a shared anonymous mapping, so that the
@@ -716,6 +732,10 @@ int uevent_trigger_share_uuid_supported(void)
  * uevent attribute returns, so that the uevent is queued on the netlink socket already; the time is only spent
  * when the uevent does not come while other uevents arrive, see uevent_seqnum(). */
 #define SYNTHETIC_UUID_PROBE_USEC (1 * USEC_PER_SEC)
+
+/* How often uevent_trigger_with_uuid() looks while it waits whether another process found out meanwhile whether
+ * the kernel supports UUIDs, see uevent_trigger_set_uuid_supported(). */
+#define SYNTHETIC_UUID_PROBE_CHECK_USEC (10 * USEC_PER_MSEC)
 
 /* The sequence number of the last uevent that the kernel sent, from /sys/kernel/uevent_seqnum, or UINT64_MAX if
  * it cannot be read. The kernel counts it up for every uevent it sends, and only then, before the write to the
@@ -788,7 +808,8 @@ static void uevent_probe_check(struct uevent_probe *p, struct udev_device *d)
  * number cannot be read, SYNTHETIC_UUID_PROBE_USEC after the deadline. The same is done when the uevent
  * triggered without the UUID arrived: the kernel queued it before the write returned, so when another uevent
  * of the device with the same action came first, e.g. one that the kernel sent on its own at the same time,
- * the own one, which may carry SYNTH_UUID=0, is read too. Returns 0, or a negative errno if poll() failed. */
+ * the own one, which may carry SYNTH_UUID=0, is read too. It also stops when another process that shares the
+ * result stored it meanwhile. Returns 0, or a negative errno if poll() failed. */
 static int uevent_probe_wait(struct udev_monitor *monitor, struct uevent_probe *p, usec_t deadline)
 {
         struct pollfd pfd = {
@@ -806,7 +827,7 @@ static int uevent_probe_wait(struct udev_monitor *monitor, struct uevent_probe *
                 usec_t n;
                 int r;
 
-                if (p->synth_uuid_seen)
+                if (p->synth_uuid_seen || uevent_trigger_uuid_supported() >= 0)
                         return 0;
 
                 n = now(CLOCK_MONOTONIC);
@@ -817,7 +838,8 @@ static int uevent_probe_wait(struct udev_monitor *monitor, struct uevent_probe *
                 if (drain && n >= usec_add(deadline, SYNTHETIC_UUID_PROBE_USEC))
                         return 0;
 
-                r = poll(&pfd, 1, drain ? 0 : (int) DIV_ROUND_UP(deadline - n, USEC_PER_MSEC));
+                r = poll(&pfd, 1, drain ? 0 : (int) DIV_ROUND_UP(MIN(deadline - n, SYNTHETIC_UUID_PROBE_CHECK_USEC),
+                                                                 USEC_PER_MSEC));
                 if (r < 0) {
                         if (errno == EINTR)
                                 continue;
@@ -921,15 +943,17 @@ static int uevent_trigger_fitting(const char *syspath, const char *action, const
  * uevent without the UUID does not arrive either within a second, e.g. as the kernel suppresses the uevents
  * of a disk while add_disk() scans its partitions, or when the socket lost uevents, nothing is decided, and
  * the next call tries again: a missing uevent alone never decides. A decided result is kept for all further
- * calls of the process. The waits are skipped when /sys/kernel/uevent_seqnum shows that the write triggered no
- * uevent at all, see uevent_seqnum(). The device gets the uevent with the UUID when the kernel supports UUIDs,
- * and the one without it when it does not, as it would anyway; but when nothing could be decided, it may get
- * none, when the kernel sent none, or both, when the kernel sent the first one, which the socket lost or
- * which did not arrive in time. When the uevents of the kernel cannot be watched, or the kernel refused the
- * uevent with the UUID, the uevent is triggered without the UUID, and the next call tries again. A device
- * without a subsystem, i.e. without a bus or class, never sends uevents, so it cannot tell, and is triggered
- * with the UUID, without waiting; the next call tries again. Returns 1 if the uevent was triggered with the
- * UUID, 0 if it was triggered without it, and a negative errno on failure. */
+ * calls of the process, and of the processes that share it, see uevent_trigger_share_uuid_supported(); when
+ * another of them decides first, the waiting stops, and its result stays, see
+ * uevent_trigger_set_uuid_supported(). The waits are skipped when /sys/kernel/uevent_seqnum shows that the
+ * write triggered no uevent at all, see uevent_seqnum(). The device gets the uevent with the UUID when the
+ * kernel supports UUIDs, and the one without it when it does not, as it would anyway; but when nothing could
+ * be decided, it may get none, when the kernel sent none, or both, when the kernel sent the first one, which
+ * the socket lost or which did not arrive in time. When the uevents of the kernel cannot be watched, or the
+ * kernel refused the uevent with the UUID, the uevent is triggered without the UUID, and the next call tries
+ * again. A device without a subsystem, i.e. without a bus or class, never sends uevents, so it cannot tell,
+ * and is triggered with the UUID, without waiting; the next call tries again. Returns 1 if the uevent was
+ * triggered with the UUID, 0 if it was triggered without it, and a negative errno on failure. */
 static int uevent_trigger_with_uuid(struct udev *udev, const char *syspath, const char *action,
                                     const char *uuid, const char *args)
 {
@@ -946,10 +970,11 @@ static int uevent_trigger_with_uuid(struct udev *udev, const char *syspath, cons
         assert(action);
         assert(uuid);
 
-        if (*synthetic_uuid_supported > 0)
+        r = uevent_trigger_uuid_supported();
+        if (r > 0)
                 return uevent_trigger_fitting(syspath, action, uuid, args);
 
-        if (*synthetic_uuid_supported == 0) {
+        if (r == 0) {
                 r = uevent_trigger(syspath, action, NULL);
                 return r < 0 ? r : 0;
         }
@@ -980,9 +1005,18 @@ static int uevent_trigger_with_uuid(struct udev *udev, const char *syspath, cons
         }
 
         if (p.synth_uuid_seen) {
-                *synthetic_uuid_supported = 1;
-                log_debug("The kernel supports UUIDs of synthetic uevents.");
+                if (uevent_trigger_set_uuid_supported(1) > 0)
+                        log_debug("The kernel supports UUIDs of synthetic uevents.");
                 return 1;
+        }
+
+        /* Another process found out meanwhile: the uevent was triggered with the UUID, or there was none. */
+        r = uevent_trigger_uuid_supported();
+        if (r > 0)
+                return 1;
+        if (r == 0) {
+                r = uevent_trigger(syspath, action, NULL);
+                return r < 0 ? r : 0;
         }
 
         /* The uevent with the UUID did not come: the kernel does not support UUIDs, or sent no uevent for the
@@ -1004,15 +1038,19 @@ static int uevent_trigger_with_uuid(struct udev *udev, const char *syspath, cons
         }
 
         if (p.synth_uuid_seen) {
-                *synthetic_uuid_supported = 1;
-                log_debug("The kernel supports UUIDs of synthetic uevents, but the uevent with UUID %s of %s did not arrive, triggered '%s' without a UUID.",
-                          uuid, syspath, action);
+                if (uevent_trigger_set_uuid_supported(1) > 0)
+                        log_debug("The kernel supports UUIDs of synthetic uevents, but the uevent with UUID %s of %s did not arrive, triggered '%s' without a UUID.",
+                                  uuid, syspath, action);
                 return 0;
         }
 
+        if (uevent_trigger_uuid_supported() >= 0)
+                /* another process found out meanwhile */
+                return 0;
+
         if (p.plain_seen && !p.lost) {
-                *synthetic_uuid_supported = 0;
-                log_debug("The kernel does not support UUIDs of synthetic uevents (Linux 4.13 or newer is needed), triggering uevents without them.");
+                if (uevent_trigger_set_uuid_supported(0) == 0)
+                        log_debug("The kernel does not support UUIDs of synthetic uevents (Linux 4.13 or newer is needed), triggering uevents without them.");
                 return 0;
         }
 
