@@ -739,6 +739,9 @@ static void spawn_read(struct spawn *spawn,
         };
         size_t respos = 0;
         bool truncated = false;
+        /* the output is logged if stderr is watched, also after the program closed its stderr, when
+         * fd_stderr is -1 */
+        bool log_output = fd_stderr >= 0;
         int r;
 
         /* read from child if requested */
@@ -824,7 +827,7 @@ static void spawn_read(struct spawn *spawn,
                                 }
 
                                 /* log debug output only if we watch stderr */
-                                if (fd_stderr >= 0) {
+                                if (log_output) {
                                         char *pos;
                                         char *line;
 
