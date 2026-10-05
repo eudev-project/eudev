@@ -121,10 +121,20 @@ int udev_parse_hwdb_format(const char *s) {
         return -EINVAL;
 }
 
-/* Like log_syntax_parse_error() of systemd, but the message is only logged at debug level here, and
- * remembered, so that udevd can warn about it, while the other users of libudev do not complain about the
- * settings of udevd. With error 0, the reason is that the signal of timeout_signal= cannot terminate a
- * process. */
+/* set by udevd, which logs the messages about its settings itself, see udev_set_conf_warnings_quiet() */
+static bool conf_warnings_quiet = false;
+
+/* Not part of the public API, used by udevd before the first udev_new(): the messages about its invalid
+ * settings in udev.conf are only remembered for udev_get_conf_warnings(), and not also logged at debug level,
+ * as udevd logs them as warnings, which would show them twice with --debug. */
+void udev_set_conf_warnings_quiet(void) {
+        conf_warnings_quiet = true;
+}
+
+/* Like log_syntax_parse_error() of systemd, but the message is only logged at debug level here, unless udevd
+ * asked not to, and remembered, so that udevd can warn about it, while the other users of libudev do not
+ * complain about the settings of udevd. With error 0, the reason is that the signal of timeout_signal= cannot
+ * terminate a process. */
 static void udev_conf_parse_error(struct udev_conf *conf, const char *filename, unsigned line,
                                   const char *key, const char *value, int error) {
         _cleanup_free_ char *escaped = NULL;
@@ -140,7 +150,8 @@ static void udev_conf_parse_error(struct udev_conf *conf, const char *filename, 
         if (r < 0)
                 return;
 
-        log_debug("%s", m);
+        if (!conf_warnings_quiet)
+                log_debug("%s", m);
         (void) strv_consume(&conf->conf_warnings, m);
 }
 

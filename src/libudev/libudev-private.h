@@ -50,6 +50,7 @@ usec_t udev_get_event_timeout_usec(struct udev *udev);
 int udev_parse_resolve_names(const char *s, int *ret);
 bool udev_get_resolve_names(struct udev *udev, int *ret);
 char **udev_get_conf_warnings(struct udev *udev);
+void udev_set_conf_warnings_quiet(void);
 int udev_get_timeout_signal(struct udev *udev);
 int udev_get_hwdb_format(struct udev *udev);
 int udev_read_hwdb_format(const char *root);

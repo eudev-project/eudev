@@ -92,7 +92,7 @@ static int run_command(struct udev *udev, const struct udevadm_cmd *cmd, int arg
 }
 
 int main(int argc, char *argv[]) {
-        struct udev *udev;
+        struct udev *udev = NULL;
         static const struct option options[] = {
                 { "debug", no_argument, NULL, 'd' },
                 { "help", no_argument, NULL, 'h' },
@@ -101,14 +101,13 @@ int main(int argc, char *argv[]) {
         };
         const char *command;
         unsigned int i;
-        int rc = 1, c;
+        bool debug = false;
+        int rc = 1, c, level;
 
-        udev = udev_new();
-        if (udev == NULL)
-                goto out;
-
-        /* like systemd's udevadm, after udev_log= of udev.conf, which udev_new() applied, so that the
-         * environment overrides it */
+        /* Like systemd's udevadm, the log settings of the environment and -d/--debug take precedence over
+         * udev_log= of udev.conf. Unlike systemd, which reads udev.conf before log_setup(), so that the debug
+         * messages of its parser never show, they are applied before udev_new() reads udev.conf, and then
+         * the log level once more, see below. */
         log_parse_environment();
         log_open();
         mac_selinux_init("/dev");
@@ -122,6 +121,7 @@ int main(int argc, char *argv[]) {
                 switch (c) {
 
                 case 'd':
+                        debug = true;
                         log_set_max_level(LOG_DEBUG);
                         break;
 
@@ -136,6 +136,14 @@ int main(int argc, char *argv[]) {
                 default:
                         goto out;
                 }
+
+        level = log_get_max_level();
+        udev = udev_new();
+        if (udev == NULL)
+                goto out;
+        /* again, over udev_log= of udev.conf, which udev_new() applied */
+        if (debug || log_max_level_from_environment())
+                log_set_max_level(level);
 
         command = argv[optind];
 

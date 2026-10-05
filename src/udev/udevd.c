@@ -2179,13 +2179,19 @@ int main(int argc, char *argv[]) {
          * settings of the environment, before udev.conf is read, so that its udev_log= takes precedence over
          * $SYSTEMD_LOG_LEVEL, as in systemd. Like before the environment was read here, the messages before
          * and while udev.conf is read go to standard error instead, with --debug, and when it is a terminal,
-         * unless $UDEV_LOG_TARGET or $SYSTEMD_LOG_TARGET sets the target, see log_parse_environment(). */
+         * unless $UDEV_LOG_TARGET or $SYSTEMD_LOG_TARGET sets the target, see log_parse_environment(). Unlike
+         * systemd, with --debug the debug messages of the parser of udev.conf are shown, until a udev_log=
+         * in it lowers the level; parse_argv() sets the debug level again. */
         early_console = (arg_debug || isatty(STDERR_FILENO)) &&
                         !getenv("UDEV_LOG_TARGET") && !getenv("SYSTEMD_LOG_TARGET");
         log_set_target(early_console ? LOG_TARGET_CONSOLE : LOG_TARGET_AUTO);
         log_parse_environment();
+        if (arg_debug)
+                log_set_max_level(LOG_DEBUG);
         log_open();
 
+        /* the warnings about the settings in udev.conf are logged below, once */
+        udev_set_conf_warnings_quiet();
         udev = udev_new();
         if (!udev) {
                 r = log_error_errno(errno, "could not allocate udev context: %m");

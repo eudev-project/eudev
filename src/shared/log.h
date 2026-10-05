@@ -60,6 +60,8 @@ void log_close(void);
  * systemd.log_location, systemd.log_time, systemd.log_tid and systemd.log_ratelimit_kmsg are read. Not for
  * library code. */
 void log_parse_environment(void);
+/* Whether log_parse_environment() set the maximum log level, i.e. not only the one of single targets. */
+bool log_max_level_from_environment(void);
 
 void log_close_syslog(void);
 void log_close_journal(void);

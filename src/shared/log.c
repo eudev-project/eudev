@@ -67,6 +67,9 @@ static bool show_time = false;
 static bool show_tid = false;
 static bool ratelimit_kmsg = true;
 
+/* whether log_parse_environment() set the maximum log level, see log_max_level_from_environment() */
+static bool max_level_from_environment = false;
+
 /* Akin to glibc's __abort_msg; which is private and we hence cannot
  * use here. */
 static char *log_abort_msg = NULL;
@@ -774,6 +777,7 @@ static int log_set_max_level_from_string(const char *e) {
                                 return -EINVAL;
 
                         log_set_max_level(level);
+                        max_level_from_environment = true;
                         continue;
                 }
 
@@ -958,6 +962,10 @@ void log_parse_environment(void) {
         e = log_getenv("RATELIMIT_KMSG");
         if (e && log_set_ratelimit_kmsg_from_string(e) < 0)
                 log_warning("Failed to parse log ratelimit kmsg boolean '%s', ignoring.", e);
+}
+
+bool log_max_level_from_environment(void) {
+        return max_level_from_environment;
 }
 static const char *const log_target_table[] = {
         [LOG_TARGET_CONSOLE] = "console",
