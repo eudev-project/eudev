@@ -126,7 +126,7 @@ static int adm_hwdb(struct udev *udev, int argc, char *argv[]) {
                 }
 
         if (!update && !test) {
-                log_error("Either --update or --test must be used");
+                log_error("Either --update or --test must be used.");
                 return EXIT_FAILURE;
         }
 
