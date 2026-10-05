@@ -32,6 +32,7 @@
 #include <linux/videodev2.h>
 
 #include "build.h"
+#include "options.h"
 #include "util.h"
 #include "utf8.h"
 
@@ -50,7 +51,7 @@ int main(int argc, char *argv[]) {
         log_parse_environment();
         log_open();
 
-        while ((c = getopt_long(argc, argv, "h", options, NULL)) >= 0)
+        while ((c = getopt_long_log(argc, argv, "h", options)) >= 0)
 
                 switch (c) {
                 case 'h':

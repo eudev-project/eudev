@@ -38,27 +38,31 @@
 #include "device-nodes.h"
 #include "fileio.h"
 #include "libudev-private.h"
+#include "options.h"
 #include "scsi_id.h"
 #include "strv.h"
 #include "udev-util.h"
 #include "utf8.h"
 
+/* in the order of systemd's, which its message about an ambiguous option lists */
 static const struct option options[] = {
+        { "help",               no_argument,       NULL, 'h' },
+        { "version",            no_argument,       NULL, 'V' }, /* don't advertise -V */
         { "device",             required_argument, NULL, 'd' },
         { "config",             required_argument, NULL, 'f' },
         { "page",               required_argument, NULL, 'p' },
+        { "sg-version",         required_argument, NULL, 's' },
         { "denylisted",         no_argument,       NULL, 'b' },
-        { "allowlisted",        no_argument,       NULL, 'g' },
         { "blacklisted",        no_argument,       NULL, 'b' }, /* backward compat */
+        { "allowlisted",        no_argument,       NULL, 'g' },
         { "whitelisted",        no_argument,       NULL, 'g' }, /* backward compat */
         { "replace-whitespace", no_argument,       NULL, 'u' },
-        { "sg-version",         required_argument, NULL, 's' },
         { "verbose",            no_argument,       NULL, 'v' },
-        { "version",            no_argument,       NULL, 'V' }, /* don't advertise -V */
         { "export",             no_argument,       NULL, 'x' },
-        { "help",               no_argument,       NULL, 'h' },
         {}
 };
+
+static const char optstring[] = "d:f:gp:uvVxhbs:";
 
 static bool all_good = false;
 static bool dev_specified = false;
@@ -268,7 +272,7 @@ static int set_options(struct udev *udev __attribute__((unused)),
          * file) we have to reset this back to 1.
          */
         optind = 1;
-        while ((option = getopt_long(argc, argv, "d:f:gp:uvVxhbs:", options, NULL)) >= 0)
+        while ((option = getopt_long_log(argc, argv, optstring, options)) >= 0)
                 switch (option) {
                 case 'b':
                         all_good = false;
@@ -349,6 +353,24 @@ static int set_options(struct udev *udev __attribute__((unused)),
         return 0;
 }
 
+/* Like systemd: "Option -d/--device not supported in the config file.", with the short and the long name of
+ * the option, as option_get_synopsis() of systemd gives them; arg is the argument the option was in. Unlike
+ * systemd, which has a long option --version and a short option -V, eudev has one for both, whose name is
+ * the one that was used. */
+static void log_config_option_unsupported(int option, const char *arg) {
+        int i;
+
+        for (i = 0; options[i].name; i++)
+                if (options[i].val == option)
+                        break;
+        assert(options[i].name);
+
+        if (option == 'V')
+                log_error("Option %s not supported in the config file.", startswith(arg, "--") ? "--version" : "-V");
+        else
+                log_error("Option -%c/--%s not supported in the config file.", option, options[i].name);
+}
+
 static int per_dev_options(struct udev *udev,
                            struct scsi_id_device *dev_scsi __attribute__((unused)), int *good_bad, int *page_code)
 {
@@ -364,7 +386,8 @@ static int per_dev_options(struct udev *udev,
 
         optind = 1; /* reset this global extern */
         while (retval == 0) {
-                option = getopt_long(newargc, newargv, "bgp:", options, NULL);
+                /* Like systemd, all options are parsed, and those that are not allowed here refused. */
+                option = getopt_long_log(newargc, newargv, optstring, options);
                 if (option == -1)
                         break;
 
@@ -390,8 +413,13 @@ static int per_dev_options(struct udev *udev,
                         }
                         break;
 
+                case '?':
+                        /* logged already */
+                        retval = -1;
+                        break;
+
                 default:
-                        log_error("Unknown or bad option '%c' (0x%x)", option, option);
+                        log_config_option_unsupported(option, newargv[optind - 1]);
                         retval = -1;
                         break;
                 }

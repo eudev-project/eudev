@@ -33,6 +33,7 @@
 #include <stdlib.h>
 #include "build.h"
 #include "mtd_probe.h"
+#include "options.h"
 #include "util.h"
 
 static const char *arg_device = NULL;
@@ -45,7 +46,7 @@ static int parse_argv(int argc, char *argv[]) {
         };
         int c;
 
-        while ((c = getopt_long(argc, argv, "h", options, NULL)) >= 0)
+        while ((c = getopt_long_log(argc, argv, "h", options)) >= 0)
                 switch (c) {
                 case 'h':
                         printf("%s /dev/mtd[n]\n\n"

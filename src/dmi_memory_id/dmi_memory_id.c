@@ -55,6 +55,7 @@
 #include "libudev-private.h"
 #include "fileio.h"
 #include "main-func.h"
+#include "options.h"
 #include "udev-util.h"
 #include "unaligned.h"
 #include "utf8.h"
@@ -665,7 +666,7 @@ static int parse_argv(int argc, char * const *argv) {
         };
         int c;
 
-        while ((c = getopt_long(argc, argv, "F:hV", options, NULL)) >= 0)
+        while ((c = getopt_long_log(argc, argv, "F:hV", options)) >= 0)
                 switch (c) {
                 case 'F':
                         arg_source_file = optarg;

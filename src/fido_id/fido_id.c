@@ -27,6 +27,7 @@
 #include "log.h"
 #include "macro.h"
 #include "main-func.h"
+#include "options.h"
 #include "path-util.h"
 #include "udev-util.h"
 #include "udev.h"
@@ -41,7 +42,7 @@ static int parse_argv(int argc, char *argv[]) {
         };
         int c;
 
-        while ((c = getopt_long(argc, argv, "h", options, NULL)) >= 0)
+        while ((c = getopt_long_log(argc, argv, "h", options)) >= 0)
                 switch (c) {
                 case 'h':
                         printf("%s [OPTIONS...] SYSFS_PATH\n\n"

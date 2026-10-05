@@ -51,6 +51,7 @@
 #include "libudev-private.h"
 #include "udev-util.h"
 #include "log.h"
+#include "options.h"
 
 #define COMMAND_TIMEOUT_MSEC (30 * 1000)
 
@@ -402,7 +403,7 @@ static int parse_argv(int argc, char *argv[]) {
         };
         int c;
 
-        while ((c = getopt_long(argc, argv, "xh", options, NULL)) >= 0)
+        while ((c = getopt_long_log(argc, argv, "xh", options)) >= 0)
                 switch (c) {
                 case 'x':
                         arg_export = true;

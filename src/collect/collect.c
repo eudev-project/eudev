@@ -38,6 +38,7 @@
 #include "libudev.h"
 #include "libudev-private.h"
 #include "macro.h"
+#include "options.h"
 
 #define BUFSIZE 16
 #define UDEV_ALARM_TIMEOUT 180
@@ -456,7 +457,7 @@ int main(int argc, char **argv)
         while (1) {
                 int option;
 
-                option = getopt_long(argc, argv, "ardh", options, NULL);
+                option = getopt_long_log(argc, argv, "ardh", options);
                 if (option == -1)
                         break;
 
