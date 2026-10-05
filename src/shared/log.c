@@ -58,7 +58,8 @@ static int kmsg_fd = -1;
 
 static bool syslog_is_stream = false;
 
-static bool show_color = false;
+/* like systemd: unset (-1) until $SYSTEMD_LOG_COLOR sets it, or log_open() turns it on for the console */
+static int show_color = -1;
 static bool show_location = false;
 
 /* Akin to glibc's __abort_msg; which is private and we hence cannot
@@ -181,7 +182,15 @@ fail:
         return r;
 }
 
-int log_open(void) {
+/* Like log_on_console() of systemd: whether the messages go to the console. */
+static bool log_on_console(void) {
+        if (IN_SET(log_target, LOG_TARGET_CONSOLE, LOG_TARGET_CONSOLE_PREFIXED))
+                return true;
+
+        return syslog_fd < 0 && kmsg_fd < 0;
+}
+
+static int log_open_internal(void) {
         int r;
 
         /* If we don't use the console we close it here, to not get
@@ -227,6 +236,19 @@ int log_open(void) {
         return log_open_console();
 }
 
+int log_open(void) {
+        int r;
+
+        r = log_open_internal();
+
+        /* Like log_setup() of systemd, which eudev's programs do not have: the messages to the console are
+         * colored by default, as far as colors_enabled() allows it, i.e. on a terminal. */
+        if (show_color < 0 && log_on_console())
+                show_color = true;
+
+        return r;
+}
+
 void log_set_target(LogTarget target) {
         assert(target >= 0);
         assert(target < _LOG_TARGET_MAX);
@@ -258,8 +280,8 @@ static int write_to_console(
 
         char location[256], prefix[1 + DECIMAL_STR_MAX(int) + 2];
         struct iovec iovec[6] = {};
+        const char *on = NULL, *off = NULL;
         unsigned n = 0;
-        bool highlight;
 
         if (console_fd < 0)
                 return 0;
@@ -272,20 +294,28 @@ static int write_to_console(
                 IOVEC_SET_STRING(iovec[n++], prefix);
         }
 
-        highlight = LOG_PRI(level) <= LOG_ERR && show_color;
+        /* like systemd, a color for each level, and the location in dark yellow */
+        if (show_color > 0)
+                get_log_colors(LOG_PRI(level), &on, &off, NULL);
 
         if (show_location) {
-                /* like systemd */
-                snprintf(location, sizeof(location), "%s:%i: ", file, line);
+                const char *lon = "", *loff = "";
+
+                if (show_color > 0) {
+                        lon = ansi_highlight_yellow4();
+                        loff = ansi_normal();
+                }
+
+                snprintf(location, sizeof(location), "%s%s:%i%s: ", lon, file, line, loff);
                 char_array_0(location);
                 IOVEC_SET_STRING(iovec[n++], location);
         }
 
-        if (highlight)
-                IOVEC_SET_STRING(iovec[n++], ANSI_HIGHLIGHT_RED_ON);
+        if (on)
+                IOVEC_SET_STRING(iovec[n++], on);
         IOVEC_SET_STRING(iovec[n++], buffer);
-        if (highlight)
-                IOVEC_SET_STRING(iovec[n++], ANSI_HIGHLIGHT_OFF);
+        if (off)
+                IOVEC_SET_STRING(iovec[n++], off);
         IOVEC_SET_STRING(iovec[n++], "\n");
 
         if (writev(console_fd, iovec, n) < 0) {

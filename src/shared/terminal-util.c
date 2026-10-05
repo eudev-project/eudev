@@ -269,6 +269,44 @@ DEFINE_ANSI_FUNC(highlight_cyan,        "\x1B[0;1;36m")
 DEFINE_ANSI_FUNC_256(grey,              "\x1B[0;38:5:245m", "\x1B[0;90m")
 DEFINE_ANSI_FUNC_256(highlight_grey,    "\x1B[0;1;38:5:245m", "\x1B[0;1;90m")
 
+void get_log_colors(int priority, const char **on, const char **off, const char **highlight) {
+        /* Note that this will initialize output variables only when there's something to output.
+         * The caller must pre-initialize to "" or NULL as appropriate. */
+
+        if (priority <= LOG_ERR) {
+                if (on)
+                        *on = ansi_highlight_red();
+                if (off)
+                        *off = ansi_normal();
+                if (highlight)
+                        *highlight = ansi_highlight();
+
+        } else if (priority <= LOG_WARNING) {
+                if (on)
+                        *on = ansi_highlight_yellow();
+                if (off)
+                        *off = ansi_normal();
+                if (highlight)
+                        *highlight = ansi_highlight();
+
+        } else if (priority <= LOG_NOTICE) {
+                if (on)
+                        *on = ansi_highlight();
+                if (off)
+                        *off = ansi_normal();
+                if (highlight)
+                        *highlight = ansi_highlight_red();
+
+        } else if (priority >= LOG_DEBUG) {
+                if (on)
+                        *on = ansi_grey();
+                if (off)
+                        *off = ansi_normal();
+                if (highlight)
+                        *highlight = ansi_highlight_red();
+        }
+}
+
 static bool is_locale_utf8_impl(void) {
         const char *set;
         int r;

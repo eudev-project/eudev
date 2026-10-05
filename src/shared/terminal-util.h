@@ -88,6 +88,11 @@ const char *ansi_highlight_cyan(void);
 const char *ansi_grey(void);
 const char *ansi_highlight_grey(void);
 
+/* Like systemd's get_log_colors(): the colors of a log message of the priority, see write_to_console() in
+ * log.c: errors and more important ones in red, warnings in yellow, notices highlighted, debug messages in
+ * grey, and informational ones in the normal color. */
+void get_log_colors(int priority, const char **on, const char **off, const char **highlight);
+
 /* Tree drawing glyphs, as systemd's glyph-util.h has them. UTF-8 box drawing characters are used
  * unless the locale's character set is not UTF-8, like systemd's is_locale_utf8() decides. */
 typedef enum Glyph {

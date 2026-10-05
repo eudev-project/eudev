@@ -409,7 +409,16 @@ logs to the console\&.
 .PP
 \fI$UDEV_LOG_COLOR\fR, \fI$SYSTEMD_LOG_COLOR\fR
 .RS 4
-A boolean\&. If true, error messages and more important ones written to the tty are highlighted in red\&.
+A boolean\&. If true, messages written to the tty are colored according to their log level, like in systemd: errors and more important ones in red, warnings in yellow, notices highlighted and debug messages in grey\&. The default is true\&. Colors are used only when standard output and standard error are terminals, and
+\fI$TERM\fR
+is set and not
+dumb, and
+\fI$NO_COLOR\fR
+and
+\fI$SYSTEMD_COLORS\fR
+are used like by
+\fBudevadm\fR, see
+\fBudevadm\fR(8)\&.
 .RE
 .PP
 \fI$UDEV_LOG_LOCATION\fR, \fI$SYSTEMD_LOG_LOCATION\fR

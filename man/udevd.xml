@@ -406,8 +406,11 @@ UDEV_PROC_CMDLINE="net.ifnames=0" udevadm test /sys/class/net/eth0</programlisti
         <term><varname>$UDEV_LOG_COLOR</varname></term>
         <term><varname>$SYSTEMD_LOG_COLOR</varname></term>
         <listitem>
-          <para>A boolean. If true, error messages and more important ones written to the tty are
-          highlighted in red.</para>
+          <para>A boolean. If true, messages written to the tty are colored according to their log level,
+          like in systemd: errors and more important ones in red, warnings in yellow, notices highlighted
+          and debug messages in grey. The default is true. Colors are used only when standard output and
+          standard error are terminals, and <varname>$TERM</varname> is set and not <literal>dumb</literal>, and <varname>$NO_COLOR</varname> and <varname>$SYSTEMD_COLORS</varname> are used like by <command>udevadm</command>, see
+          <citerefentry><refentrytitle>udevadm</refentrytitle><manvolnum>8</manvolnum></citerefentry>.</para>
         </listitem>
       </varlistentry>
       <varlistentry>
