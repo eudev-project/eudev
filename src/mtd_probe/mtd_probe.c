@@ -76,6 +76,10 @@ int main(int argc, char** argv) {
         mtd_info_t mtd_info;
         int r;
 
+        /* like the other helpers; unlike systemd's mtd_probe and v4l_id, which do not set up logging */
+        log_parse_environment();
+        log_open();
+
         r = parse_argv(argc, argv);
         if (r <= 0)
                 return r < 0 ? EXIT_FAILURE : 0;

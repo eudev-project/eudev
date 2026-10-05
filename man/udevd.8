@@ -309,11 +309,10 @@ Like in systemd, the same as the environment variables
 \fI$SYSTEMD_LOG_TID\fR
 and
 \fI$SYSTEMD_LOG_RATELIMIT_KMSG\fR, see below, which take precedence over them\&. Like systemd before version 248, every program of eudev that has no controlling terminal reads them:
-\fBudevd\fR,
+\fBudevd\fR, the programs that it runs, e\&.g\&.
 \fBudevadm\fR
-when
-\fBudevd\fR
-runs it, and the commands run without a terminal, e\&.g\&. by init scripts; a command run from a terminal ignores them\&.
+or helpers like
+\fBscsi_id\fR, and the commands run without a terminal, e\&.g\&. by init scripts; a command run from a terminal ignores them\&.
 .RE
 .PP
 The log level of

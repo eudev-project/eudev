@@ -692,11 +692,11 @@ static int run(int argc, char* const* argv) {
         int r;
 
         log_set_target(LOG_TARGET_AUTO);
-        //udev_parse_config();
-        //log_parse_environment();
-        log_open();
-
         udev = udev_new();
+        /* like udev_parse_config() and log_setup() of systemd's helpers: after udev_log= of udev.conf, which
+         * udev_new() applied, so that the environment, and the kernel command line, override it */
+        log_parse_environment();
+        log_open();
         if (udev == NULL)
                 return log_oom();
 

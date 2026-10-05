@@ -991,10 +991,12 @@ static int run(int argc, char *argv[]) {
         _cleanup_udev_unref_ struct udev *udev = NULL;
         int r;
 
-        log_open();
-
         /* not used otherwise, but udev_new() applies udev_log= from udev.conf */
         udev = udev_new();
+        /* like udev_parse_config() and log_setup() of systemd's helpers: after udev_log= of udev.conf, which
+         * udev_new() applied, so that the environment, and the kernel command line, override it */
+        log_parse_environment();
+        log_open();
 
         r = parse_argv(argc, argv);
         if (r <= 0)

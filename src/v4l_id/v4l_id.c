@@ -46,6 +46,10 @@ int main(int argc, char *argv[]) {
         struct v4l2_capability v2cap;
         int c;
 
+        /* like the other helpers; unlike systemd's mtd_probe and v4l_id, which do not set up logging */
+        log_parse_environment();
+        log_open();
+
         while ((c = getopt_long(argc, argv, "h", options, NULL)) >= 0)
 
                 switch (c) {

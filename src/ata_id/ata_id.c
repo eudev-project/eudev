@@ -444,9 +444,11 @@ int main(int argc, char *argv[])
         uint16_t word;
         int peripheral_device_type = -1, r;
 
-        log_open();
-
         udev = udev_new();
+        /* like udev_parse_config() and log_setup() of systemd's helpers: after udev_log= of udev.conf, which
+         * udev_new() applied, so that the environment, and the kernel command line, override it */
+        log_parse_environment();
+        log_open();
         if (!udev) {
                 log_oom();
                 return 1;

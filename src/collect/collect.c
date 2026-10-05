@@ -420,6 +420,10 @@ int main(int argc, char **argv)
         char tmpdir[UTIL_PATH_SIZE];
 
         udev = udev_new();
+        /* like udev_parse_config() and log_setup() of systemd's helpers: after udev_log= of udev.conf, which
+         * udev_new() applied, so that the environment, and the kernel command line, override it */
+        log_parse_environment();
+        log_open();
         if (udev == NULL) {
                 ret = EXIT_FAILURE;
                 goto exit;

@@ -172,9 +172,11 @@ int main(int argc, char *argv[]) {
         struct udev *udev;
         int r;
 
-        log_open();
-
         udev = udev_new();
+        /* like log_setup() of systemd-hwdb: after udev_log= of udev.conf, which udev_new() applied, so that
+         * the environment, and the kernel command line, override it */
+        log_parse_environment();
+        log_open();
         if (!udev) {
                 r = log_oom();
                 goto finish;

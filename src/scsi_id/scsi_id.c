@@ -508,9 +508,11 @@ int main(int argc, char **argv)
         char maj_min_dev[MAX_PATH_LEN];
         int newargc;
 
-        log_open();
-
         udev = udev_new();
+        /* like udev_parse_config() and log_setup() of systemd's helpers: after udev_log= of udev.conf, which
+         * udev_new() applied, so that the environment, and the kernel command line, override it */
+        log_parse_environment();
+        log_open();
         if (!udev) {
                 log_oom();
                 retval = 1;

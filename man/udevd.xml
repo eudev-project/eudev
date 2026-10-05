@@ -345,9 +345,9 @@
           <varname>$SYSTEMD_LOG_TIME</varname>, <varname>$SYSTEMD_LOG_TID</varname> and
           <varname>$SYSTEMD_LOG_RATELIMIT_KMSG</varname>, see below, which take precedence over them.
           Like systemd before version 248, every program of eudev that has no controlling terminal reads
-          them: <command>udevd</command>, <command>udevadm</command> when <command>udevd</command> runs it,
-          and the commands run without a terminal, e.g. by init scripts; a command run from a terminal
-          ignores them.</para>
+          them: <command>udevd</command>, the programs that it runs, e.g. <command>udevadm</command> or
+          helpers like <command>scsi_id</command>, and the commands run without a terminal, e.g. by init
+          scripts; a command run from a terminal ignores them.</para>
         </listitem>
       </varlistentry>
     </variablelist>
