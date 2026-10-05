@@ -659,7 +659,10 @@
             without UUIDs then, and waits for an event of each triggered
             device instead. Devices without a subsystem, e.g.
             <filename>/sys/devices/platform</filename> with
-            <option>--include-parents</option>, are not waited for, as the
+            <option>--include-parents</option>, and hidden block devices,
+            whose <filename>hidden</filename> attribute is 1, e.g. the path
+            devices of native NVMe multipath
+            (<filename>nvme0c0n1</filename>), are not waited for, as the
             kernel sends no events for them.</para>
           </listitem>
         </varlistentry>
@@ -671,10 +674,10 @@
             environment block (in the <literal>SYNTH_UUID=</literal> property) and may be used to track
             delivery of the generated events. This requires Linux 4.13 or newer: with older kernels,
             the events are triggered without UUIDs, with a warning, and no UUIDs are printed, see
-            <option>--settle</option>. No UUID is printed for a device without a subsystem, which is
-            triggered without one, as the kernel sends no event for it, and for a device whose event
-            the kernel refused with the UUID, as it did not fit, which is triggered without one, with a
-            warning.</para>
+            <option>--settle</option>. No UUID is printed for a device without a subsystem or a hidden
+            block device, which is triggered without one, as the kernel sends no event for it, and for a
+            device whose event the kernel refused with the UUID, as it did not fit, which is triggered
+            without one, with a warning.</para>
           </listitem>
         </varlistentry>
         <varlistentry>

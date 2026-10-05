@@ -397,8 +397,8 @@ static int exec_list(struct udev *udev, char **list, const char *action, Set *se
                  * an event of the device.
                  *
                  * Also unlike systemd, which then prints a UUID and waits forever with --settle, a device
-                 * without a subsystem, for which the kernel sends no uevent, is triggered without a UUID, and
-                 * not waited for. */
+                 * without a subsystem or a hidden block device, for which the kernel sends no uevent, is
+                 * triggered without a UUID, and not waited for, see syspath_sends_uevents(). */
                 sends = syspath_sends_uevents(syspath);
                 if (sends) {
                         r = uevent_trigger_with_args(udev, syspath, action, args, id);
@@ -464,7 +464,7 @@ static int exec_list(struct udev *udev, char **list, const char *action, Set *se
                 /* Wait for the UUID if the kernel supports it, as the device may be renamed while the
                  * event is processed. Otherwise, wait for an event for the device. */
                 if (settle_set != NULL && !sends)
-                        log_debug("%s: The device has no subsystem, the kernel sends no uevent for it, not waiting for it.",
+                        log_debug("%s: The device has no subsystem or is a hidden block device, the kernel sends no uevent for it, not waiting for it.",
                                   eudev_basename(syspath));
                 else if (settle_set != NULL && set_put_strdup(settle_set, with_uuid ? id : syspath) < 0)
                         return log_oom();

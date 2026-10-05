@@ -959,17 +959,28 @@ static int uevent_probe_wait(struct udev_monitor *monitor, struct uevent_probe *
 }
 
 /* Whether the kernel sends a uevent when one is triggered with the uevent attribute of the kobject with the
- * syspath: not for a device without a subsystem, i.e. without a bus or class (dev_uevent_filter()). Only devices
- * are checked, as the other kobjects with an uevent attribute, e.g. buses, drivers and modules, have no subsystem
+ * syspath: not for a device without a subsystem, i.e. without a bus or class (dev_uevent_filter()), and not for a
+ * hidden block device, whose "hidden" attribute is 1, e.g. a path device of native NVMe multipath (nvme0c0n1):
+ * the kernel suppresses its uevents for good, the write succeeds, but there is no uevent (and there was no "add"
+ * either, so udevd does not know the device). Kernels without the attribute cannot tell. Only devices are
+ * checked, as the other kobjects with an uevent attribute, e.g. buses, drivers and modules, have no subsystem
  * link, but send uevents. */
 bool syspath_sends_uevents(const char *syspath)
 {
+        _cleanup_free_ char *subsystem = NULL, *hidden = NULL;
+
         assert(syspath);
 
         if (!startswith(syspath, "/sys/devices/"))
                 return true;
 
-        return access(strjoina(syspath, "/subsystem"), F_OK) >= 0;
+        if (readlink_malloc(strjoina(syspath, "/subsystem"), &subsystem) < 0)
+                return access(strjoina(syspath, "/subsystem"), F_OK) >= 0;
+
+        if (!streq(eudev_basename(subsystem), "block"))
+                return true;
+
+        return read_one_line_file(strjoina(syspath, "/hidden"), &hidden) < 0 || !streq(hidden, "1");
 }
 
 /* Triggers a synthetic uevent of the device with the syspath with the action and the UUID, followed by the
@@ -1043,9 +1054,10 @@ static int uevent_trigger_fitting(const char *syspath, const char *action, const
  * be decided, it may get none, when the kernel sent none, or both, when the kernel sent the first one, which
  * the socket lost or which did not arrive in time. When the uevents of the kernel cannot be watched, or the
  * kernel refused the uevent with the UUID, the uevent is triggered without the UUID, and the next call tries
- * again. A device without a subsystem, i.e. without a bus or class, never sends uevents, so it cannot tell,
- * and is triggered with the UUID, without waiting; the next call tries again. Returns 1 if the uevent was
- * triggered with the UUID, 0 if it was triggered without it, and a negative errno on failure. */
+ * again. A device that never sends uevents, without a subsystem or a hidden block device, see
+ * syspath_sends_uevents(), cannot tell, and is triggered with the UUID, without waiting; the next call tries
+ * again. Returns 1 if the uevent was triggered with the UUID, 0 if it was triggered without it, and a negative
+ * errno on failure. */
 static int uevent_trigger_with_uuid(struct udev *udev, const char *syspath, const char *action,
                                     const char *uuid, const char *args)
 {
