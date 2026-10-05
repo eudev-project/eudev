@@ -282,6 +282,21 @@ static int include_parents(struct udev *udev, char ***list) {
         return 0;
 }
 
+/* Like add_device_match() of systemd: the device s, also below prefix, is a parent device whose devices are
+ * triggered, see scan_devices(). */
+static int add_device_match(struct udev *udev, const char *s, const char *prefix, char ***parents) {
+        _cleanup_udev_device_unref_ struct udev_device *dev = NULL;
+
+        dev = find_device(udev, s, prefix);
+        if (!dev)
+                return log_error_errno(errno > 0 ? errno : ENODEV, "Failed to open the device '%s': %m", s);
+
+        if (strv_extend(parents, udev_device_get_syspath(dev)) < 0)
+                return log_oom();
+
+        return 0;
+}
+
 /* libudev matches only one parent device, so scan the devices below each parent, the results are
  * merged by the enumerator. */
 static void scan_devices(struct udev *udev, struct udev_enumerate *udev_enumerate, char **parents) {
@@ -755,35 +770,19 @@ static int adm_trigger(struct udev *udev, int argc, char *argv[]) {
                 return 0;
         }
 
-        STRV_FOREACH(m, parent_match) {
-                _cleanup_udev_device_unref_ struct udev_device *dev;
-
-                dev = find_device(udev, *m, "/sys");
-                if (dev == NULL) {
-                        log_error_errno(errno > 0 ? errno : ENODEV, "Failed to open the device '%s': %m", *m);
+        /* Like setup_matches() of systemd: the devices given as arguments, then the ones of --name-match=,
+         * then the ones of --parent-match=, before udevd is pinged. */
+        for (; optind < argc; optind++)
+                if (add_device_match(udev, argv[optind], NULL, &parents) < 0)
                         return 1;
-                }
 
-                if (strv_extend(&parents, udev_device_get_syspath(dev)) < 0) {
-                        log_oom();
+        STRV_FOREACH(m, name_match)
+                if (add_device_match(udev, *m, "/dev/", &parents) < 0)
                         return 1;
-                }
-        }
 
-        STRV_FOREACH(m, name_match) {
-                _cleanup_udev_device_unref_ struct udev_device *dev;
-
-                dev = find_device(udev, *m, "/dev/");
-                if (dev == NULL) {
-                        log_error_errno(errno > 0 ? errno : ENODEV, "Failed to open the device '%s': %m", *m);
+        STRV_FOREACH(m, parent_match)
+                if (add_device_match(udev, *m, "/sys", &parents) < 0)
                         return 1;
-                }
-
-                if (strv_extend(&parents, udev_device_get_syspath(dev)) < 0) {
-                        log_oom();
-                        return 1;
-                }
-        }
 
         if (ping) {
                 _cleanup_udev_ctrl_unref_ struct udev_ctrl *uctrl = NULL;
@@ -804,22 +803,6 @@ static int adm_trigger(struct udev *udev, int argc, char *argv[]) {
                 r = udev_ctrl_send_ping(uctrl, timeout);
                 if (r < 0) {
                         log_error_errno(r, "Failed to connect to udev daemon: %m");
-                        return 1;
-                }
-        }
-
-        for (; optind < argc; optind++) {
-                _cleanup_udev_device_unref_ struct udev_device *dev;
-
-                dev = find_device(udev, argv[optind], NULL);
-                if (dev == NULL) {
-                        log_error_errno(errno > 0 ? errno : ENODEV, "Failed to open the device '%s': %m",
-                                        argv[optind]);
-                        return 1;
-                }
-
-                if (strv_extend(&parents, udev_device_get_syspath(dev)) < 0) {
-                        log_oom();
                         return 1;
                 }
         }
