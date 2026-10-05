@@ -55,6 +55,7 @@
 #include "fileio.h"
 #include "hashmap.h"
 #include "id128-util.h"
+#include "options.h"
 #include "reread-partition-table.h"
 #include "set.h"
 
@@ -2113,7 +2114,11 @@ enum {
         ARG_TIMEOUT_SIGNAL = 0x100,
 };
 
+/* in the order of the help text, which is the one of systemd's options, that its message about an ambiguous
+ * option lists, with --ready-notify= of eudev after --debug */
 static const struct option options[] = {
+        { "help",               no_argument,            NULL, 'h' },
+        { "version",            no_argument,            NULL, 'V' },
         { "daemon",             no_argument,            NULL, 'd' },
         { "debug",              no_argument,            NULL, 'D' },
         { "ready-notify",       required_argument,      NULL, 'r' },
@@ -2121,8 +2126,6 @@ static const struct option options[] = {
         { "exec-delay",         required_argument,      NULL, 'e' },
         { "event-timeout",      required_argument,      NULL, 't' },
         { "resolve-names",      required_argument,      NULL, 'N' },
-        { "help",               no_argument,            NULL, 'h' },
-        { "version",            no_argument,            NULL, 'V' },
         { "timeout-signal",     required_argument,      NULL, ARG_TIMEOUT_SIGNAL },
         {}
 };
@@ -2163,7 +2166,8 @@ static int parse_argv(int argc, char *argv[]) {
                 log_set_max_level(LOG_DEBUG);
         }
 
-        while ((c = getopt_long(argc, argv, optstring, options, NULL)) >= 0) {
+        /* like systemd, with the messages of its option parser about invalid options */
+        while ((c = getopt_long_log(argc, argv, optstring, options)) >= 0) {
                 int r;
 
                 switch (c) {
