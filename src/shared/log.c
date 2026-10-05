@@ -432,8 +432,35 @@ static int write_to_syslog(
  * was LOG_LINE_MAX, 1024 - PREFIX_MAX, i.e. 992 bytes, or 976 bytes with CONFIG_PRINTK_CALLER (Linux 5.1 and
  * later); Linux 3.5 refused records of more than 1024 bytes, and older kernels took any length. */
 #define KMSG_RECORD_MAX 992U
-/* the mark of a message that is cut to fit into a record of /dev/kmsg */
-#define KMSG_TRUNCATED "..."
+/* the mark of a message that is cut, to fit into a record of /dev/kmsg, or into the buffer of
+ * log_internalv() or log_assert() */
+#define LOG_TRUNCATED "..."
+
+/* Returns where to cut the string s at the byte n or before it, so that the part before the cut ends with a
+ * whole UTF-8 character: n, or the start of the character that n is in. It backs up over at most 3
+ * continuation bytes, the most that a valid sequence has, so that invalid UTF-8, e.g. a run of
+ * continuation bytes in the output of a program, does not lose more of the message. s must have at least
+ * n + 1 bytes. */
+static size_t utf8_cut_point(const char *s, size_t n) {
+        unsigned i;
+
+        for (i = 0; i < 3 && n > 0 && ((unsigned char) s[n] & 0xc0) == 0x80; i++)
+                n--;
+
+        return n;
+}
+
+/* Marks a message that was cut to fit into its buffer of the given size, i.e. the buffer holds its first
+ * size - 1 bytes: like the cut of a record of /dev/kmsg, see write_to_kmsg(), it ends with LOG_TRUNCATED,
+ * at the start of a UTF-8 character, so that the message stays valid UTF-8. */
+static void log_mark_cut(char *buffer, size_t size) {
+        size_t n;
+
+        assert(size > STRLEN(LOG_TRUNCATED) + 1);
+
+        n = utf8_cut_point(buffer, size - 1 - STRLEN(LOG_TRUNCATED));
+        memcpy(buffer + n, LOG_TRUNCATED, STRLEN(LOG_TRUNCATED) + 1);
+}
 
 /* Like ratelimit_below() of systemd, for the RateLimit of write_to_kmsg(): at most 200 messages in 5 seconds.
  * Returns true if the message may be written, and the number of dropped messages in the interval in
@@ -509,15 +536,11 @@ static int write_to_kmsg(
          * mark it as cut. The other log targets get the whole message. */
         total = IOVEC_TOTAL_SIZE(iovec, ELEMENTSOF(iovec));
         if (total > KMSG_RECORD_MAX) {
-                size_t excess = total - KMSG_RECORD_MAX + STRLEN(KMSG_TRUNCATED);
+                size_t excess = total - KMSG_RECORD_MAX + STRLEN(LOG_TRUNCATED);
 
                 if (excess < iovec[3].iov_len) {
-                        size_t n = iovec[3].iov_len - excess;
-
-                        while (n > 0 && ((unsigned char) buffer[n] & 0xc0) == 0x80)
-                                n--;
-                        iovec[3].iov_len = n;
-                        IOVEC_SET_STRING(iovec[4], KMSG_TRUNCATED);
+                        iovec[3].iov_len = utf8_cut_point(buffer, iovec[3].iov_len - excess);
+                        IOVEC_SET_STRING(iovec[4], LOG_TRUNCATED);
                 }
         }
 
@@ -658,7 +681,13 @@ int log_internalv(
                         errno = saved_errno;
                         vsnprintf(long_buffer, size, format, aq);
                         long_buffer[size - 1] = '\0';
-                }
+
+                        /* longer than LOG_MESSAGE_MAX */
+                        if ((size_t) n >= size)
+                                log_mark_cut(long_buffer, size);
+                } else
+                        /* no memory for the long message, it is cut to LINE_MAX */
+                        log_mark_cut(buffer, sizeof(buffer));
         }
         va_end(aq);
 
@@ -684,10 +713,11 @@ int log_internal_long(
         if (_likely_(LOG_PRI(level) > log_max_level))
                 return -error;
 
-        /* log_dispatch() modifies the buffer while splitting the lines */
+        /* log_dispatch() modifies the buffer while splitting the lines; without memory for a copy, the
+         * message is cut and marked like a long formatted message */
         buffer = strdup(message);
         if (!buffer)
-                return log_internal(level, error, file, line, func, "%.*s", LINE_MAX - 1, message);
+                return log_internal(level, error, file, line, func, "%s", message);
 
         return log_dispatch(level, error, file, line, func, NULL, NULL, buffer);
 }
@@ -718,15 +748,18 @@ static void log_assert(
                 const char *func,
                 const char *format) {
         static char buffer[LINE_MAX];
+        int n;
 
         if (_likely_(LOG_PRI(level) > log_max_level))
                 return;
 
         DISABLE_WARNING_FORMAT_NONLITERAL;
-        snprintf(buffer, sizeof(buffer), format, text, file, line, func);
+        n = snprintf(buffer, sizeof(buffer), format, text, file, line, func);
         REENABLE_WARNING;
 
         char_array_0(buffer);
+        if (n >= (int) sizeof(buffer))
+                log_mark_cut(buffer, sizeof(buffer));
         log_abort_msg = buffer;
 
         log_dispatch(level, 0, file, line, func, NULL, NULL, buffer);
