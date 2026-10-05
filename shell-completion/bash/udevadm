@@ -31,6 +31,12 @@ __get_all_sysdevs() {
     printf '%s\n' "${devs[@]%/}"
 }
 
+__get_all_sysnames() {
+    local -a devs=(/sys/bus/*/devices/*/ /sys/class/*/*/)
+    devs=("${devs[@]%/}")
+    printf '%s\n' "${devs[@]##*/}" | sort -u
+}
+
 __get_all_device_nodes() {
     find /dev -xtype b -o -xtype c
 }
@@ -71,7 +77,7 @@ __get_udev_rules_names() {
 }
 
 _udevadm() {
-    local i verb comps builtin
+    local i verb verb_i comps builtin command
     local cur=${COMP_WORDS[COMP_CWORD]} prev=${COMP_WORDS[COMP_CWORD-1]}
     local -A OPTS=(
         [COMMON]='-h --help -V --version'
@@ -101,8 +107,10 @@ _udevadm() {
         [VERIFY_ARG]='-N --resolve-names --root'
         [CAT_STANDALONE]='--tldr --config'
         [CAT_ARG]='--root'
-        [WAIT]='-t --timeout --initialized=no --removed --settle'
-        [LOCK]='-t --timeout -d --device -b --backing -p --print'
+        [WAIT_STANDALONE]='--removed --settle'
+        [WAIT_ARG]='-t --timeout --initialized'
+        [LOCK_STANDALONE]='-p --print'
+        [LOCK_ARG]='-t --timeout -d --device -b --backing'
     )
 
     local verbs=(info trigger settle control monitor hwdb test-builtin test verify cat wait lock)
@@ -111,6 +119,7 @@ _udevadm() {
     for ((i=0; i < COMP_CWORD; i++)); do
         if __contains_word "${COMP_WORDS[i]}" "${verbs[@]}"; then
             verb=${COMP_WORDS[i]}
+            verb_i=$i
             break
         fi
     done
@@ -151,6 +160,10 @@ _udevadm() {
                     --name-match)
                         comps=$( __get_all_device_nodes )
                         ;;
+                    --sysname-match)
+                        comps=$( __get_all_sysnames )
+                        local IFS=$'\n'
+                        ;;
                     *)
                         comps=''
                         ;;
@@ -176,7 +189,11 @@ _udevadm() {
                     -c|--action)
                         comps='add remove change move online offline bind unbind'
                         ;;
-                    -y|--sysname-match|-b|--parent-match)
+                    -y|--sysname-match)
+                        comps=$( __get_all_sysnames )
+                        local IFS=$'\n'
+                        ;;
+                    -b|--parent-match)
                         comps=$( __get_all_sysdevs )
                         local IFS=$'\n'
                         ;;
@@ -374,8 +391,11 @@ _udevadm() {
             ;;
 
         'wait')
-            if __contains_word "$prev" ${OPTS[WAIT]}; then
+            if __contains_word "$prev" ${OPTS[WAIT_ARG]}; then
                 case $prev in
+                    --initialized)
+                        comps='yes no'
+                        ;;
                     *)
                         comps=''
                         ;;
@@ -385,7 +405,7 @@ _udevadm() {
             fi
 
             if [[ $cur = -* ]]; then
-                comps="${OPTS[COMMON]} ${OPTS[WAIT]}"
+                comps="${OPTS[COMMON]} ${OPTS[WAIT_STANDALONE]} ${OPTS[WAIT_ARG]}"
             else
                 comps=$( __get_all_devices )
                 local IFS=$'\n'
@@ -393,7 +413,19 @@ _udevadm() {
             ;;
 
         'lock')
-            if __contains_word "$prev" ${OPTS[LOCK]}; then
+            # the first word that is neither an option nor its argument is the command to run, and
+            # the rest are its arguments
+            for ((i=verb_i+1; i < COMP_CWORD; i++)); do
+                if [[ ${COMP_WORDS[i]} != -* ]] && ! __contains_word "${COMP_WORDS[i-1]}" ${OPTS[LOCK_ARG]}; then
+                    command=${COMP_WORDS[i]}
+                    break
+                fi
+            done
+
+            if [[ -n $command ]]; then
+                comps=''
+                compopt -o default
+            elif __contains_word "$prev" ${OPTS[LOCK_ARG]}; then
                 case $prev in
                     -d|--device)
                         comps=$( find /dev -xtype b )
@@ -407,10 +439,11 @@ _udevadm() {
                 esac
                 COMPREPLY=( $(compgen -W '$comps' -- "$cur") )
                 return 0
-            fi
-
-            if [[ $cur = -* ]]; then
-                comps="${OPTS[COMMON]} ${OPTS[LOCK]}"
+            elif [[ $cur = -* ]]; then
+                comps="${OPTS[COMMON]} ${OPTS[LOCK_STANDALONE]} ${OPTS[LOCK_ARG]}"
+            elif __contains_word "-p" "${COMP_WORDS[@]}" || __contains_word "--print" "${COMP_WORDS[@]}"; then
+                # no command with --print
+                comps=''
             else
                 comps=''
                 compopt -o default
