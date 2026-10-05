@@ -416,7 +416,10 @@ struct token {
                 struct {
                         enum token_type type:8;
                         enum operation_type op:8;
-                        enum string_glob_type glob:7;
+                        enum string_glob_type glob:5;
+                        /* What the key looks like in the rules, for token_to_string(), where it differs: */
+                        bool add_written:1;       /* OPTIONS+=, which is applied like OPTIONS= */
+                        bool program_written:1;   /* RUN{program}, not RUN */
                         bool case_insensitive:1;  /* string or pattern is matched case-insensitively */
                         enum string_subst_type subst:4;
                         enum string_subst_type attrsubst:4;
@@ -668,11 +671,12 @@ static char *escape_key_text(const char *s) {
 }
 
 /* Formats a token like the key of the rule line it comes from, e.g. KERNEL=="sd*", for the trace
- * logs. The text of the rules is not kept, so OPTIONS are shown one by one, and RUN with its type.
- * Unlike the token text of systemd, the attribute and the value are escaped with escape_key_text(), so
- * that control characters and invalid UTF-8 of the rules do not get into the logs. */
+ * logs, like the token text of systemd, which is the key as written in the rules. The text of the rules
+ * is not kept, so the key is put together again, and the values of OPTIONS are shown one by one. Unlike
+ * the token text of systemd, the attribute and the value are escaped with escape_key_text(), so that
+ * control characters and invalid UTF-8 of the rules do not get into the logs. */
 static char *token_to_string(struct udev_rules *rules, struct token *token) {
-        const char *op = operation_key_str(token->key.op);
+        const char *op = token->key.add_written ? "+=" : operation_key_str(token->key.op);
         _cleanup_free_ char *value = NULL, *attr = NULL;
         const char *key = NULL, *option = NULL;
         bool has_attr = false;
@@ -773,34 +777,16 @@ static char *token_to_string(struct udev_rules *rules, struct token *token) {
         case TK_M_RESULT:
                 key = "RESULT";
                 break;
+        /* the values of OPTIONS as written, see parse_options() */
         case TK_A_DUMP:
-                option = json_format_enabled(token->key.dump_flags) ? "dump-json" : "dump";
-                break;
         case TK_A_STRING_ESCAPE_NONE:
-                option = "string_escape=none";
-                break;
         case TK_A_STRING_ESCAPE_REPLACE:
-                option = "string_escape=replace";
-                break;
         case TK_A_DB_PERSIST:
-                option = "db_persist";
-                break;
         case TK_A_NET_ALTNAMES:
-                option = "net_altnames";
-                break;
         case TK_A_INOTIFY_WATCH:
-                option = token->key.watch ? "watch" : "nowatch";
-                break;
         case TK_A_DEVLINK_PRIO:
-                r = asprintf(&s, "OPTIONS%s\"link_priority=%i\"", op, token->key.devlink_prio);
-                return r < 0 ? NULL : s;
         case TK_A_LOG_LEVEL:
-                if (token->key.log_level < 0)
-                        option = "log_level=reset";
-                else {
-                        r = asprintf(&s, "OPTIONS%s\"log_level=%i\"", op, token->key.log_level);
-                        return r < 0 ? NULL : s;
-                }
+                option = value;
                 break;
         case TK_A_STATIC_NODE:
                 r = asprintf(&s, "OPTIONS%s\"static_node=%s\"", op, value);
@@ -815,14 +801,15 @@ static char *token_to_string(struct udev_rules *rules, struct token *token) {
                 key = "MODE";
                 break;
         case TK_A_OWNER_ID:
-                r = asprintf(&s, "OWNER%s\"%u\"", op, (unsigned) token->key.uid);
-                return r < 0 ? NULL : s;
+                /* the value as written, e.g. "root", not the ID it was resolved to */
+                key = "OWNER";
+                break;
         case TK_A_GROUP_ID:
-                r = asprintf(&s, "GROUP%s\"%u\"", op, (unsigned) token->key.gid);
-                return r < 0 ? NULL : s;
+                key = "GROUP";
+                break;
         case TK_A_MODE_ID:
-                r = asprintf(&s, "MODE%s\"%#o\"", op, (unsigned) token->key.mode);
-                return r < 0 ? NULL : s;
+                key = "MODE";
+                break;
         case TK_A_SECLABEL:
                 key = "SECLABEL";
                 has_attr = true;
@@ -831,7 +818,7 @@ static char *token_to_string(struct udev_rules *rules, struct token *token) {
                 key = "RUN{builtin}";
                 break;
         case TK_A_RUN_PROGRAM:
-                key = "RUN{program}";
+                key = token->key.program_written ? "RUN{program}" : "RUN";
                 break;
         case TK_A_GOTO:
                 key = "GOTO";
@@ -1726,13 +1713,16 @@ static int rule_add_key(struct rule_tmp *rule_tmp, enum token_type type,
                 /* like systemd, TEST{} without a mode checks only whether the file exists */
                 token->key.mode = data ? *(mode_t *)data : MODE_INVALID;
                 break;
+        /* the values of OPTIONS keep the value as written, see parse_options() */
         case TK_A_DUMP:
                 token->key.dump_flags = *(JsonFormatFlags *)data;
+                r = rules_add_string(rule_tmp->rules, value, &token->key.value_off);
                 break;
         case TK_A_STRING_ESCAPE_NONE:
         case TK_A_STRING_ESCAPE_REPLACE:
         case TK_A_DB_PERSIST:
         case TK_A_NET_ALTNAMES:
+                r = rules_add_string(rule_tmp->rules, value, &token->key.value_off);
                 break;
         case TK_A_RUN_BUILTIN:
         case TK_A_RUN_PROGRAM:
@@ -1742,18 +1732,24 @@ static int rule_add_key(struct rule_tmp *rule_tmp, enum token_type type,
         case TK_A_INOTIFY_WATCH:
         case TK_A_DEVLINK_PRIO:
                 token->key.devlink_prio = *(int *)data;
+                r = rules_add_string(rule_tmp->rules, value, &token->key.value_off);
                 break;
         case TK_A_LOG_LEVEL:
                 token->key.log_level = *(int *)data;
+                r = rules_add_string(rule_tmp->rules, value, &token->key.value_off);
                 break;
+        /* the value as written, only for token_to_string() */
         case TK_A_OWNER_ID:
                 token->key.uid = *(uid_t *)data;
+                r = rules_add_string(rule_tmp->rules, value, &token->key.value_off);
                 break;
         case TK_A_GROUP_ID:
                 token->key.gid = *(gid_t *)data;
+                r = rules_add_string(rule_tmp->rules, value, &token->key.value_off);
                 break;
         case TK_A_MODE_ID:
                 token->key.mode = *(mode_t *)data;
+                r = rules_add_string(rule_tmp->rules, value, &token->key.value_off);
                 break;
         case TK_RULE:
         case TK_M_PARENTS_MIN:
@@ -1912,32 +1908,32 @@ static int parse_options(struct rule_tmp *rule_tmp, enum operation_type op, cons
                         case OPTION_DUMP: {
                                 const JsonFormatFlags flags = JSON_FORMAT_OFF;
 
-                                rule_add_key(rule_tmp, TK_A_DUMP, op, NULL, &flags);
+                                rule_add_key(rule_tmp, TK_A_DUMP, op, word, &flags);
                                 break;
                         }
                         case OPTION_DUMP_JSON: {
                                 const JsonFormatFlags flags = JSON_FORMAT_NEWLINE;
 
-                                rule_add_key(rule_tmp, TK_A_DUMP, op, NULL, &flags);
+                                rule_add_key(rule_tmp, TK_A_DUMP, op, word, &flags);
                                 break;
                         }
                         case OPTION_STRING_ESCAPE_NONE:
-                                rule_add_key(rule_tmp, TK_A_STRING_ESCAPE_NONE, op, NULL, NULL);
+                                rule_add_key(rule_tmp, TK_A_STRING_ESCAPE_NONE, op, word, NULL);
                                 break;
                         case OPTION_STRING_ESCAPE_REPLACE:
-                                rule_add_key(rule_tmp, TK_A_STRING_ESCAPE_REPLACE, op, NULL, NULL);
+                                rule_add_key(rule_tmp, TK_A_STRING_ESCAPE_REPLACE, op, word, NULL);
                                 break;
                         case OPTION_DB_PERSIST:
-                                rule_add_key(rule_tmp, TK_A_DB_PERSIST, op, NULL, NULL);
+                                rule_add_key(rule_tmp, TK_A_DB_PERSIST, op, word, NULL);
                                 break;
                         case OPTION_NET_ALTNAMES:
-                                rule_add_key(rule_tmp, TK_A_NET_ALTNAMES, op, NULL, NULL);
+                                rule_add_key(rule_tmp, TK_A_NET_ALTNAMES, op, word, NULL);
                                 break;
                         case OPTION_WATCH:
                         case OPTION_NOWATCH: {
                                 const int watch = o->id == OPTION_WATCH;
 
-                                rule_add_key(rule_tmp, TK_A_INOTIFY_WATCH, op, NULL, &watch);
+                                rule_add_key(rule_tmp, TK_A_INOTIFY_WATCH, op, word, &watch);
                                 break;
                         }
                         case OPTION_STATIC_NODE:
@@ -1951,7 +1947,7 @@ static int parse_options(struct rule_tmp *rule_tmp, enum operation_type op, cons
                                         log_rule_error_errno(r, "Failed to parse link priority '%s': %m", arg);
                                         return -EINVAL;
                                 }
-                                rule_add_key(rule_tmp, TK_A_DEVLINK_PRIO, op, NULL, &prio);
+                                rule_add_key(rule_tmp, TK_A_DEVLINK_PRIO, op, word, &prio);
                                 break;
                         }
                         case OPTION_LOG_LEVEL: {
@@ -1966,7 +1962,7 @@ static int parse_options(struct rule_tmp *rule_tmp, enum operation_type op, cons
                                                 return -EINVAL;
                                         }
                                 }
-                                rule_add_key(rule_tmp, TK_A_LOG_LEVEL, op, NULL, &level);
+                                rule_add_key(rule_tmp, TK_A_LOG_LEVEL, op, word, &level);
                                 break;
                         }
                         }
@@ -2356,7 +2352,9 @@ static int add_rule(struct udev_rules *rules, char *line,
 
                                 if (check_disabled_builtin(what, value))
                                         goto ignore;
-                                rule_add_key(&rule_tmp, TK_A_RUN_PROGRAM, op, value, &cmd);
+                                if (rule_add_key(&rule_tmp, TK_A_RUN_PROGRAM, op, value, &cmd) == 0)
+                                        rule_tmp.token[rule_tmp.token_cur - 1].key.program_written =
+                                                streq(what, "RUN{program}");
                         } else {
                                 log_rule_invalid_attr("RUN");
                                 goto invalid;
@@ -2457,7 +2455,7 @@ static int add_rule(struct udev_rules *rules, char *line,
                                 }
                                 if (r < 0)
                                         goto invalid;
-                                rule_add_key(&rule_tmp, group ? TK_A_GROUP_ID : TK_A_OWNER_ID, op, NULL, &id);
+                                rule_add_key(&rule_tmp, group ? TK_A_GROUP_ID : TK_A_OWNER_ID, op, value, &id);
                         } else if (rules->resolve_names >= 0)
                                 rule_add_key(&rule_tmp, group ? TK_A_GROUP : TK_A_OWNER, op, value, NULL);
                         else {
@@ -2485,7 +2483,7 @@ static int add_rule(struct udev_rules *rules, char *line,
                          * user or group: the rest of the line still applies. */
                         r = parse_mode(value, &mode);
                         if (r >= 0)
-                                rule_add_key(&rule_tmp, TK_A_MODE_ID, op, NULL, &mode);
+                                rule_add_key(&rule_tmp, TK_A_MODE_ID, op, value, &mode);
                         else if (value_is_plain(value)) {
                                 log_rule_error_errno(r, "Failed to parse mode \"%s\", ignoring: %m", value);
                                 continue;
@@ -2495,6 +2493,7 @@ static int add_rule(struct udev_rules *rules, char *line,
                 }
 
                 if (streq(key, "OPTIONS")) {
+                        size_t first;
                         int r;
 
                         /* like systemd-udevd, which takes += as = */
@@ -2502,14 +2501,16 @@ static int add_rule(struct udev_rules *rules, char *line,
                                 log_rule_invalid_op("OPTIONS");
                                 goto invalid;
                         }
-                        if (op == OP_ADD)
-                                op = OP_ASSIGN;
 
-                        r = parse_options(&rule_tmp, op, value);
+                        first = rule_tmp.token_cur;
+                        r = parse_options(&rule_tmp, op == OP_ADD ? OP_ASSIGN : op, value);
                         if (r == -EOPNOTSUPP)
                                 goto ignore;
                         if (r < 0)
                                 goto invalid;
+                        /* the tokens show the key as written */
+                        for (; first < rule_tmp.token_cur; first++)
+                                rule_tmp.token[first].key.add_written = op == OP_ADD;
                         continue;
                 }
 
