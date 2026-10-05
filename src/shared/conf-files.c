@@ -112,6 +112,8 @@ static int conf_file_chase_and_verify(const char *root, const char *original_pat
         int r;
 
         r = chase(path, root, conf_files_chase_flags(flags), &resolved);
+        if (r == -ENOENT && FLAGS_SET(flags, CONF_FILES_QUIET_MISSING))
+                return r;
         if (r < 0)
                 return log_full_errno(log_level, r, "Failed to chase '%s': %m", original_path);
         if (r == 0) {
@@ -119,8 +121,11 @@ static int conf_file_chase_and_verify(const char *root, const char *original_pat
                     path_equal(skip_root(root, resolved), "/dev/null"))
                         return conf_file_mask(masked, name, original_path, "symlink to /dev/null");
 
-                if (conf_files_need_stat(flags))
+                if (conf_files_need_stat(flags)) {
+                        if (FLAGS_SET(flags, CONF_FILES_QUIET_MISSING))
+                                return -ENOENT;
                         return log_full_errno(log_level, ENOENT, "Failed to chase '%s': %m", original_path);
+                }
         } else if (conf_files_need_stat(flags)) {
                 if (stat(resolved, &st) < 0)
                         return log_full_errno(log_level, errno, "Failed to stat '%s': %m", original_path);
@@ -212,6 +217,8 @@ int conf_file_new(const char *path, const char *root, ConfFilesFlags flags, Conf
                 return log_oom();
 
         r = chase(dirpath, root, conf_files_chase_flags(flags), &resolved_dirpath);
+        if (r == -ENOENT && FLAGS_SET(flags, CONF_FILES_QUIET_MISSING))
+                return r;
         if (r < 0) {
                 _cleanup_free_ char *d = prefix_root(root, isempty(dirpath) ? "/" : dirpath);
 
