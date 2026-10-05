@@ -152,7 +152,7 @@ struct udev_monitor *udev_monitor_new_from_netlink_fd(struct udev *udev, const c
                  * will not receive any messages.
                  */
                 if (access(UDEV_ROOT_RUN "/udev/control", F_OK) < 0 && dev_is_devtmpfs() <= 0) {
-                        log_debug("the udev service seems not to be active, disable the monitor");
+                        log_debug("The udev service seems not to be active, disabling the monitor.");
                         group = UDEV_MONITOR_NONE;
                 } else
                         group = UDEV_MONITOR_UDEV;
