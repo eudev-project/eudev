@@ -28,15 +28,28 @@
 #include "udev.h"
 #include "udevadm-util.h"
 
-static int adm_version(struct udev *udev __attribute__((unused)), int argc __attribute__((unused)), char *argv[] __attribute__((unused))) {
+static int print_version(void) {
         printf("%s\n", UDEV_VERSION);
         return 0;
 }
+
+static int adm_version(struct udev *udev, int argc, char *argv[]);
 
 static const struct udevadm_cmd udevadm_version = {
         .name = "version",
         .cmd = adm_version,
 };
+
+static int adm_version(struct udev *udev __attribute__((unused)), int argc, char *argv[] __attribute__((unused))) {
+        /* Like systemd, the command takes no arguments, unlike -V/--version, which ignores the ones after it. */
+        if (argc > 1) {
+                log_error("Too many arguments.");
+                return 1;
+        }
+
+        log_command_call(&udevadm_version);
+        return print_version();
+}
 
 static int adm_help(struct udev *udev, int argc, char *argv[]);
 
@@ -208,7 +221,7 @@ static int run_command(struct udev *udev, const struct udevadm_cmd *cmd, int arg
         if (cmd->debug)
                 log_set_max_level(LOG_DEBUG);
         /* The other commands log this after they checked their arguments, see log_command_call(). */
-        if (cmd == &udevadm_help || cmd == &udevadm_version)
+        if (cmd == &udevadm_help)
                 log_command_call(cmd);
         return cmd->cmd(udev, argc, argv);
 }
@@ -247,7 +260,7 @@ int main(int argc, char *argv[]) {
                         goto out;
 
                 case 'V':
-                        rc = adm_version(udev, argc, argv);
+                        rc = print_version();
                         goto out;
 
                 default:
