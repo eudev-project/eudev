@@ -33,6 +33,7 @@
 #include "libudev.h"
 #include "libudev-private.h"
 #include "path-util.h"
+#include "set.h"
 
 /**
  * SECTION:libudev-enumerate
@@ -67,6 +68,8 @@ struct udev_enumerate {
         struct syspath *devices;
         unsigned int devices_cur;
         unsigned int devices_max;
+        /* the syspaths of devices, see add_parent_devices() */
+        Set *devices_by_syspath;
         bool devices_uptodate:1;
         bool match_is_initialized;
 };
@@ -144,6 +147,7 @@ _public_ struct udev_enumerate *udev_enumerate_unref(struct udev_enumerate *udev
         udev_list_cleanup(&udev_enumerate->tags_match_list);
         udev_device_unref(udev_enumerate->parent_match);
         udev_list_cleanup(&udev_enumerate->devices_list);
+        set_free(udev_enumerate->devices_by_syspath);
         for (i = 0; i < udev_enumerate->devices_cur; i++)
                 free(udev_enumerate->devices[i].syspath);
         free(udev_enumerate->devices);
@@ -189,6 +193,20 @@ static int syspath_add(struct udev_enumerate *udev_enumerate, const char *syspat
         path = strdup(syspath);
         if (path == NULL)
                 return -ENOMEM;
+
+        /* the first entry of a syspath, which is kept until the context is freed */
+        if (!udev_enumerate->devices_by_syspath) {
+                udev_enumerate->devices_by_syspath = set_new(&string_hash_ops);
+                if (!udev_enumerate->devices_by_syspath) {
+                        free(path);
+                        return -ENOMEM;
+                }
+        }
+        if (set_put(udev_enumerate->devices_by_syspath, path) < 0) {
+                free(path);
+                return -ENOMEM;
+        }
+
         entry = &udev_enumerate->devices[udev_enumerate->devices_cur];
         entry->syspath = path;
         entry->len = strlen(path);
@@ -677,6 +695,60 @@ static bool match_sysname(struct udev_enumerate *udev_enumerate, const char *sys
         return false;
 }
 
+static bool match_subsystem(struct udev_enumerate *udev_enumerate, const char *subsystem)
+{
+        struct udev_list_entry *list_entry;
+
+        if (!subsystem)
+                return false;
+
+        udev_list_entry_foreach(list_entry, udev_list_get_entry(&udev_enumerate->subsystem_nomatch_list)) {
+                if (fnmatch(udev_list_entry_get_name(list_entry), subsystem, 0) == 0)
+                        return false;
+        }
+
+        if (udev_list_get_entry(&udev_enumerate->subsystem_match_list) != NULL) {
+                udev_list_entry_foreach(list_entry, udev_list_get_entry(&udev_enumerate->subsystem_match_list)) {
+                        if (fnmatch(udev_list_entry_get_name(list_entry), subsystem, 0) == 0)
+                                return true;
+                }
+                return false;
+        }
+
+        return true;
+}
+
+/* Like sd-device's enumerator, the parents of a device that a scan of /sys finds are listed too, if they match
+ * the filters, also the one for subsystems, which a device without a subsystem never matches: e.g. the
+ * directories /sys/bus/X/drivers, the parents of the drivers, which no scan finds. The walk stops at a
+ * parent that is listed already. */
+static void add_parent_devices(struct udev_enumerate *udev_enumerate, struct udev_device *dev)
+{
+        struct udev_device *parent;
+
+        for (parent = udev_device_get_parent(dev); parent; parent = udev_device_get_parent(parent)) {
+                if (!match_sysname(udev_enumerate, udev_device_get_sysname(parent)))
+                        continue;
+                if (!match_subsystem(udev_enumerate, udev_device_get_subsystem(parent)))
+                        continue;
+                if (!match_parent(udev_enumerate, parent))
+                        continue;
+                if (!match_tag(udev_enumerate, parent))
+                        continue;
+                if (!match_initialized(udev_enumerate, parent))
+                        continue;
+                if (!match_property(udev_enumerate, parent))
+                        continue;
+                if (!match_sysattr(udev_enumerate, parent))
+                        continue;
+
+                if (set_contains(udev_enumerate->devices_by_syspath, udev_device_get_syspath(parent)))
+                        return;
+                if (syspath_add(udev_enumerate, udev_device_get_syspath(parent)) < 0)
+                        return;
+        }
+}
+
 static int scan_dir_and_add_devices(struct udev_enumerate *udev_enumerate,
                                     const char *basedir, const char *subdir1, const char *subdir2)
 {
@@ -722,34 +794,12 @@ static int scan_dir_and_add_devices(struct udev_enumerate *udev_enumerate,
                         goto nomatch;
 
                 syspath_add(udev_enumerate, udev_device_get_syspath(dev));
+                add_parent_devices(udev_enumerate, dev);
 nomatch:
                 udev_device_unref(dev);
         }
         closedir(dir);
         return 0;
-}
-
-static bool match_subsystem(struct udev_enumerate *udev_enumerate, const char *subsystem)
-{
-        struct udev_list_entry *list_entry;
-
-        if (!subsystem)
-                return false;
-
-        udev_list_entry_foreach(list_entry, udev_list_get_entry(&udev_enumerate->subsystem_nomatch_list)) {
-                if (fnmatch(udev_list_entry_get_name(list_entry), subsystem, 0) == 0)
-                        return false;
-        }
-
-        if (udev_list_get_entry(&udev_enumerate->subsystem_match_list) != NULL) {
-                udev_list_entry_foreach(list_entry, udev_list_get_entry(&udev_enumerate->subsystem_match_list)) {
-                        if (fnmatch(udev_list_entry_get_name(list_entry), subsystem, 0) == 0)
-                                return true;
-                }
-                return false;
-        }
-
-        return true;
 }
 
 static int scan_dir(struct udev_enumerate *udev_enumerate, const char *basedir, const char *subdir, const char *subsystem)
@@ -929,7 +979,10 @@ static int scan_devices_all(struct udev_enumerate *udev_enumerate)
  * @udev_enumerate: udev enumeration context
  *
  * Scan /sys for all devices which match the given filters. No matches
- * will return all currently available devices.
+ * will return all currently available devices. Like systemd's libudev,
+ * the parents of the devices found in /sys/bus and /sys/class are
+ * included, if they match the filters; tags and a parent device are
+ * looked up in other ways, without the parents.
  *
  * Returns: 0 on success, otherwise a negative error value.
  **/
@@ -955,6 +1008,8 @@ _public_ int udev_enumerate_scan_devices(struct udev_enumerate *udev_enumerate)
  * @udev_enumerate: udev enumeration context
  *
  * Scan /sys for all kernel subsystems, including buses, classes, drivers.
+ * Like systemd's libudev, the parents of the devices found are included,
+ * if they match the filters, e.g. the drivers directories of the buses.
  *
  * Returns: 0 on success, otherwise a negative error value.
  **/
