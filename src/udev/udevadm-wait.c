@@ -196,7 +196,7 @@ static int parse_argv(int argc, char *argv[]) {
 
         int c, r;
 
-        while ((c = udevadm_getopt_long(argc, argv, "t:hV", options)) >= 0)
+        while ((c = getopt_long_log(argc, argv, "t:hV", options)) >= 0)
                 switch (c) {
                 case 't':
                         r = parse_sec(optarg, &arg_timeout_usec);

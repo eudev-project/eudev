@@ -72,7 +72,7 @@ static int adm_settle(struct udev *udev, int argc, char *argv[]) {
         struct udev_queue *queue;
         int rc = EXIT_FAILURE;
 
-        while ((c = udevadm_getopt_long(argc, argv, "t:E:hs:e:qV", options)) >= 0) {
+        while ((c = getopt_long_log(argc, argv, "t:E:hs:e:qV", options)) >= 0) {
                 switch (c) {
 
                 case 't': {

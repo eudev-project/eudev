@@ -68,7 +68,7 @@ static int parse_argv(int argc, char *argv[]) {
         /* Resetting to 0 forces the invocation of an internal initialization routine of getopt_long()
          * that checks for GNU extensions in optstring ('-' or '+' at the beginning). */
         optind = 0;
-        while ((c = udevadm_getopt_long(argc, argv, arg_print ? "hVd:b:t:p" : "+hVd:b:t:p", options)) >= 0)
+        while ((c = getopt_long_log(argc, argv, arg_print ? "hVd:b:t:p" : "+hVd:b:t:p", options)) >= 0)
 
                 switch (c) {
 

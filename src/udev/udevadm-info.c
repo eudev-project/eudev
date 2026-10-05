@@ -1362,7 +1362,7 @@ static int uinfo(struct udev *udev, int argc, char *argv[]) {
 
         enum query_type query = QUERY_ALL;
 
-        while ((c = udevadm_getopt_long(argc, argv, "atced:n:p:q:rxP:w::Vh", options)) >= 0)
+        while ((c = getopt_long_log(argc, argv, "atced:n:p:q:rxP:w::Vh", options)) >= 0)
                 switch (c) {
                 case ARG_PROPERTY:
                         /* Make sure that if the empty property list was specified, we won't show any

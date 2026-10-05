@@ -24,6 +24,7 @@ libudev_shared_la_SOURCES=\
 	mkdir.c \
 	mkdir-label.c \
 	MurmurHash2.c \
+	options.c \
 	os-util.c \
 	pager.c \
 	path-util.c \
@@ -68,6 +69,7 @@ noinst_HEADERS = \
 	missing_ioprio.h \
 	mkdir.h \
 	MurmurHash2.h \
+	options.h \
 	os-util.h \
 	pager.h \
 	path-util.h \

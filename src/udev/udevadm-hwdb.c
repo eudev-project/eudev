@@ -79,7 +79,7 @@ static int adm_hwdb(struct udev *udev, int argc, char *argv[]) {
                 goto out;
         }
 
-        while ((c = udevadm_getopt_long(argc, argv, "uso:t:r:hV", options)) >= 0)
+        while ((c = getopt_long_log(argc, argv, "uso:t:r:hV", options)) >= 0)
                 switch(c) {
                 case 'u':
                         update = true;

@@ -65,7 +65,7 @@ static int adm_builtin(struct udev *udev, int argc, char *argv[]) {
         enum udev_builtin_cmd cmd;
         int rc = EXIT_SUCCESS, c, r;
 
-        while ((c = udevadm_getopt_long(argc, argv, "a:hV", options)) >= 0)
+        while ((c = getopt_long_log(argc, argv, "a:hV", options)) >= 0)
                 switch (c) {
                 case 'a':
                         r = parse_device_action(optarg, &action);

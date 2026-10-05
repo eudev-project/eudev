@@ -247,7 +247,7 @@ int main(int argc, char *argv[]) {
         log_open();
         mac_selinux_init("/dev");
 
-        while ((c = udevadm_getopt_long(argc, argv, "+dhV", options)) >= 0)
+        while ((c = getopt_long_log(argc, argv, "+dhV", options)) >= 0)
                 switch (c) {
 
                 case 'd':

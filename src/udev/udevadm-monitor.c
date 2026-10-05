@@ -112,7 +112,7 @@ static int adm_monitor(struct udev *udev, int argc, char *argv[]) {
         udev_list_init(udev, &subsystem_match_list, true);
         udev_list_init(udev, &tag_match_list, true);
 
-        while((c = udevadm_getopt_long(argc, argv, "pekus:t:hV", options)) >= 0)
+        while((c = getopt_long_log(argc, argv, "pekus:t:hV", options)) >= 0)
                 switch (c) {
                 case 'p':
                 case 'e':
