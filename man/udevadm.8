@@ -678,7 +678,7 @@ Signal udevd to reload the rules files and other databases like the kernel modul
 Set a global property for all events\&.
 .RE
 .PP
-\fB\-m\fR, \fB\-\-children\-max=\fR\fIvalue\fR
+\fB\-m\fR, \fB\-\-children\-max=\fR\fB\fIN\fR\fR
 .RS 4
 Set the maximum number of events, udevd will handle at the same time\&. When 0 is specified, then the maximum is determined based on the system resources\&.
 .RE
@@ -889,11 +889,13 @@ add\&.
 .PP
 \fB\-N\fR, \fB\-\-resolve\-names=\fR\fB\fBearly\fR\fR\fB|\fR\fB\fBlate\fR\fR\fB|\fR\fB\fBnever\fR\fR
 .RS 4
-Specify when udevadm should resolve names of users and groups\&. When set to
+Specify when
+\fBudevadm\fR
+should resolve names of users and groups specified in udev rules\&. When set to
 \fBearly\fR
 (the default), names will be resolved when the rules are parsed\&. When set to
-\fBlate\fR, names will be resolved for every event\&. When set to
-\fBnever\fR, names will never be resolved and all devices will be owned by root\&.
+\fBlate\fR, names will be resolved during the event being processed\&. When set to
+\fBnever\fR, names will never be resolved and relevant udev rules will be ignored\&.
 .RE
 .PP
 \fB\-D \fR\fB\fIDIR\fR\fR, \fB\-\-extra\-rules\-dir=\fR\fB\fIDIR\fR\fR

@@ -781,7 +781,7 @@
         </varlistentry>
         <varlistentry>
           <term><option>-m</option></term>
-          <term><option>--children-max=</option><replaceable>value</replaceable></term>
+          <term><option>--children-max=<replaceable>N</replaceable></option></term>
           <listitem>
             <para>Set the maximum number of events, udevd will handle at the
             same time. When 0 is specified, then the maximum is determined based on the system
@@ -1039,13 +1039,11 @@
           <term><option>-N</option></term>
           <term><option>--resolve-names=<constant>early</constant>|<constant>late</constant>|<constant>never</constant></option></term>
           <listitem>
-            <para>Specify when udevadm should resolve names of users
-            and groups.  When set to <constant>early</constant> (the
-            default), names will be resolved when the rules are
-            parsed. When set to <constant>late</constant>, names will
-            be resolved for every event. When set to
-            <constant>never</constant>, names will never be resolved
-            and all devices will be owned by root.</para>
+            <para>Specify when <command>udevadm</command> should resolve names of users and groups specified
+            in udev rules. When set to <constant>early</constant> (the default), names will be resolved when
+            the rules are parsed. When set to <constant>late</constant>, names will be resolved during the
+            event being processed. When set to <constant>never</constant>, names will never be resolved and
+            relevant udev rules will be ignored.</para>
           </listitem>
         </varlistentry>
         <varlistentry>
