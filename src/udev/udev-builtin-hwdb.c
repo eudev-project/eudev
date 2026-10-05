@@ -217,9 +217,12 @@ static int builtin_hwdb(struct udev_device *dev, int argc, char *argv[], enum ud
 static int builtin_hwdb_init(struct udev *udev) {
         if (hwdb)
                 return 0;
+
+        /* like systemd, return the reason, e.g. -ENOENT when there is no hwdb.bin; udev_hwdb_new() logged it */
+        errno = 0;
         hwdb = udev_hwdb_new(udev);
         if (!hwdb)
-                return -ENOMEM;
+                return errno_or_else(ENOMEM);
 
         log_debug("Loaded hardware database.");
         return 0;
