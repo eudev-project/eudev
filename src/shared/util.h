@@ -447,18 +447,12 @@ _alloc_(2, 3) static inline void *realloc_multiply(void *p, size_t a, size_t b) 
  * proceeding and smashing the stack limits. Note that by default RLIMIT_STACK is 8M on Linux. */
 #define ALLOCA_MAX (4U*1024U*1024U)
 
-#define new(t, n) ((t*) malloc_multiply(sizeof(t), (n)))
-
 #define alloca_safe(n)                                                  \
         ({                                                              \
                 size_t _nn_ = n;                                        \
                 assert(_nn_ <= ALLOCA_MAX);                             \
                 alloca(_nn_ == 0 ? 1 : _nn_);                           \
         })                                                              \
-
-#define newdup(t, p, n) ((t*) memdup_multiply(p, sizeof(t), (n)))
-
-#define newdup_suffix0(t, p, n) ((t*) memdup_suffix0_multiply(p, sizeof(t), (n)))
 
 #define free_and_replace(a, b)                  \
         ({                                      \
