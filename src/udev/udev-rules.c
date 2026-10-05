@@ -1346,8 +1346,13 @@ static int import_program_into_properties(struct udev_event *event, struct udev_
 
         envp = udev_device_get_properties_envp(dev);
         err = udev_event_spawn(event, timeout_usec, program, envp, sigmask, result, IMPORT_PROGRAM_SIZE, &truncated);
-        if (err < 0)
+        if (err != 0) {
+                /* like systemd; the errors of running the program are logged already */
+                if (err > 0)
+                        log_event_debug(event, rules, rule, token, "Command \"%s\" returned %d (error), ignoring",
+                                        program, err);
                 return 0;
+        }
 
         if (truncated) {
                 log_event_debug(event, rules, rule, token,
@@ -3497,7 +3502,12 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                         envp = udev_device_get_properties_envp(event->dev);
                         log_event_debug(event, rules, rule, cur, "Running command \"%s\"", program);
 
-                        if (udev_event_spawn(event, timeout_usec, program, envp, sigmask, result, sizeof(result), NULL) < 0) {
+                        r = udev_event_spawn(event, timeout_usec, program, envp, sigmask, result, sizeof(result), NULL);
+                        if (r != 0) {
+                                /* like systemd; the errors of running the program are logged already */
+                                if (r > 0)
+                                        log_event_debug(event, rules, rule, cur, "Command \"%s\" returned %d (error)",
+                                                        program, r);
                                 if (!log_event_result(event, rules, rule, cur, cur->key.op == OP_NOMATCH))
                                         goto nomatch;
                         } else {

@@ -858,8 +858,8 @@ static int spawn_wait(struct spawn *spawn) {
                                         break;
                                 if (WIFEXITED(status)) {
                                         log_debug("'%s' ["PID_FMT"] exit with return code %i", cmd, pid, WEXITSTATUS(status));
-                                        if (WEXITSTATUS(status) != 0)
-                                                err = -1;
+                                        /* like systemd, the exit code of a program that failed */
+                                        err = WEXITSTATUS(status);
                                 } else if (WIFSIGNALED(status)) {
                                         log_error("'%s' ["PID_FMT"] terminated by signal %i (%s)", cmd, pid, WTERMSIG(status), strsignal(WTERMSIG(status)));
                                         err = -1;
@@ -984,6 +984,9 @@ static const char *test_mode_helper(const char *program) {
         return NULL;
 }
 
+/* Like udev_event_spawn() of systemd: runs the command, with its standard output in result. Returns 0 when the
+ * program succeeded, its exit code when it failed, and a negative error when it could not be run or did not
+ * exit normally, e.g. was killed by a signal. */
 int udev_event_spawn(struct udev_event *event,
                      usec_t timeout_usec,
                      const char *cmd, char **envp, const sigset_t *sigmask,
