@@ -224,7 +224,7 @@ static int find_gpt_root(struct udev_device *dev, blkid_probe pr, const char *lo
                          * device, hence look for it among partitions now */
                         need_esp_or_xbootldr = true;
         } else {
-                dev_t whole_devno;
+                dev_t whole_devno, this_devno;
 
                 /* On the main system look at the *current* root instead */
 
@@ -242,7 +242,12 @@ static int find_gpt_root(struct udev_device *dev, blkid_probe pr, const char *lo
                 if (r < 0)
                         return log_device_debug_errno(dev, r, "Failed to find whole block device for root block device: %m");
 
-                if (whole_devno != udev_device_get_devnum(dev)) {
+                /* like sd_device_get_devnum() of systemd, which fails with ENOENT without a major number */
+                this_devno = udev_device_get_devnum(dev);
+                if (major(this_devno) == 0)
+                        return log_device_debug_errno(dev, ENOENT, "Failed to get device major/minor of device: %m");
+
+                if (whole_devno != this_devno) {
                         log_device_debug(dev, "This device is not the current root block device.");
                         return 0;
                 }
