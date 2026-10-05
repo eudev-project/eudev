@@ -271,8 +271,10 @@ static int files_add(Hashmap *h, Set *masked, DIR *dir, const char *root, const 
                                  hidden_file(de->d_name) || !endswith(de->d_name, suffix))
                         continue;
 
-                original_path = strjoin(original_dirpath, "/", de->d_name, NULL);
-                result = strjoin(resolved_dirpath, "/", de->d_name, NULL);
+                /* like systemd, with path_join(), so that there is no double slash after the root
+                 * directory "/" */
+                original_path = path_join(original_dirpath, de->d_name);
+                result = path_join(resolved_dirpath, de->d_name);
                 if (!original_path || !result)
                         return -ENOMEM;
 
