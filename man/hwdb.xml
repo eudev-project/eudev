@@ -27,17 +27,20 @@
 
   <refsect1><title>Hardware Database Files</title>
       <para>The hwdb files are read from the files located in the
-      system hwdb directory <filename>/usr/lib/udev/hwdb.d</filename> and
-      the local administration directory <filename>/etc/udev/hwdb.d</filename>.
-      All hwdb files are collectively sorted and processed in lexical order,
+      system hwdb directory <filename>/usr/lib/udev/hwdb.d</filename>,
+      the local administration directory <filename>/etc/udev/hwdb.d</filename>,
+      and the directories in the <varname>$UDEV_HWDB_PATH</varname> search path,
+      see below. All hwdb files are collectively sorted and processed in lexical order,
       regardless of the directories in which they live. However, files with
       identical filenames replace each other. Files in <filename>/etc/</filename>
       have the highest priority and take precedence over files with the same
-      name in <filename>/usr/lib/</filename>. This can be used to override a
+      name in <filename>/usr/lib/</filename>, and the files in the directories of
+      <varname>$UDEV_HWDB_PATH</varname> have the lowest priority. This can be used to override a
       system-supplied hwdb file with a local file if needed;
       a symlink in <filename>/etc/</filename> with the same name as a hwdb file in
-      <filename>/usr/lib/</filename>, pointing to <filename>/dev/null</filename>,
-      or an empty file with that name, disables that hwdb file entirely. hwdb files must have the extension
+      <filename>/usr/lib/</filename> or in <varname>$UDEV_HWDB_PATH</varname>, pointing to
+      <filename>/dev/null</filename>, or an empty file with that name, disables that hwdb file
+      entirely. hwdb files must have the extension
       <filename>.hwdb</filename>; other extensions are ignored.</para>
 
       <para>Each hwdb file contains data records consisting of matches and associated
@@ -79,6 +82,21 @@
       or alternatively <filename>/usr/lib/udev/hwdb.bin</filename> if you want ship the
       compiled database in an immutable image.  During runtime, only the binary database
       is used.</para>
+  </refsect1>
+
+  <refsect1><title>Environment</title>
+    <variablelist>
+      <varlistentry>
+        <term><varname>$UDEV_HWDB_PATH</varname></term>
+        <listitem>
+          <para>Additional directories of hwdb files, separated by colons, which
+          <command>udevadm hwdb --update</command> and <command>systemd-hwdb update</command> (if
+          installed) read after the system directories, and like them below the root directory given with
+          <option>--root=</option>. A relative directory is relative to that root directory, or
+          else to the current directory. Only the compilation of the database reads them.</para>
+        </listitem>
+      </varlistentry>
+    </variablelist>
   </refsect1>
 
   <refsect1>
