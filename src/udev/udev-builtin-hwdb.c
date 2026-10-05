@@ -202,7 +202,7 @@ static int builtin_hwdb(struct udev_device *dev, int argc, char *argv[], enum ud
                 errno = 0;
                 srcdev = udev_device_new_from_device_id(udev_device_get_udev(dev), device);
                 if (!srcdev)
-                        return log_device_debug_errno(dev, errno > 0 ? errno : ENODEV, "Failed to create device object '%s': %m", device);
+                        return log_device_debug_errno(dev, errno > 0 ? errno : ENODEV, "Failed to create sd_device object '%s': %m", device);
         }
 
         r = udev_builtin_hwdb_search(dev, srcdev, subsystem, prefix, filter, mode);
