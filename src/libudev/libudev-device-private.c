@@ -737,6 +737,18 @@ int uevent_trigger_share_uuid_supported(void)
  * the kernel supports UUIDs, see uevent_trigger_set_uuid_supported(). */
 #define SYNTHETIC_UUID_PROBE_CHECK_USEC (10 * USEC_PER_MSEC)
 
+/* The receive buffer of the socket of uevent_trigger_with_uuid(), which gets every uevent of the kernel, so that
+ * a flood of uevents, e.g. of a coldplug, does not fill it up while the process does not read, e.g. between
+ * binding the socket and triggering the uevent, so that the kernel drops the uevent that the probe waits for
+ * (ENOBUFS); the default of net.core.rmem_default (208 KiB) holds about 220 uevents. The kernel doubles the
+ * size for its bookkeeping, and every uevent takes about 960 bytes of it, whatever its length, so the 32 MiB
+ * hold about 35000 uevents (Linux 7.1.8): about half a second of the fastest flood measured, four processes
+ * writing to uevent files with udevd running, about 70000 uevents per second in total (KVM, 2 CPUs), and
+ * much longer for a slower one. The buffer only takes memory for the uevents that are queued and not read
+ * yet; udevd and udevadm monitor use 128 MiB. Beyond net.core.rmem_max, it needs CAP_NET_ADMIN, see
+ * udev_monitor_set_receive_buffer_size(). */
+#define SYNTHETIC_UUID_PROBE_RCVBUF (16 * 1024 * 1024)
+
 /* The sequence number of the last uevent that the kernel sent, from /sys/kernel/uevent_seqnum, or UINT64_MAX if
  * it cannot be read. The kernel counts it up for every uevent it sends, and only then, before the write to the
  * uevent attribute that triggered the uevent returns, so when it is the same before and after such a write, the
@@ -984,6 +996,8 @@ static int uevent_trigger_with_uuid(struct udev *udev, const char *syspath, cons
 
         /* The socket must be bound before the uevent is triggered. */
         monitor = udev_monitor_new_from_netlink(udev, "kernel");
+        if (monitor)
+                (void) udev_monitor_set_receive_buffer_size(monitor, SYNTHETIC_UUID_PROBE_RCVBUF);
         if (!monitor || udev_monitor_enable_receiving(monitor) < 0) {
                 log_debug("Failed to watch the uevents of the kernel, triggering '%s' on %s without a UUID.",
                           action, syspath);
