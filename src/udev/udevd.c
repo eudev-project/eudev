@@ -2170,10 +2170,13 @@ static int parse_argv(int argc, char *argv[]) {
          * kernel command line, -D/--debug is found before the other options, see argv_has_debug(), so that
          * the warnings about all of them, also about those that come before it, go to the console, and with
          * the debug level, also when udev_log= in udev.conf, which udev_new() applied already, is lower. The
-         * final log level is set when the settings are merged, see main(). */
+         * final log level is set when the settings are merged, see main(). Like cdrom_id and scsi_id, the
+         * log is opened again for the console: when it was opened for /dev/kmsg or syslog before, e.g. for
+         * $UDEV_LOG_TARGET=kmsg, the console is closed in PID 1, and nothing would be logged at all. */
         if (arg_debug) {
                 config_by_command.log_level = LOG_DEBUG;
                 log_set_target(LOG_TARGET_CONSOLE);
+                log_open();
                 log_set_max_level(LOG_DEBUG);
         }
 
