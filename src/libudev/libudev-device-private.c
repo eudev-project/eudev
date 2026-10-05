@@ -521,8 +521,9 @@ DEFINE_TRIVIAL_CLEANUP_FUNC(struct udev_device *, udev_device_unref);
 /* Like device_new_from_devname() of systemd's sd-device: finds the device whose device node the path resolves
  * to, below /dev/, e.g. the path of a device node symlink. With strict, as for sd_device_new_from_devname(),
  * the path itself must be below /dev/ too; without, as for sd_device_new_from_path(), it may be any path, also
- * a relative one. Returns -EINVAL if it is not below /dev/, -ENODEV if it does not exist, and -ENOTTY if it is
- * not a device node. */
+ * a relative one. Returns -EINVAL if it is not below /dev/, -ENODEV if it does not exist, -ENOTTY if it is
+ * not a device node, and the error of udev_device_new_from_devnum() otherwise, e.g. -ENXIO if the device with
+ * its number has another number or type. */
 static int device_new_from_devname_full(struct udev *udev, const char *devname, bool strict,
                                         struct udev_device **ret) {
         _cleanup_(udev_device_unrefp) struct udev_device *dev = NULL;
@@ -555,18 +556,11 @@ static int device_new_from_devname_full(struct udev *udev, const char *devname, 
         if (!S_ISCHR(st.st_mode) && !S_ISBLK(st.st_mode))
                 return -ENOTTY;
 
-        if (major(st.st_rdev) == 0)
-                return -ENODEV;
-
+        /* Like sd_device_new_from_stat_rdev() of systemd: major 0 fails with ENODEV, and a device with
+         * another number or type with ENXIO, see udev_device_new_from_devnum(). */
         dev = udev_device_new_from_devnum(udev, S_ISBLK(st.st_mode) ? 'b' : 'c', st.st_rdev);
         if (!dev)
-                return -ENODEV;
-
-        if (udev_device_get_devnum(dev) != st.st_rdev)
-                return -ENXIO;
-
-        if (streq_ptr(udev_device_get_subsystem(dev), "block") != !!S_ISBLK(st.st_mode))
-                return -ENXIO;
+                return errno > 0 ? -errno : -ENODEV;
 
         *ret = TAKE_PTR(dev);
         return 0;
