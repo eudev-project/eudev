@@ -105,8 +105,8 @@ static void usage(void)
                "  number of missing IDs otherwise, and prints\n"
                "  COLLECT_<checkpoint>=<number of missing IDs>.\n"
                "  On error it prints no COLLECT_ line and returns 1 for wrong\n"
-               "  arguments (or when it cannot initialize libudev), 2 when it\n"
-               "  runs out of memory (or cannot handle SIGALRM), 3 when the\n"
+               "  arguments, 2 when it runs out of memory (also when it cannot\n"
+               "  initialize libudev) or cannot handle SIGALRM, 3 when the\n"
                "  checkpoint file cannot be created, opened or locked, 4 when\n"
                "  the lock is not acquired within %d seconds, or 255 when the\n"
                "  checkpoint file cannot be read or written.\n\n"
@@ -443,8 +443,9 @@ int main(int argc, char **argv)
          * udev_new() applied, so that the environment, and the kernel command line, override it */
         log_parse_environment();
         log_open();
-        if (udev == NULL) {
-                ret = EXIT_FAILURE;
+        if (udev == NULL) { /* it fails only when memory runs out */
+                log_oom();
+                ret = 2;
                 goto exit;
         }
 

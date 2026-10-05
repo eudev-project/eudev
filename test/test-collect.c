@@ -21,6 +21,14 @@ static void *test_new(size_t size, size_t n) {
 #undef new
 #define new(t, n) ((t*) test_new(sizeof(t), (n)))
 
+/* udev_new() in collect fails while fail_udev_new is set, to test running out of memory there */
+#include "libudev.h"
+static bool fail_udev_new = false;
+static struct udev *test_udev_new(void) {
+        return fail_udev_new ? NULL : udev_new();
+}
+#define udev_new test_udev_new
+
 /* the functions of collect, which are static, with its main() renamed */
 #undef UDEV_ROOT_RUN
 #define UDEV_ROOT_RUN "run"
@@ -311,6 +319,10 @@ int main(void) {
         fail_new = true;
         r |= test_collect("out of memory", 2, "", NULL, "cp", "a", "a", "b", "c", NULL);
         fail_new = false;
+        /* udev_new() fails only when memory runs out */
+        fail_udev_new = true;
+        r |= test_collect("out of memory in udev_new()", 2, "", "Out of memory", "cp", "a", "a", "b", NULL);
+        fail_udev_new = false;
 
         /* write() fails beyond the limit of the file size (with SIGXFSZ ignored), also after a short write */
         {
