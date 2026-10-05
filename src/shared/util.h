@@ -907,6 +907,12 @@ static inline int errno_or_else(int fallback) {
 /* Device is absent or "empty". We get -ENOMEDIUM from CD/DVD devices, also in VMs. */
 #define ERRNO_IS_DEVICE_ABSENT_OR_EMPTY(r) (ERRNO_IS_DEVICE_ABSENT(r) || abs(r) == ENOMEDIUM)
 
+/* Like ERRNO_IS_DISCONNECT() of systemd: the errors of a connection that is refused, broken or not
+ * established in time, as positive or negative errno. */
+#define ERRNO_IS_DISCONNECT(r)                                          \
+        IN_SET(abs(r), ECONNABORTED, ECONNREFUSED, ECONNRESET, EHOSTDOWN, EHOSTUNREACH, ENETDOWN, \
+               ENETRESET, ENETUNREACH, ENONET, ENOPROTOOPT, ENOTCONN, EPIPE, EPROTO, ESHUTDOWN, ETIMEDOUT)
+
 /* Like RET_GATHER() of systemd: collect possible errors in <acc>, so that the first error can be returned.
  * Returns (possibly updated) <acc>, which is evaluated only once. */
 #define RET_GATHER(acc, err)                    \

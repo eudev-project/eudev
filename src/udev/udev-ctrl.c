@@ -264,9 +264,16 @@ static bool ctrl_msg_type_has_reply(enum udev_ctrl_msg_type type) {
         return IN_SET(type, UDEV_CTRL_SET_TRACE, UDEV_CTRL_REVERT);
 }
 
-static int ctrl_send(struct udev_ctrl *uctrl, enum udev_ctrl_msg_type type, int intval, const char *buf, int timeout) {
+/* Sends a message, and waits until udevd handled it, or for its reply. ret_sent, if not NULL, tells whether the
+ * message was sent, so that a failure is one of waiting for udevd, like udev_ctrl_wait() of systemd v261, rather
+ * than one of connecting to it or sending the message, like its udev_ctrl_send(). */
+static int ctrl_send_full(struct udev_ctrl *uctrl, enum udev_ctrl_msg_type type, int intval, const char *buf, int timeout,
+                          bool *ret_sent) {
         struct udev_ctrl_msg_wire ctrl_msg_wire;
         int err = 0;
+
+        if (ret_sent)
+                *ret_sent = false;
 
         memzero(&ctrl_msg_wire, sizeof(struct udev_ctrl_msg_wire));
         snprintf(ctrl_msg_wire.version, sizeof(ctrl_msg_wire.version), "%.*s", (int)(sizeof(ctrl_msg_wire.version) - 1), "udev-" VERSION);
@@ -306,6 +313,8 @@ static int ctrl_send(struct udev_ctrl *uctrl, enum udev_ctrl_msg_type type, int 
                 err = -errno;
                 goto out;
         }
+        if (ret_sent)
+                *ret_sent = true;
 
         /* wait for peer message handling or disconnect */
         for (;;) {
@@ -348,6 +357,10 @@ out:
         return err;
 }
 
+static int ctrl_send(struct udev_ctrl *uctrl, enum udev_ctrl_msg_type type, int intval, const char *buf, int timeout) {
+        return ctrl_send_full(uctrl, type, intval, buf, timeout, NULL);
+}
+
 int udev_ctrl_send_set_log_level(struct udev_ctrl *uctrl, int priority, int timeout) {
         return ctrl_send(uctrl, UDEV_CTRL_SET_LOG_LEVEL, priority, NULL, timeout);
 }
@@ -374,6 +387,10 @@ int udev_ctrl_send_set_children_max(struct udev_ctrl *uctrl, int count, int time
 
 int udev_ctrl_send_ping(struct udev_ctrl *uctrl, int timeout) {
         return ctrl_send(uctrl, UDEV_CTRL_PING, 0, NULL, timeout);
+}
+
+int udev_ctrl_send_ping_full(struct udev_ctrl *uctrl, int timeout, bool *ret_sent) {
+        return ctrl_send_full(uctrl, UDEV_CTRL_PING, 0, NULL, timeout, ret_sent);
 }
 
 int udev_ctrl_send_exit(struct udev_ctrl *uctrl, int timeout) {

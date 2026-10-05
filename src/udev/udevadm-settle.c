@@ -136,7 +136,8 @@ static int adm_settle(struct udev *udev, int argc, char *argv[]) {
         if (getuid() == 0) {
                 struct udev_ctrl *uctrl;
                 usec_t ping_usec = MAX(5 * USEC_PER_SEC, timeout_usec);
-                int ping_timeout;
+                int ping_timeout, r;
+                bool sent;
 
                 /* Like systemd v261, the last version that pings udevd through the control socket, fail
                  * if it cannot be created. */
@@ -154,12 +155,21 @@ static int adm_settle(struct udev *udev, int argc, char *argv[]) {
                 else
                         ping_timeout = (ping_usec + USEC_PER_SEC - 1) / USEC_PER_SEC;
 
-                if (udev_ctrl_send_ping(uctrl, ping_timeout) < 0) {
-                        log_debug("no connection to daemon");
-                        udev_ctrl_unref(uctrl);
-                        return EXIT_SUCCESS;
-                }
+                /* Like systemd v261: when udevd cannot be reached, because it does not run, nothing is
+                 * waited for, and other failures are errors, also one of waiting for its reply. */
+                r = udev_ctrl_send_ping_full(uctrl, ping_timeout, &sent);
                 udev_ctrl_unref(uctrl);
+                if (r < 0 && sent) {
+                        log_error_errno(r, "Failed to wait for daemon to reply: %m");
+                        return EXIT_FAILURE;
+                }
+                if (r < 0) {
+                        bool ignore = ERRNO_IS_DISCONNECT(r) || r == -ENOENT;
+
+                        log_full_errno(ignore ? LOG_DEBUG : LOG_ERR, r, "Failed to connect to udev daemon%s: %m",
+                                       ignore ? ", ignoring" : "");
+                        return ignore ? EXIT_SUCCESS : EXIT_FAILURE;
+                }
         } else if (access(UDEV_ROOT_RUN "/udev/control", F_OK) < 0) {
                 /* Like systemd, for non-privileged users, at least check if udevd is running. */
                 if (errno == ENOENT)

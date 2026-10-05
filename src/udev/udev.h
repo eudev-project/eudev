@@ -187,6 +187,7 @@ int udev_ctrl_send_stop_exec_queue(struct udev_ctrl *uctrl, int timeout);
 int udev_ctrl_send_start_exec_queue(struct udev_ctrl *uctrl, int timeout);
 int udev_ctrl_send_reload(struct udev_ctrl *uctrl, int timeout);
 int udev_ctrl_send_ping(struct udev_ctrl *uctrl, int timeout);
+int udev_ctrl_send_ping_full(struct udev_ctrl *uctrl, int timeout, bool *ret_sent);
 int udev_ctrl_send_exit(struct udev_ctrl *uctrl, int timeout);
 int udev_ctrl_send_set_env(struct udev_ctrl *uctrl, const char *key, int timeout);
 int udev_ctrl_send_set_children_max(struct udev_ctrl *uctrl, int count, int timeout);
