@@ -33,6 +33,7 @@
 #include "libudev-private.h"
 #include "conf-files.h"
 #include "missing.h"
+#include "path-util.h"
 #include "strv.h"
 #include "utf8.h"
 
@@ -366,6 +367,28 @@ static const char* const udev_conf_dirs[] = {
 #endif
         NULL
 };
+
+/* Not part of the public API, used by udevadm cat. Like conf_files_cat() of systemd, logs the files and directories
+ * that udev_conf_files() looks at below root, at debug level. */
+void udev_conf_log_search_dirs(const char *root) {
+        size_t i;
+        int pass;
+
+        log_debug("Looking for configuration in:");
+        for (pass = 0; pass < 2; pass++)
+                for (i = 0; udev_conf_dirs[i]; i++) {
+                        _cleanup_free_ char *p = NULL;
+
+                        /* simplified, without a double slash, whatever the build directories look like */
+                        p = path_join(root, udev_conf_dirs[i], pass == 0 ? "udev.conf" : "udev.conf.d");
+                        if (!p) {
+                                log_oom_debug();
+                                return;
+                        }
+                        path_simplify(p);
+                        log_debug("   %s%s", p, pass == 0 ? "" : "/*.conf");
+                }
+}
 
 /* Not part of the public API, also used by udevadm cat. Returns the configuration files of udevd below root, like
  * config_parse_standard_file_with_dropins() of systemd for "udev/udev.conf": the main configuration file, the

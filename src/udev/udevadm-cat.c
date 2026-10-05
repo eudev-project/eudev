@@ -161,6 +161,8 @@ static int cat_config(bool *newline) {
         size_t n_dropins = 0, i;
         int r, ret = 0;
 
+        udev_conf_log_search_dirs(arg_root);
+
         r = udev_conf_files(arg_root, CONF_FILES_WARN, &c, &dropins, &n_dropins);
         if (r < 0)
                 return log_error_errno(r, "Failed to query file list: %m");

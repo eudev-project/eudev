@@ -53,6 +53,7 @@ char **udev_get_conf_warnings(struct udev *udev);
 int udev_get_timeout_signal(struct udev *udev);
 int udev_get_hwdb_format(struct udev *udev);
 int udev_read_hwdb_format(const char *root);
+void udev_conf_log_search_dirs(const char *root);
 int udev_conf_files(const char *root, ConfFilesFlags flags,
                     ConfFile **ret_main, ConfFile ***ret_dropins, size_t *ret_n_dropins);
 bool udev_get_sas_legacy_path(struct udev *udev);
