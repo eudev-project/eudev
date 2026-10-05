@@ -520,6 +520,121 @@ static void trigger_other_ata_compat_owners(struct udev_device *dev, enum udev_e
         }
 }
 
+/* eudev: the other way round, when the device on bus 0 with target 0 of an ATA port, the owner of the old ATA
+ * link of the port, goes away, a lone device left on the port gets the link only at its next event, see
+ * handle_scsi_ata(). The rules run path_id for the "remove" event of the SCSI target of that device; trigger a
+ * "change" uevent for the block devices below the remaining target, if exactly one remains on the port, unless
+ * they finished their event with ID_PATH_ATA_COMPAT already. Their events then find one target on the port
+ * and give them the link. The SCSI target is used rather than the block device, because the kernel removes the
+ * target after it is done with the device (e.g. after the cache of the disk is flushed), so that the target is
+ * gone from sysfs when its event runs, while it may still be there during the "remove" event of the disk. The
+ * targets are counted like scsi_host_has_one_target() does, without the removed one, in case its directory is
+ * still there (or in test mode). */
+static void trigger_lone_ata_compat_device(struct udev_device *dev, enum udev_event_mode mode) {
+        _cleanup_udev_enumerate_unref_ struct udev_enumerate *e = NULL;
+        _cleanup_udev_device_unref_ struct udev_device *atadev = NULL, *targetdev = NULL;
+        _cleanup_closedir_ DIR *dir = NULL;
+        _cleanup_free_ char *target = NULL;
+        _cleanup_strv_free_ char **args = NULL;
+        struct udev *udev = udev_device_get_udev(dev);
+        struct udev_device *hostdev, *portdev;
+        struct udev_list_entry *item;
+        const char *rest;
+        unsigned host, bus, id;
+        struct dirent *de;
+        int r;
+
+        if (sscanf(udev_device_get_sysname(dev), "target%u:%u:%u", &host, &bus, &id) != 3 || bus != 0 || id != 0)
+                return;
+
+        /* the target is gone from sysfs, so this is the nearest scsi_host above its path, which must be the
+         * parent directory of the target, on an ATA port */
+        hostdev = udev_device_get_parent_with_subsystem_devtype(dev, "scsi", "scsi_host");
+        if (!hostdev)
+                return;
+        rest = path_startswith(udev_device_get_syspath(dev), udev_device_get_syspath(hostdev));
+        if (!streq_ptr(rest, udev_device_get_sysname(dev)))
+                return;
+        portdev = udev_device_get_parent(hostdev);
+        if (!portdev)
+                return;
+        atadev = udev_device_new_from_subsystem_sysname(udev, "ata_port", udev_device_get_sysname(portdev));
+        if (!atadev)
+                return;
+
+        dir = opendir(udev_device_get_syspath(hostdev));
+        if (!dir)
+                return;
+        while ((de = readdir(dir))) {
+                if (!startswith(de->d_name, "target") || !IN_SET(de->d_type, DT_DIR, DT_UNKNOWN) ||
+                    streq(de->d_name, udev_device_get_sysname(dev)))
+                        continue;
+                if (target)
+                        return; /* more than one target remains, none of them gets the link */
+                target = strjoin(udev_device_get_syspath(hostdev), "/", de->d_name, NULL);
+                if (!target) {
+                        log_oom_debug();
+                        return;
+                }
+        }
+        if (!target)
+                return;
+
+        targetdev = udev_device_new_from_syspath(udev, target);
+        if (!targetdev)
+                return;
+
+        e = udev_enumerate_new(udev);
+        if (!e) {
+                log_oom_debug();
+                return;
+        }
+        r = udev_enumerate_add_match_subsystem(e, "block");
+        if (r >= 0)
+                r = udev_enumerate_add_match_parent(e, targetdev);
+        if (r >= 0)
+                r = udev_enumerate_scan_devices(e);
+        if (r < 0) {
+                log_device_debug_errno(dev, r, "Failed to enumerate the block devices of the ATA port, ignoring: %m");
+                return;
+        }
+
+        udev_list_entry_foreach(item, udev_enumerate_get_list_entry(e)) {
+                _cleanup_udev_device_unref_ struct udev_device *d = NULL;
+
+                d = udev_device_new_from_syspath(udev, udev_list_entry_get_name(item));
+                if (!d)
+                        continue;
+
+                if (udev_device_get_is_initialized(d) > 0 &&
+                    !udev_device_get_property_value(d, "ID_PROCESSING") &&
+                    udev_device_get_property_value(d, "ID_PATH_ATA_COMPAT"))
+                        continue;
+
+                if (mode != EVENT_UDEV_WORKER) {
+                        log_device_debug(dev, "Running in test mode, skipping 'change' uevent for %s, which may get the old ATA link of the port.",
+                                         udev_device_get_sysname(d));
+                        continue;
+                }
+
+                /* with the caller arguments, like the uevents udevd triggers, here with the PID of the worker */
+                if (!args) {
+                        r = device_build_default_trigger_args(/* with_timestamp= */ false, &args);
+                        if (r < 0) {
+                                log_device_debug_errno(dev, r, "Failed to build the arguments of the 'change' uevents, ignoring: %m");
+                                return;
+                        }
+                }
+
+                log_device_debug(dev, "Triggering 'change' uevent for %s, which may get the old ATA link of the port.",
+                                 udev_device_get_sysname(d));
+                r = device_trigger_with_timestamp(d, "change", args, /* ret_uuid= */ NULL);
+                if (r < 0)
+                        log_device_debug_errno(dev, r, "Failed to trigger 'change' uevent for %s, ignoring: %m",
+                                               udev_device_get_sysname(d));
+        }
+}
+
 static struct udev_device *handle_scsi_default(struct udev_device *parent, char **path) {
         struct udev_device *hostdev;
         int host, bus, target, lun;
@@ -947,6 +1062,15 @@ static int builtin_path_id(struct udev_device *dev, int argc __attribute__((unus
         _cleanup_free_ char *compat_path = NULL;
         bool supported_transport = false;
         bool supported_parent = false;
+
+        /* eudev: the rules run path_id for the "remove" event of a SCSI target only to pass the old ATA link
+         * of its port on, see trigger_lone_ata_compat_device(); the target is gone, there is no path to add */
+        if (streq_ptr(udev_device_get_action(dev), "remove") &&
+            streq_ptr(udev_device_get_subsystem(dev), "scsi") &&
+            streq_ptr(udev_device_get_devtype(dev), "scsi_target")) {
+                trigger_lone_ata_compat_device(dev, mode);
+                return EXIT_SUCCESS;
+        }
 
         /* walk up the chain of devices and compose path */
         parent = dev;
