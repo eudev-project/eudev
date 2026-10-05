@@ -444,6 +444,7 @@ out:
  * then wait for the one of the disk, from which they take ID_PATH_ATA_COMPAT. */
 static void trigger_other_ata_compat_owners(struct udev_device *dev, enum udev_event_mode mode) {
         _cleanup_udev_enumerate_unref_ struct udev_enumerate *e = NULL;
+        _cleanup_strv_free_ char **args = NULL;
         struct udev_device *scsidev, *targetdev, *hostdev;
         struct udev_list_entry *item;
         unsigned host, bus, target, lun;
@@ -501,9 +502,18 @@ static void trigger_other_ata_compat_owners(struct udev_device *dev, enum udev_e
                         continue;
                 }
 
+                /* with the caller arguments, like the uevents udevd triggers, here with the PID of the worker */
+                if (!args) {
+                        r = device_build_default_trigger_args(/* with_timestamp= */ false, &args);
+                        if (r < 0) {
+                                log_device_debug_errno(dev, r, "Failed to build the arguments of the 'change' uevents, ignoring: %m");
+                                return;
+                        }
+                }
+
                 log_device_debug(dev, "Triggering 'change' uevent for %s, which may have the old ATA link of the port.",
                                  udev_device_get_sysname(d));
-                r = device_trigger(d, "change", NULL);
+                r = device_trigger_with_timestamp(d, "change", args, /* ret_uuid= */ NULL);
                 if (r < 0)
                         log_device_debug_errno(dev, r, "Failed to trigger 'change' uevent for %s, ignoring: %m",
                                                udev_device_get_sysname(d));

@@ -551,24 +551,6 @@ static int trigger_args_join(char * const *args, char **ret)
         return 0;
 }
 
-/* Like sd_device_trigger_with_uuid() of systemd: triggers a synthetic uevent of the device with the action,
- * e.g. "change", by writing it to the uevent attribute, with the UUID, unless it is NULL. The kernel passes
- * the UUID on as SYNTH_UUID= since Linux 4.13; older kernels log an error and send no uevent at all, see
- * uevent_trigger_with_uuid(). */
-int device_trigger(struct udev_device *device, const char *action, const char *uuid)
-{
-        const char *syspath;
-
-        assert(device);
-        assert(action);
-
-        syspath = udev_device_get_syspath(device);
-        if (!syspath)
-                return -ENODEV;
-
-        return uevent_trigger(syspath, action, uuid);
-}
-
 DEFINE_TRIVIAL_CLEANUP_FUNC(struct udev_monitor *, udev_monitor_unref);
 DEFINE_TRIVIAL_CLEANUP_FUNC(struct udev_device *, udev_device_unref);
 
@@ -719,8 +701,8 @@ bool syspath_sends_uevents(const char *syspath)
         return access(strjoina(syspath, "/subsystem"), F_OK) >= 0;
 }
 
-/* Triggers a synthetic uevent of the device with the syspath, like device_trigger() with the UUID, followed by
- * the arguments joined by trigger_args_join() unless they are NULL, as long as the kernel supports UUIDs, and
+/* Triggers a synthetic uevent of the device with the syspath with the action and the UUID, followed by the
+ * arguments joined by trigger_args_join() unless they are NULL, as long as the kernel supports UUIDs, and
  * otherwise without both; Linux 4.13 brought both, the kernel passes them on as SYNTH_UUID= and
  * SYNTH_ARG_KEY=VALUE. Kernels before 4.13 accept the write of an action with
  * a UUID, log "uevent: unknown action-string", and send no uevent at all, so their missing support cannot be
