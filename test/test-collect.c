@@ -12,6 +12,15 @@
  * collect's main() keeps its checkpoint files in run/udev/collect/ of it instead of below /run.
  */
 
+/* new() in collect fails while fail_new is set, to test running out of memory */
+#include "util.h"
+static bool fail_new = false;
+static void *test_new(size_t size, size_t n) {
+        return fail_new ? NULL : malloc_multiply(size, n);
+}
+#undef new
+#define new(t, n) ((t*) test_new(sizeof(t), (n)))
+
 /* the functions of collect, which are static, with its main() renamed */
 #undef UDEV_ROOT_RUN
 #define UDEV_ROOT_RUN "run"
@@ -296,6 +305,11 @@ int main(void) {
         r |= test_collect("missing parameters", 1, "Missing parameter(s)\n", "", "cp", NULL);
         r |= test_collect("unknown option", 1, "", NULL, "--bogus", "cp", "a", "a", NULL);
         r |= test_collect("too long checkpoint name", 3, "", "is too long", longname, "a", "a", NULL);
+
+        /* running out of memory for an ID of the list that the file does not have yet: the file is closed */
+        fail_new = true;
+        r |= test_collect("out of memory", 2, "", NULL, "cp", "a", "a", "b", "c", NULL);
+        fail_new = false;
 
         /* write() fails beyond the limit of the file size (with SIGXFSZ ignored), also after a short write */
         {

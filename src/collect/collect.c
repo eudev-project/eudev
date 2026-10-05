@@ -498,13 +498,13 @@ int main(int argc, char **argv)
         r = checkout(fd);
         if (r == -ENOMEM) { /* checkout() logged it */
                 ret = 2;
-                goto out;
+                goto close_fd;
         }
         if (r < 0) {
                 errno = -r;
                 fprintf(stderr, "Cannot read %s/%s: %m\n", tmpdir, checkpoint);
                 ret = -1;
-                goto out;
+                goto close_fd;
         }
 
         for (i = argi; i < argc; i++) {
@@ -527,7 +527,7 @@ int main(int argc, char **argv)
                         if (!him) {
                                 log_oom();
                                 ret = 2;
-                                goto out;
+                                goto close_fd;
                         }
 
                         him->name = strdup(argv[i]);
@@ -535,7 +535,7 @@ int main(int argc, char **argv)
                                 free(him);
                                 log_oom();
                                 ret = 2;
-                                goto out;
+                                goto close_fd;
                         }
 
                         him->state = STATE_NONE;
@@ -560,9 +560,8 @@ int main(int argc, char **argv)
 
         if (lseek(fd, 0, SEEK_SET) < 0 || ftruncate(fd, 0) < 0) { /* in the unlikely event lseek/ftruncate fail */
                 fprintf(stderr, "lseek/ftruncate %s/%s failed: %m\n", tmpdir, checkpoint);
-                close(fd);
                 ret = -1;
-                goto out;
+                goto close_fd;
         }
         r = missing(fd);
         if (r == -ENOMEM) /* missing() logged it */
@@ -577,6 +576,7 @@ int main(int argc, char **argv)
         if (lockf(fd, F_ULOCK, 0)) {
                 /* this error can be safely ignored */
         }
+close_fd:
         close(fd);
 out:
         if (debug)
