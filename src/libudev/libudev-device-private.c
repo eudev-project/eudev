@@ -27,8 +27,10 @@
 #include <fcntl.h>
 #include <poll.h>
 #include <sys/mman.h>
+#include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/sysmacros.h>
+#include <linux/filter.h>
 
 #include "libudev.h"
 #include "libudev-private.h"
@@ -737,16 +739,16 @@ int uevent_trigger_share_uuid_supported(void)
  * the kernel supports UUIDs, see uevent_trigger_set_uuid_supported(). */
 #define SYNTHETIC_UUID_PROBE_CHECK_USEC (10 * USEC_PER_MSEC)
 
-/* The receive buffer of the socket of uevent_trigger_with_uuid(), which gets every uevent of the kernel, so that
- * a flood of uevents, e.g. of a coldplug, does not fill it up while the process does not read, e.g. between
- * binding the socket and triggering the uevent, so that the kernel drops the uevent that the probe waits for
- * (ENOBUFS); the default of net.core.rmem_default (208 KiB) holds about 220 uevents. The kernel doubles the
- * size for its bookkeeping, and every uevent takes about 960 bytes of it, whatever its length, so the 32 MiB
- * hold about 35000 uevents (Linux 7.1.8): about half a second of the fastest flood measured, four processes
- * writing to uevent files with udevd running, about 70000 uevents per second in total (KVM, 2 CPUs), and
- * much longer for a slower one. The buffer only takes memory for the uevents that are queued and not read
- * yet; udevd and udevadm monitor use 128 MiB. Beyond net.core.rmem_max, it needs CAP_NET_ADMIN, see
- * udev_monitor_set_receive_buffer_size(). */
+/* The receive buffer of the socket of uevent_trigger_with_uuid(), which gets every uevent of the kernel if the
+ * filter of uevent_probe_filter() cannot be attached, so that a flood of uevents, e.g. of a coldplug, does not
+ * fill it up while the process does not read, e.g. between binding the socket and triggering the uevent, so that
+ * the kernel drops the uevent that the probe waits for (ENOBUFS); the default of net.core.rmem_default (208 KiB)
+ * holds about 220 uevents. The kernel doubles the size for its bookkeeping, and every uevent takes about 960 bytes
+ * of it, whatever its length, so the 32 MiB hold about 35000 uevents (Linux 7.1.8): about half a second of the
+ * fastest flood measured, four processes writing to uevent files with udevd running, about 70000 uevents per
+ * second in total (KVM, 2 CPUs), and much longer for a slower one. The buffer only takes memory for the uevents
+ * that are queued and not read yet; udevd and udevadm monitor use 128 MiB. Beyond net.core.rmem_max, it needs
+ * CAP_NET_ADMIN, see udev_monitor_set_receive_buffer_size(). */
 #define SYNTHETIC_UUID_PROBE_RCVBUF (16 * 1024 * 1024)
 
 /* The sequence number of the last uevent that the kernel sent, from /sys/kernel/uevent_seqnum, or UINT64_MAX if
@@ -767,6 +769,84 @@ static uint64_t uevent_seqnum(void)
 static bool uevent_seqnum_unchanged(uint64_t before, uint64_t after)
 {
         return before != UINT64_MAX && before == after;
+}
+
+/* Attaches a socket filter to the socket of the monitor that passes only the uevents of the kernel for the
+ * device with the syspath with the action: the kernel starts every uevent message with "ACTION@DEVPATH" and a
+ * NUL, which the filter compares, up to 4 bytes at a time, so the other uevents, e.g. of a flood, never reach
+ * the socket, and cannot fill its buffer. The filters of udev_monitor_filter_add_match_subsystem_devtype()
+ * cannot do that: their socket filter only looks at the messages of udevd, and passes every message of the
+ * kernel, whose subsystem is not at a fixed place (systemd installs none for the uevents of the kernel).
+ * Returns 0, or a negative errno, e.g. -E2BIG if the path is too long for a socket filter. */
+static int uevent_probe_filter(struct udev_monitor *monitor, const char *syspath, const char *action)
+{
+        _cleanup_free_ struct sock_filter *ins = NULL;
+        _cleanup_free_ char *header = NULL;
+        struct sock_fprog prog = {};
+        const char *devpath;
+        const uint8_t *h;
+        size_t len, n = 0, i;
+
+        assert(monitor);
+        assert(syspath);
+        assert(action);
+
+        devpath = startswith(syspath, "/sys");
+        if (!devpath || devpath[0] != '/')
+                return -EINVAL;
+
+        header = strjoin(action, "@", devpath, NULL);
+        if (!header)
+                return -ENOMEM;
+
+        /* with the NUL, so that a longer path, e.g. of a partition of the disk, does not match */
+        len = strlen(header) + 1;
+
+        /* three instructions for every 4 bytes, for the 2 and the 1 that may be left, and the last */
+        if ((len / 4 + 2) * 3 + 1 > BPF_MAXINSNS)
+                return -E2BIG;
+
+        ins = new(struct sock_filter, (len / 4 + 2) * 3 + 1);
+        if (!ins)
+                return -ENOMEM;
+
+        h = (const uint8_t *) header;
+        for (i = 0; i < len;) {
+                uint32_t value;
+                uint16_t size;
+                size_t k;
+
+                if (len - i >= 4) {
+                        size = BPF_W;
+                        k = 4;
+                        value = (uint32_t) h[i] << 24 | (uint32_t) h[i + 1] << 16 | (uint32_t) h[i + 2] << 8 | h[i + 3];
+                } else if (len - i >= 2) {
+                        size = BPF_H;
+                        k = 2;
+                        value = (uint32_t) h[i] << 8 | h[i + 1];
+                } else {
+                        size = BPF_B;
+                        k = 1;
+                        value = h[i];
+                }
+
+                /* load the bytes at the offset in network byte order (a message that is shorter is dropped),
+                 * and drop the message if they differ */
+                ins[n++] = (struct sock_filter) BPF_STMT(BPF_LD|size|BPF_ABS, i);
+                ins[n++] = (struct sock_filter) BPF_JUMP(BPF_JMP|BPF_JEQ|BPF_K, value, 1, 0);
+                ins[n++] = (struct sock_filter) BPF_STMT(BPF_RET|BPF_K, 0);
+                i += k;
+        }
+
+        /* the whole header matched, pass the message */
+        ins[n++] = (struct sock_filter) BPF_STMT(BPF_RET|BPF_K, 0xffffffff);
+
+        prog.len = n;
+        prog.filter = ins;
+        if (setsockopt(udev_monitor_get_fd(monitor), SOL_SOCKET, SO_ATTACH_FILTER, &prog, sizeof(prog)) < 0)
+                return -errno;
+
+        return 0;
 }
 
 /* What uevent_trigger_with_uuid() saw of the uevents of the kernel while it waited. */
@@ -996,8 +1076,13 @@ static int uevent_trigger_with_uuid(struct udev *udev, const char *syspath, cons
 
         /* The socket must be bound before the uevent is triggered. */
         monitor = udev_monitor_new_from_netlink(udev, "kernel");
-        if (monitor)
+        if (monitor) {
                 (void) udev_monitor_set_receive_buffer_size(monitor, SYNTHETIC_UUID_PROBE_RCVBUF);
+
+                r = uevent_probe_filter(monitor, syspath, action);
+                if (r < 0)
+                        log_debug_errno(r, "Failed to filter the uevents of the kernel for %s, ignoring: %m", syspath);
+        }
         if (!monitor || udev_monitor_enable_receiving(monitor) < 0) {
                 log_debug("Failed to watch the uevents of the kernel, triggering '%s' on %s without a UUID.",
                           action, syspath);
