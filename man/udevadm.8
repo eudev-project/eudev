@@ -453,7 +453,7 @@ and in the debug log of
 SYNTH_ARG_PIDFDID=
 and
 SYNTH_ARG_InvocationID=\&. This requires Linux 4\&.13 or newer: with older kernels, the events are triggered without the UUID and these properties, see
-\fB\-\-settle\fR\&. As older kernels accept such an event without sending it, the first event of each
+\fB\-\-settle\fR\&. A kernel that reports version 4\&.13 or newer is taken to support them\&. As older kernels accept such an event without sending it, and may have the support backported, on a kernel that reports an older version the first event of each
 \fBudevadm trigger\fR
 call and the first one of
 \fBudevd\fR
@@ -601,7 +601,7 @@ Apart from triggering events, also waits for those events to finish\&. Note that
 \fBudevadm settle\fR\&.
 \fBudevadm settle\fR
 waits for all events to finish\&. This option only waits for events triggered by the same command to finish\&. The events are recognized by their UUIDs, see
-\fB\-\-uuid\fR\&. As kernels before Linux 4\&.13 do not support them,
+\fB\-\-uuid\fR\&. As kernels before Linux 4\&.13 do not support them, on a kernel that reports an older version
 \fBudevadm\fR
 finds out with the first event whether the kernel passes the UUID on (see above), which may take a second or two, and triggers the events without UUIDs then, and waits for an event of each triggered device instead, as for an event that was triggered without a UUID before it was known\&. Devices without a subsystem, e\&.g\&.
 /sys/devices/platform

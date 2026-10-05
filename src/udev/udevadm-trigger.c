@@ -391,7 +391,8 @@ static int exec_list(struct udev *udev, char **list, const char *action, Set *se
                  *
                  * eudev: systemd assumes that kernels before 4.13, which do not know the UUID logic, refuse
                  * the write with EINVAL, and then triggers the uevents without UUIDs. But they accept it,
-                 * and send no uevent at all, so --settle would wait forever. uevent_trigger_with_args()
+                 * and send no uevent at all, so --settle would wait forever. On a kernel that reports a
+                 * version before 4.13, which may have the support backported, uevent_trigger_with_args()
                  * finds out with the first uevent whether the kernel supports UUIDs (or with the next ones,
                  * as long as their uevents do not tell), and triggers the uevents without them and without
                  * the arguments if it does not; then --settle waits for an event of the device, as for a

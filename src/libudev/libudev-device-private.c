@@ -30,6 +30,7 @@
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/sysmacros.h>
+#include <sys/utsname.h>
 #include <linux/filter.h>
 
 #include "libudev.h"
@@ -708,11 +709,24 @@ static int uevent_trigger_set_uuid_supported(int supported)
         return supported;
 }
 
+/* Whether the running kernel reports Linux 4.13 or newer, which supports UUIDs of synthetic uevents, so that
+ * uevent_trigger_with_uuid() needs no probe, like eudev before the probe (b3a70f99f). A kernel that reports an
+ * older version may have the support backported, so it is probed. */
+static bool kernel_version_supports_uuid(void)
+{
+        unsigned major, minor;
+        struct utsname u;
+
+        return uname(&u) >= 0 && sscanf(u.release, "%u.%u", &major, &minor) == 2 &&
+               (major > 4 || (major == 4 && minor >= 13));
+}
+
 /* Moves the result of the probe of uevent_trigger_with_uuid() to a shared anonymous mapping, so that the
  * process and the child processes it forks afterwards share it: whichever of them finds out first whether the
  * kernel supports UUIDs, the others see the result too, also those forked before it was known. udevd uses it
  * for its workers and its "(udev-synth)" processes, which trigger uevents as well, so that they do not probe
- * again, each of them, which may take a second or two, and keep the result until udevd exits. */
+ * again, each of them, which may take a second or two on kernels that report a version before 4.13, and keep
+ * the result until udevd exits. */
 int uevent_trigger_share_uuid_supported(void)
 {
         int *p;
@@ -1034,30 +1048,30 @@ static int uevent_trigger_fitting(const char *syspath, const char *action, const
 
 /* Triggers a synthetic uevent of the device with the syspath with the action and the UUID, followed by the
  * arguments joined by trigger_args_join() unless they are NULL, as long as the kernel supports UUIDs, and
- * otherwise without both, see uevent_trigger_fitting(). Linux 4.13 brought both, the kernel passes them on
- * as SYNTH_UUID= and SYNTH_ARG_KEY=VALUE. Kernels before 4.13 accept the write of an action with a UUID, log
- * "uevent: unknown action-string", and send no uevent at all, so their missing support cannot be told from
- * the result of the write. So, unlike systemd, which looks at the result of the write, as long as it is not
- * known, the uevent is triggered with the UUID, and the uevents of the kernel are watched: if the uevent with
- * the UUID arrives, the kernel supports UUIDs. If it does not arrive within a second, the uevent is triggered
- * again without the UUID, so that the device gets its uevent, and the uevent of that decides: kernels since
- * 4.13 add SYNTH_UUID=0 to a synthetic uevent without a UUID, older kernels add nothing. Any other uevent with
- * SYNTH_UUID= that arrives meanwhile, triggered by whoever, also shows that the kernel supports UUIDs. When the
- * uevent without the UUID does not arrive either within a second, e.g. as the kernel suppresses the uevents
- * of a disk while add_disk() scans its partitions, or when the socket lost uevents, nothing is decided, and
- * the next call tries again: a missing uevent alone never decides. A decided result is kept for all further
- * calls of the process, and of the processes that share it, see uevent_trigger_share_uuid_supported(); when
- * another of them decides first, the waiting stops, and its result stays, see
- * uevent_trigger_set_uuid_supported(). The waits are skipped when /sys/kernel/uevent_seqnum shows that the
- * write triggered no uevent at all, see uevent_seqnum(). The device gets the uevent with the UUID when the
- * kernel supports UUIDs, and the one without it when it does not, as it would anyway; but when nothing could
- * be decided, it may get none, when the kernel sent none, or both, when the kernel sent the first one, which
- * the socket lost or which did not arrive in time. When the uevents of the kernel cannot be watched, or the
- * kernel refused the uevent with the UUID, the uevent is triggered without the UUID, and the next call tries
- * again. A device that never sends uevents, without a subsystem or a hidden block device, see
- * syspath_sends_uevents(), cannot tell, and is triggered with the UUID, without waiting; the next call tries
- * again. Returns 1 if the uevent was triggered with the UUID, 0 if it was triggered without it, and a negative
- * errno on failure. */
+ * otherwise without both, see uevent_trigger_fitting(). Linux 4.13 brought both, the kernel passes them on as
+ * SYNTH_UUID= and SYNTH_ARG_KEY=VALUE. Kernels before 4.13 accept the write of an action with a UUID, log "uevent:
+ * unknown action-string", and send no uevent at all, so their missing support cannot be told from the result of
+ * the write. A kernel that reports Linux 4.13 or newer is known to support them, see
+ * kernel_version_supports_uuid(). On one that reports an older version, which may have the support backported,
+ * unlike systemd, which looks at the result of the write, as long as it is not known, the uevent is triggered with
+ * the UUID, and the uevents of the kernel are watched: if the uevent with the UUID arrives, the kernel supports
+ * UUIDs. If it does not arrive within a second, the uevent is triggered again without the UUID, so that the device
+ * gets its uevent, and the uevent of that decides: kernels since 4.13 add SYNTH_UUID=0 to a synthetic uevent
+ * without a UUID, older kernels add nothing. Any other uevent with SYNTH_UUID= that arrives meanwhile, triggered
+ * by whoever, also shows that the kernel supports UUIDs. When the uevent without the UUID does not arrive either
+ * within a second, e.g. as the kernel suppresses the uevents of a disk while add_disk() scans its partitions, or
+ * when the socket lost uevents, nothing is decided, and the next call tries again: a missing uevent alone never
+ * decides. A decided result is kept for all further calls of the process, and of the processes that share it, see
+ * uevent_trigger_share_uuid_supported(); when another of them decides first, the waiting stops, and its result
+ * stays, see uevent_trigger_set_uuid_supported(). The waits are skipped when /sys/kernel/uevent_seqnum shows that
+ * the write triggered no uevent at all, see uevent_seqnum(). The device gets the uevent with the UUID when the
+ * kernel supports UUIDs, and the one without it when it does not, as it would anyway; but when nothing could be
+ * decided, it may get none, when the kernel sent none, or both, when the kernel sent the first one, which the
+ * socket lost or which did not arrive in time. When the uevents of the kernel cannot be watched, or the kernel
+ * refused the uevent with the UUID, the uevent is triggered without the UUID, and the next call tries again. A
+ * device that never sends uevents, without a subsystem or a hidden block device, see syspath_sends_uevents(),
+ * cannot tell, and is triggered with the UUID, without waiting; the next call tries again. Returns 1 if the uevent
+ * was triggered with the UUID, 0 if it was triggered without it, and a negative errno on failure. */
 static int uevent_trigger_with_uuid(struct udev *udev, const char *syspath, const char *action,
                                     const char *uuid, const char *args)
 {
@@ -1075,6 +1089,11 @@ static int uevent_trigger_with_uuid(struct udev *udev, const char *syspath, cons
         assert(uuid);
 
         r = uevent_trigger_uuid_supported();
+        if (r < 0 && kernel_version_supports_uuid()) {
+                r = uevent_trigger_set_uuid_supported(1);
+                if (r > 0)
+                        log_debug("The kernel is Linux 4.13 or newer, it supports UUIDs of synthetic uevents.");
+        }
         if (r > 0)
                 return uevent_trigger_fitting(syspath, action, uuid, args);
 
