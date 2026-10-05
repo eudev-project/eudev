@@ -1207,13 +1207,16 @@ static int import_property(struct udev_event *event, struct udev_rules *rules, s
         return r;
 }
 
-/* Imports a "KEY=VALUE" line. Lines that are empty, comments or invalid are skipped. Returns -ENOMEM
- * when out of memory, 0 otherwise. */
+/* Imports a "KEY=VALUE" line, like get_property_from_string() of systemd: whitespace around the key and the
+ * value is removed, and the value may be quoted with '"' or '\''. Lines that are empty or comments are
+ * skipped; invalid lines, without '=', with an empty key or value, or with a missing closing quote, are
+ * skipped with a debug message, which shows the line like systemd: as far as it is parsed, i.e. the whole
+ * line if it has no '=', and the part before the key and the key otherwise. Returns -ENOMEM when out of
+ * memory, 0 otherwise. */
 static int import_property_from_string(struct udev_event *event, struct udev_rules *rules, struct token *rule,
                                        struct token *token, char *line) {
-        char *key;
-        char *val;
-        size_t len;
+        _cleanup_free_ char *escaped = NULL;
+        char *key, *key_end = NULL, *val, *val_end, *eq;
         int r;
 
         /* find key */
@@ -1226,52 +1229,46 @@ static int import_property_from_string(struct udev_event *event, struct udev_rul
                 return 0;
 
         /* split key/value */
-        val = strchr(key, '=');
-        if (val == NULL)
-                return 0;
-        val[0] = '\0';
-        val++;
+        eq = strchr(key, '=');
+        if (!eq)
+                goto invalid;
 
-        /* find value */
+        key_end = eq;
+        while (key_end > key && isspace((unsigned char) key_end[-1]))
+                key_end--;
+        if (key_end == key)
+                goto invalid;
+
+        val = eq + 1;
         while (isspace((unsigned char) val[0]))
                 val++;
-
-        /* terminate key */
-        len = strlen(key);
-        if (len == 0)
-                return 0;
-        while (isspace((unsigned char) key[len-1]))
-                len--;
-        key[len] = '\0';
-
-        /* terminate value */
-        len = strlen(val);
-        if (len == 0)
-                return 0;
-        while (isspace((unsigned char) val[len-1]))
-                len--;
-        val[len] = '\0';
-
-        if (len == 0)
-                return 0;
+        val_end = val + strlen(val);
+        while (val_end > val && isspace((unsigned char) val_end[-1]))
+                val_end--;
+        if (val_end == val)
+                goto invalid;
 
         /* unquote */
         if (val[0] == '"' || val[0] == '\'') {
-                if (len == 1 || val[len-1] != val[0]) {
-                        _cleanup_free_ char *escaped = utf8_escape_non_printable(val);
-
-                        /* the line is split into the key and the value by now */
-                        log_event_debug_errno(event, rules, rule, token, EINVAL,
-                                              "Failed to parse key and value from '%s=%s', ignoring: %m",
-                                              key, escaped ?: val);
-                        return 0;
-                }
-                val[len-1] = '\0';
+                if (val_end - val == 1 || val_end[-1] != val[0])
+                        goto invalid;
                 val++;
+                val_end--;
         }
+
+        *key_end = '\0';
+        *val_end = '\0';
 
         r = import_property(event, rules, rule, token, key, val);
         return r == -ENOMEM ? r : 0;
+
+invalid:
+        if (key_end)
+                *key_end = '\0';
+        escaped = utf8_escape_non_printable(line);
+        log_event_debug_errno(event, rules, rule, token, EINVAL,
+                              "Failed to parse key and value from \"%s\", ignoring: %m", escaped ?: line);
+        return 0;
 }
 
 /* Like IMPORT{file} of systemd-udevd: returns 1 when the file was imported, 0 when it does not exist
