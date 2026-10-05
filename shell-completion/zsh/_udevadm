@@ -20,7 +20,7 @@ _udevadm_info(){
         '--cleanup-db[Cleanup the udev database.]' \
         '--value[When showing properties, print only their values.]' \
         '*--property=[Show only properties by this name.]:NAME' \
-        '--wait-for-initialization=-[Wait for device to be initialized.]:SECONDS' \
+        '--wait-for-initialization=-[Wait for device to be initialized.]:SECS' \
         '--json=[Generate JSON output]:MODE:(pretty short off)' \
         '--no-pager[Do not pipe output into a pager.]' \
         '*--subsystem-match=[When used with --export-db, only show devices of the given subsystem.]:SUBSYSTEM' \
