@@ -408,6 +408,53 @@ T}
 .PP
 Request device events from the kernel\&. Primarily used to replay events at system coldplug time\&.
 .PP
+Each event is triggered with a random UUID, which the kernel passes on in the
+SYNTH_UUID=
+property (see
+\fB\-\-uuid\fR), and with information about the program that triggered it, which the kernel passes on in these properties (note the mixed\-case names):
+.PP
+SYNTH_ARG_PID=
+.RS 4
+The process ID of
+\fBudevadm\fR\&.
+.RE
+.PP
+SYNTH_ARG_Comm=
+.RS 4
+The name of the program,
+udevadm, without its directory and without the characters that are neither letters nor digits\&.
+.RE
+.PP
+SYNTH_ARG_TimestampRealtime=, SYNTH_ARG_TimestampMonotonic=, SYNTH_ARG_TimestampBoottime=
+.RS 4
+The time in microseconds of
+\fBCLOCK_REALTIME\fR,
+\fBCLOCK_MONOTONIC\fR
+and
+\fBCLOCK_BOOTTIME\fR
+when the triggering started\&. It is taken once, so all events of one call carry the same time\&.
+.RE
+.PP
+The events that
+\fBudevd\fR
+triggers itself, the change events of watched devices (see the
+\fBwatch\fR
+option in
+\fBudev\fR(7)) and of the partitions of a disk whose partition table is read again, carry them too, with the process ID of
+\fBudevd\fR
+(of the worker for the change events of the
+\fBpath_id\fR
+built\-in command) and the time of each event\&. The properties can be matched with
+\fIENV{}\fR
+in rules, are shown by
+\fBudevadm monitor \-\-property\fR
+and in the debug log of
+\fBudevd\fR, and are not stored in the udev database\&. Unlike systemd, eudev does not send
+SYNTH_ARG_PIDFDID=
+and
+SYNTH_ARG_InvocationID=\&. This requires Linux 4\&.13 or newer: with older kernels, the events are triggered without the UUID and these properties, see
+\fB\-\-settle\fR\&. The kernel builds every event in a buffer of 2048 bytes for at most 64 properties; when it refuses an event because the properties no longer fit, the event is triggered again without them, and then also without the UUID\&.
+.PP
 \fB\-v\fR, \fB\-\-verbose\fR
 .RS 4
 Print the list of devices which will be triggered\&.
@@ -553,10 +600,10 @@ with
 .PP
 \fB\-\-uuid\fR
 .RS 4
-Trigger the synthetic device events, and associate a randomized UUID with each\&. These UUIDs are printed to standard output, one line for each event\&. These UUIDs are included in the uevent environment block (in the
+Print the randomized UUIDs that the synthetic device events are triggered with to standard output, one line for each event\&. These UUIDs are included in the uevent environment block (in the
 SYNTH_UUID=
 property) and may be used to track delivery of the generated events\&. This requires Linux 4\&.13 or newer: with older kernels, the events are triggered without UUIDs, with a warning, and no UUIDs are printed, see
-\fB\-\-settle\fR\&. No UUID is printed for a device without a subsystem, which is triggered without one, as the kernel sends no event for it\&.
+\fB\-\-settle\fR\&. No UUID is printed for a device without a subsystem, which is triggered without one, as the kernel sends no event for it, and for a device whose event the kernel refused with the UUID, as it did not fit, which is triggered without one, with a warning\&.
 .RE
 .PP
 \fB\-\-wait\-daemon[=\fR\fB\fISECONDS\fR\fR\fB]\fR

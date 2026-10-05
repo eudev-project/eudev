@@ -396,6 +396,23 @@ below; for a device whose database entry was written by an older version of udev
 Match against a device property value\&. When the device does not have the property, the global property set with
 \fBudevadm control \-\-property\fR
 is matched, if there is one\&.
+.sp
+The synthetic events that
+\fBudevadm trigger\fR
+and
+\fBudevd\fR
+trigger carry a random UUID in
+SYNTH_UUID=, and the process ID, the program name and the time of the program that triggered them in
+SYNTH_ARG_PID=,
+SYNTH_ARG_Comm=,
+SYNTH_ARG_TimestampRealtime=,
+SYNTH_ARG_TimestampMonotonic=
+and
+SYNTH_ARG_TimestampBoottime=
+(with Linux 4\&.13 or newer; note the mixed\-case names), which can be matched here, e\&.g\&.
+ENV{SYNTH_ARG_Comm}=="udevadm"\&. Like the other properties that come with the event from the kernel, they are not stored in the udev database\&. See
+\fBudevadm\fR(8)
+for details\&.
 .RE
 .PP
 \fITAG\fR

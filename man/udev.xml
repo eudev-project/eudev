@@ -359,6 +359,18 @@
             <para>Match against a device property value. When the device does not have
             the property, the global property set with <command>udevadm control
             --property</command> is matched, if there is one.</para>
+            <para>The synthetic events that <command>udevadm trigger</command> and
+            <command>udevd</command> trigger carry a random UUID in <literal>SYNTH_UUID=</literal>, and
+            the process ID, the program name and the time of the program that triggered them in
+            <literal>SYNTH_ARG_PID=</literal>, <literal>SYNTH_ARG_Comm=</literal>,
+            <literal>SYNTH_ARG_TimestampRealtime=</literal>,
+            <literal>SYNTH_ARG_TimestampMonotonic=</literal> and
+            <literal>SYNTH_ARG_TimestampBoottime=</literal> (with Linux 4.13 or newer; note the
+            mixed-case names), which can be matched here, e.g.
+            <literal>ENV{SYNTH_ARG_Comm}=="udevadm"</literal>. Like the other properties that come with
+            the event from the kernel, they are not stored in the udev database. See
+            <citerefentry><refentrytitle>udevadm</refentrytitle><manvolnum>8</manvolnum></citerefentry>
+            for details.</para>
           </listitem>
         </varlistentry>
 
