@@ -105,8 +105,11 @@ int udev_device_has_db(struct udev_device *udev_device);
 int udev_device_db_is_persistent(struct udev_device *udev_device);
 int udev_device_tag_index(struct udev_device *dev, bool add);
 int udev_device_tag_index_restore(struct udev_device *dev, struct udev_device *old);
+/* Like parse_devnum() of systemd: "MAJOR:MINOR" in decimal, both valid for the kernel. */
+int parse_devnum_id(const char *s, dev_t *ret);
 /* Like sd_device_new_from_devname() of systemd: the device whose device node the path below /dev/, e.g. a
- * device node symlink, resolves to. -EINVAL if it is not below /dev/, -ENODEV if it does not exist. */
+ * device node symlink, resolves to, or of the number of /dev/block/MAJOR:MINOR or /dev/char/MAJOR:MINOR,
+ * which need not exist. -EINVAL if it is not below /dev/, -ENODEV if it does not exist. */
 int device_new_from_devname(struct udev *udev, const char *devname, struct udev_device **ret);
 /* Like sd_device_new_from_path() of systemd: the device of a path that resolves to a device node below /dev/,
  * or to a sysfs path; it may also be relative, or a symlink. -ENODEV if it does not exist, or is neither. */

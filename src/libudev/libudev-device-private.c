@@ -518,17 +518,49 @@ int device_trigger(struct udev_device *device, const char *action, const char *u
 DEFINE_TRIVIAL_CLEANUP_FUNC(struct udev_monitor *, udev_monitor_unref);
 DEFINE_TRIVIAL_CLEANUP_FUNC(struct udev_device *, udev_device_unref);
 
+/* Like device_path_parse_major_minor() of systemd: the type and the number of a path /dev/block/MAJOR:MINOR or
+ * /dev/char/MAJOR:MINOR, without looking at the file system. -ENODEV for other paths. Unlike systemd, there are
+ * no synthetic inaccessible device nodes of /run/systemd/inaccessible/. */
+static int device_path_parse_major_minor(const char *path, char *ret_type, dev_t *ret_devnum) {
+        const char *w;
+        dev_t devnum;
+        char type;
+        int r;
+
+        w = path_startswith(path, "/dev/block/");
+        if (w)
+                type = 'b';
+        else {
+                w = path_startswith(path, "/dev/char/");
+                if (!w)
+                        return -ENODEV;
+
+                type = 'c';
+        }
+
+        r = parse_devnum_id(w, &devnum);
+        if (r < 0)
+                return r;
+
+        *ret_type = type;
+        *ret_devnum = devnum;
+        return 0;
+}
+
 /* Like device_new_from_devname() of systemd's sd-device: finds the device whose device node the path resolves
  * to, below /dev/, e.g. the path of a device node symlink. With strict, as for sd_device_new_from_devname(),
  * the path itself must be below /dev/ too; without, as for sd_device_new_from_path(), it may be any path, also
- * a relative one. Returns -EINVAL if it is not below /dev/, -ENODEV if it does not exist, -ENOTTY if it is
- * not a device node, and the error of udev_device_new_from_devnum() otherwise, e.g. -ENXIO if the device with
- * its number has another number or type. */
+ * a relative one. Like in systemd, /dev/block/MAJOR:MINOR and /dev/char/MAJOR:MINOR are looked up by the number
+ * in the path, also when the path does not exist. Returns -EINVAL if it is not below /dev/, -ENODEV if it does
+ * not exist, -ENOTTY if it is not a device node, and the error of udev_device_new_from_devnum() otherwise, e.g.
+ * -ENXIO if the device with its number has another number or type. */
 static int device_new_from_devname_full(struct udev *udev, const char *devname, bool strict,
                                         struct udev_device **ret) {
         _cleanup_(udev_device_unrefp) struct udev_device *dev = NULL;
         _cleanup_free_ char *resolved = NULL;
         struct stat st;
+        dev_t devnum;
+        char type;
         int r;
 
         assert(udev);
@@ -537,6 +569,18 @@ static int device_new_from_devname_full(struct udev *udev, const char *devname, 
 
         if (strict && isempty(path_startswith(devname, "/dev/")))
                 return -EINVAL;
+
+        /* Like systemd: shortcut when "/dev/block/maj:min" or "/dev/char/maj:min" is specified. In that
+         * case, the path is converted to the device directly, hence it is not necessary that the specified
+         * path exists. So, this works fine without udevd being running. */
+        if (device_path_parse_major_minor(devname, &type, &devnum) >= 0) {
+                dev = udev_device_new_from_devnum(udev, type, devnum);
+                if (!dev)
+                        return errno > 0 ? -errno : -ENODEV;
+
+                *ret = TAKE_PTR(dev);
+                return 0;
+        }
 
         /* like chase_and_stat() in systemd, a path with a component longer than NAME_MAX is invalid */
         r = path_check_name_max(devname);

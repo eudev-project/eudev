@@ -1459,7 +1459,7 @@ _public_ struct udev_device *udev_device_new_from_devnum(struct udev *udev, char
 
 /* Like parse_devnum() of systemd: "MAJOR:MINOR" in decimal, the major number made of digits only, both
  * valid for the kernel. */
-static int parse_devnum_id(const char *s, dev_t *ret)
+int parse_devnum_id(const char *s, dev_t *ret)
 {
         _cleanup_free_ char *major = NULL;
         unsigned x, y;
