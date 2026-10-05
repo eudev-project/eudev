@@ -129,15 +129,16 @@ static void get_cap_mask(struct udev_device *dev __attribute__((unused)),
         if (mode == EVENT_UDEVADM_TEST_BUILTIN) {
                 log_device_debug(pdev, "%s decoded bit map:", attr);
                 val = bitmask_size / sizeof (unsigned long);
-                /* skip over leading zeros */
+                /* skip trailing zeros */
                 while (val > 0 && bitmask[val-1] == 0)
                         --val;
-                /* with the right unsigned long number of hex chars */
-                for (i = 0; i < val; ++i)
+                /* with the right unsigned long number of hex chars; like systemd, the bit number is an
+                 * unsigned long, also on 32-bit systems, where BITS_PER_LONG is a 32-bit size_t */
+                for (unsigned long j = 0; j < val; j++)
                         if (sizeof(unsigned long) == 4)
-                                log_device_debug(pdev, "  bit %4zu: %08lX\n", i * BITS_PER_LONG, bitmask[i]);
+                                log_device_debug(pdev, "  bit %4lu: %08lX\n", j * BITS_PER_LONG, bitmask[j]);
                         else
-                                log_device_debug(pdev, "  bit %4zu: %016lX\n", i * BITS_PER_LONG, bitmask[i]);
+                                log_device_debug(pdev, "  bit %4lu: %016lX\n", j * BITS_PER_LONG, bitmask[j]);
         }
 }
 
