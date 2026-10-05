@@ -721,6 +721,130 @@ static bool kernel_version_supports_uuid(void)
                (major > 4 || (major == 4 && minor >= 13));
 }
 
+/* The file in which uevent_trigger_with_uuid() keeps a decided result of its probe for the rest of the boot, on
+ * kernels that report a version before 4.13, see uevent_uuid_cache_read(). */
+#define UEVENT_UUID_CACHE UDEV_ROOT_RUN "/udev/uevent-uuid-support"
+
+/* The boot ID and the release of the running kernel, which a result in UEVENT_UUID_CACHE must match. */
+static int uevent_uuid_cache_key(char **ret_boot_id, char **ret_release)
+{
+        _cleanup_free_ char *boot_id = NULL, *release = NULL;
+        struct utsname u;
+        int r;
+
+        assert(ret_boot_id);
+        assert(ret_release);
+
+        r = read_one_line_file("/proc/sys/kernel/random/boot_id", &boot_id);
+        if (r < 0)
+                return r;
+        if (isempty(boot_id))
+                return -EINVAL;
+
+        if (uname(&u) < 0)
+                return -errno;
+
+        release = strdup(u.release);
+        if (!release)
+                return -ENOMEM;
+
+        *ret_boot_id = TAKE_PTR(boot_id);
+        *ret_release = TAKE_PTR(release);
+        return 0;
+}
+
+/* Reads the result of an earlier probe from UEVENT_UUID_CACHE: 1 if the kernel supports UUIDs, 0 if it does not,
+ * or a negative errno if there is none, e.g. -ENOENT, or it is of another boot or another kernel release, which
+ * can only be when /run is not a tmpfs (-ESTALE), or it cannot be read. The probe runs once per boot then,
+ * instead of once in every udevadm run and in every udevd, which matters on kernels before 4.13, where it waits
+ * for a uevent that never comes, see uevent_trigger_with_uuid(). The file is written only by root, as
+ * UDEV_ROOT_RUN/udev is. */
+static int uevent_uuid_cache_read(void)
+{
+        _cleanup_free_ char *contents = NULL, *boot_id = NULL, *release = NULL;
+        const char *file_boot_id = NULL, *file_release = NULL, *file_supported = NULL;
+        char *line, *state = NULL;
+        int r;
+
+        r = read_full_file(UEVENT_UUID_CACHE, &contents, NULL);
+        if (r < 0)
+                return r;
+
+        for (line = strtok_r(contents, "\n", &state); line; line = strtok_r(NULL, "\n", &state)) {
+                const char *v;
+
+                if ((v = startswith(line, "BOOT_ID=")))
+                        file_boot_id = v;
+                else if ((v = startswith(line, "RELEASE=")))
+                        file_release = v;
+                else if ((v = startswith(line, "SUPPORTED=")))
+                        file_supported = v;
+        }
+
+        if (!file_boot_id || !file_release || !file_supported || !STR_IN_SET(file_supported, "0", "1"))
+                return -EBADMSG;
+
+        r = uevent_uuid_cache_key(&boot_id, &release);
+        if (r < 0)
+                return r;
+
+        if (!streq(file_boot_id, boot_id) || !streq(file_release, release))
+                return -ESTALE;
+
+        return streq(file_supported, "1");
+}
+
+/* Writes a decided result of the probe to UEVENT_UUID_CACHE, atomically: a temporary file in the same directory,
+ * renamed over it. Fails, e.g. with ENOENT or EROFS, when UDEV_ROOT_RUN/udev does not exist or is read-only, or
+ * with EACCES when not run by root; it is not created here, the result is then kept only in the process and the
+ * processes that share it, see uevent_trigger_share_uuid_supported(). */
+static int uevent_uuid_cache_write(int supported)
+{
+        _cleanup_free_ char *boot_id = NULL, *release = NULL, *contents = NULL, *temp = NULL;
+        _cleanup_fclose_ FILE *f = NULL;
+        int r;
+
+        r = uevent_uuid_cache_key(&boot_id, &release);
+        if (r < 0)
+                return r;
+
+        contents = strjoin("# Whether the kernel supports UUIDs of synthetic uevents, found out by eudev,\n"
+                           "# see udevadm(8)\n"
+                           "BOOT_ID=", boot_id, "\n"
+                           "RELEASE=", release, "\n"
+                           "SUPPORTED=", supported > 0 ? "1" : "0", "\n", NULL);
+        if (!contents)
+                return -ENOMEM;
+
+        r = fopen_temporary(UEVENT_UUID_CACHE, &f, &temp);
+        if (r < 0)
+                return r;
+
+        (void) fchmod(fileno(f), 0644);
+        r = write_string_stream(f, contents);
+        if (r >= 0 && rename(temp, UEVENT_UUID_CACHE) < 0)
+                r = -errno;
+        if (r < 0)
+                (void) unlink(temp);
+        return r;
+}
+
+/* Stores a decided result of the probe, and keeps it in UEVENT_UUID_CACHE, unless another process stored another
+ * one meanwhile. */
+static bool uevent_trigger_decide_uuid_supported(int supported)
+{
+        int r;
+
+        if (uevent_trigger_set_uuid_supported(supported) != supported)
+                return false;
+
+        r = uevent_uuid_cache_write(supported);
+        if (r < 0)
+                log_debug_errno(r, "Failed to keep whether the kernel supports UUIDs of synthetic uevents in %s, ignoring: %m",
+                                UEVENT_UUID_CACHE);
+        return true;
+}
+
 /* Moves the result of the probe of uevent_trigger_with_uuid() to a shared anonymous mapping, so that the
  * process and the child processes it forks afterwards share it: whichever of them finds out first whether the
  * kernel supports UUIDs, the others see the result too, also those forked before it was known. udevd uses it
@@ -1063,15 +1187,18 @@ static int uevent_trigger_fitting(const char *syspath, const char *action, const
  * when the socket lost uevents, nothing is decided, and the next call tries again: a missing uevent alone never
  * decides. A decided result is kept for all further calls of the process, and of the processes that share it, see
  * uevent_trigger_share_uuid_supported(); when another of them decides first, the waiting stops, and its result
- * stays, see uevent_trigger_set_uuid_supported(). The waits are skipped when /sys/kernel/uevent_seqnum shows that
- * the write triggered no uevent at all, see uevent_seqnum(). The device gets the uevent with the UUID when the
- * kernel supports UUIDs, and the one without it when it does not, as it would anyway; but when nothing could be
- * decided, it may get none, when the kernel sent none, or both, when the kernel sent the first one, which the
- * socket lost or which did not arrive in time. When the uevents of the kernel cannot be watched, or the kernel
- * refused the uevent with the UUID, the uevent is triggered without the UUID, and the next call tries again. A
- * device that never sends uevents, without a subsystem or a hidden block device, see syspath_sends_uevents(),
- * cannot tell, and is triggered with the UUID, without waiting; the next call tries again. Returns 1 if the uevent
- * was triggered with the UUID, 0 if it was triggered without it, and a negative errno on failure. */
+ * stays, see uevent_trigger_set_uuid_supported(). It is also kept in UEVENT_UUID_CACHE for the rest of the boot,
+ * see uevent_uuid_cache_read(), so that later processes, e.g. the next udevadm runs and a restarted udevd, use it
+ * instead of probing again; an undecided probe keeps nothing there. The waits are skipped when
+ * /sys/kernel/uevent_seqnum shows that the write triggered no uevent at all, see uevent_seqnum(). The device gets
+ * the uevent with the UUID when the kernel supports UUIDs, and the one without it when it does not, as it would
+ * anyway; but when nothing could be decided, it may get none, when the kernel sent none, or both, when the kernel
+ * sent the first one, which the socket lost or which did not arrive in time. When the uevents of the kernel cannot
+ * be watched, or the kernel refused the uevent with the UUID, the uevent is triggered without the UUID, and the
+ * next call tries again. A device that never sends uevents, without a subsystem or a hidden block device, see
+ * syspath_sends_uevents(), cannot tell, and is triggered with the UUID, without waiting; the next call tries
+ * again. Returns 1 if the uevent was triggered with the UUID, 0 if it was triggered without it, and a negative
+ * errno on failure. */
 static int uevent_trigger_with_uuid(struct udev *udev, const char *syspath, const char *action,
                                     const char *uuid, const char *args)
 {
@@ -1093,6 +1220,18 @@ static int uevent_trigger_with_uuid(struct udev *udev, const char *syspath, cons
                 r = uevent_trigger_set_uuid_supported(1);
                 if (r > 0)
                         log_debug("The kernel is Linux 4.13 or newer, it supports UUIDs of synthetic uevents.");
+        } else if (r < 0) {
+                int cached;
+
+                cached = uevent_uuid_cache_read();
+                if (cached >= 0) {
+                        r = uevent_trigger_set_uuid_supported(cached);
+                        if (r == cached)
+                                log_debug("The kernel %s UUIDs of synthetic uevents, as found out before in this boot, see %s.",
+                                          cached ? "supports" : "does not support", UEVENT_UUID_CACHE);
+                } else if (cached != -ENOENT)
+                        log_debug_errno(cached, "Failed to read whether the kernel supports UUIDs of synthetic uevents from %s, ignoring: %m",
+                                        UEVENT_UUID_CACHE);
         }
         if (r > 0)
                 return uevent_trigger_fitting(syspath, action, uuid, args);
@@ -1135,7 +1274,7 @@ static int uevent_trigger_with_uuid(struct udev *udev, const char *syspath, cons
         }
 
         if (p.synth_uuid_seen) {
-                if (uevent_trigger_set_uuid_supported(1) > 0)
+                if (uevent_trigger_decide_uuid_supported(1))
                         log_debug("The kernel supports UUIDs of synthetic uevents.");
                 return 1;
         }
@@ -1168,7 +1307,7 @@ static int uevent_trigger_with_uuid(struct udev *udev, const char *syspath, cons
         }
 
         if (p.synth_uuid_seen) {
-                if (uevent_trigger_set_uuid_supported(1) > 0)
+                if (uevent_trigger_decide_uuid_supported(1))
                         log_debug("The kernel supports UUIDs of synthetic uevents, but the uevent with UUID %s of %s did not arrive, triggered '%s' without a UUID.",
                                   uuid, syspath, action);
                 return 0;
@@ -1179,7 +1318,7 @@ static int uevent_trigger_with_uuid(struct udev *udev, const char *syspath, cons
                 return 0;
 
         if (p.plain_seen && !p.lost) {
-                if (uevent_trigger_set_uuid_supported(0) == 0)
+                if (uevent_trigger_decide_uuid_supported(0))
                         log_debug("The kernel does not support UUIDs of synthetic uevents (its synthetic uevents carry no SYNTH_UUID=, as before Linux 4.13), triggering uevents without them.");
                 return 0;
         }

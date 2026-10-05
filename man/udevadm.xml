@@ -476,7 +476,12 @@
       a disk whose events the kernel suppresses while it reads its partition table, nothing is
       decided, and the next event finds out. The result is kept until <command>udevadm</command>
       exits, and in <command>udevd</command>, which shares it with its workers and other child
-      processes, until <command>udevd</command> exits. The kernel builds every event in a buffer of
+      processes, until <command>udevd</command> exits. A decided result is also stored in
+      <filename>/run/udev/uevent-uuid-support</filename>, together with the boot ID and the release
+      of the kernel, so that later <command>udevadm</command> runs and a restarted
+      <command>udevd</command> use it instead of finding out again, until the next boot; a file of
+      another boot or kernel is ignored. When <filename>/run/udev</filename> does not exist or cannot
+      be written, every process finds out on its own. The kernel builds every event in a buffer of
       2048 bytes for at most 64 properties; when it refuses an event because the properties no longer
       fit, the event is triggered again without them, and then also without the UUID.</para>
       <variablelist>
