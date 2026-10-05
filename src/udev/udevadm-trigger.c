@@ -403,9 +403,16 @@ static int exec_list(struct udev *udev, char **list, const char *action, Set *se
                 if (sends) {
                         r = uevent_trigger_with_args(udev, syspath, action, args, id);
                         with_uuid = r > 0;
-                        if (r == 0 && arg_uuid && !warned_uuid) {
-                                log_warning("The kernel does not support UUIDs of synthetic uevents (Linux 4.13 or newer is needed), triggering uevents without them.");
-                                warned_uuid = true;
+                        if (r == 0 && arg_uuid) {
+                                if (uevent_trigger_uuid_supported() != 0)
+                                        /* e.g. the kernel refused the uevent with the UUID, as it did
+                                         * not fit, see uevent_trigger_fitting() */
+                                        log_warning("%s: Could not trigger the uevent with a UUID, triggered it without one.",
+                                                    eudev_basename(syspath));
+                                else if (!warned_uuid) {
+                                        log_warning("The kernel does not support UUIDs of synthetic uevents (Linux 4.13 or newer is needed), triggering uevents without them.");
+                                        warned_uuid = true;
+                                }
                         }
                 } else
                         r = write_uevent(filename, action, NULL);

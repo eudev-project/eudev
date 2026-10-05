@@ -682,6 +682,11 @@ int device_new_from_path(struct udev *udev, const char *path, struct udev_device
  * as found out by uevent_trigger_with_uuid(); -1 as long as it is not known. */
 static int synthetic_uuid_supported = -1;
 
+int uevent_trigger_uuid_supported(void)
+{
+        return synthetic_uuid_supported;
+}
+
 /* How long uevent_trigger_with_uuid() waits for the uevent with the UUID that it triggered first. The kernel
  * sends a synthetic uevent before the write to the uevent attribute returns, so that the uevent is queued on
  * the netlink socket already; the time is only spent on kernels without UUIDs. */
@@ -702,19 +707,68 @@ bool syspath_sends_uevents(const char *syspath)
 }
 
 /* Triggers a synthetic uevent of the device with the syspath with the action and the UUID, followed by the
- * arguments joined by trigger_args_join() unless they are NULL, as long as the kernel supports UUIDs, and
- * otherwise without both; Linux 4.13 brought both, the kernel passes them on as SYNTH_UUID= and
- * SYNTH_ARG_KEY=VALUE. Kernels before 4.13 accept the write of an action with
- * a UUID, log "uevent: unknown action-string", and send no uevent at all, so their missing support cannot be
- * told from the result of the write. So, unlike systemd, which looks at the result of the write, the first
- * call of the process triggers the uevent with the UUID on the device, and watches the uevents of the kernel
- * for it, for at most a second: if it does not arrive, the uevent is triggered again without the UUID, and all
- * further calls trigger their uevents without UUIDs. Apart from the time on such old kernels, this has no
- * side effects: the device gets exactly the uevent it would get anyway. When the uevents of the kernel cannot
- * be watched, the uevent is triggered without the UUID, and the next call tries again. A device without a
- * subsystem, i.e. without a bus or class, never sends uevents, so it cannot tell, and is triggered with the
- * UUID, without waiting; the next call tries again. Returns 1 if the uevent was triggered with the UUID, 0 if
+ * arguments joined by trigger_args_join() unless they are NULL, like uevent_trigger_full(), but when the
+ * kernel refuses the uevent with ENOMEM, triggers it again without the arguments, and then without the UUID.
+ *
+ * The kernel builds every uevent in a buffer of UEVENT_BUFFER_SIZE (2048) bytes for at most UEVENT_NUM_ENVP
+ * (64) variables: ACTION=, DEVPATH=, SUBSYSTEM=, SYNTH_UUID= (SYNTH_UUID=0 without a UUID), one
+ * SYNTH_ARG_KEY=VALUE for every argument, the variables of the device, as in its uevent file, and SEQNUM=.
+ * If they do not fit, it sends no uevent, and the write fails with ENOMEM (older kernels accept the write
+ * without an error then). The UUID takes 36 bytes more than SYNTH_UUID=0, and the arguments of
+ * device_build_default_trigger_args() with the timestamps about 165 bytes and 5 variables, so a device whose
+ * uevent is close to the limit, e.g. an input device with a long PHYS string, could get no uevent at all from
+ * a trigger with them, while the kernel's own uevent and a trigger with the plain action still work. Unlike
+ * systemd 66563e97b7, which then fails, the uevent is triggered again in the smaller form, as the arguments
+ * are informational only, and the UUID is only needed to recognize the uevent; the kernel logs its error for
+ * the refused write. The space is not estimated beforehand, which would need to read the uevent file of the
+ * device for every trigger, and could still be wrong; the kernel knows it. An input device with a MODALIAS
+ * that is too long does not fail on recent kernels (e.g. 6.8.12): the kernel cuts it to the space that is
+ * left, so the UUID and the arguments make it shorter, as SYNTH_UUID=0 of a plain trigger already does; its
+ * beginning, which e.g. the hwdb matches, stays. Returns 1 if the uevent was triggered with the UUID, 0 if
  * it was triggered without it, and a negative errno on failure. */
+static int uevent_trigger_fitting(const char *syspath, const char *action, const char *uuid, const char *args)
+{
+        int r;
+
+        assert(syspath);
+        assert(action);
+
+        if (uuid && args) {
+                r = uevent_trigger_full(syspath, action, uuid, args);
+                if (r != -ENOMEM)
+                        return r < 0 ? r : 1;
+
+                log_debug_errno(r, "%s: The kernel refused the uevent with the caller arguments, they may not fit into it, triggering '%s' without them: %m",
+                                syspath, action);
+        }
+
+        if (uuid) {
+                r = uevent_trigger_full(syspath, action, uuid, NULL);
+                if (r != -ENOMEM)
+                        return r < 0 ? r : 1;
+
+                log_debug_errno(r, "%s: The kernel refused the uevent with the UUID, it may not fit into it, triggering '%s' without it: %m",
+                                syspath, action);
+        }
+
+        r = uevent_trigger_full(syspath, action, NULL, NULL);
+        return r < 0 ? r : 0;
+}
+
+/* Triggers a synthetic uevent of the device with the syspath with the action and the UUID, followed by the
+ * arguments joined by trigger_args_join() unless they are NULL, as long as the kernel supports UUIDs, and
+ * otherwise without both, see uevent_trigger_fitting(). Linux 4.13 brought both, the kernel passes them on
+ * as SYNTH_UUID= and SYNTH_ARG_KEY=VALUE. Kernels before 4.13 accept the write of an action with a UUID, log
+ * "uevent: unknown action-string", and send no uevent at all, so their missing support cannot be told from
+ * the result of the write. So, unlike systemd, which looks at the result of the write, the first call of the
+ * process triggers the uevent with the UUID on the device, and watches the uevents of the kernel for it, for
+ * at most a second: if it does not arrive, the uevent is triggered again without the UUID, and all further
+ * calls trigger their uevents without UUIDs. Apart from the time on such old kernels, this has no side
+ * effects: the device gets exactly the uevent it would get anyway. When the uevents of the kernel cannot be
+ * watched, or the kernel refused the uevent with the UUID, the uevent is triggered without the UUID, and the
+ * next call tries again. A device without a subsystem, i.e. without a bus or class, never sends uevents, so it
+ * cannot tell, and is triggered with the UUID, without waiting; the next call tries again. Returns 1 if the
+ * uevent was triggered with the UUID, 0 if it was triggered without it, and a negative errno on failure. */
 static int uevent_trigger_with_uuid(struct udev *udev, const char *syspath, const char *action,
                                     const char *uuid, const char *args)
 {
@@ -727,20 +781,16 @@ static int uevent_trigger_with_uuid(struct udev *udev, const char *syspath, cons
         assert(action);
         assert(uuid);
 
-        if (synthetic_uuid_supported > 0) {
-                r = uevent_trigger_full(syspath, action, uuid, args);
-                return r < 0 ? r : 1;
-        }
+        if (synthetic_uuid_supported > 0)
+                return uevent_trigger_fitting(syspath, action, uuid, args);
 
         if (synthetic_uuid_supported == 0) {
                 r = uevent_trigger(syspath, action, NULL);
                 return r < 0 ? r : 0;
         }
 
-        if (!syspath_sends_uevents(syspath)) {
-                r = uevent_trigger_full(syspath, action, uuid, args);
-                return r < 0 ? r : 1;
-        }
+        if (!syspath_sends_uevents(syspath))
+                return uevent_trigger_fitting(syspath, action, uuid, args);
 
         /* The socket must be bound before the uevent is triggered. */
         monitor = udev_monitor_new_from_netlink(udev, "kernel");
@@ -751,8 +801,9 @@ static int uevent_trigger_with_uuid(struct udev *udev, const char *syspath, cons
                 return r < 0 ? r : 0;
         }
 
-        r = uevent_trigger_full(syspath, action, uuid, args);
-        if (r < 0)
+        r = uevent_trigger_fitting(syspath, action, uuid, args);
+        if (r <= 0)
+                /* without the UUID, which the kernel refused, its support cannot be told */
                 return r;
 
         deadline = usec_add(now(CLOCK_MONOTONIC), SYNTHETIC_UUID_PROBE_USEC);
@@ -797,9 +848,10 @@ static int uevent_trigger_with_uuid(struct udev *udev, const char *syspath, cons
  * the syspath with the action, e.g. "change", a random UUID, and the arguments, which are KEY VALUE pairs,
  * unless args is NULL, see uevent_trigger_with_uuid(). The kernel passes the arguments on as
  * SYNTH_ARG_KEY=VALUE. Returns 1 if the uevent was triggered with the UUID, which is then stored in ret_uuid
- * unless it is NULL, 0 if it was triggered without the UUID and the arguments, as the kernel does not
- * support them, and ret_uuid is set to the empty string, and a negative errno on failure, e.g. -EINVAL
- * if the arguments are not KEY VALUE pairs of alphanumerical words. */
+ * unless it is NULL, with or without the arguments, 0 if it was triggered without the UUID and the
+ * arguments, as the kernel does not support them, or refused the uevent with them, and ret_uuid is set to
+ * the empty string, and a negative errno on failure, e.g. -EINVAL if the arguments are not KEY VALUE pairs of
+ * alphanumerical words. */
 int uevent_trigger_with_args(struct udev *udev, const char *syspath, const char *action, char * const *args,
                              char *ret_uuid)
 {
