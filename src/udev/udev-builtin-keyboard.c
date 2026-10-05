@@ -31,6 +31,11 @@
 
 #include "keyboard-keys-from-name.h"
 
+/* The atkbd driver keeps the force-release scan codes in a bitmap of its ATKBD_KEYMAP_SIZE (512) codes, and
+ * refuses a force_release list with a code out of range as a whole (ERANGE, or EINVAL for a number that
+ * does not fit), so that none of the codes in it are set. */
+#define ATKBD_SCAN_CODE_MAX 511U
+
 /* eudev: whether the force_release list of atkbd, e.g. "6,9-11", has the scan code. The kernel prints
  * its bitmap of the codes as such a list; anything else is taken as not having it. */
 static bool force_release_has_code(const char *list, unsigned code) {
@@ -102,9 +107,9 @@ static int install_force_release(struct udev_device *dev, const unsigned *releas
                 return 0;
         }
 
-        /* eudev: sysfs takes at most a page with one write, and would cut a longer list. As the kernel
-         * keeps a bitmap of the scan codes up to 511, only a list with invalid codes can be that long,
-         * which the kernel would refuse anyway. */
+        /* eudev: sysfs takes at most a page with one write, and would cut a longer list. With the codes
+         * up to ATKBD_SCAN_CODE_MAX only, and without duplicates, the list cannot get that long; this is
+         * only a safeguard. */
         if (len > page_size())
                 return log_device_error_errno(atkbd, E2BIG,
                                               "keyboard: force-release list of %zu bytes is longer than the %zu bytes of the attribute, not updating it",
@@ -113,7 +118,9 @@ static int install_force_release(struct udev_device *dev, const unsigned *releas
         log_device_debug(atkbd, "keyboard: updating force-release list with '%s'", codes);
         ret = udev_device_set_sysattr_value(atkbd, "force_release", codes);
         if (ret < 0)
-                return log_device_error_errno(atkbd, ret, "Failed to set force-release attribute: %m");
+                /* the kernel takes the list as a whole, or none of it */
+                return log_device_error_errno(atkbd, ret, "Failed to set force-release attribute, the whole list '%s' was refused: %m",
+                                              codes);
 
         return 0;
 }
@@ -285,13 +292,20 @@ static int builtin_keyboard(struct udev_device *dev, int argc __attribute__((unu
                         keycode = udev_list_entry_get_value(entry);
 
                         /* a leading '!' needs a force-release entry; eudev: in a list that grows for
-                         * them, while systemd keeps 1023, each later code replacing the last one */
+                         * them, while systemd keeps 1023, each later code replacing the last one, and
+                         * without the codes that atkbd does not take, while systemd adds them, and
+                         * then the kernel refuses the whole list */
                         if (keycode[0] == '!') {
                                 keycode++;
 
-                                if (!GREEDY_REALLOC(release, release_allocated, release_count + 1))
-                                        return log_oom_debug();
-                                release[release_count++] = scancode;
+                                if (scancode > ATKBD_SCAN_CODE_MAX)
+                                        log_device_warning(dev, "Scan code 0x%x of %s is out of range for the force-release list, ignoring",
+                                                           scancode, key);
+                                else {
+                                        if (!GREEDY_REALLOC(release, release_allocated, release_count + 1))
+                                                return log_oom_debug();
+                                        release[release_count++] = scancode;
+                                }
 
                                 if (keycode[0] == '\0')
                                         continue;
