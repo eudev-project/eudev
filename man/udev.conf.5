@@ -75,7 +75,10 @@ replaces those in
 and
 /usr/lib; a symlink to
 /dev/null
-or an empty file disables them\&. Files that are not regular files are ignored\&.
+or an empty file disables them\&. Files that are not regular files are ignored\&. A program that uses libudev, like
+\fBudevd\fR
+and
+\fBudevadm\fR, reads the files once, when it creates its first libudev context\&.
 .PP
 The following options can be set:
 .PP

@@ -44,13 +44,10 @@
  * and is passed to all library operations.
  */
 
-/**
- * udev:
- *
- * Opaque object representing the library context.
- */
-struct udev {
-        int refcount;
+/* The settings of udev.conf and its drop-ins, see udev_read_conf_files(). */
+struct udev_conf {
+        /* udev_log=, which is applied while the files are read, or -1 if it is not set */
+        int log_level;
         /* format of hwdb.bin created by 'udevadm hwdb', hwdb_format= in udev.conf, negative if invalid */
         int hwdb_format;
         /* timeout_signal=, children_max=, exec_delay= and event_timeout= in udev.conf for udevd, 0 if they
@@ -64,14 +61,27 @@ struct udev {
         bool resolve_names_set;
         /* the messages about invalid settings of udevd in udev.conf, which udevd logs as warnings */
         char **conf_warnings;
-        void (*log_fn)(struct udev *udev,
-                       int priority, const char *file, int line, const char *fn,
-                       const char *format, va_list args);
-        void *userdata;
         bool sas_legacy_path;
         char *net_naming_scheme;
         int net_altnames;
         char *net_altnames_invalid; /* the invalid value of net_altnames=, "" if it is empty */
+};
+
+#define UDEV_CONF_INIT { .log_level = -1, .hwdb_format = 1, .net_altnames = 1, }
+
+/**
+ * udev:
+ *
+ * Opaque object representing the library context.
+ */
+struct udev {
+        int refcount;
+        /* the settings of udev.conf, which are read once per process, see udev_conf_get() */
+        const struct udev_conf *conf;
+        void (*log_fn)(struct udev *udev,
+                       int priority, const char *file, int line, const char *fn,
+                       const char *format, va_list args);
+        void *userdata;
 };
 
 /**
@@ -114,7 +124,7 @@ int udev_parse_hwdb_format(const char *s) {
  * remembered, so that udevd can warn about it, while the other users of libudev do not complain about the
  * settings of udevd. With error 0, the reason is that the signal of timeout_signal= cannot terminate a
  * process. */
-static void udev_conf_parse_error(struct udev *udev, const char *filename, unsigned line,
+static void udev_conf_parse_error(struct udev_conf *conf, const char *filename, unsigned line,
                                   const char *key, const char *value, int error) {
         _cleanup_free_ char *escaped = NULL;
         char *m;
@@ -130,7 +140,7 @@ static void udev_conf_parse_error(struct udev *udev, const char *filename, unsig
                 return;
 
         log_debug("%s", m);
-        (void) strv_consume(&udev->conf_warnings, m);
+        (void) strv_consume(&conf->conf_warnings, m);
 }
 
 /* Not part of the public API, used by udevd. Parses the value of resolve_names= in udev.conf and of
@@ -148,8 +158,8 @@ int udev_parse_resolve_names(const char *s, int *ret) {
         return 0;
 }
 
-/* Reads the configuration file path; the messages name it filename. */
-static void udev_read_conf(struct udev *udev, const char *path, const char *filename) {
+/* Reads the configuration file path into conf; the messages name it filename. */
+static void udev_read_conf(struct udev_conf *conf, const char *path, const char *filename) {
         _cleanup_fclose_ FILE *f = NULL;
 
         f = fopen(path, "re");
@@ -207,14 +217,14 @@ static void udev_read_conf(struct udev *udev, const char *path, const char *file
                                 /* an empty value is invalid, which udevd warns about, see below */
                                 if (streq(key, "net_altnames")) {
                                         log_debug("%s:%u: empty net_altnames=, ignoring.", filename, line_nr);
-                                        udev->net_altnames = -EINVAL;
-                                        free(udev->net_altnames_invalid);
-                                        udev->net_altnames_invalid = strdup("");
+                                        conf->net_altnames = -EINVAL;
+                                        free(conf->net_altnames_invalid);
+                                        conf->net_altnames_invalid = strdup("");
                                 } else if (streq(key, "children_max") || streq(key, "exec_delay") ||
                                            streq(key, "event_timeout") || streq(key, "resolve_names") ||
                                            streq(key, "timeout_signal"))
                                         /* like systemd's parsers of these values */
-                                        udev_conf_parse_error(udev, filename, line_nr, key, val, -EINVAL);
+                                        udev_conf_parse_error(conf, filename, line_nr, key, val, -EINVAL);
                                 continue;
                         }
                         while (isspace((unsigned char) val[len-1]))
@@ -235,8 +245,8 @@ static void udev_read_conf(struct udev *udev, const char *path, const char *file
                         }
 
                         if (streq(key, "hwdb_format")) {
-                                udev->hwdb_format = udev_parse_hwdb_format(val);
-                                if (udev->hwdb_format < 0)
+                                conf->hwdb_format = udev_parse_hwdb_format(val);
+                                if (conf->hwdb_format < 0)
                                         log_debug("%s:%u: invalid hwdb_format '%s'.", filename, line_nr, val);
                                 continue;
                         }
@@ -247,8 +257,10 @@ static void udev_read_conf(struct udev *udev, const char *path, const char *file
                                 prio = util_log_priority(val);
                                 if (prio < 0)
                                         log_debug("%s:%u: invalid log level '%s', ignoring.", filename, line_nr, val);
-                                else
+                                else {
                                         log_set_max_level(prio);
+                                        conf->log_level = prio;
+                                }
                                 continue;
                         }
 
@@ -259,7 +271,7 @@ static void udev_read_conf(struct udev *udev, const char *path, const char *file
                                 if (b < 0)
                                         log_debug("%s:%u: invalid boolean '%s' for sas_legacy_path, ignoring.", filename, line_nr, val);
                                 else
-                                        udev->sas_legacy_path = b;
+                                        conf->sas_legacy_path = b;
                                 continue;
                         }
 
@@ -270,17 +282,17 @@ static void udev_read_conf(struct udev *udev, const char *path, const char *file
                                 b = parse_boolean(val);
                                 if (b < 0)
                                         log_debug("%s:%u: invalid boolean '%s' for net_altnames, ignoring.", filename, line_nr, val);
-                                udev->net_altnames = b < 0 ? -EINVAL : b;
-                                free(udev->net_altnames_invalid);
-                                udev->net_altnames_invalid = b < 0 ? strdup(val) : NULL;
+                                conf->net_altnames = b < 0 ? -EINVAL : b;
+                                free(conf->net_altnames_invalid);
+                                conf->net_altnames_invalid = b < 0 ? strdup(val) : NULL;
                                 continue;
                         }
 
                         if (streq(key, "net_naming_scheme")) {
                                 /* validated by the net_id builtin, which knows the schemes; an
                                  * empty value, e.g. "", resets it */
-                                free(udev->net_naming_scheme);
-                                udev->net_naming_scheme = val[0] != '\0' ? strdup(val) : NULL;
+                                free(conf->net_naming_scheme);
+                                conf->net_naming_scheme = val[0] != '\0' ? strdup(val) : NULL;
                                 continue;
                         }
 
@@ -290,9 +302,9 @@ static void udev_read_conf(struct udev *udev, const char *path, const char *file
 
                                 r = safe_atou(val, &n);
                                 if (r < 0)
-                                        udev_conf_parse_error(udev, filename, line_nr, key, val, r);
+                                        udev_conf_parse_error(conf, filename, line_nr, key, val, r);
                                 else
-                                        udev->children_max = n;
+                                        conf->children_max = n;
                                 continue;
                         }
 
@@ -302,22 +314,22 @@ static void udev_read_conf(struct udev *udev, const char *path, const char *file
 
                                 r = parse_sec(val, &t);
                                 if (r < 0)
-                                        udev_conf_parse_error(udev, filename, line_nr, key, val, r);
+                                        udev_conf_parse_error(conf, filename, line_nr, key, val, r);
                                 else if (streq(key, "exec_delay"))
-                                        udev->exec_delay_usec = t;
+                                        conf->exec_delay_usec = t;
                                 else
-                                        udev->event_timeout_usec = t;
+                                        conf->event_timeout_usec = t;
                                 continue;
                         }
 
                         if (streq(key, "resolve_names")) {
                                 int r;
 
-                                r = udev_parse_resolve_names(val, &udev->resolve_names);
+                                r = udev_parse_resolve_names(val, &conf->resolve_names);
                                 if (r < 0)
-                                        udev_conf_parse_error(udev, filename, line_nr, key, val, r);
+                                        udev_conf_parse_error(conf, filename, line_nr, key, val, r);
                                 else
-                                        udev->resolve_names_set = true;
+                                        conf->resolve_names_set = true;
                                 continue;
                         }
 
@@ -328,11 +340,11 @@ static void udev_read_conf(struct udev *udev, const char *path, const char *file
                                  * anything */
                                 sig = signal_from_string(val);
                                 if (sig < 0)
-                                        udev_conf_parse_error(udev, filename, line_nr, key, val, sig);
+                                        udev_conf_parse_error(conf, filename, line_nr, key, val, sig);
                                 else if (!signal_terminates(sig))
-                                        udev_conf_parse_error(udev, filename, line_nr, key, val, 0);
+                                        udev_conf_parse_error(conf, filename, line_nr, key, val, 0);
                                 else
-                                        udev->timeout_signal = sig;
+                                        conf->timeout_signal = sig;
                                 continue;
                         }
                 }
@@ -399,9 +411,10 @@ int udev_conf_files(const char *root, ConfFilesFlags flags,
 }
 
 /* Like config_parse_many_files() of systemd: reads the main configuration file, and then the drop-ins, see
- * udev_conf_files(); the main file is skipped when it is one of the drop-ins, e.g. a symlink to it, which is read
- * as such. The files are read with their symlinks resolved below root, the messages name them as found. */
-static void udev_read_conf_files(struct udev *udev, const char *root) {
+ * udev_conf_files(), into conf; the main file is skipped when it is one of the drop-ins, e.g. a symlink to it,
+ * which is read as such. The files are read with their symlinks resolved below root, the messages name them as
+ * found. */
+static void udev_read_conf_files(struct udev_conf *conf, const char *root) {
         ConfFile *main_file = NULL, **dropins = NULL;
         size_t n_dropins = 0, i;
         int r;
@@ -426,21 +439,67 @@ static void udev_read_conf_files(struct udev *udev, const char *root) {
                                 }
 
                 if (main_file)
-                        udev_read_conf(udev, main_file->resolved_path, main_file->original_path);
+                        udev_read_conf(conf, main_file->resolved_path, main_file->original_path);
         }
 
         for (i = 0; i < n_dropins; i++)
-                udev_read_conf(udev, dropins[i]->resolved_path, dropins[i]->original_path);
+                udev_read_conf(conf, dropins[i]->resolved_path, dropins[i]->original_path);
 
         conf_file_free(main_file);
         conf_file_free_array(dropins, n_dropins);
+}
+
+static void udev_conf_free_contents(struct udev_conf *conf) {
+        free(conf->net_naming_scheme);
+        free(conf->net_altnames_invalid);
+        strv_free(conf->conf_warnings);
+}
+
+/* the settings of udev.conf read by the first call of udev_conf_get(), freed only when the process exits */
+static struct udev_conf *udev_conf_cached = NULL;
+
+/* Returns the settings of udev.conf and its drop-ins, which are read by the first call in the process, and reused
+ * by the later ones, so that e.g. a program that creates many libudev contexts does not look for and read the
+ * files every time; changes of the files are not seen then. Like the first, each later call applies udev_log=,
+ * as udev_new() always did. The first calls may run at the same time, e.g. udev_new() in several threads, which
+ * libudev allows for different contexts: then each reads the files, and the result that is stored first is
+ * used by all of them, with atomic operations, so no locks are needed; the others are freed. Returns NULL only
+ * when out of memory. */
+static const struct udev_conf *udev_conf_get(void) {
+        struct udev_conf *conf, *cached = NULL;
+
+        conf = __atomic_load_n(&udev_conf_cached, __ATOMIC_ACQUIRE);
+        if (conf) {
+                if (conf->log_level >= 0)
+                        log_set_max_level(conf->log_level);
+                return conf;
+        }
+
+        conf = new(struct udev_conf, 1);
+        if (!conf)
+                return NULL;
+        *conf = (struct udev_conf) UDEV_CONF_INIT;
+
+        udev_read_conf_files(conf, NULL);
+
+        if (!__atomic_compare_exchange_n(&udev_conf_cached, &cached, conf, false, __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE)) {
+                /* another thread was faster, its result is the same */
+                udev_conf_free_contents(conf);
+                free(conf);
+                conf = cached;
+        }
+
+        return conf;
 }
 
 /**
  * udev_new:
  *
  * Create udev library context. This reads the udev configuration
- * file, and fills in the default values.
+ * file, and fills in the default values. The configuration is read
+ * by the first call in the process; later calls use the values read
+ * then, so changes of the configuration files are not seen by a
+ * process that has created a context already.
  *
  * The initial refcount is 1, and needs to be decremented to
  * release the resources of the udev library context.
@@ -448,16 +507,18 @@ static void udev_read_conf_files(struct udev *udev, const char *root) {
  * Returns: a new udev library context
  **/
 _public_ struct udev *udev_new(void) {
+        const struct udev_conf *conf;
         struct udev *udev;
+
+        conf = udev_conf_get();
+        if (!conf)
+                return NULL;
 
         udev = new0(struct udev, 1);
         if (udev == NULL)
                 return NULL;
         udev->refcount = 1;
-        udev->hwdb_format = 1;
-        udev->net_altnames = 1;
-
-        udev_read_conf_files(udev, NULL);
+        udev->conf = conf;
 
         return udev;
 }
@@ -467,36 +528,36 @@ _public_ struct udev *udev_new(void) {
 unsigned udev_get_children_max(struct udev *udev) {
         if (udev == NULL)
                 return 0;
-        return udev->children_max;
+        return udev->conf->children_max;
 }
 
 usec_t udev_get_exec_delay_usec(struct udev *udev) {
         if (udev == NULL)
                 return 0;
-        return udev->exec_delay_usec;
+        return udev->conf->exec_delay_usec;
 }
 
 usec_t udev_get_event_timeout_usec(struct udev *udev) {
         if (udev == NULL)
                 return 0;
-        return udev->event_timeout_usec;
+        return udev->conf->event_timeout_usec;
 }
 
 /* Not part of the public API, used by udevd. Returns true and resolve_names= in udev.conf, see
  * udev_parse_resolve_names(), if it is set. */
 bool udev_get_resolve_names(struct udev *udev, int *ret) {
-        if (udev == NULL || !udev->resolve_names_set)
+        if (udev == NULL || !udev->conf->resolve_names_set)
                 return false;
-        *ret = udev->resolve_names;
+        *ret = udev->conf->resolve_names;
         return true;
 }
 
 /* Not part of the public API, used by udevd. Returns the messages about the invalid settings of udevd in
- * udev.conf, which udevd logs as warnings, or NULL if there are none. */
+ * udev.conf, which udevd logs as warnings, or NULL if there are none. They belong to libudev. */
 char **udev_get_conf_warnings(struct udev *udev) {
         if (udev == NULL)
                 return NULL;
-        return udev->conf_warnings;
+        return udev->conf->conf_warnings;
 }
 
 /* Not part of the public API, used by udevd. Returns the signal of timeout_signal= in udev.conf, or 0 if it is
@@ -504,7 +565,7 @@ char **udev_get_conf_warnings(struct udev *udev) {
 int udev_get_timeout_signal(struct udev *udev) {
         if (udev == NULL)
                 return 0;
-        return udev->timeout_signal;
+        return udev->conf->timeout_signal;
 }
 
 /* Returns the format of hwdb.bin configured with hwdb_format= in udev.conf, 1 or 2, or
@@ -512,25 +573,20 @@ int udev_get_timeout_signal(struct udev *udev) {
 int udev_get_hwdb_format(struct udev *udev) {
         if (udev == NULL)
                 return 1;
-        return udev->hwdb_format;
+        return udev->conf->hwdb_format;
 }
 
 /* Like udev_get_hwdb_format(), but reads the udev.conf below the specified root directory,
- * e.g. when creating hwdb.bin for an offline image. */
+ * e.g. when creating hwdb.bin for an offline image, every time. */
 int udev_read_hwdb_format(const char *root) {
-        struct udev tmp = {
-                .refcount = 1,
-                .hwdb_format = 1,
-        };
+        struct udev_conf tmp = UDEV_CONF_INIT;
         int level;
 
         /* do not apply udev_log= of the configuration below the root */
         level = log_get_max_level();
         udev_read_conf_files(&tmp, root);
         log_set_max_level(level);
-        free(tmp.net_naming_scheme);
-        free(tmp.net_altnames_invalid);
-        strv_free(tmp.conf_warnings);
+        udev_conf_free_contents(&tmp);
 
         return tmp.hwdb_format;
 }
@@ -539,7 +595,7 @@ int udev_read_hwdb_format(const char *root) {
 bool udev_get_sas_legacy_path(struct udev *udev) {
         if (udev == NULL)
                 return false;
-        return udev->sas_legacy_path;
+        return udev->conf->sas_legacy_path;
 }
 
 /* Not part of the public API, used by the net_id builtin. Returns the value of
@@ -547,7 +603,7 @@ bool udev_get_sas_legacy_path(struct udev *udev) {
 const char *udev_get_net_naming_scheme(struct udev *udev) {
         if (udev == NULL)
                 return NULL;
-        return udev->net_naming_scheme;
+        return udev->conf->net_naming_scheme;
 }
 
 /* Not part of the public API, used by udevd. Returns the value of net_altnames= in udev.conf: 1 if it is not
@@ -555,7 +611,7 @@ const char *udev_get_net_naming_scheme(struct udev *udev) {
 int udev_get_net_altnames(struct udev *udev) {
         if (udev == NULL)
                 return 1;
-        return udev->net_altnames;
+        return udev->conf->net_altnames;
 }
 
 /* Not part of the public API, used by udevd. Returns the value of net_altnames= in udev.conf if it is
@@ -563,7 +619,7 @@ int udev_get_net_altnames(struct udev *udev) {
 const char *udev_get_net_altnames_invalid(struct udev *udev) {
         if (udev == NULL)
                 return NULL;
-        return udev->net_altnames_invalid;
+        return udev->conf->net_altnames_invalid;
 }
 
 /**
@@ -596,9 +652,7 @@ _public_ struct udev *udev_unref(struct udev *udev) {
         udev->refcount--;
         if (udev->refcount > 0)
                 return udev;
-        free(udev->net_naming_scheme);
-        free(udev->net_altnames_invalid);
-        strv_free(udev->conf_warnings);
+        /* the settings of udev.conf are kept for later contexts, see udev_conf_get() */
         free(udev);
         return NULL;
 }

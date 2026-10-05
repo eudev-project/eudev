@@ -91,7 +91,9 @@
       <filename>/usr/local/lib</filename> and <filename>/usr/lib</filename>;
       a symlink to <filename>/dev/null</filename>
       or an empty file disables them. Files that are not regular files are
-      ignored.
+      ignored. A program that uses libudev, like <command>udevd</command> and
+      <command>udevadm</command>, reads the files once, when it creates its
+      first libudev context.
     </para>
     <para>
       The following options can be set:
