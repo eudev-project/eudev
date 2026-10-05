@@ -476,7 +476,7 @@ int main(int argc, char **argv)
 
         argi = optind;
         if (argi + 2 > argc) {
-                printf("Missing parameter(s)\n");
+                fprintf(stderr, "Missing parameter(s)\n");
                 ret = 1;
                 goto exit;
         }

@@ -303,7 +303,7 @@ int main(void) {
         r |= test_collect("an ID removed", 1, "COLLECT_cp=1\n", "", "--remove", "cp", "a", "a", "b", NULL);
         r |= test_collect("an ID added again", 0, "COLLECT_cp=0\n", "", "--add", "cp", "a", "a", "b", NULL);
         r |= test_collect("help", 0, NULL, "", "--help", NULL);
-        r |= test_collect("missing parameters", 1, "Missing parameter(s)\n", "", "cp", NULL);
+        r |= test_collect("missing parameters", 1, "", "Missing parameter(s)\n", "cp", NULL);
         r |= test_collect("unknown option", 1, "", NULL, "--bogus", "cp", "a", "a", NULL);
         r |= test_collect("too long checkpoint name", 3, "", "is too long", longname, "a", "a", NULL);
 
