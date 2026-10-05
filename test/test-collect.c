@@ -119,8 +119,8 @@ static int read_file(const char *path, char *buf, size_t size) {
 }
 
 /* Runs collect's main() with the arguments, which end with NULL, and compares its exit code, its standard
- * output and its messages with the expected ones: the messages must contain the expected text, or be empty
- * for "". It must not leave a file descriptor open. */
+ * output (unless NULL is expected) and its messages with the expected ones: the messages must contain the
+ * expected text, or be empty for "". It must not leave a file descriptor open. */
 static int test_collect(const char *name, int expected_rc, const char *expected_out, const char *expected_err, ...) {
         char *argv[16] = { (char *) "collect" };
         char out[4096], err[4096];
@@ -185,7 +185,7 @@ static int test_collect(const char *name, int expected_rc, const char *expected_
                         name, rc, expected_rc, out, err);
                 return -1;
         }
-        if (!streq(out, expected_out)) {
+        if (expected_out && !streq(out, expected_out)) {
                 fprintf(stderr, "%s: output \"%s\", expected \"%s\"\n", name, out, expected_out);
                 return -1;
         }
@@ -202,7 +202,7 @@ static int test_collect(const char *name, int expected_rc, const char *expected_
         /* shown without the newline at the end, and long messages cut */
         delete_trailing_chars(out, "\n");
         delete_trailing_chars(err, "\n");
-        printf("%s: exit code %i, output \"%s\"%s%.160s%s\n", name, rc, out,
+        printf("%s: exit code %i, output \"%.160s%s\"%s%.160s%s\n", name, rc, out, strlen(out) > 160 ? "..." : "",
                *err ? ", messages: " : "", err, strlen(err) > 160 ? "..." : "");
         return 0;
 }
@@ -302,6 +302,7 @@ int main(void) {
         r |= test_collect("second of two IDs", 0, "COLLECT_cp=0\n", "", "cp", "b", "a", "b", NULL);
         r |= test_collect("an ID removed", 1, "COLLECT_cp=1\n", "", "--remove", "cp", "a", "a", "b", NULL);
         r |= test_collect("an ID added again", 0, "COLLECT_cp=0\n", "", "--add", "cp", "a", "a", "b", NULL);
+        r |= test_collect("help", 0, NULL, "", "--help", NULL);
         r |= test_collect("missing parameters", 1, "Missing parameter(s)\n", "", "cp", NULL);
         r |= test_collect("unknown option", 1, "", NULL, "--bogus", "cp", "a", "a", NULL);
         r |= test_collect("too long checkpoint name", 3, "", "is too long", longname, "a", "a", NULL);

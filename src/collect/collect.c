@@ -8,7 +8,7 @@
  * If all IDs given by <idlist> are listed (ie collect has been
  * invoked for each ID in <idlist>) collect returns 0, the
  * number of missing IDs otherwise.
- * A negative number is returned on error.
+ * On error, it returns one of the exit codes listed by usage().
  *
  * Copyright(C) 2007, Hannes Reinecke <hare@suse.de>
  *
@@ -102,9 +102,15 @@ static void usage(void)
                "  <id> must be part of the list <idlist>.\n"
                "  If all IDs given by <idlist> are listed (ie collect has been\n"
                "  invoked for each ID in <idlist>) collect returns 0, the\n"
-               "  number of missing IDs otherwise.\n"
-               "  On error a negative number is returned.\n\n"
-               , program_invocation_short_name);
+               "  number of missing IDs otherwise, and prints\n"
+               "  COLLECT_<checkpoint>=<number of missing IDs>.\n"
+               "  On error it prints no COLLECT_ line and returns 1 for wrong\n"
+               "  arguments (or when it cannot initialize libudev), 2 when it\n"
+               "  runs out of memory (or cannot handle SIGALRM), 3 when the\n"
+               "  checkpoint file cannot be created, opened or locked, 4 when\n"
+               "  the lock is not acquired within %d seconds, or 255 when the\n"
+               "  checkpoint file cannot be read or written.\n\n"
+               , program_invocation_short_name, UDEV_ALARM_TIMEOUT);
 }
 
 /*
