@@ -395,10 +395,12 @@ void udev_conf_log_search_dirs(const char *root) {
  * first udev.conf in the directories of udev_conf_dirs, or NULL, and the drop-ins in their subdirectories
  * udev.conf.d. Like for the rules files, and like systemd's "udevadm cat --config", a mask, i.e. an empty file or
  * a symlink to /dev/null, and a file that is not a regular file are left out; a masked udev.conf hides the ones
- * in the later directories, others do not. flags may add CONF_FILES_WARN, for udevadm cat. */
+ * in the later directories, others do not. flags may add CONF_FILES_WARN, for udevadm cat. If ret_main_mask is
+ * not NULL, it is set to the path of the mask, prefixed with root, when the main file is masked, else to NULL. */
 int udev_conf_files(const char *root, ConfFilesFlags flags,
-                    ConfFile **ret_main, ConfFile ***ret_dropins, size_t *ret_n_dropins) {
+                    ConfFile **ret_main, char **ret_main_mask, ConfFile ***ret_dropins, size_t *ret_n_dropins) {
         _cleanup_strv_free_ char **dirs = NULL;
+        _cleanup_free_ char *mask = NULL;
         ConfFile *main_file = NULL;
         size_t i;
         int r;
@@ -408,10 +410,20 @@ int udev_conf_files(const char *root, ConfFilesFlags flags,
         assert(ret_n_dropins);
 
         for (i = 0; udev_conf_dirs[i]; i++) {
-                r = conf_file_new(strjoina(udev_conf_dirs[i], "/udev.conf"), root,
-                                  CONF_FILES_REGULAR | CONF_FILES_FILTER_MASKED, &main_file);
-                if (r >= 0 || r == -ERFKILL)
+                const char *path = strjoina(udev_conf_dirs[i], "/udev.conf");
+
+                r = conf_file_new(path, root, CONF_FILES_REGULAR | CONF_FILES_FILTER_MASKED, &main_file);
+                if (r >= 0)
                         break;
+                if (r == -ERFKILL) {
+                        if (ret_main_mask) {
+                                mask = prefix_root(root, path);
+                                if (!mask)
+                                        return -ENOMEM;
+                                path_simplify(mask);
+                        }
+                        break;
+                }
                 if (r == -ENOMEM)
                         return r;
         }
@@ -430,6 +442,8 @@ int udev_conf_files(const char *root, ConfFilesFlags flags,
         }
 
         *ret_main = main_file;
+        if (ret_main_mask)
+                *ret_main_mask = TAKE_PTR(mask);
         return 0;
 }
 
@@ -442,7 +456,7 @@ static void udev_read_conf_files(struct udev_conf *conf, const char *root) {
         size_t n_dropins = 0, i;
         int r;
 
-        r = udev_conf_files(root, 0, &main_file, &dropins, &n_dropins);
+        r = udev_conf_files(root, 0, &main_file, NULL, &dropins, &n_dropins);
         if (r < 0) {
                 log_debug_errno(r, "Failed to find the udev.conf files, ignoring: %m");
                 return;

@@ -154,21 +154,28 @@ static int cat_file(const char *name, const char *path, bool *newline) {
 }
 
 /* Like conf_files_cat() of systemd for "udev/udev.conf": shows the main configuration file and the drop-ins, as
- * libudev reads them, see udev_conf_files(). Like systemd, a mask, i.e. an empty file or a symlink to /dev/null,
- * and a file that is not a regular file count as not found. */
+ * libudev reads them, see udev_conf_files(). Like systemd, a file that is not a regular file counts as not found.
+ * Unlike systemd, which says that the main file is not found also when it is masked, i.e. an empty file or a
+ * symlink to /dev/null, which hides the ones in the later directories, the mask is named. */
 static int cat_config(bool *newline) {
         ConfFile *c = NULL, **dropins = NULL;
+        _cleanup_free_ char *mask = NULL;
         size_t n_dropins = 0, i;
         int r, ret = 0;
 
         udev_conf_log_search_dirs(arg_root);
 
-        r = udev_conf_files(arg_root, CONF_FILES_WARN, &c, &dropins, &n_dropins);
+        r = udev_conf_files(arg_root, CONF_FILES_WARN, &c, &mask, &dropins, &n_dropins);
         if (r < 0)
                 return log_error_errno(r, "Failed to query file list: %m");
 
         if (c)
                 ret = cat_file(c->original_path, c->resolved_path, newline);
+        else if (mask)
+                printf("%s# Main configuration file udev/udev.conf is masked by %s%s\n",
+                       ansi_highlight_magenta(),
+                       mask,
+                       ansi_normal());
         else
                 printf("%s# Main configuration file udev/udev.conf not found%s\n",
                        ansi_highlight_magenta(),

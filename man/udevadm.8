@@ -1070,7 +1070,9 @@ Only print the "interesting" parts of the configuration files, skipping comments
 .RS 4
 Shows
 \fBudev.conf\fR(5)
-files, the main configuration file and its drop\-ins, rather than udev rules files\&. When specified, no udev rules file can be specified\&.
+files, the main configuration file and its drop\-ins, rather than udev rules files\&. When specified, no udev rules file can be specified\&. A mask of the main configuration file, i\&.e\&. a symlink to
+/dev/null
+or an empty file, is shown as such\&.
 .RE
 .PP
 \fB\-V\fR, \fB\-\-version\fR

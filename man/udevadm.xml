@@ -1257,7 +1257,8 @@
             <para>Shows
             <citerefentry><refentrytitle>udev.conf</refentrytitle><manvolnum>5</manvolnum></citerefentry>
             files, the main configuration file and its drop-ins, rather than udev rules files. When specified,
-            no udev rules file can be specified.
+            no udev rules file can be specified. A mask of the main configuration file, i.e. a symlink to
+            <filename>/dev/null</filename> or an empty file, is shown as such.
             </para>
           </listitem>
         </varlistentry>
