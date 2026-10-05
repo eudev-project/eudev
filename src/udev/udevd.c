@@ -170,9 +170,11 @@ struct event {
         enum event_state state;
         unsigned long long int delaying_seqnum;
         unsigned long long int seqnum;
-        const char *devpath;
-        const char *devpath_old;
-        const char *devnode;
+        /* copies, so that nothing that changes the device, e.g. a getter that reads its uevent file, frees
+         * the strings that is_devpath_busy() compares */
+        char *devpath;
+        char *devpath_old;
+        char *devnode;
         dev_t devnum;
         int ifindex;
         bool is_block;
@@ -250,6 +252,9 @@ static void event_free(struct event *event) {
         if (event->worker)
                 event->worker->event = NULL;
 
+        free(event->devpath);
+        free(event->devpath_old);
+        free(event->devnode);
         free(event);
 }
 
@@ -935,7 +940,13 @@ static void log_event_queued(struct udev_device *dev) {
 }
 
 static int event_queue_insert(struct udev_device *dev) {
+        _cleanup_free_ char *devpath = NULL, *devpath_old = NULL, *devnode = NULL;
         struct event *event;
+
+        if (free_and_strdup(&devpath, udev_device_get_devpath(dev)) < 0 ||
+            free_and_strdup(&devpath_old, udev_device_get_devpath_old(dev)) < 0 ||
+            free_and_strdup(&devnode, udev_device_get_devnode(dev)) < 0)
+                return log_oom();
 
         event = new0(struct event, 1);
         if (event == NULL)
@@ -944,9 +955,9 @@ static int event_queue_insert(struct udev_device *dev) {
         event->udev = udev_device_get_udev(dev);
         event->dev = dev;
         event->seqnum = udev_device_get_seqnum(dev);
-        event->devpath = udev_device_get_devpath(dev);
-        event->devpath_old = udev_device_get_devpath_old(dev);
-        event->devnode = udev_device_get_devnode(dev);
+        event->devpath = TAKE_PTR(devpath);
+        event->devpath_old = TAKE_PTR(devpath_old);
+        event->devnode = TAKE_PTR(devnode);
         event->devnum = udev_device_get_devnum(dev);
         event->is_block = streq("block", udev_device_get_subsystem(dev));
         event->ifindex = udev_device_get_ifindex(dev);
