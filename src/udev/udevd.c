@@ -2150,9 +2150,10 @@ int main(int argc, char *argv[]) {
                 goto exit;
         }
 
-        /* the auto target from now on, also when standard error is a terminal; with --debug, parse_argv()
+        /* the auto target from now on, also when standard error is a terminal, unless systemd.log_target= on
+         * the kernel command line set the target, see log_parse_environment(); with --debug, parse_argv()
          * keeps the console */
-        if (early_console && !arg_debug) {
+        if (early_console && !arg_debug && !log_target_from_environment()) {
                 log_set_target(LOG_TARGET_AUTO);
                 log_open();
         }

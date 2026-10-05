@@ -43,6 +43,8 @@
 static LogTarget log_target = LOG_TARGET_CONSOLE;
 static int log_max_level = LOG_INFO;
 static int log_facility = LOG_DAEMON;
+/* whether log_parse_environment() set the log target, see log_target_from_environment() */
+static bool target_from_environment = false;
 
 /* Like log_target_max_level[] of systemd: the maximum log levels of the single targets, which can only
  * lower the global one, see log_set_max_level_from_string(). */
@@ -738,7 +740,12 @@ static int log_set_target_from_string(const char *e) {
                 return -EINVAL;
 
         log_set_target(t);
+        target_from_environment = true;
         return 0;
+}
+
+bool log_target_from_environment(void) {
+        return target_from_environment;
 }
 
 /* Like log_set_max_level_from_string() of systemd: a comma-separated list of log levels, by name or

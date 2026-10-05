@@ -42,6 +42,8 @@ typedef enum LogTarget{
 }  LogTarget;
 
 void log_set_target(LogTarget target);
+/* Whether log_parse_environment() set the log target, from the environment or the kernel command line. */
+bool log_target_from_environment(void);
 void log_set_max_level(int level);
 int log_get_max_level(void) _pure_;
 
