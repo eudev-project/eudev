@@ -491,6 +491,13 @@ static int sysfs_resolve(const char *path, char **ret)
         _cleanup_free_ char *resolved = NULL, *real_sys = NULL;
         const char *p;
         char *t;
+        int r;
+
+        /* Like chase() of systemd, which device_set_syspath() and device_chase() use: a path with a
+         * component longer than NAME_MAX is invalid, before anything is looked up. */
+        r = path_check_name_max(path);
+        if (r < 0)
+                return r;
 
         resolved = realpath(path, NULL);
         if (!resolved)

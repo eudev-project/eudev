@@ -908,6 +908,19 @@ int path_find_first_component(const char **p, bool accept_dot_dot, const char **
         return len;
 }
 
+int path_check_name_max(const char *path) {
+        const char *p = path;
+        int r;
+
+        assert(path);
+
+        for (;;) {
+                r = path_find_first_component(&p, /* accept_dot_dot= */ true, NULL);
+                if (r <= 0)
+                        return r;
+        }
+}
+
 static const char* skip_slash_or_dot_backward(const char *path, const char *q) {
         assert(path);
         assert(!q || q >= path);

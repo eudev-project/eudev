@@ -528,6 +528,7 @@ static int device_new_from_devname_full(struct udev *udev, const char *devname, 
         _cleanup_(udev_device_unrefp) struct udev_device *dev = NULL;
         _cleanup_free_ char *resolved = NULL;
         struct stat st;
+        int r;
 
         assert(udev);
         assert(devname);
@@ -535,6 +536,11 @@ static int device_new_from_devname_full(struct udev *udev, const char *devname, 
 
         if (strict && isempty(path_startswith(devname, "/dev/")))
                 return -EINVAL;
+
+        /* like chase_and_stat() in systemd, a path with a component longer than NAME_MAX is invalid */
+        r = path_check_name_max(devname);
+        if (r < 0)
+                return r;
 
         resolved = realpath(devname, NULL);
         if (!resolved)

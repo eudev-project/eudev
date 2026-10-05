@@ -60,6 +60,9 @@ int chase(const char *path, const char *root, ChaseFlags flags, char **ret_path)
 char* path_extend_internal(char **x, ...);
 
 int path_find_first_component(const char **p, bool accept_dot_dot, const char **ret);
+/* Like chase() of systemd, which refuses a path that has a component longer than NAME_MAX with EINVAL before
+ * it looks at anything: returns -EINVAL for such a path, 0 otherwise. */
+int path_check_name_max(const char *path);
 int path_find_last_component(const char *path, bool accept_dot_dot, const char **next, const char **ret);
 /* Like systemd's path_extract_filename(): the last component of path, which is a valid file name, i.e.
  * neither "." nor "..". Returns -EINVAL if path is not valid or ends with "..", -EADDRNOTAVAIL if it
