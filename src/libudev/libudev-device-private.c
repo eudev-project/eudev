@@ -712,7 +712,7 @@ static int uevent_trigger_set_uuid_supported(int supported)
  * process and the child processes it forks afterwards share it: whichever of them finds out first whether the
  * kernel supports UUIDs, the others see the result too, also those forked before it was known. udevd uses it
  * for its workers and its "(udev-synth)" processes, which trigger uevents as well, so that they do not probe
- * again, each of them, which takes a second on kernels before 4.13. */
+ * again, each of them, which may take a second or two, and keep the result until udevd exits. */
 int uevent_trigger_share_uuid_supported(void)
 {
         int *p;
@@ -1161,7 +1161,7 @@ static int uevent_trigger_with_uuid(struct udev *udev, const char *syspath, cons
 
         if (p.plain_seen && !p.lost) {
                 if (uevent_trigger_set_uuid_supported(0) == 0)
-                        log_debug("The kernel does not support UUIDs of synthetic uevents (Linux 4.13 or newer is needed), triggering uevents without them.");
+                        log_debug("The kernel does not support UUIDs of synthetic uevents (its synthetic uevents carry no SYNTH_UUID=, as before Linux 4.13), triggering uevents without them.");
                 return 0;
         }
 

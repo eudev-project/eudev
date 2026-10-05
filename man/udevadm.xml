@@ -466,9 +466,18 @@
       the udev database. Unlike systemd, eudev does not send <literal>SYNTH_ARG_PIDFDID=</literal>
       and <literal>SYNTH_ARG_InvocationID=</literal>. This requires Linux 4.13 or newer: with older
       kernels, the events are triggered without the UUID and these properties, see
-      <option>--settle</option>. The kernel builds every event in a buffer of 2048 bytes for at most
-      64 properties; when it refuses an event because the properties no longer fit, the event is
-      triggered again without them, and then also without the UUID.</para>
+      <option>--settle</option>. As older kernels accept such an event without sending it, the first
+      event of each <command>udevadm trigger</command> call and the first one of
+      <command>udevd</command> find out whether the kernel supports them: the event is triggered with
+      the UUID, and if it does not arrive within a second, again without it, and that event decides,
+      as Linux 4.13 and newer add <literal>SYNTH_UUID=0</literal> to it, and older kernels do not.
+      When neither arrives, e.g. for a disk whose events the kernel suppresses while it reads its
+      partition table, nothing is decided, and the next event finds out. The result is kept until
+      <command>udevadm</command> exits, and in <command>udevd</command>, which shares it with its
+      workers and other child processes, until <command>udevd</command> exits. The kernel builds
+      every event in a buffer of 2048 bytes for at most 64 properties; when it refuses an event
+      because the properties no longer fit, the event is triggered again without them, and then also
+      without the UUID.</para>
       <variablelist>
         <varlistentry>
           <term><option>-v</option></term>
@@ -654,10 +663,11 @@
             the same command to finish. The events are recognized by their
             UUIDs, see <option>--uuid</option>. As kernels before Linux 4.13
             do not support them, <command>udevadm</command> finds out with
-            the first event whether the kernel passes the UUID on, which
-            takes up to a second with older kernels, and triggers the events
+            the first event whether the kernel passes the UUID on (see
+            above), which may take a second or two, and triggers the events
             without UUIDs then, and waits for an event of each triggered
-            device instead. Devices without a subsystem, e.g.
+            device instead, as for an event that was triggered without a
+            UUID before it was known. Devices without a subsystem, e.g.
             <filename>/sys/devices/platform</filename> with
             <option>--include-parents</option>, and hidden block devices,
             whose <filename>hidden</filename> attribute is 1, e.g. the path
@@ -674,7 +684,9 @@
             environment block (in the <literal>SYNTH_UUID=</literal> property) and may be used to track
             delivery of the generated events. This requires Linux 4.13 or newer: with older kernels,
             the events are triggered without UUIDs, with a warning, and no UUIDs are printed, see
-            <option>--settle</option>. No UUID is printed for a device without a subsystem or a hidden
+            <option>--settle</option>. No UUID is printed, with a warning, for an event that was
+            triggered without one before it was known whether the kernel supports them. No UUID is
+            printed for a device without a subsystem or a hidden
             block device, which is triggered without one, as the kernel sends no event for it, and for a
             device whose event the kernel refused with the UUID, as it did not fit, which is triggered
             without one, with a warning.</para>

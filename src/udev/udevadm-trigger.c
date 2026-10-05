@@ -392,9 +392,10 @@ static int exec_list(struct udev *udev, char **list, const char *action, Set *se
                  * eudev: systemd assumes that kernels before 4.13, which do not know the UUID logic, refuse
                  * the write with EINVAL, and then triggers the uevents without UUIDs. But they accept it,
                  * and send no uevent at all, so --settle would wait forever. uevent_trigger_with_args()
-                 * finds out with the first uevent whether the kernel supports UUIDs, and triggers the
-                 * uevents without them and without the arguments if it does not; then --settle waits for
-                 * an event of the device.
+                 * finds out with the first uevent whether the kernel supports UUIDs (or with the next ones,
+                 * as long as their uevents do not tell), and triggers the uevents without them and without
+                 * the arguments if it does not; then --settle waits for an event of the device, as for a
+                 * uevent that was triggered without a UUID before it was known.
                  *
                  * Also unlike systemd, which then prints a UUID and waits forever with --settle, a device
                  * without a subsystem or a hidden block device, for which the kernel sends no uevent, is
@@ -406,11 +407,13 @@ static int exec_list(struct udev *udev, char **list, const char *action, Set *se
                         if (r == 0 && arg_uuid) {
                                 if (uevent_trigger_uuid_supported() != 0)
                                         /* e.g. the kernel refused the uevent with the UUID, as it did
-                                         * not fit, see uevent_trigger_fitting() */
+                                         * not fit, see uevent_trigger_fitting(), or the uevents of the
+                                         * probe did not tell whether the kernel supports UUIDs, e.g. as
+                                         * the kernel suppresses the uevents of the device */
                                         log_warning("%s: Could not trigger the uevent with a UUID, triggered it without one.",
                                                     eudev_basename(syspath));
                                 else if (!warned_uuid) {
-                                        log_warning("The kernel does not support UUIDs of synthetic uevents (Linux 4.13 or newer is needed), triggering uevents without them.");
+                                        log_warning("The kernel does not support UUIDs of synthetic uevents (its synthetic uevents carry no SYNTH_UUID=, as before Linux 4.13), triggering uevents without them.");
                                         warned_uuid = true;
                                 }
                         }

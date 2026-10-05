@@ -453,7 +453,18 @@ and in the debug log of
 SYNTH_ARG_PIDFDID=
 and
 SYNTH_ARG_InvocationID=\&. This requires Linux 4\&.13 or newer: with older kernels, the events are triggered without the UUID and these properties, see
-\fB\-\-settle\fR\&. The kernel builds every event in a buffer of 2048 bytes for at most 64 properties; when it refuses an event because the properties no longer fit, the event is triggered again without them, and then also without the UUID\&.
+\fB\-\-settle\fR\&. As older kernels accept such an event without sending it, the first event of each
+\fBudevadm trigger\fR
+call and the first one of
+\fBudevd\fR
+find out whether the kernel supports them: the event is triggered with the UUID, and if it does not arrive within a second, again without it, and that event decides, as Linux 4\&.13 and newer add
+SYNTH_UUID=0
+to it, and older kernels do not\&. When neither arrives, e\&.g\&. for a disk whose events the kernel suppresses while it reads its partition table, nothing is decided, and the next event finds out\&. The result is kept until
+\fBudevadm\fR
+exits, and in
+\fBudevd\fR, which shares it with its workers and other child processes, until
+\fBudevd\fR
+exits\&. The kernel builds every event in a buffer of 2048 bytes for at most 64 properties; when it refuses an event because the properties no longer fit, the event is triggered again without them, and then also without the UUID\&.
 .PP
 \fB\-v\fR, \fB\-\-verbose\fR
 .RS 4
@@ -592,7 +603,7 @@ Apart from triggering events, also waits for those events to finish\&. Note that
 waits for all events to finish\&. This option only waits for events triggered by the same command to finish\&. The events are recognized by their UUIDs, see
 \fB\-\-uuid\fR\&. As kernels before Linux 4\&.13 do not support them,
 \fBudevadm\fR
-finds out with the first event whether the kernel passes the UUID on, which takes up to a second with older kernels, and triggers the events without UUIDs then, and waits for an event of each triggered device instead\&. Devices without a subsystem, e\&.g\&.
+finds out with the first event whether the kernel passes the UUID on (see above), which may take a second or two, and triggers the events without UUIDs then, and waits for an event of each triggered device instead, as for an event that was triggered without a UUID before it was known\&. Devices without a subsystem, e\&.g\&.
 /sys/devices/platform
 with
 \fB\-\-include\-parents\fR, and hidden block devices, whose
@@ -605,7 +616,7 @@ attribute is 1, e\&.g\&. the path devices of native NVMe multipath (nvme0c0n1), 
 Print the randomized UUIDs that the synthetic device events are triggered with to standard output, one line for each event\&. These UUIDs are included in the uevent environment block (in the
 SYNTH_UUID=
 property) and may be used to track delivery of the generated events\&. This requires Linux 4\&.13 or newer: with older kernels, the events are triggered without UUIDs, with a warning, and no UUIDs are printed, see
-\fB\-\-settle\fR\&. No UUID is printed for a device without a subsystem or a hidden block device, which is triggered without one, as the kernel sends no event for it, and for a device whose event the kernel refused with the UUID, as it did not fit, which is triggered without one, with a warning\&.
+\fB\-\-settle\fR\&. No UUID is printed, with a warning, for an event that was triggered without one before it was known whether the kernel supports them\&. No UUID is printed for a device without a subsystem or a hidden block device, which is triggered without one, as the kernel sends no event for it, and for a device whose event the kernel refused with the UUID, as it did not fit, which is triggered without one, with a warning\&.
 .RE
 .PP
 \fB\-\-wait\-daemon[=\fR\fB\fISECONDS\fR\fR\fB]\fR
