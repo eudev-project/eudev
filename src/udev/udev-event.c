@@ -695,10 +695,39 @@ static int spawn_check_timeouts(struct spawn *spawn) {
         return poll_timeout(spawn->timeout_usec - age_usec);
 }
 
+/* Returns the length of an incomplete UTF-8 sequence at the end of the n bytes of s: a lead byte with fewer
+ * continuation bytes after it than it needs, i.e. a character that the next read() continues. */
+static size_t utf8_incomplete_tail(const char *s, size_t n) {
+        size_t i;
+
+        for (i = 1; i <= 3 && i <= n; i++) {
+                unsigned char c = s[n - i];
+
+                if ((c & 0xc0) == 0x80)
+                        continue;
+                if ((c & 0xe0) == 0xc0)
+                        return i < 2 ? i : 0;
+                if ((c & 0xf0) == 0xe0)
+                        return i < 3 ? i : 0;
+                if ((c & 0xf8) == 0xf0)
+                        return i;
+                break;
+        }
+
+        return 0;
+}
+
 static void spawn_read(struct spawn *spawn,
                        int fd_stdout, int fd_stderr,
                        char *result, size_t ressize, bool *ret_truncated) {
         const char *cmd = spawn->cmd;
+        /* for the debug messages of the output: an incomplete UTF-8 sequence at the end of the last chunk
+         * of stdout and of stderr, kept for the next chunk, so that no message ends or starts in the middle
+         * of a character */
+        struct {
+                char bytes[3];
+                size_t len;
+        } partial[2] = {};
         _cleanup_close_ int fd_ep = -1;
         struct epoll_event ep_outpipe = {
                 .events = EPOLLIN,
@@ -762,6 +791,7 @@ static void spawn_read(struct spawn *spawn,
 
                 for (i = 0; i < fdcount; i++) {
                         int *fd = (int *)ev[i].data.ptr;
+                        unsigned k = fd == &fd_stdout ? 0 : 1;
 
                         if (*fd < 0)
                                 continue;
@@ -769,11 +799,15 @@ static void spawn_read(struct spawn *spawn,
                         if (ev[i].events & EPOLLIN) {
                                 ssize_t count;
                                 char buf[4096];
+                                size_t kept = partial[k].len, n;
 
-                                count = read(*fd, buf, sizeof(buf)-1);
+                                /* the start of the character that the last chunk ended with */
+                                memcpy(buf, partial[k].bytes, kept);
+                                count = read(*fd, buf + kept, sizeof(buf) - 1 - kept);
                                 if (count <= 0)
                                         continue;
-                                buf[count] = '\0';
+                                n = kept + count;
+                                buf[n] = '\0';
 
                                 /* store stdout result */
                                 if (result != NULL && *fd == fd_stdout) {
@@ -785,7 +819,7 @@ static void spawn_read(struct spawn *spawn,
                                                         log_warning("Truncating stdout of '%s' up to %zu byte.", cmd, ressize - 1);
                                                 truncated = true;
                                         }
-                                        memcpy(&result[respos], buf, len);
+                                        memcpy(&result[respos], buf + kept, len);
                                         respos += len;
                                 }
 
@@ -794,6 +828,10 @@ static void spawn_read(struct spawn *spawn,
                                         char *pos;
                                         char *line;
 
+                                        partial[k].len = utf8_incomplete_tail(buf, n);
+                                        memcpy(partial[k].bytes, buf + n - partial[k].len, partial[k].len);
+                                        buf[n - partial[k].len] = '\0';
+
                                         pos = buf;
                                         while ((line = strsep(&pos, "\n"))) {
                                                 if (pos != NULL || line[0] != '\0')
@@ -801,6 +839,12 @@ static void spawn_read(struct spawn *spawn,
                                         }
                                 }
                         } else if (ev[i].events & EPOLLHUP) {
+                                /* the output ended with an incomplete character */
+                                if (partial[k].len > 0)
+                                        log_debug("'%s'(%s) '%.*s'", cmd, *fd == fd_stdout ? "out" : "err",
+                                                  (int) partial[k].len, partial[k].bytes);
+                                partial[k].len = 0;
+
                                 r = epoll_ctl(fd_ep, EPOLL_CTL_DEL, *fd, NULL);
                                 if (r < 0) {
                                         log_error_errno(errno, "failed to remove fd from epoll: %m");
