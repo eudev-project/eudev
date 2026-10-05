@@ -7,7 +7,7 @@
  * <id> must be part of the ID list <idlist>.
  * If all IDs given by <idlist> are listed (ie collect has been
  * invoked for each ID in <idlist>) collect returns 0, the
- * number of missing IDs otherwise.
+ * number of missing IDs otherwise, at most MISSING_MAX.
  * On error, it returns one of the exit codes listed by usage().
  *
  * Copyright(C) 2007, Hannes Reinecke <hare@suse.de>
@@ -41,6 +41,10 @@
 
 #define BUFSIZE 16
 #define UDEV_ALARM_TIMEOUT 180
+/* The exit code is the number of missing IDs, but at most this: it must stay below 255, the exit code of the
+ * read and write errors, and would wrap around at 256, e.g. to 0, "all present". The COLLECT_ line has the
+ * real number. */
+#define MISSING_MAX 254
 
 enum collect_state {
         STATE_NONE,
@@ -102,15 +106,15 @@ static void usage(void)
                "  <id> must be part of the list <idlist>.\n"
                "  If all IDs given by <idlist> are listed (ie collect has been\n"
                "  invoked for each ID in <idlist>) collect returns 0, the\n"
-               "  number of missing IDs otherwise, and prints\n"
-               "  COLLECT_<checkpoint>=<number of missing IDs>.\n"
+               "  number of missing IDs otherwise (%d for %d or more), and\n"
+               "  prints COLLECT_<checkpoint>=<number of missing IDs>.\n"
                "  On error it prints no COLLECT_ line and returns 1 for wrong\n"
                "  arguments, 2 when it runs out of memory (also when it cannot\n"
                "  initialize libudev) or cannot handle SIGALRM, 3 when the\n"
                "  checkpoint file cannot be created, opened or locked, 4 when\n"
                "  the lock is not acquired within %d seconds, or 255 when the\n"
                "  checkpoint file cannot be read or written.\n\n"
-               , program_invocation_short_name, UDEV_ALARM_TIMEOUT);
+               , program_invocation_short_name, MISSING_MAX, MISSING_MAX, UDEV_ALARM_TIMEOUT);
 }
 
 /*
@@ -577,8 +581,10 @@ int main(int argc, char **argv)
                 errno = -r;
                 fprintf(stderr, "Cannot write %s/%s: %m\n", tmpdir, checkpoint);
                 ret = -1;
-        } else
-                ret = count = r;
+        } else {
+                count = r;
+                ret = r > MISSING_MAX ? MISSING_MAX : r;
+        }
 
         if (lockf(fd, F_ULOCK, 0)) {
                 /* this error can be safely ignored */

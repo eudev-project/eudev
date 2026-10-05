@@ -39,6 +39,8 @@ static struct udev *test_udev_new(void) {
 #include <ftw.h>
 #include <sys/resource.h>
 
+#include "strv.h"
+
 /* the limit of the size of the files that collect's main() writes */
 static rlim_t fsize_limit = RLIM_INFINITY;
 
@@ -126,21 +128,14 @@ static int read_file(const char *path, char *buf, size_t size) {
         return 0;
 }
 
-/* Runs collect's main() with the arguments, which end with NULL, and compares its exit code, its standard
- * output (unless NULL is expected) and its messages with the expected ones: the messages must contain the
- * expected text, or be empty for "". It must not leave a file descriptor open. */
-static int test_collect(const char *name, int expected_rc, const char *expected_out, const char *expected_err, ...) {
-        char *argv[16] = { (char *) "collect" };
+/* Runs collect's main() with argv, which ends with NULL, and compares its exit code, its standard output
+ * (unless NULL is expected) and its messages with the expected ones: the messages must contain the expected
+ * text, or be empty for "". It must not leave a file descriptor open. */
+static int test_collect_argv(const char *name, int expected_rc, const char *expected_out, const char *expected_err,
+                             char **argv) {
         char out[4096], err[4096];
-        int argc = 1, fd_out, fd_err, saved_out, saved_err, next_fd, rc;
+        int argc = strv_length(argv), fd_out, fd_err, saved_out, saved_err, next_fd, rc;
         struct rlimit saved_rl;
-        va_list ap;
-
-        va_start(ap, expected_err);
-        while (argc < (int) ELEMENTSOF(argv) - 1 && (argv[argc] = va_arg(ap, char *)))
-                argc++;
-        va_end(ap);
-        argv[argc] = NULL;
 
         if (getrlimit(RLIMIT_FSIZE, &saved_rl) < 0) {
                 fprintf(stderr, "%s: cannot get the limit of the file size: %m\n", name);
@@ -213,6 +208,47 @@ static int test_collect(const char *name, int expected_rc, const char *expected_
         printf("%s: exit code %i, output \"%.160s%s\"%s%.160s%s\n", name, rc, out, strlen(out) > 160 ? "..." : "",
                *err ? ", messages: " : "", err, strlen(err) > 160 ? "..." : "");
         return 0;
+}
+
+/* Like test_collect_argv(), with the arguments after argv[0], which end with NULL. */
+static int test_collect(const char *name, int expected_rc, const char *expected_out, const char *expected_err, ...) {
+        char *argv[16] = { (char *) "collect" };
+        int argc = 1;
+        va_list ap;
+
+        va_start(ap, expected_err);
+        while (argc < (int) ELEMENTSOF(argv) - 1 && (argv[argc] = va_arg(ap, char *)))
+                argc++;
+        va_end(ap);
+        argv[argc] = NULL;
+
+        return test_collect_argv(name, expected_rc, expected_out, expected_err, argv);
+}
+
+/* Runs collect with an ID list of n IDs, id0 to id<n-1>, for the ID id0, which gives n - 1 missing IDs. */
+static int test_collect_many(const char *name, const char *checkpoint, unsigned n, int expected_rc, const char *expected_out) {
+        char **argv;
+        unsigned i;
+        int r;
+
+        argv = new0(char *, n + 4);
+        if (!argv)
+                return log_oom();
+        argv[0] = strdup("collect");
+        argv[1] = strdup(checkpoint);
+        argv[2] = strdup("id0");
+        for (i = 0; i < n; i++)
+                if (asprintf(&argv[3 + i], "id%u", i) < 0)
+                        argv[3 + i] = NULL;
+        for (i = 0; i < n + 3; i++)
+                if (!argv[i]) {
+                        strv_free(argv);
+                        return log_oom();
+                }
+
+        r = test_collect_argv(name, expected_rc, expected_out, "", argv);
+        strv_free(argv);
+        return r;
 }
 
 static int remove_entry(const char *path, const struct stat *st, int flag, struct FTW *ftw) {
@@ -314,6 +350,14 @@ int main(void) {
         r |= test_collect("missing parameters", 1, "", "Missing parameter(s)\n", "cp", NULL);
         r |= test_collect("unknown option", 1, "", NULL, "--bogus", "cp", "a", "a", NULL);
         r |= test_collect("too long checkpoint name", 3, "", "is too long", longname, "a", "a", NULL);
+
+        /* the exit code is the number of missing IDs, at most 254, below the 255 of the errors and without
+         * wrapping around at 256; the COLLECT_ line has the real number */
+        r |= test_collect_many("253 missing IDs", "cp253", 254, 253, "COLLECT_cp253=253\n");
+        r |= test_collect_many("254 missing IDs", "cp254", 255, 254, "COLLECT_cp254=254\n");
+        r |= test_collect_many("255 missing IDs", "cp255", 256, 254, "COLLECT_cp255=255\n");
+        r |= test_collect_many("256 missing IDs", "cp256", 257, 254, "COLLECT_cp256=256\n");
+        r |= test_collect_many("1000 missing IDs", "cp1000", 1001, 254, "COLLECT_cp1000=1000\n");
 
         /* running out of memory for an ID of the list that the file does not have yet: the file is closed */
         fail_new = true;
