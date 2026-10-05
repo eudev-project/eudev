@@ -63,13 +63,11 @@ static bool force_release_has_code(const char *list, unsigned code) {
         }
 }
 
-static int install_force_release(struct udev_device *dev, const unsigned *release, unsigned release_count) {
+static int install_force_release(struct udev_device *dev, const unsigned *release, size_t release_count) {
         struct udev_device *atkbd;
+        _cleanup_free_ char *codes = NULL;
         const char *cur;
-        char codes[4096];
-        char *s;
-        size_t l;
-        unsigned i, added = 0;
+        size_t allocated = 0, len, i, added = 0;
         int ret;
 
         atkbd = udev_device_get_parent_with_subsystem_devtype(dev, "serio", NULL);
@@ -80,11 +78,12 @@ static int install_force_release(struct udev_device *dev, const unsigned *releas
         if (ret < 0)
                 return log_device_error_errno(atkbd, ret, "Failed to get force-release attribute: %m");
 
-        s = codes;
-        l = sizeof(codes);
-
-        /* copy current content */
-        l = strpcpy(&s, l, cur);
+        /* copy current content; eudev: into a buffer that grows for the list, while systemd cuts the
+         * list at 4095 bytes */
+        len = strlen(cur);
+        if (!GREEDY_REALLOC(codes, allocated, len + 1))
+                return log_oom_debug();
+        memcpy(codes, cur, len + 1);
 
         /* append new codes; eudev: only the ones that the list does not have yet, and without an empty
          * first entry, while systemd appends all of them every time, after a comma */
@@ -92,7 +91,9 @@ static int install_force_release(struct udev_device *dev, const unsigned *releas
                 if (force_release_has_code(codes, release[i]))
                         continue;
 
-                l = strpcpyf(&s, l, "%s%u", s == codes ? "" : ",", release[i]);
+                if (!GREEDY_REALLOC(codes, allocated, len + 1 + DECIMAL_STR_MAX(unsigned)))
+                        return log_oom_debug();
+                len += snprintf(codes + len, allocated - len, "%s%u", len > 0 ? "," : "", release[i]);
                 added++;
         }
 
@@ -100,6 +101,14 @@ static int install_force_release(struct udev_device *dev, const unsigned *releas
                 log_device_debug(atkbd, "keyboard: force-release list '%s' has all the codes already", cur);
                 return 0;
         }
+
+        /* eudev: sysfs takes at most a page with one write, and would cut a longer list. As the kernel
+         * keeps a bitmap of the scan codes up to 511, only a list with invalid codes can be that long,
+         * which the kernel would refuse anyway. */
+        if (len > page_size())
+                return log_device_error_errno(atkbd, E2BIG,
+                                              "keyboard: force-release list of %zu bytes is longer than the %zu bytes of the attribute, not updating it",
+                                              len, page_size());
 
         log_device_debug(atkbd, "keyboard: updating force-release list with '%s'", codes);
         ret = udev_device_set_sysattr_value(atkbd, "force_release", codes);
@@ -241,8 +250,8 @@ static int open_device(struct udev_device *dev, const char *devnode) {
 
 static int builtin_keyboard(struct udev_device *dev, int argc __attribute__((unused)), char *argv[] __attribute__((unused)), enum udev_event_mode mode) {
         struct udev_list_entry *entry;
-        unsigned release[1024];
-        unsigned release_count = 0;
+        _cleanup_free_ unsigned *release = NULL;
+        size_t release_allocated = 0, release_count = 0;
         _cleanup_close_ int fd = -1;
         const char *node;
         int has_abs = -1;
@@ -275,13 +284,14 @@ static int builtin_keyboard(struct udev_device *dev, int argc __attribute__((unu
 
                         keycode = udev_list_entry_get_value(entry);
 
-                        /* a leading '!' needs a force-release entry */
+                        /* a leading '!' needs a force-release entry; eudev: in a list that grows for
+                         * them, while systemd keeps 1023, each later code replacing the last one */
                         if (keycode[0] == '!') {
                                 keycode++;
 
-                                release[release_count] = scancode;
-                                if (release_count <  ELEMENTSOF(release)-1)
-                                        release_count++;
+                                if (!GREEDY_REALLOC(release, release_allocated, release_count + 1))
+                                        return log_oom_debug();
+                                release[release_count++] = scancode;
 
                                 if (keycode[0] == '\0')
                                         continue;
