@@ -32,6 +32,7 @@
 #include <sys/types.h>
 #include <sys/sysmacros.h>
 
+#include "hashmap.h"
 #include "pager.h"
 #include "path-util.h"
 #include "strv.h"
@@ -1002,10 +1003,62 @@ static int draw_tree(
         return 0;
 }
 
+/* Like sd-device's enumerator, which adds the parents of the devices it finds, if they have a subsystem and
+ * are not listed yet, e.g. the directories /sys/bus/X/drivers, the parents of the drivers, which no scan of
+ * /sys finds. The listed devices are put into devices, by their syspath. */
+static int add_parent_devices(struct udev *udev, struct udev_enumerate *e, Hashmap *devices) {
+        _cleanup_strv_free_ char **parents = NULL;
+        struct udev_list_entry *entry;
+        struct udev_device *d;
+        Iterator i;
+        char **p;
+        int r;
+
+        udev_list_entry_foreach(entry, udev_enumerate_get_list_entry(e)) {
+                /* Devices that are gone meanwhile are skipped. */
+                d = udev_device_new_from_syspath(udev, udev_list_entry_get_name(entry));
+                if (!d)
+                        continue;
+
+                r = hashmap_put(devices, udev_device_get_syspath(d), d);
+                if (r <= 0)
+                        udev_device_unref(d);
+                if (r < 0)
+                        return log_oom();
+        }
+
+        HASHMAP_FOREACH(d, devices, i) {
+                struct udev_device *parent;
+
+                for (parent = udev_device_get_parent(d); parent; parent = udev_device_get_parent(parent)) {
+                        const char *syspath = udev_device_get_syspath(parent);
+
+                        if (!udev_device_get_subsystem(parent))
+                                continue;
+
+                        /* the parents of a listed device are added for it */
+                        if (hashmap_contains(devices, syspath) || strv_contains(parents, syspath))
+                                break;
+
+                        if (strv_extend(&parents, syspath) < 0)
+                                return log_oom();
+                }
+        }
+
+        STRV_FOREACH(p, parents) {
+                r = udev_enumerate_add_syspath(e, *p);
+                if (r < 0)
+                        return log_error_errno(r, "Failed to add parent devices: %m");
+        }
+
+        return 0;
+}
+
 static int print_tree(struct udev *udev, struct udev_device *below) {
         _cleanup_udev_enumerate_unref_ struct udev_enumerate *e = NULL;
         struct udev_list_entry *entry;
-        struct udev_device **array = NULL;
+        struct udev_device **array = NULL, *d;
+        Hashmap *devices = NULL;
         size_t n = 0, n_allocated = 0, i;
         int r;
 
@@ -1025,6 +1078,10 @@ static int print_tree(struct udev *udev, struct udev_device *below) {
         if (r < 0)
                 return log_error_errno(r, "Failed to scan for devices and subsystems: %m");
 
+        devices = hashmap_new(&string_hash_ops);
+        if (!devices)
+                return log_oom();
+
         if (below) {
                 struct udev_device *parent;
 
@@ -1035,16 +1092,22 @@ static int print_tree(struct udev *udev, struct udev_device *below) {
                                 continue;
 
                         r = udev_enumerate_add_syspath(e, udev_device_get_syspath(parent));
-                        if (r < 0)
-                                return log_error_errno(r, "Failed to add parent devices: %m");
+                        if (r < 0) {
+                                log_error_errno(r, "Failed to add parent devices: %m");
+                                goto finish;
+                        }
                 }
+        } else {
+                r = add_parent_devices(udev, e, devices);
+                if (r < 0)
+                        goto finish;
         }
 
         udev_list_entry_foreach(entry, udev_enumerate_get_list_entry(e)) {
-                struct udev_device *d;
+                const char *syspath = udev_list_entry_get_name(entry);
 
                 /* Devices that are gone meanwhile are skipped. */
-                d = udev_device_new_from_syspath(udev, udev_list_entry_get_name(entry));
+                d = hashmap_remove(devices, syspath) ?: udev_device_new_from_syspath(udev, syspath);
                 if (!d)
                         continue;
 
@@ -1074,6 +1137,9 @@ finish:
         for (i = 0; i < n; i++)
                 udev_device_unref(array[i]);
         free(array);
+        while ((d = hashmap_steal_first(devices)))
+                udev_device_unref(d);
+        hashmap_free(devices);
         return r;
 }
 
