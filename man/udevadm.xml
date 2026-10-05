@@ -1521,7 +1521,8 @@
         <term><varname>$SYSTEMD_LOG_LOCATION</varname></term>
         <listitem>
           <para>A boolean. If true, messages written to the tty are prefixed with a filename and line
-          number in the source code where the message originates.</para>
+          number in the source code where the message originates. The filename is relative to the top of
+          the source tree, e.g. <filename>src/udev/udevadm.c</filename>, like in systemd.</para>
         </listitem>
       </varlistentry>
       <varlistentry>

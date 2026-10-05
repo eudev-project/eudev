@@ -2,6 +2,7 @@ ACLOCAL_AMFLAGS = -I m4 ${ACLOCAL_FLAGS}
 
 AM_CPPFLAGS = \
 	$(LIBC_CPPFLAGS) \
+	$(PROJECT_FILE_CPPFLAGS) \
 	-DUDEV_VERSION=\"$(UDEV_VERSION)\" \
 	-I $(top_srcdir)/src/shared
 

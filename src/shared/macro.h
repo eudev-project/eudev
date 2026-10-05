@@ -108,10 +108,26 @@ static inline size_t ALIGN_TO(size_t l, size_t ali) {
                 (type*)( (char *)UNIQ_T(A, uniq) - offsetof(type,member) ); \
         })
 
+/* Like PROJECT_FILE of systemd: the name of the source file relative to the top of the source tree, e.g.
+ * "src/udev/udevadm.c", for the locations in log messages and assertions. Each Makefile.am passes its directory
+ * relative to the top of the source tree, $(subdir), as PROJECT_SUBDIR, and the top of the source tree as the
+ * compiler sees it, $(top_srcdir), as PROJECT_TOP_SRCDIR, see PROJECT_FILE_CPPFLAGS in configure.ac: __FILE__
+ * is the bare name of a file in the directory where it is compiled, and starts with $(top_srcdir)/ for the
+ * other files, e.g. the headers of src/shared, and for all files when building outside of the source tree.
+ * The compiler makes the comparisons, and the result is a string constant. */
+#if defined(PROJECT_SUBDIR) && defined(PROJECT_TOP_SRCDIR)
+#  define PROJECT_FILE                                                                  \
+        (!__builtin_strchr(__FILE__, '/') ? PROJECT_SUBDIR "/" __FILE__ :               \
+         __builtin_strncmp(__FILE__, PROJECT_TOP_SRCDIR "/", sizeof(PROJECT_TOP_SRCDIR "/") - 1) == 0 ? \
+         &__FILE__[sizeof(PROJECT_TOP_SRCDIR "/") - 1] : __FILE__)
+#else
+#  define PROJECT_FILE __FILE__
+#endif
+
 #define assert_se(expr)                                                 \
         do {                                                            \
                 if (_unlikely_(!(expr)))                                \
-                        log_assert_failed(#expr, __FILE__, __LINE__, __PRETTY_FUNCTION__); \
+                        log_assert_failed(#expr, PROJECT_FILE, __LINE__, __PRETTY_FUNCTION__); \
         } while (false)                                                 \
 
 /* We override the glibc assert() here. */
@@ -124,7 +140,7 @@ static inline size_t ALIGN_TO(size_t l, size_t ali) {
 
 #define assert_not_reached(t)                                           \
         do {                                                            \
-                log_assert_failed_unreachable(t, __FILE__, __LINE__, __PRETTY_FUNCTION__); \
+                log_assert_failed_unreachable(t, PROJECT_FILE, __LINE__, __PRETTY_FUNCTION__); \
         } while (false)
 
 #if defined(static_assert)

@@ -2,6 +2,7 @@ ACLOCAL_AMFLAGS = -I m4 ${ACLOCAL_FLAGS}
 
 AM_CPPFLAGS = \
 	$(LIBC_CPPFLAGS) \
+	$(PROJECT_FILE_CPPFLAGS) \
 	-DUDEV_ROOT_RUN=\"$(rootrundir)\" \
 	-I $(top_srcdir)/src/shared \
 	-I $(top_srcdir)/src/libudev

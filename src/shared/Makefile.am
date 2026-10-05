@@ -2,6 +2,7 @@ ACLOCAL_AMFLAGS = -I m4 ${ACLOCAL_FLAGS}
 
 AM_CPPFLAGS = \
 	$(LIBC_CPPFLAGS) \
+	$(PROJECT_FILE_CPPFLAGS) \
 	-DUDEV_ROOT_RUN=\"$(rootrundir)\" \
 	-include $(top_builddir)/config.h
 

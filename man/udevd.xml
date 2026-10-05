@@ -415,7 +415,8 @@ UDEV_PROC_CMDLINE="net.ifnames=0" udevadm test /sys/class/net/eth0</programlisti
         <term><varname>$SYSTEMD_LOG_LOCATION</varname></term>
         <listitem>
           <para>A boolean. If true, messages written to the tty are prefixed with a filename and line
-          number in the source code where the message originates.</para>
+          number in the source code where the message originates. The filename is relative to the top of
+          the source tree, e.g. <filename>src/udev/udevd.c</filename>, like in systemd.</para>
         </listitem>
       </varlistentry>
     </variablelist>

@@ -112,7 +112,7 @@ noreturn void log_assert_failed_unreachable(
         ({                                                                        \
                 int _l = (level), _e = (error);                                   \
                 (log_get_max_level() >= LOG_PRI(_l))                              \
-                ? log_internal(_l, _e, __FILE__, __LINE__, __func__, __VA_ARGS__) \
+                ? log_internal(_l, _e, PROJECT_FILE, __LINE__, __func__, __VA_ARGS__) \
                 : -abs(_e); \
         })
 
@@ -122,7 +122,7 @@ noreturn void log_assert_failed_unreachable(
         ({                                                                        \
                 int _l = (level);                                                 \
                 (log_get_max_level() >= LOG_PRI(_l))                              \
-                ? log_internal_long(_l, 0, __FILE__, __LINE__, __func__, (message)) \
+                ? log_internal_long(_l, 0, PROJECT_FILE, __LINE__, __func__, (message)) \
                 : 0;                                                              \
         })
 
@@ -152,7 +152,7 @@ noreturn void log_assert_failed_unreachable(
 
 /* log_oom_internal() always returns -ENOMEM; spell it out here, so that
  * the value is known at the call site (e.g. to static analyzers) */
-#define log_oom() ({ log_oom_internal(__FILE__, __LINE__, __func__); -ENOMEM; })
+#define log_oom() ({ log_oom_internal(PROJECT_FILE, __LINE__, __func__); -ENOMEM; })
 #define log_oom_debug() log_debug_errno(ENOMEM, "Out of memory.")
 
 /* systemd marks errors that were not taken from errno with SYNTHETIC_ERRNO(), so that they are not

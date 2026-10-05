@@ -122,6 +122,10 @@ AS_IF([test "x$libc_is_glibc" = xyes],
 	[LIBC_CPPFLAGS=])
 AC_SUBST([LIBC_CPPFLAGS])
 
+# The names of the source files in the locations of the log messages are relative to the top of the source
+# tree, like in systemd, see PROJECT_FILE in src/shared/macro.h; make expands the variables in each directory.
+AC_SUBST([PROJECT_FILE_CPPFLAGS], ['-DPROJECT_SUBDIR=\"$(subdir)\" -DPROJECT_TOP_SRCDIR=\"$(top_srcdir)\"'])
+
 # ------------------------------------------------------------------------------
 
 # TODO: the old python checks are irrelevant, but we do need python and perl for tests

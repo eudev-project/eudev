@@ -64,7 +64,7 @@ static unsigned parse_line_nr = 0;
                 if (checking)                                                     \
                         udev_rules_check_note_level(checking, _l);                \
                 (log_get_max_level() >= LOG_PRI(_l))                              \
-                ? log_internal(_l, _e, __FILE__, __LINE__, __func__, __VA_ARGS__) \
+                ? log_internal(_l, _e, PROJECT_FILE, __LINE__, __func__, __VA_ARGS__) \
                 : -abs(_e);                                                       \
         })
 
@@ -87,7 +87,7 @@ static unsigned parse_line_nr = 0;
  * that systemd logs with log_struct() instead of log_line_*(). */
 #define log_rule_warning_no_issue(fmt, ...)                                                         \
         ((log_get_max_level() >= LOG_WARNING)                                                       \
-         ? log_internal(LOG_WARNING, 0, __FILE__, __LINE__, __func__, "%s:%u " fmt,                 \
+         ? log_internal(LOG_WARNING, 0, PROJECT_FILE, __LINE__, __func__, "%s:%u " fmt,                 \
                         strna(parse_filename), parse_line_nr, ##__VA_ARGS__)                        \
          : 0)
 

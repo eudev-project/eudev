@@ -414,7 +414,8 @@ A boolean\&. If true, error messages and more important ones written to the tty 
 .PP
 \fI$UDEV_LOG_LOCATION\fR, \fI$SYSTEMD_LOG_LOCATION\fR
 .RS 4
-A boolean\&. If true, messages written to the tty are prefixed with a filename and line number in the source code where the message originates\&.
+A boolean\&. If true, messages written to the tty are prefixed with a filename and line number in the source code where the message originates\&. The filename is relative to the top of the source tree, e\&.g\&.
+src/udev/udevd\&.c, like in systemd\&.
 .RE
 .SH "SEE ALSO"
 .PP
