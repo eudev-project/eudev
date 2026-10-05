@@ -1082,8 +1082,10 @@
             <para>Specify when <command>udevadm</command> should resolve names of users and groups specified
             in udev rules. When set to <constant>early</constant> (the default), names will be resolved when
             the rules are parsed. When set to <constant>late</constant>, names will be resolved during the
-            event being processed. When set to <constant>never</constant>, names will never be resolved and
-            relevant udev rules will be ignored.</para>
+            event being processed. When set to <constant>never</constant>, names will never be resolved, and
+            the <varname>OWNER</varname> and <varname>GROUP</varname> keys whose value is not a numeric ID,
+            i.e. a name or a value with substitutions, will be ignored; the other keys of these rules still
+            apply.</para>
           </listitem>
         </varlistentry>
         <varlistentry>
@@ -1203,8 +1205,10 @@
             in udev rules. When set to <constant>early</constant> (the default), names will be resolved when
             the rules are parsed. When set to <constant>late</constant>, names will not be verified, as
             <command>udevd</command> resolves names during each event being processed. When set to
-            <constant>never</constant>, names will never be resolved and relevant rules will be ignored.
-            </para>
+            <constant>never</constant>, names will never be resolved, and the <varname>OWNER</varname> and
+            <varname>GROUP</varname> keys whose value is not a numeric ID, i.e. a name or a value with
+            substitutions, will be ignored, as <command>udevd</command> ignores them with this setting; the
+            other keys of these rules are still verified.</para>
           </listitem>
         </varlistentry>
 

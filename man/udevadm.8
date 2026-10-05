@@ -942,7 +942,11 @@ should resolve names of users and groups specified in udev rules\&. When set to
 \fBearly\fR
 (the default), names will be resolved when the rules are parsed\&. When set to
 \fBlate\fR, names will be resolved during the event being processed\&. When set to
-\fBnever\fR, names will never be resolved and relevant udev rules will be ignored\&.
+\fBnever\fR, names will never be resolved, and the
+\fIOWNER\fR
+and
+\fIGROUP\fR
+keys whose value is not a numeric ID, i\&.e\&. a name or a value with substitutions, will be ignored; the other keys of these rules still apply\&.
 .RE
 .PP
 \fB\-D \fR\fB\fIDIR\fR\fR, \fB\-\-extra\-rules\-dir=\fR\fB\fIDIR\fR\fR
@@ -1049,7 +1053,13 @@ should resolve names of users and groups specified in udev rules\&. When set to
 \fBlate\fR, names will not be verified, as
 \fBudevd\fR
 resolves names during each event being processed\&. When set to
-\fBnever\fR, names will never be resolved and relevant rules will be ignored\&.
+\fBnever\fR, names will never be resolved, and the
+\fIOWNER\fR
+and
+\fIGROUP\fR
+keys whose value is not a numeric ID, i\&.e\&. a name or a value with substitutions, will be ignored, as
+\fBudevd\fR
+ignores them with this setting; the other keys of these rules are still verified\&.
 .RE
 .PP
 \fB\-\-root=\fR\fB\fIPATH\fR\fR
