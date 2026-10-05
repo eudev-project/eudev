@@ -2460,6 +2460,11 @@ int main(int argc, char *argv[]) {
                 goto exit;
         }
 
+        /* udevd, its workers and its "(udev-synth)" processes find out together whether the kernel supports the
+         * UUIDs and the arguments of synthetic uevents (Linux 4.13 or newer), see uevent_trigger_with_args() */
+        if (uevent_trigger_share_uuid_supported() < 0)
+                log_debug_errno(errno, "Failed to share whether the kernel supports UUIDs of synthetic uevents with the child processes, ignoring: %m");
+
         manager_set_default_children_max();
         default_children_max = arg_children_max;
 

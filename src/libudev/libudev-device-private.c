@@ -26,6 +26,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <poll.h>
+#include <sys/mman.h>
 #include <sys/stat.h>
 #include <sys/sysmacros.h>
 
@@ -679,12 +680,35 @@ int device_new_from_path(struct udev *udev, const char *path, struct udev_device
 }
 
 /* Whether the kernel passes the UUID of a synthetic uevent on as SYNTH_UUID=, which it does since Linux 4.13,
- * as found out by uevent_trigger_with_uuid(); -1 as long as it is not known. */
-static int synthetic_uuid_supported = -1;
+ * as found out by uevent_trigger_with_uuid(); -1 as long as it is not known. It is in a shared mapping after
+ * uevent_trigger_share_uuid_supported(). */
+static int synthetic_uuid_supported_private = -1;
+static volatile int *synthetic_uuid_supported = &synthetic_uuid_supported_private;
 
 int uevent_trigger_uuid_supported(void)
 {
-        return synthetic_uuid_supported;
+        return *synthetic_uuid_supported;
+}
+
+/* Moves the result of the probe of uevent_trigger_with_uuid() to a shared anonymous mapping, so that the
+ * process and the child processes it forks afterwards share it: whichever of them finds out first whether the
+ * kernel supports UUIDs, the others see the result too, also those forked before it was known. udevd uses it
+ * for its workers and its "(udev-synth)" processes, which trigger uevents as well, so that they do not probe
+ * again, each of them, which takes a second on kernels before 4.13. */
+int uevent_trigger_share_uuid_supported(void)
+{
+        int *p;
+
+        if (synthetic_uuid_supported != &synthetic_uuid_supported_private)
+                return 0;
+
+        p = mmap(NULL, sizeof(int), PROT_READ|PROT_WRITE, MAP_SHARED|MAP_ANONYMOUS, -1, 0);
+        if (p == MAP_FAILED)
+                return -errno;
+
+        *p = synthetic_uuid_supported_private;
+        synthetic_uuid_supported = p;
+        return 0;
 }
 
 /* How long uevent_trigger_with_uuid() waits for the uevent with the UUID that it triggered first. The kernel
@@ -781,10 +805,10 @@ static int uevent_trigger_with_uuid(struct udev *udev, const char *syspath, cons
         assert(action);
         assert(uuid);
 
-        if (synthetic_uuid_supported > 0)
+        if (*synthetic_uuid_supported > 0)
                 return uevent_trigger_fitting(syspath, action, uuid, args);
 
-        if (synthetic_uuid_supported == 0) {
+        if (*synthetic_uuid_supported == 0) {
                 r = uevent_trigger(syspath, action, NULL);
                 return r < 0 ? r : 0;
         }
@@ -832,12 +856,13 @@ static int uevent_trigger_with_uuid(struct udev *udev, const char *syspath, cons
 
                 d = udev_monitor_receive_device(monitor);
                 if (d && streq_ptr(udev_device_get_property_value(d, "SYNTH_UUID"), uuid)) {
-                        synthetic_uuid_supported = 1;
+                        *synthetic_uuid_supported = 1;
+                        log_debug("The kernel supports UUIDs of synthetic uevents.");
                         return 1;
                 }
         }
 
-        synthetic_uuid_supported = 0;
+        *synthetic_uuid_supported = 0;
         log_debug("The kernel does not support UUIDs of synthetic uevents (Linux 4.13 or newer is needed), triggering uevents without them.");
 
         r = uevent_trigger(syspath, action, NULL);

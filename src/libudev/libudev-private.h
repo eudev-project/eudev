@@ -133,6 +133,7 @@ int uevent_trigger_with_args(struct udev *udev, const char *syspath, const char 
 int device_trigger_with_args(struct udev_device *device, const char *action, char * const *args, char *ret_uuid);
 /* Whether the kernel supports UUIDs of synthetic uevents: 1 yes, 0 no, -1 not known (yet) */
 int uevent_trigger_uuid_supported(void);
+int uevent_trigger_share_uuid_supported(void);
 int device_build_default_trigger_args(bool with_timestamp, char ***ret);
 int device_trigger_with_timestamp(struct udev_device *device, const char *action, char * const *args,
                                   char *ret_uuid);
