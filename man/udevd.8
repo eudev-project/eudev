@@ -298,6 +298,44 @@ takes precedence over both, unless its value starts with
 :\&.
 .RE
 .PP
+\fIsystemd\&.log_level=\fR, \fIsystemd\&.log_target=\fR, \fIsystemd\&.log_color[=\fR\fI\fIBOOL\fR\fR\fI]\fR, \fIsystemd\&.log_location[=\fR\fI\fIBOOL\fR\fR\fI]\fR, \fIsystemd\&.log_time[=\fR\fI\fIBOOL\fR\fR\fI]\fR, \fIsystemd\&.log_tid[=\fR\fI\fIBOOL\fR\fR\fI]\fR, \fIsystemd\&.log_ratelimit_kmsg[=\fR\fI\fIBOOL\fR\fR\fI]\fR
+.RS 4
+Like in systemd, the same as the environment variables
+\fI$SYSTEMD_LOG_LEVEL\fR,
+\fI$SYSTEMD_LOG_TARGET\fR,
+\fI$SYSTEMD_LOG_COLOR\fR,
+\fI$SYSTEMD_LOG_LOCATION\fR,
+\fI$SYSTEMD_LOG_TIME\fR,
+\fI$SYSTEMD_LOG_TID\fR
+and
+\fI$SYSTEMD_LOG_RATELIMIT_KMSG\fR, see below, which take precedence over them\&. Like systemd before version 248, every program of eudev that has no controlling terminal reads them:
+\fBudevd\fR,
+\fBudevadm\fR
+when
+\fBudevd\fR
+runs it, and the commands run without a terminal, e\&.g\&. by init scripts; a command run from a terminal ignores them\&.
+.RE
+.PP
+The log level of
+\fBudevd\fR
+is taken from the following, where a later one takes precedence over the earlier ones: the default,
+info;
+\fIsystemd\&.log_level=\fR
+on the kernel command line;
+\fI$UDEV_LOG_LEVEL\fR
+or
+\fI$SYSTEMD_LOG_LEVEL\fR;
+\fIudev_log=\fR
+in
+\fBudev.conf\fR(5);
+\fB\-\-debug\fR;
+\fIudev\&.log_level=\fR
+on the kernel command line; and
+\fBudevadm control \-\-log\-level=\fR\&. Trace logging, with
+\fIudev\&.trace\fR
+or
+\fBudevadm control \-\-trace\fR, logs at the debug level regardless of them\&.
+.PP
 For testing, the kernel command line can be replaced by the value of the
 \fI$UDEV_PROC_CMDLINE\fR
 environment variable of
@@ -361,7 +399,9 @@ or
 \fBkmsg\fR
 followed by a colon to set the maximum log level for that specific log target (e\&.g\&.
 \fBSYSTEMD_LOG_LEVEL=debug,console:info\fR
-specifies to log at debug level except when logging to the console which should be at info level)\&. Note that the global maximum log level takes priority over any per target maximum log levels\&. Like in systemd,
+specifies to log at debug level except when logging to the console which should be at info level)\&. Note that the global maximum log level takes priority over any per target maximum log levels\&. Like in systemd, it takes precedence over
+\fIsystemd\&.log_level=\fR
+on the kernel command line, and
 \fIudev_log=\fR
 of
 \fBudev.conf\fR(5),

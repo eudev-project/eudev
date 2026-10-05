@@ -330,7 +330,37 @@
           value starts with <literal>:</literal>.</para>
         </listitem>
       </varlistentry>
+      <varlistentry>
+        <term><varname>systemd.log_level=</varname></term>
+        <term><varname>systemd.log_target=</varname></term>
+        <term><varname>systemd.log_color[=<replaceable>BOOL</replaceable>]</varname></term>
+        <term><varname>systemd.log_location[=<replaceable>BOOL</replaceable>]</varname></term>
+        <term><varname>systemd.log_time[=<replaceable>BOOL</replaceable>]</varname></term>
+        <term><varname>systemd.log_tid[=<replaceable>BOOL</replaceable>]</varname></term>
+        <term><varname>systemd.log_ratelimit_kmsg[=<replaceable>BOOL</replaceable>]</varname></term>
+        <listitem>
+          <para>Like in systemd, the same as the environment variables
+          <varname>$SYSTEMD_LOG_LEVEL</varname>, <varname>$SYSTEMD_LOG_TARGET</varname>,
+          <varname>$SYSTEMD_LOG_COLOR</varname>, <varname>$SYSTEMD_LOG_LOCATION</varname>,
+          <varname>$SYSTEMD_LOG_TIME</varname>, <varname>$SYSTEMD_LOG_TID</varname> and
+          <varname>$SYSTEMD_LOG_RATELIMIT_KMSG</varname>, see below, which take precedence over them.
+          Like systemd before version 248, every program of eudev that has no controlling terminal reads
+          them: <command>udevd</command>, <command>udevadm</command> when <command>udevd</command> runs it,
+          and the commands run without a terminal, e.g. by init scripts; a command run from a terminal
+          ignores them.</para>
+        </listitem>
+      </varlistentry>
     </variablelist>
+    <para>The log level of <command>udevd</command> is taken from the following, where a later one takes
+    precedence over the earlier ones: the default, <literal>info</literal>;
+    <varname>systemd.log_level=</varname> on the kernel command line;
+    <varname>$UDEV_LOG_LEVEL</varname> or <varname>$SYSTEMD_LOG_LEVEL</varname>;
+    <varname>udev_log=</varname> in
+    <citerefentry><refentrytitle>udev.conf</refentrytitle><manvolnum>5</manvolnum></citerefentry>;
+    <option>--debug</option>; <varname>udev.log_level=</varname> on the kernel command line; and
+    <command>udevadm control --log-level=</command>. Trace logging, with
+    <varname>udev.trace</varname> or <command>udevadm control --trace</command>, logs at the debug level
+    regardless of them.</para>
     <!-- when adding entries here, consider also adding them
          in kernel-command-line.xml -->
 
@@ -377,7 +407,8 @@ UDEV_PROC_CMDLINE="net.ifnames=0" udevadm test /sys/class/net/eth0</programlisti
           <constant>SYSTEMD_LOG_LEVEL=debug,console:info</constant> specifies to log at debug level except
           when logging to the console which should be at info level). Note that the global maximum log level
           takes priority over any per target maximum log levels.
-          Like in systemd, <varname>udev_log=</varname> of
+          Like in systemd, it takes precedence over <varname>systemd.log_level=</varname> on the kernel
+          command line, and <varname>udev_log=</varname> of
           <citerefentry><refentrytitle>udev.conf</refentrytitle><manvolnum>5</manvolnum></citerefentry>,
           <option>--debug</option>, <varname>udev.log_level=</varname> on the kernel command line and
           <command>udevadm control --log-level=</command> take precedence over it.</para>

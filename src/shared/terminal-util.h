@@ -23,6 +23,7 @@
 #include <stdbool.h>
 #include <stdarg.h>
 #include <stdio.h>
+#include <sys/types.h>
 
 #include "macro.h"
 #include "time-util.h"
@@ -38,6 +39,10 @@
 #define ANSI_ERASE_TO_END_OF_LINE "\x1B[K"
 
 int open_terminal(const char *name, int mode);
+
+/* Like get_ctty_devnr() of systemd: the device number of the controlling terminal of the process (0 for the
+ * calling process), -ENXIO if it has none, or another error if it cannot be read from /proc. */
+int get_ctty_devnr(pid_t pid, dev_t *ret);
 
 /* Like systemd's on_tty(): whether both standard output and standard error are terminals. The
  * result is cached. */

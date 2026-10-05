@@ -1208,6 +1208,16 @@ Print help text\&.
 .RE
 .SH "ENVIRONMENT"
 .PP
+When
+\fBudevadm\fR
+has no controlling terminal, e\&.g\&. when it is run by
+\fBudevd\fR
+or by an init script, it reads the log settings of the kernel command line first, like systemd before version 248, see
+\fBudevd\fR(8): e\&.g\&.
+\fIsystemd\&.log_level=\fR
+like
+\fI$SYSTEMD_LOG_LEVEL\fR; the variables below take precedence over them\&.
+.PP
 \fI$UDEV_LOG_LEVEL\fR, \fI$SYSTEMD_LOG_LEVEL\fR
 .RS 4
 The maximum log level of emitted messages (messages with a higher log level, i\&.e\&. less important ones, are suppressed)\&. Takes a comma\-separated list of values\&. A value may be either one of (in order of decreasing importance)

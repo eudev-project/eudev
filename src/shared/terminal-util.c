@@ -19,6 +19,7 @@
 
 #include <sys/ioctl.h>
 #include <sys/types.h>
+#include <sys/sysmacros.h>
 #include <sys/stat.h>
 #include <sys/utsname.h>
 #include <termios.h>
@@ -268,6 +269,43 @@ DEFINE_ANSI_FUNC(highlight_magenta,     "\x1B[0;1;35m")
 DEFINE_ANSI_FUNC(highlight_cyan,        "\x1B[0;1;36m")
 DEFINE_ANSI_FUNC_256(grey,              "\x1B[0;38:5:245m", "\x1B[0;90m")
 DEFINE_ANSI_FUNC_256(highlight_grey,    "\x1B[0;1;38:5:245m", "\x1B[0;1;90m")
+
+int get_ctty_devnr(pid_t pid, dev_t *ret) {
+        _cleanup_free_ char *line = NULL;
+        unsigned long ttynr;
+        const char *p;
+        int r;
+
+        assert(pid >= 0);
+
+        p = procfs_file_alloca(pid, "stat");
+        r = read_one_line_file(p, &line);
+        if (r < 0)
+                return r;
+
+        p = strrchr(line, ')');
+        if (!p)
+                return -EIO;
+
+        p++;
+
+        if (sscanf(p, " "
+                   "%*c "  /* state */
+                   "%*d "  /* ppid */
+                   "%*d "  /* pgrp */
+                   "%*d "  /* session */
+                   "%lu ", /* ttynr */
+                   &ttynr) != 1)
+                return -EIO;
+
+        if (major((dev_t) ttynr) == 0 && minor((dev_t) ttynr) == 0)
+                return -ENXIO;
+
+        if (ret)
+                *ret = (dev_t) ttynr;
+
+        return 0;
+}
 
 void get_log_colors(int priority, const char **on, const char **off, const char **highlight) {
         /* Note that this will initialize output variables only when there's something to output.

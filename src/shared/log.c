@@ -857,9 +857,69 @@ static const char *log_getenv(const char *name) {
         return e;
 }
 
+/* Like parse_proc_cmdline_item() of systemd's log.c: the systemd.log_*= settings of the kernel command line.
+ * Unlike systemd, "debug" is not taken as systemd.log_level=debug. */
+static int log_parse_proc_cmdline_item(const char *key, const char *value) {
+        /* Like PROC_CMDLINE_STRIP_RD_PREFIX of systemd; parse_proc_cmdline() passes the parameters starting
+         * with "rd." only in an initrd. */
+        if (startswith(key, "rd."))
+                key += strlen("rd.");
+
+        if (proc_cmdline_key_streq(key, "systemd.log_target")) {
+
+                if (proc_cmdline_value_missing(key, value))
+                        return 0;
+
+                if (log_set_target_from_string(value) < 0)
+                        log_warning("Failed to parse log target '%s', ignoring.", value);
+
+        } else if (proc_cmdline_key_streq(key, "systemd.log_level")) {
+
+                if (proc_cmdline_value_missing(key, value))
+                        return 0;
+
+                if (log_set_max_level_from_string(value) < 0)
+                        log_warning("Failed to parse log level setting '%s', ignoring.", value);
+
+        } else if (proc_cmdline_key_streq(key, "systemd.log_color")) {
+
+                if (log_show_color_from_string(value ?: "1") < 0)
+                        log_warning("Failed to parse log color setting '%s', ignoring.", value);
+
+        } else if (proc_cmdline_key_streq(key, "systemd.log_location")) {
+
+                if (log_show_location_from_string(value ?: "1") < 0)
+                        log_warning("Failed to parse log location setting '%s', ignoring.", value);
+
+        } else if (proc_cmdline_key_streq(key, "systemd.log_tid")) {
+
+                if (log_show_tid_from_string(value ?: "1") < 0)
+                        log_warning("Failed to parse log tid setting '%s', ignoring.", value);
+
+        } else if (proc_cmdline_key_streq(key, "systemd.log_time")) {
+
+                if (log_show_time_from_string(value ?: "1") < 0)
+                        log_warning("Failed to parse log time setting '%s', ignoring.", value);
+
+        } else if (proc_cmdline_key_streq(key, "systemd.log_ratelimit_kmsg")) {
+
+                if (log_set_ratelimit_kmsg_from_string(value ?: "1") < 0)
+                        log_warning("Failed to parse log ratelimit kmsg boolean '%s', ignoring.", value);
+        }
+
+        return 0;
+}
+
 void log_parse_environment(void) {
         const char *e;
         int r;
+
+        /* Like systemd before v248, which reads the kernel command line in processes without a controlling
+         * terminal, i.e. daemons and the programs they start, and not in commands run from a terminal; since
+         * then, systemd reads it in PID 1 and in programs started by it directly, which eudev's programs
+         * never are. Then, like in systemd, the environment overrides it. */
+        if (get_ctty_devnr(0, NULL) < 0)
+                (void) parse_proc_cmdline(log_parse_proc_cmdline_item);
 
         e = log_getenv("TARGET");
         if (e && log_set_target_from_string(e) < 0)
