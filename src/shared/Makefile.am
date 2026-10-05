@@ -42,6 +42,7 @@ libudev_shared_la_SOURCES=\
 	time-util.c \
 	util.c \
 	utf8.c \
+	verbs.c \
 	virt.c
 
 noinst_HEADERS = \
@@ -90,6 +91,7 @@ noinst_HEADERS = \
 	util.h \
 	utf8.h \
 	udev-util.h \
+	verbs.h \
 	virt.h \
 	unaligned.h
 
