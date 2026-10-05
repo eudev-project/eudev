@@ -1284,6 +1284,17 @@ A boolean\&. If true, messages written to the tty are prefixed with a filename a
 src/udev/udevadm\&.c, like in systemd\&.
 .RE
 .PP
+\fI$UDEV_LOG_TIME\fR, \fI$SYSTEMD_LOG_TIME\fR
+.RS 4
+A boolean\&. If true, messages written to the tty are prefixed with the local time, e\&.g\&.
+Mon 2026\-10\-05 12:34:56 EEST, like in systemd\&.
+.RE
+.PP
+\fI$UDEV_LOG_TID\fR, \fI$SYSTEMD_LOG_TID\fR
+.RS 4
+A boolean\&. If true, messages written to the tty are prefixed with the numerical thread ID (TID) in parentheses, like in systemd\&.
+.RE
+.PP
 \fI$SYSTEMD_COLORS\fR
 .RS 4
 Takes a boolean argument, or a special value\&. By default (unset),

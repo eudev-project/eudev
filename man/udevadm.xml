@@ -1528,6 +1528,22 @@
         </listitem>
       </varlistentry>
       <varlistentry>
+        <term><varname>$UDEV_LOG_TIME</varname></term>
+        <term><varname>$SYSTEMD_LOG_TIME</varname></term>
+        <listitem>
+          <para>A boolean. If true, messages written to the tty are prefixed with the local time, e.g.
+          <literal>Mon 2026-10-05 12:34:56 EEST</literal>, like in systemd.</para>
+        </listitem>
+      </varlistentry>
+      <varlistentry>
+        <term><varname>$UDEV_LOG_TID</varname></term>
+        <term><varname>$SYSTEMD_LOG_TID</varname></term>
+        <listitem>
+          <para>A boolean. If true, messages written to the tty are prefixed with the numerical thread ID
+          (TID) in parentheses, like in systemd.</para>
+        </listitem>
+      </varlistentry>
+      <varlistentry>
         <term><varname>$SYSTEMD_COLORS</varname></term>
         <listitem>
           <para>Takes a boolean argument, or a special value. By default (unset), <command>udevadm</command>

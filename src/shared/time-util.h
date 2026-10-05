@@ -57,6 +57,8 @@ typedef struct dual_timestamp {
 #define NSEC_PER_YEAR ((nsec_t) (31557600ULL*NSEC_PER_SEC))
 
 #define FORMAT_TIMESPAN_MAX 64
+/* the size of the buffer for format_timestamp(), like in systemd */
+#define FORMAT_TIMESTAMP_MAX (3U+1U+10U+1U+8U+1U+6U+1U+6U+1U)
 
 usec_t now(clockid_t clock);
 
@@ -82,6 +84,10 @@ struct timespec *timespec_store(struct timespec *ts, usec_t u);
 
 struct timeval *timeval_store(struct timeval *tv, usec_t u);
 char *format_timespan(char *buf, size_t l, usec_t t, usec_t accuracy);
+/* Like format_timestamp() of systemd: the local time t, a time of CLOCK_REALTIME, e.g. "Mon 2026-10-05 12:34:56
+ * EEST", with the English name of the week day, and the time zone if it fits. Returns NULL if t is not set or
+ * the result does not fit. */
+char *format_timestamp(char *buf, size_t l, usec_t t);
 
 int parse_time(const char *t, usec_t *ret, usec_t default_unit);
 int parse_sec(const char *t, usec_t *ret);

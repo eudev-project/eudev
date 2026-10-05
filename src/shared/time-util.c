@@ -24,6 +24,7 @@
 #include <string.h>
 #include <stdbool.h>
 #include <time.h>
+#include <limits.h>
 
 #include "time-util.h"
 #include "macro.h"
@@ -77,6 +78,61 @@ struct timeval *timeval_store(struct timeval *tv, usec_t u) {
         }
 
         return tv;
+}
+
+/* the last time that format_timestamp() formats, like USEC_TIMESTAMP_FORMATTABLE_MAX of systemd */
+#define USEC_TIMESTAMP_FORMATTABLE_MAX                                                          \
+        (sizeof(time_t) == 8 ? (usec_t) 253402214399000000ULL /* Thu 9999-12-30 23:59:59 UTC */ : \
+                               ((usec_t) INT32_MAX) * USEC_PER_SEC - USEC_PER_DAY)
+
+char *format_timestamp(char *buf, size_t l, usec_t t) {
+        static const char weekdays[7][4] = { "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat" };
+        struct tm tm;
+        time_t sec;
+        size_t n;
+
+        assert(buf);
+
+        if (t <= 0 || t == USEC_INFINITY)
+                return NULL; /* Timestamp is unset */
+
+        if (l < 3 + 1 + 10 + 1 + 8 + 1 + 1 + 1)
+                return NULL; /* Not enough space even for the shortest form. */
+
+        /* Let's not format times with years > 9999 */
+        if (t > USEC_TIMESTAMP_FORMATTABLE_MAX) {
+                assert(l >= strlen("--- XXXX-XX-XX XX:XX:XX") + 1);
+                return strcpy(buf, "--- XXXX-XX-XX XX:XX:XX");
+        }
+
+        sec = (time_t) (t / USEC_PER_SEC);
+        if (!localtime_r(&sec, &tm))
+                return NULL;
+
+        /* Start with the week day */
+        memcpy(buf, weekdays[tm.tm_wday], 4);
+
+        /* Add the main components */
+        if (strftime(buf + 3, l - 3, " %Y-%m-%d %H:%M:%S", &tm) <= 0)
+                return NULL; /* Doesn't fit */
+
+        /* Append the timezone, if it fits */
+        n = strlen(buf);
+        if (tm.tm_zone && tm.tm_zone[0] != '\0') {
+                size_t tn = strlen(tm.tm_zone);
+
+                if (n + 1 + tn + 1 > l) {
+                        /* Not even enough space for the POSIX minimum (of 6)? Then complain that it doesn't
+                         * fit, otherwise suppress the time zone, like systemd. */
+                        if (n + 1 + _POSIX_TZNAME_MAX + 1 > l)
+                                return NULL;
+                } else {
+                        buf[n++] = ' ';
+                        strcpy(buf + n, tm.tm_zone);
+                }
+        }
+
+        return buf;
 }
 
 char *format_timespan(char *buf, size_t l, usec_t t, usec_t accuracy) {

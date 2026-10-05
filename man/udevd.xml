@@ -352,12 +352,10 @@ UDEV_PROC_CMDLINE="net.ifnames=0" udevadm test /sys/class/net/eth0</programlisti
   <refsect1>
     <title>Environment</title>
 
-    <para>Each of the following settings is read from <varname>$UDEV_LOG_LEVEL</varname>,
-    <varname>$UDEV_LOG_TARGET</varname>, <varname>$UDEV_LOG_COLOR</varname> or
-    <varname>$UDEV_LOG_LOCATION</varname>, and, like in systemd, from
-    <varname>$SYSTEMD_LOG_LEVEL</varname>, <varname>$SYSTEMD_LOG_TARGET</varname>,
-    <varname>$SYSTEMD_LOG_COLOR</varname> or <varname>$SYSTEMD_LOG_LOCATION</varname> when the former
-    is not set. <command>udevadm</command> reads them too, see
+    <para>Each of the following settings is read from <varname>$UDEV_LOG_<replaceable>NAME</replaceable></varname>,
+    e.g. <varname>$UDEV_LOG_LEVEL</varname>, and, like in systemd, from
+    <varname>$SYSTEMD_LOG_<replaceable>NAME</replaceable></varname>, e.g.
+    <varname>$SYSTEMD_LOG_LEVEL</varname>, when the former is not set. <command>udevadm</command> reads them too, see
     <citerefentry><refentrytitle>udevadm</refentrytitle><manvolnum>8</manvolnum></citerefentry>.</para>
 
     <variablelist class='environment-variables'>
@@ -420,6 +418,22 @@ UDEV_PROC_CMDLINE="net.ifnames=0" udevadm test /sys/class/net/eth0</programlisti
           <para>A boolean. If true, messages written to the tty are prefixed with a filename and line
           number in the source code where the message originates. The filename is relative to the top of
           the source tree, e.g. <filename>src/udev/udevd.c</filename>, like in systemd.</para>
+        </listitem>
+      </varlistentry>
+      <varlistentry>
+        <term><varname>$UDEV_LOG_TIME</varname></term>
+        <term><varname>$SYSTEMD_LOG_TIME</varname></term>
+        <listitem>
+          <para>A boolean. If true, messages written to the tty are prefixed with the local time, e.g.
+          <literal>Mon 2026-10-05 12:34:56 EEST</literal>, like in systemd.</para>
+        </listitem>
+      </varlistentry>
+      <varlistentry>
+        <term><varname>$UDEV_LOG_TID</varname></term>
+        <term><varname>$SYSTEMD_LOG_TID</varname></term>
+        <listitem>
+          <para>A boolean. If true, messages written to the tty are prefixed with the numerical thread ID
+          (TID) in parentheses, like in systemd.</para>
         </listitem>
       </varlistentry>
     </variablelist>

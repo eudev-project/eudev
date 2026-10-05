@@ -61,6 +61,8 @@ static bool syslog_is_stream = false;
 /* like systemd: unset (-1) until $SYSTEMD_LOG_COLOR sets it, or log_open() turns it on for the console */
 static int show_color = -1;
 static bool show_location = false;
+static bool show_time = false;
+static bool show_tid = false;
 
 /* Akin to glibc's __abort_msg; which is private and we hence cannot
  * use here. */
@@ -278,8 +280,9 @@ static int write_to_console(
                 const char *object __attribute__((unused)),
                 const char *buffer) {
 
-        char location[256], prefix[1 + DECIMAL_STR_MAX(int) + 2];
-        struct iovec iovec[6] = {};
+        char location[256], prefix[1 + DECIMAL_STR_MAX(int) + 2], header_time[FORMAT_TIMESTAMP_MAX],
+             tid_string[3 + DECIMAL_STR_MAX(pid_t) + 1];
+        struct iovec iovec[9] = {};
         const char *on = NULL, *off = NULL;
         unsigned n = 0;
 
@@ -292,6 +295,17 @@ static int write_to_console(
         if (log_target == LOG_TARGET_CONSOLE_PREFIXED) {
                 sprintf(prefix, "<%i>", level);
                 IOVEC_SET_STRING(iovec[n++], prefix);
+        }
+
+        /* like systemd, the time and the thread ID first */
+        if (show_time && format_timestamp(header_time, sizeof(header_time), now(CLOCK_REALTIME))) {
+                IOVEC_SET_STRING(iovec[n++], header_time);
+                IOVEC_SET_STRING(iovec[n++], " ");
+        }
+
+        if (show_tid) {
+                sprintf(tid_string, "(" PID_FMT ") ", gettid());
+                IOVEC_SET_STRING(iovec[n++], tid_string);
         }
 
         /* like systemd, a color for each level, and the location in dark yellow */
@@ -759,6 +773,28 @@ static int log_show_location_from_string(const char *e) {
         return 0;
 }
 
+static int log_show_time_from_string(const char *e) {
+        int r;
+
+        r = parse_boolean(e);
+        if (r < 0)
+                return r;
+
+        show_time = r;
+        return 0;
+}
+
+static int log_show_tid_from_string(const char *e) {
+        int r;
+
+        r = parse_boolean(e);
+        if (r < 0)
+                return r;
+
+        show_tid = r;
+        return 0;
+}
+
 /* $UDEV_LOG_<name>, or $SYSTEMD_LOG_<name> when that is not set */
 static const char *log_getenv(const char *name) {
         const char *u, *s, *e;
@@ -795,6 +831,14 @@ void log_parse_environment(void) {
         e = log_getenv("LOCATION");
         if (e && log_show_location_from_string(e) < 0)
                 log_warning("Failed to parse log location '%s', ignoring.", e);
+
+        e = log_getenv("TIME");
+        if (e && log_show_time_from_string(e) < 0)
+                log_warning("Failed to parse log time '%s', ignoring.", e);
+
+        e = log_getenv("TID");
+        if (e && log_show_tid_from_string(e) < 0)
+                log_warning("Failed to parse log tid '%s', ignoring.", e);
 }
 static const char *const log_target_table[] = {
         [LOG_TARGET_CONSOLE] = "console",
