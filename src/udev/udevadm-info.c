@@ -1580,18 +1580,16 @@ static int uinfo(struct udev *udev, int argc, char *argv[]) {
 
                 device = find_device(udev, *p, NULL);
                 if (!device) {
-                        bool bad_argument = errno == EINVAL;
+                        int error = errno > 0 ? errno : ENODEV;
 
-                        /* The exit status also if the pager is quit while the message or the output of the
-                         * other devices is written. */
-                        if (ret == 0)
-                                ret = 4;
-                        pager_set_exit_status(ret);
-
-                        if (bad_argument)
-                                log_error("Bad argument \"%s\", expected an absolute path in /dev/ or /sys/, or device ID.", *p);
+                        /* Like systemd, with the error, and the exit status is 1, also if the pager is quit
+                         * later, as for every error, see pager_open(). Unlike systemd, without "or a unit
+                         * name", as eudev has none. */
+                        if (error == EINVAL)
+                                log_error_errno(error, "Bad argument \"%s\", expected an absolute path in /dev/ or /sys/, or device ID: %m", *p);
                         else
-                                log_error("Unknown device \"%s\".", *p);
+                                log_error_errno(error, "Unknown device \"%s\": %m", *p);
+                        ret = 1;
                         continue;
                 }
 
