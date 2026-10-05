@@ -51,9 +51,10 @@ void log_close(void);
 /* Like log_parse_environment() of systemd, without the kernel command line, which systemd only parses in
  * PID 1 and in programs started by systemd: sets the log target, the maximum log level (also of single
  * targets), and whether the messages to the console are colored and show the location in the source code,
- * the time and the thread ID, from $SYSTEMD_LOG_TARGET, $SYSTEMD_LOG_LEVEL, $SYSTEMD_LOG_COLOR,
- * $SYSTEMD_LOG_LOCATION, $SYSTEMD_LOG_TIME and $SYSTEMD_LOG_TID. eudev: each of them is read from
- * $UDEV_LOG_<name> first, e.g. $UDEV_LOG_LEVEL, when set. Not for library code. */
+ * the time and the thread ID, and whether the messages to /dev/kmsg are rate limited, from
+ * $SYSTEMD_LOG_TARGET, $SYSTEMD_LOG_LEVEL, $SYSTEMD_LOG_COLOR, $SYSTEMD_LOG_LOCATION, $SYSTEMD_LOG_TIME,
+ * $SYSTEMD_LOG_TID and $SYSTEMD_LOG_RATELIMIT_KMSG. eudev: each of them is read from $UDEV_LOG_<name> first,
+ * e.g. $UDEV_LOG_LEVEL, when set. Not for library code. */
 void log_parse_environment(void);
 
 void log_close_syslog(void);

@@ -63,6 +63,7 @@ static int show_color = -1;
 static bool show_location = false;
 static bool show_time = false;
 static bool show_tid = false;
+static bool ratelimit_kmsg = true;
 
 /* Akin to glibc's __abort_msg; which is private and we hence cannot
  * use here. */
@@ -429,6 +430,31 @@ static int write_to_syslog(
 /* the mark of a message that is cut to fit into a record of /dev/kmsg */
 #define KMSG_TRUNCATED "..."
 
+/* Like ratelimit_below() of systemd, for the RateLimit of write_to_kmsg(): at most 200 messages in 5 seconds.
+ * Returns true if the message may be written, and the number of dropped messages in the interval in
+ * ret_dropped otherwise. */
+static bool kmsg_ratelimit_below(unsigned *ret_dropped) {
+        static usec_t begin = 0;
+        static unsigned num = 0;
+        usec_t ts;
+
+        ts = now(CLOCK_MONOTONIC);
+
+        if (begin <= 0 || usec_sub_unsigned(ts, begin) > 5 * USEC_PER_SEC) {
+                begin = ts;  /* Start a new time window */
+                num = 1;     /* Reset counter */
+                return true;
+        }
+
+        if (num < UINT_MAX)
+                num++;
+        if (num <= 200)
+                return true;
+
+        *ret_dropped = num == UINT_MAX ? UINT_MAX : num - 200;
+        return false;
+}
+
 static int write_to_kmsg(
                 int level,
                 int error __attribute__((unused)),
@@ -441,6 +467,7 @@ static int write_to_kmsg(
 
         char header_priority[1 + DECIMAL_STR_MAX(int) + 2], header_pid[1 + DECIMAL_STR_MAX(pid_t) + 4];
         struct iovec iovec[6] = {};
+        unsigned dropped;
         size_t total;
 
         if (kmsg_fd < 0)
@@ -448,6 +475,16 @@ static int write_to_kmsg(
 
         if (LOG_PRI(level) > log_target_max_level[LOG_TARGET_KMSG])
                 return 0;
+
+        /* Like systemd: a safety catch for logging in a loop, per process. The first dropped message of the
+         * interval is replaced by a notice. Unlike systemd, which closes the console when it logs to
+         * /dev/kmsg, so that a dropped message does not show up there, it is taken as written. */
+        if (ratelimit_kmsg && !kmsg_ratelimit_below(&dropped)) {
+                if (dropped > 1)
+                        return 1;
+
+                buffer = "Too many messages being logged to kmsg, ignoring";
+        }
 
         snprintf(header_priority, sizeof(header_priority), "<%i>", level);
         char_array_0(header_priority);
@@ -773,6 +810,17 @@ static int log_show_location_from_string(const char *e) {
         return 0;
 }
 
+static int log_set_ratelimit_kmsg_from_string(const char *e) {
+        int r;
+
+        r = parse_boolean(e);
+        if (r < 0)
+                return r;
+
+        ratelimit_kmsg = r;
+        return 0;
+}
+
 static int log_show_time_from_string(const char *e) {
         int r;
 
@@ -839,6 +887,10 @@ void log_parse_environment(void) {
         e = log_getenv("TID");
         if (e && log_show_tid_from_string(e) < 0)
                 log_warning("Failed to parse log tid '%s', ignoring.", e);
+
+        e = log_getenv("RATELIMIT_KMSG");
+        if (e && log_set_ratelimit_kmsg_from_string(e) < 0)
+                log_warning("Failed to parse log ratelimit kmsg boolean '%s', ignoring.", e);
 }
 static const char *const log_target_table[] = {
         [LOG_TARGET_CONSOLE] = "console",

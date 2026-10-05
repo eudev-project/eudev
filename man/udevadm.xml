@@ -1544,6 +1544,16 @@
         </listitem>
       </varlistentry>
       <varlistentry>
+        <term><varname>$UDEV_LOG_RATELIMIT_KMSG</varname></term>
+        <term><varname>$SYSTEMD_LOG_RATELIMIT_KMSG</varname></term>
+        <listitem>
+          <para>A boolean, true by default. If true, like in systemd, at most 200 messages in 5 seconds
+          are written to the kernel log buffer by each process; the first message that is dropped is
+          replaced by <literal>Too many messages being logged to kmsg, ignoring</literal>. If false, the
+          messages written to kmsg are not rate limited.</para>
+        </listitem>
+      </varlistentry>
+      <varlistentry>
         <term><varname>$SYSTEMD_COLORS</varname></term>
         <listitem>
           <para>Takes a boolean argument, or a special value. By default (unset), <command>udevadm</command>

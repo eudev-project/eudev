@@ -1295,6 +1295,12 @@ Mon 2026\-10\-05 12:34:56 EEST, like in systemd\&.
 A boolean\&. If true, messages written to the tty are prefixed with the numerical thread ID (TID) in parentheses, like in systemd\&.
 .RE
 .PP
+\fI$UDEV_LOG_RATELIMIT_KMSG\fR, \fI$SYSTEMD_LOG_RATELIMIT_KMSG\fR
+.RS 4
+A boolean, true by default\&. If true, like in systemd, at most 200 messages in 5 seconds are written to the kernel log buffer by each process; the first message that is dropped is replaced by
+Too many messages being logged to kmsg, ignoring\&. If false, the messages written to kmsg are not rate limited\&.
+.RE
+.PP
 \fI$SYSTEMD_COLORS\fR
 .RS 4
 Takes a boolean argument, or a special value\&. By default (unset),
