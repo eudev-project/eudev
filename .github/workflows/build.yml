@@ -28,6 +28,10 @@ jobs:
           - 'alpine:edge'
     container:
       image: ${{ matrix.distro }}
+      # udev-test.pl runs test-udev as root in its own mount namespace,
+      # which needs CAP_SYS_ADMIN and mount() past the default seccomp and
+      # AppArmor profiles of docker
+      options: --privileged
     steps:
       - name: install prerequisites (alpine)
         if: ${{ startsWith(matrix.distro, 'alpine:') }}
@@ -78,4 +82,4 @@ jobs:
       - name: make
         run: make -j$(($(nproc)+1))
       - name: check
-        run: make check || cat test/udev-test.pl.log
+        run: make check || { cat test/test-suite.log; exit 1; }
