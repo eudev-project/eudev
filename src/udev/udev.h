@@ -126,8 +126,7 @@ struct udev_rules *udev_rules_unref(struct udev_rules *rules);
 bool udev_rules_check_timestamp(struct udev_rules *rules);
 int udev_rules_apply_to_event(struct udev_rules *rules, struct udev_event *event,
                               usec_t timeout_usec,
-                              struct udev_list *properties_list,
-                              const sigset_t *sigmask);
+                              struct udev_list *properties_list);
 int udev_rules_apply_static_dev_perms(struct udev_rules *rules);
 
 /* udev-event.c */
@@ -145,14 +144,13 @@ size_t udev_event_apply_format(struct udev_event *event,
                                bool *ret_truncated);
 int udev_event_spawn(struct udev_event *event,
                      usec_t timeout_usec,
-                     const char *cmd, char **envp, const sigset_t *sigmask,
+                     const char *cmd, char **envp,
                      char *result, size_t ressize, bool *ret_truncated);
 int udev_event_execute_rules(struct udev_event *event,
                               usec_t timeout_usec,
                               struct udev_list *properties_list,
-                              struct udev_rules *rules,
-                              const sigset_t *sigset);
-void udev_event_execute_run(struct udev_event *event, usec_t timeout_usec, const sigset_t *sigset);
+                              struct udev_rules *rules);
+void udev_event_execute_run(struct udev_event *event, usec_t timeout_usec);
 void udev_event_restore_db(struct udev_event *event);
 #define UDEV_ARGV_MAX 128
 int udev_build_argv(struct udev *udev, char *cmd, int *argc, char *argv[]);

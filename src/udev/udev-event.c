@@ -590,7 +590,6 @@ size_t udev_event_apply_format(struct udev_event *event,
 
 static int spawn_exec(struct udev_event *event __attribute__((unused)),
                       const char *cmd, char *const argv[], char **envp,
-                      const sigset_t *sigmask __attribute__((unused)),
                       int fd_stdout, int fd_stderr) {
         _cleanup_close_ int fd = -1;
         int r;
@@ -1000,7 +999,7 @@ static const char *test_mode_helper(const char *program) {
  * exit normally, e.g. was killed by a signal. */
 int udev_event_spawn(struct udev_event *event,
                      usec_t timeout_usec,
-                     const char *cmd, char **envp, const sigset_t *sigmask,
+                     const char *cmd, char **envp,
                      char *result, size_t ressize, bool *ret_truncated) {
         int outpipe[2] = {-1, -1};
         int errpipe[2] = {-1, -1};
@@ -1128,7 +1127,7 @@ int udev_event_spawn(struct udev_event *event,
 
                 log_debug("starting '%s'", cmd);
 
-                spawn_exec(event, cmd, argv, envp, sigmask,
+                spawn_exec(event, cmd, argv, envp,
                            outpipe[WRITE_END], errpipe[WRITE_END]);
 
                 _exit(2 );
@@ -1651,8 +1650,7 @@ void udev_event_restore_db(struct udev_event *event) {
 int udev_event_execute_rules(struct udev_event *event,
                              usec_t timeout_usec,
                              struct udev_list *properties_list,
-                             struct udev_rules *rules,
-                             const sigset_t *sigmask) {
+                             struct udev_rules *rules) {
         struct udev_device *dev = event->dev;
         int r;
 
@@ -1690,8 +1688,7 @@ int udev_event_execute_rules(struct udev_event *event,
 
                 r = udev_rules_apply_to_event(rules, event,
                                               timeout_usec,
-                                              properties_list,
-                                              sigmask);
+                                              properties_list);
                 if (r < 0)
                         log_debug_errno(r, "%s: Failed to apply udev rules: %m", udev_device_get_sysname(dev));
 
@@ -1750,8 +1747,7 @@ int udev_event_execute_rules(struct udev_event *event,
 
                 r = udev_rules_apply_to_event(rules, event,
                                               timeout_usec,
-                                              properties_list,
-                                              sigmask);
+                                              properties_list);
                 if (r < 0) {
                         log_debug_errno(r, "%s: Failed to apply udev rules: %m", udev_device_get_sysname(dev));
                         udev_event_restore_db(event);
@@ -1976,7 +1972,7 @@ int udev_event_execute_rules(struct udev_event *event,
         return 0;
 }
 
-void udev_event_execute_run(struct udev_event *event, usec_t timeout_usec, const sigset_t *sigmask) {
+void udev_event_execute_run(struct udev_event *event, usec_t timeout_usec) {
         struct udev_list_entry *list_entry;
 
         udev_list_entry_foreach(list_entry, udev_list_get_entry(&event->run_list)) {
@@ -2008,7 +2004,7 @@ void udev_event_execute_run(struct udev_event *event, usec_t timeout_usec, const
                         }
 
                         envp = udev_device_get_properties_envp(event->dev);
-                        udev_event_spawn(event, timeout_usec, command, envp, sigmask, NULL, 0, NULL);
+                        udev_event_spawn(event, timeout_usec, command, envp, NULL, 0, NULL);
                 }
         }
 }

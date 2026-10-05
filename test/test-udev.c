@@ -189,7 +189,7 @@ int main(int argc __attribute__((unused)), char *argv[]) {
         char syspath[UTIL_PATH_SIZE];
         const char *devpath;
         const char *action;
-        sigset_t mask, sigmask_orig;
+        sigset_t mask;
         int err;
 
         err = fake_filesystems();
@@ -211,8 +211,6 @@ int main(int argc __attribute__((unused)), char *argv[]) {
 
         log_debug("version %s", VERSION);
         mac_selinux_init("/dev");
-
-        sigprocmask(SIG_SETMASK, NULL, &sigmask_orig);
 
         action = argv[1];
         if (action == NULL) {
@@ -246,7 +244,7 @@ int main(int argc __attribute__((unused)), char *argv[]) {
         event->keep_netifs = keep_netifs;
 
         sigfillset(&mask);
-        sigprocmask(SIG_SETMASK, &mask, &sigmask_orig);
+        sigprocmask(SIG_SETMASK, &mask, NULL);
         event->fd_signal = signalfd(-1, &mask, SFD_NONBLOCK|SFD_CLOEXEC);
         if (event->fd_signal < 0) {
                 fprintf(stderr, "error creating signalfd\n");
@@ -275,11 +273,9 @@ int main(int argc __attribute__((unused)), char *argv[]) {
         if (udev_event_execute_rules(event,
                                      3 * USEC_PER_SEC,
                                      NULL,
-                                     rules,
-                                     &sigmask_orig) >= 0) {
+                                     rules) >= 0) {
                 udev_event_execute_run(event,
-                                       3 * USEC_PER_SEC,
-                                       NULL);
+                                       3 * USEC_PER_SEC);
 
                 /* Finalize the database like the udevd worker does after RUN, so that ID_PROCESSING=1 is not
                  * left in it, and restore the previous database entry and the tag index like it, when that

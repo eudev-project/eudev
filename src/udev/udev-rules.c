@@ -1329,7 +1329,7 @@ static int import_file_into_properties(struct udev_event *event, struct udev_rul
 static int import_program_into_properties(struct udev_event *event, struct udev_rules *rules, struct token *rule,
                                           struct token *token,
                                           usec_t timeout_usec,
-                                          const char *program, const sigset_t *sigmask) {
+                                          const char *program) {
         struct udev_device *dev = event->dev;
         char **envp;
         _cleanup_free_ char *result = NULL;
@@ -1342,7 +1342,7 @@ static int import_program_into_properties(struct udev_event *event, struct udev_
                 return log_oom();
 
         envp = udev_device_get_properties_envp(dev);
-        err = udev_event_spawn(event, timeout_usec, program, envp, sigmask, result, IMPORT_PROGRAM_SIZE, &truncated);
+        err = udev_event_spawn(event, timeout_usec, program, envp, result, IMPORT_PROGRAM_SIZE, &truncated);
         if (err != 0) {
                 /* like systemd; the errors of running the program are logged already */
                 if (err > 0)
@@ -3253,8 +3253,7 @@ static int udev_replace_ifname(struct udev *udev, char *str) {
 int udev_rules_apply_to_event(struct udev_rules *rules,
                               struct udev_event *event,
                               usec_t timeout_usec,
-                              struct udev_list *properties_list,
-                              const sigset_t *sigmask) {
+                              struct udev_list *properties_list) {
         struct token *cur;
         /* the first token is the one of a rule, or the end, so this is set before it is used; the
          * initialization keeps compilers from warning that it may be used uninitialized */
@@ -3499,7 +3498,7 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                         envp = udev_device_get_properties_envp(event->dev);
                         log_event_debug(event, rules, rule, cur, "Running command \"%s\"", program);
 
-                        r = udev_event_spawn(event, timeout_usec, program, envp, sigmask, result, sizeof(result), NULL);
+                        r = udev_event_spawn(event, timeout_usec, program, envp, result, sizeof(result), NULL);
                         if (r != 0) {
                                 /* like systemd; the errors of running the program are logged already */
                                 if (r > 0)
@@ -3547,7 +3546,7 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                         log_event_debug(event, rules, rule, cur, "Importing properties from results of \"%s\"", import);
 
                         r = import_program_into_properties(event, rules, rule, cur, timeout_usec,
-                                                           import, sigmask);
+                                                           import);
                         if (r < 0)
                                 return r;
                         if (!log_event_result(event, rules, rule, cur, (r > 0) == (cur->key.op != OP_NOMATCH)))

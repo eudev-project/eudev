@@ -45,7 +45,7 @@ int main(int argc, char *argv[]) {
         _cleanup_udev_event_unref_ struct udev_event *event = NULL;
         char syspath[UTIL_PATH_SIZE];
         const char *barrier;
-        sigset_t mask, sigmask_orig;
+        sigset_t mask;
 
         if (argc != 3) {
                 fprintf(stderr, "usage: %s ACTION DEVPATH\n", program_invocation_short_name);
@@ -84,9 +84,8 @@ int main(int argc, char *argv[]) {
         if (!event)
                 return EXIT_FAILURE;
 
-        sigprocmask(SIG_SETMASK, NULL, &sigmask_orig);
         sigfillset(&mask);
-        sigprocmask(SIG_SETMASK, &mask, &sigmask_orig);
+        sigprocmask(SIG_SETMASK, &mask, NULL);
         event->fd_signal = signalfd(-1, &mask, SFD_NONBLOCK|SFD_CLOEXEC);
         if (event->fd_signal < 0) {
                 fprintf(stderr, "error creating signalfd: %m\n");
@@ -102,8 +101,8 @@ int main(int argc, char *argv[]) {
         }
 
         /* like udevd, which does not run RUN when the rules fail */
-        if (udev_event_execute_rules(event, 3 * USEC_PER_SEC, NULL, rules, &sigmask_orig) >= 0)
-                udev_event_execute_run(event, 3 * USEC_PER_SEC, NULL);
+        if (udev_event_execute_rules(event, 3 * USEC_PER_SEC, NULL, rules) >= 0)
+                udev_event_execute_run(event, 3 * USEC_PER_SEC);
 
         safe_close(event->fd_signal);
         return EXIT_SUCCESS;

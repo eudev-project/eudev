@@ -70,7 +70,7 @@ static int adm_test(struct udev *udev, int argc, char *argv[]) {
         _cleanup_udev_device_unref_ struct udev_device *dev = NULL;
         _cleanup_udev_event_unref_ struct udev_event *event = NULL;
         JsonFormatFlags json_format_flags = JSON_FORMAT_OFF;
-        sigset_t mask, sigmask_orig;
+        sigset_t mask;
         int rc = 0, c, r;
 
         enum {
@@ -155,8 +155,6 @@ static int adm_test(struct udev *udev, int argc, char *argv[]) {
                  "specified by a RUN key. It may show incorrect results, because\n"
                  "some values may be different, or not available at a simulation run.");
 
-        sigprocmask(SIG_SETMASK, NULL, &sigmask_orig);
-
         udev_event_check_config(udev);
 
         /* not in the middle of the output when NAME= or net_id selects it */
@@ -198,7 +196,7 @@ static int adm_test(struct udev *udev, int argc, char *argv[]) {
         event->trace = verbose;
 
         sigfillset(&mask);
-        sigprocmask(SIG_SETMASK, &mask, &sigmask_orig);
+        sigprocmask(SIG_SETMASK, &mask, NULL);
         event->fd_signal = signalfd(-1, &mask, SFD_NONBLOCK|SFD_CLOEXEC);
         if (event->fd_signal < 0) {
                 log_error_errno(errno, "Failed to create signalfd: %m");
@@ -211,8 +209,7 @@ static int adm_test(struct udev *udev, int argc, char *argv[]) {
         r = udev_event_execute_rules(event,
                                      60 * USEC_PER_SEC,
                                      NULL,
-                                     rules,
-                                     &sigmask_orig);
+                                     rules);
         if (r < 0)
                 log_warning_errno(r, "Failed to process the rules, udevd would stop processing the event here and not run RUN: %m");
         log_info("Processing udev rules done.");

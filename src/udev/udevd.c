@@ -134,6 +134,7 @@ static usec_t arg_event_timeout_usec = DEFAULT_EVENT_TIMEOUT_USEC;
 static usec_t arg_event_timeout_warn_usec = DEFAULT_EVENT_TIMEOUT_USEC / 3;
 static int arg_timeout_signal = SIGKILL;
 static bool arg_blockdev_read_only = false;
+/* the signal mask udevd started with, see synthesize_change() */
 static sigset_t sigmask_orig;
 static UDEV_LIST(event_list);
 Hashmap *workers;
@@ -663,8 +664,7 @@ static void worker_spawn(struct event *event) {
                         r = udev_event_execute_rules(udev_event,
                                                      arg_event_timeout_usec,
                                                      &properties_list,
-                                                     rules,
-                                                     &sigmask_orig);
+                                                     rules);
                         if (r < 0)
                                 /* Like systemd a446e8ff2c, when the rules fail, e.g. on an error of
                                  * IMPORT{}, or the database cannot be written, RUN is not run and the
@@ -674,8 +674,7 @@ static void worker_spawn(struct event *event) {
                                                   udev_device_get_sysname(dev));
                         else {
                                 udev_event_execute_run(udev_event,
-                                                       arg_event_timeout_usec,
-                                                       &sigmask_orig);
+                                                       arg_event_timeout_usec);
 
                                 /* apply/restore inotify watch; some udev rule may erroneously set
                                  * inotify watch on remove event, silently ignore it for safety */
