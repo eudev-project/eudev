@@ -194,7 +194,6 @@ AC_SUBST([udevlibexecdir], [${rootlibexecdir}])
 
 # sysconfdir paths
 AC_SUBST([udevconfdir],[${sysconfdir}/udev])
-AC_SUBST([udevconffile],[${udevconfdir}/udev.conf])
 AC_SUBST([udevhwdbbin],[${udevconfdir}/hwdb.bin])
 
 # udevlibexecdir paths
@@ -570,7 +569,6 @@ summary_rootlibexecdir=`expand_dir "$rootlibexecdir"`
 summary_datarootdir=`expand_dir "$datarootdir"`
 summary_rootrundir=`expand_dir "$rootrundir"`
 summary_udevconfdir=`expand_dir "$udevconfdir"`
-summary_udevconffile=`expand_dir "$udevconffile"`
 summary_udevhwdbdir=`expand_dir "$udevhwdbdir"`
 summary_udevhwdbbin=`expand_dir "$udevhwdbbin"`
 summary_udevlibexecdir=`expand_dir "$udevlibexecdir"`
@@ -584,6 +582,17 @@ AS_IF([test "x$enable_programs" != "xyes"], [
 	AS_IF([test "x$with_bashcompletiondir" != xno], [summary_bashcompletiondir="no (--disable-programs)"])
 	AS_IF([test "x$with_zshcompletiondir" != xno], [summary_zshcompletiondir="no (--disable-programs)"])
 ])
+# the directories of udev.conf and its drop-ins udev.conf.d/*.conf, in the order in which libudev looks at
+# them, see udev_conf_dirs[] in src/libudev/libudev.c; each one once
+summary_udevconfdirs=
+summary_dirs="$summary_udevconfdir $summary_rootrundir/udev /usr/local/lib/udev $summary_udevlibexecdir"
+AS_IF([test "x$enable_split_usr" = "xyes"], [summary_dirs="$summary_dirs /lib/udev /usr/lib/udev"])
+for summary_dir in $summary_dirs; do
+	case " $summary_udevconfdirs " in
+	*" $summary_dir "*) ;;
+	*) summary_udevconfdirs="${summary_udevconfdirs:+$summary_udevconfdirs }$summary_dir" ;;
+	esac
+done
 
 AC_MSG_RESULT([
 	prefix:                  ${summary_prefix}
@@ -601,7 +610,7 @@ AC_MSG_RESULT([
 	rootrundir:              ${summary_rootrundir}
 
 	udevconfdir:             ${summary_udevconfdir}
-	udevconffile:            ${summary_udevconffile}
+	udev.conf search dirs:   ${summary_udevconfdirs}
 	udevhwdbdir:             ${summary_udevhwdbdir}
 	udevhwdbbin:             ${summary_udevhwdbbin}
 	udevlibexecdir:          ${summary_udevlibexecdir}
