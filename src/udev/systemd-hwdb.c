@@ -12,8 +12,11 @@
 #include <stdlib.h>
 
 #include "hwdb-util.h"
+#include "options.h"
+#include "strv.h"
 #include "udev.h"
 #include "udevadm-util.h"
+#include "verbs.h"
 
 static const char *arg_hwdb_bin_dir = NULL;
 static char *arg_root = NULL;
@@ -50,12 +53,13 @@ static int parse_argv(int argc, char *argv[]) {
                 ARG_USR,
         };
 
+        /* in the order of systemd's, which its message about an ambiguous option lists */
         static const struct option options[] = {
                 { "help",     no_argument,       NULL, 'h'         },
                 { "version",  no_argument,       NULL, ARG_VERSION },
-                { "usr",      no_argument,       NULL, ARG_USR     },
                 { "strict",   no_argument,       NULL, 's'         },
                 { "root",     required_argument, NULL, 'r'         },
+                { "usr",      no_argument,       NULL, ARG_USR     },
                 {}
         };
 
@@ -64,7 +68,7 @@ static int parse_argv(int argc, char *argv[]) {
         assert(argc >= 0);
         assert(argv);
 
-        while ((c = getopt_long(argc, argv, "sr:h", options, NULL)) >= 0)
+        while ((c = getopt_long_log(argc, argv, "sr:h", options)) >= 0)
                 switch (c) {
 
                 case 'h':
@@ -132,23 +136,15 @@ static int verb_update(struct udev *udev) {
         return hwdb_update(udev, arg_root, hwdb_bin, arg_strict);
 }
 
-/* Like the dispatch_verb() of systemd for the verbs "update" and "query MODALIAS". */
+/* Like the dispatch_verb() of systemd for the verbs "query MODALIAS", "update", and "help", which is not
+ * listed in the help, with the names in this order in its messages, and a hint for an unknown verb. */
 static int dispatch_verb(struct udev *udev, int argc, char *argv[]) {
         char **args = argv + optind;
         int left = argc - optind;
 
         if (left <= 0) {
-                log_error("Command verb required (one of update, query).");
+                log_verb_required(STRV_MAKE("query", "update", "help"));
                 return -EINVAL;
-        }
-
-        if (streq(args[0], "update")) {
-                if (left > 1) {
-                        log_error("Too many arguments.");
-                        return -EINVAL;
-                }
-
-                return verb_update(udev);
         }
 
         if (streq(args[0], "query")) {
@@ -164,7 +160,22 @@ static int dispatch_verb(struct udev *udev, int argc, char *argv[]) {
                 return hwdb_query(udev, args[1], arg_root);
         }
 
-        log_error("Unknown command verb '%s'.", args[0]);
+        if (streq(args[0], "update")) {
+                if (left > 1) {
+                        log_error("Too many arguments.");
+                        return -EINVAL;
+                }
+
+                return verb_update(udev);
+        }
+
+        /* any arguments, like systemd's */
+        if (streq(args[0], "help")) {
+                help();
+                return 0;
+        }
+
+        log_unknown_verb(STRV_MAKE("query", "update", "help"), args[0]);
         return -EINVAL;
 }
 
