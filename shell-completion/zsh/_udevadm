@@ -234,6 +234,7 @@ _udevadm_mounts(){
 _udevadm_commands(){
     local -a _udevadm_cmds
     _udevadm_cmds=(
+        'help:show this help'
         'info:query sysfs or the udev database'
         'trigger:request events from the kernel'
         'settle:wait for the event queue to finish'
@@ -246,6 +247,7 @@ _udevadm_commands(){
         'cat:show udev rules files'
         'wait:wait for devices or device symlinks being created'
         'lock:lock a block device and run a command'
+        'version:show package version'
     )
 
     if ((CURRENT == 1)); then

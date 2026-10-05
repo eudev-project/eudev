@@ -113,7 +113,7 @@ _udevadm() {
         [LOCK_ARG]='-t --timeout -d --device -b --backing'
     )
 
-    local verbs=(info trigger settle control monitor hwdb test-builtin test verify cat wait lock)
+    local verbs=(help info trigger settle control monitor hwdb test-builtin test verify cat wait lock version)
     local builtins=(blkid btrfs factory_reset hwdb input_id keyboard kmod net_driver net_id path_id tpm2_id usb_id)
 
     for ((i=0; i < COMP_CWORD; i++)); do
@@ -448,6 +448,11 @@ _udevadm() {
                 comps=''
                 compopt -o default
             fi
+            ;;
+
+        'help'|'version')
+            # no arguments
+            comps=''
             ;;
 
         *)
