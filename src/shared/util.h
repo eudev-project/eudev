@@ -158,6 +158,8 @@ static inline int safe_atou(const char *s, unsigned *ret_u) {
         return safe_atou_full(s, 0, ret_u);
 }
 
+int safe_atou16_full(const char *s, unsigned base, uint16_t *ret);
+
 int safe_atollu_full(const char *s, unsigned base, unsigned long long *ret_llu);
 
 static inline int safe_atollu(const char *s, unsigned long long *ret_llu) {

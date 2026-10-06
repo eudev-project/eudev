@@ -126,6 +126,7 @@ int device_get_sysattr_unsigned_full(struct udev_device *device, const char *sys
 static inline int device_get_sysattr_unsigned(struct udev_device *device, const char *sysattr, unsigned *ret) {
         return device_get_sysattr_unsigned_full(device, sysattr, 0, ret);
 }
+int device_get_sysattr_u16_full(struct udev_device *device, const char *sysattr, unsigned base, uint16_t *ret);
 int device_get_sysattr_bool(struct udev_device *device, const char *sysattr);
 int device_get_sysattr_u64(struct udev_device *device, const char *sysattr, uint64_t *ret);
 bool syspath_sends_uevents(const char *syspath);

@@ -843,6 +843,22 @@ int safe_atou_full(const char *s, unsigned base, unsigned *ret_u) {
         return 0;
 }
 
+int safe_atou16_full(const char *s, unsigned base, uint16_t *ret) {
+        unsigned u;
+        int r;
+
+        assert(ret);
+
+        r = safe_atou_full(s, base, &u);
+        if (r < 0)
+                return r;
+        if (u > UINT16_MAX)
+                return -ERANGE;
+
+        *ret = (uint16_t) u;
+        return 0;
+}
+
 int safe_atoi(const char *s, int *ret_i) {
         unsigned base = 0;
         char *x = NULL;

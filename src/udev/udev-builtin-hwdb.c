@@ -70,29 +70,18 @@ int udev_builtin_hwdb_lookup(struct udev_device *dev,
 }
 
 static const char *modalias_usb(struct udev_device *dev, char *s, size_t size) {
-        const char *v, *p, *n;
-        int vn, pn;
+        const char *n;
+        uint16_t v, p;
 
-        v = udev_device_get_sysattr_value(dev, "idVendor");
-        if (!v)
+        /* like systemd, the IDs are hexadecimal numbers up to ffff, also 0000 */
+        if (device_get_sysattr_u16_full(dev, "idVendor", 16, &v) < 0)
                 return NULL;
-        p = udev_device_get_sysattr_value(dev, "idProduct");
-        if (!p)
-                return NULL;
-        vn = strtol(v, NULL, 16);
-        if (vn <= 0)
-                return NULL;
-        if (vn > 0xffff)
-                return NULL;
-        pn = strtol(p, NULL, 16);
-        if (pn <= 0)
-                return NULL;
-        if (pn > 0xffff)
+        if (device_get_sysattr_u16_full(dev, "idProduct", 16, &p) < 0)
                 return NULL;
         if (device_get_sysattr_safe_string(dev, "product", &n) < 0)
                 n = NULL;
 
-        snprintf(s, size, "usb:v%04Xp%04X:%s", vn, pn, n ? n : "");
+        snprintf(s, size, "usb:v%04Xp%04X:%s", v, p, n ? n : "");
         return s;
 }
 

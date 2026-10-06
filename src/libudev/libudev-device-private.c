@@ -457,6 +457,26 @@ int device_get_sysattr_unsigned_full(struct udev_device *device, const char *sys
         return v > 0;
 }
 
+int device_get_sysattr_u16_full(struct udev_device *device, const char *sysattr, unsigned base, uint16_t *ret)
+{
+        const char *value;
+        uint16_t v;
+        int r;
+
+        r = device_get_sysattr_value(device, sysattr, &value);
+        if (r < 0)
+                return r;
+
+        r = safe_atou16_full(value, base, &v);
+        if (r < 0)
+                return log_debug_errno(r, "%s: Failed to parse '%s' attribute: %m",
+                                       udev_device_get_sysname(device), sysattr);
+
+        if (ret)
+                *ret = v;
+        return v > 0;
+}
+
 int device_get_sysattr_bool(struct udev_device *device, const char *sysattr)
 {
         const char *value;
