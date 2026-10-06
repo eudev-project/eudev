@@ -78,8 +78,10 @@ int log_internal(
                 const char *func,
                 const char *format, ...) _printf_(6,7);
 
-/* Logs a message that is not a format string, and may be longer than LINE_MAX, which limits the
- * formatted messages of log_internal(). Each line of it is logged as a message of its own. */
+/* Logs a message that is not a format string, e.g. the output of a program, whole, whatever its length,
+ * where log_internal() cuts the formatted messages at 128 KiB, see LOG_MESSAGE_MAX in log.c. Each line of it is
+ * logged as a message of its own; /dev/kmsg gets the start of each, see write_to_kmsg(). Without memory for a
+ * copy, it is logged like a formatted message. */
 int log_internal_long(
                 int level,
                 int error,
