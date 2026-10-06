@@ -308,7 +308,7 @@ takes precedence over both, unless its value starts with
 :\&.
 .RE
 .PP
-\fIsystemd\&.log_level=\fR, \fIsystemd\&.log_target=\fR, \fIsystemd\&.log_color[=\fR\fI\fIBOOL\fR\fR\fI]\fR, \fIsystemd\&.log_location[=\fR\fI\fIBOOL\fR\fR\fI]\fR, \fIsystemd\&.log_time[=\fR\fI\fIBOOL\fR\fR\fI]\fR, \fIsystemd\&.log_tid[=\fR\fI\fIBOOL\fR\fR\fI]\fR, \fIsystemd\&.log_ratelimit_kmsg[=\fR\fI\fIBOOL\fR\fR\fI]\fR
+\fIsystemd\&.log_level=\fR, \fIsystemd\&.log_target=\fR, \fIsystemd\&.log_color[=\fR\fI\fIBOOL\fR\fR\fI]\fR, \fIsystemd\&.log_location[=\fR\fI\fIBOOL\fR\fR\fI]\fR, \fIsystemd\&.log_time[=\fR\fI\fIBOOL\fR\fR\fI]\fR, \fIsystemd\&.log_tid[=\fR\fI\fIBOOL\fR\fR\fI]\fR, \fIsystemd\&.log_ratelimit_kmsg[=\fR\fI\fIBOOL\fR\fR\fI]\fR, \fIdebug\fR
 .RS 4
 Like in systemd, the same as the environment variables
 \fI$SYSTEMD_LOG_LEVEL\fR,
@@ -318,7 +318,10 @@ Like in systemd, the same as the environment variables
 \fI$SYSTEMD_LOG_TIME\fR,
 \fI$SYSTEMD_LOG_TID\fR
 and
-\fI$SYSTEMD_LOG_RATELIMIT_KMSG\fR, see below, which take precedence over them\&. Like systemd before version 248, every program of eudev that has no controlling terminal reads them:
+\fI$SYSTEMD_LOG_RATELIMIT_KMSG\fR, see below, which take precedence over them\&. Like in systemd,
+\fIdebug\fR
+without a value is the same as
+\fIsystemd\&.log_level=debug\fR\&. Like systemd before version 248, every program of eudev that has no controlling terminal reads them:
 \fBudevd\fR, the programs that it runs, e\&.g\&.
 \fBudevadm\fR
 or helpers like
@@ -330,6 +333,8 @@ The log level of
 is taken from the following, where a later one takes precedence over the earlier ones: the default,
 info;
 \fIsystemd\&.log_level=\fR
+or
+\fIdebug\fR
 on the kernel command line;
 \fI$UDEV_LOG_LEVEL\fR
 or

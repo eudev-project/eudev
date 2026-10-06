@@ -347,12 +347,15 @@
         <term><varname>systemd.log_time[=<replaceable>BOOL</replaceable>]</varname></term>
         <term><varname>systemd.log_tid[=<replaceable>BOOL</replaceable>]</varname></term>
         <term><varname>systemd.log_ratelimit_kmsg[=<replaceable>BOOL</replaceable>]</varname></term>
+        <term><varname>debug</varname></term>
         <listitem>
           <para>Like in systemd, the same as the environment variables
           <varname>$SYSTEMD_LOG_LEVEL</varname>, <varname>$SYSTEMD_LOG_TARGET</varname>,
           <varname>$SYSTEMD_LOG_COLOR</varname>, <varname>$SYSTEMD_LOG_LOCATION</varname>,
           <varname>$SYSTEMD_LOG_TIME</varname>, <varname>$SYSTEMD_LOG_TID</varname> and
           <varname>$SYSTEMD_LOG_RATELIMIT_KMSG</varname>, see below, which take precedence over them.
+          Like in systemd, <varname>debug</varname> without a value is the same as
+          <varname>systemd.log_level=debug</varname>.
           Like systemd before version 248, every program of eudev that has no controlling terminal reads
           them: <command>udevd</command>, the programs that it runs, e.g. <command>udevadm</command> or
           helpers like <command>scsi_id</command>, and the commands run without a terminal, e.g. by init
@@ -362,7 +365,7 @@
     </variablelist>
     <para>The log level of <command>udevd</command> is taken from the following, where a later one takes
     precedence over the earlier ones: the default, <literal>info</literal>;
-    <varname>systemd.log_level=</varname> on the kernel command line;
+    <varname>systemd.log_level=</varname> or <varname>debug</varname> on the kernel command line;
     <varname>$UDEV_LOG_LEVEL</varname> or <varname>$SYSTEMD_LOG_LEVEL</varname>;
     <varname>udev_log=</varname> in
     <citerefentry><refentrytitle>udev.conf</refentrytitle><manvolnum>5</manvolnum></citerefentry>;

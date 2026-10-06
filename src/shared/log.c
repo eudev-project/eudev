@@ -918,15 +918,20 @@ static const char *log_getenv(const char *name) {
         return e;
 }
 
-/* Like parse_proc_cmdline_item() of systemd's log.c: the systemd.log_*= settings of the kernel command line.
- * Unlike systemd, "debug" is not taken as systemd.log_level=debug. */
+/* Like parse_proc_cmdline_item() of systemd's log.c: the systemd.log_*= settings of the kernel command line,
+ * and, like in systemd, "debug" without a value, which is taken as systemd.log_level=debug. */
 static int log_parse_proc_cmdline_item(const char *key, const char *value) {
         /* Like PROC_CMDLINE_STRIP_RD_PREFIX of systemd; parse_proc_cmdline() passes the parameters starting
          * with "rd." only in an initrd. */
         if (startswith(key, "rd."))
                 key += strlen("rd.");
 
-        if (proc_cmdline_key_streq(key, "systemd.log_target")) {
+        if (streq(key, "debug") && !value) {
+                /* like systemd.log_level=debug, see log_set_max_level_from_string() */
+                log_set_max_level(LOG_DEBUG);
+                max_level_from_environment = true;
+
+        } else if (proc_cmdline_key_streq(key, "systemd.log_target")) {
 
                 if (proc_cmdline_value_missing(key, value))
                         return 0;

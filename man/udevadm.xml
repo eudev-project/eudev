@@ -1534,8 +1534,9 @@
     <command>udevd</command> or by an init script, it reads the log settings of the kernel command line
     first, like systemd before version 248, see
     <citerefentry><refentrytitle>udevd</refentrytitle><manvolnum>8</manvolnum></citerefentry>: e.g.
-    <varname>systemd.log_level=</varname> like <varname>$SYSTEMD_LOG_LEVEL</varname>; the variables below
-    take precedence over them.</para>
+    <varname>systemd.log_level=</varname> like <varname>$SYSTEMD_LOG_LEVEL</varname>, and
+    <varname>debug</varname> like <varname>systemd.log_level=debug</varname>; the variables below take
+    precedence over them.</para>
 
     <variablelist class='environment-variables'>
       <varlistentry>

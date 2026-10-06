@@ -57,8 +57,8 @@ void log_close(void);
  * $SYSTEMD_LOG_TID and $SYSTEMD_LOG_RATELIMIT_KMSG. eudev: each of them is read from $UDEV_LOG_<name> first,
  * e.g. $UDEV_LOG_LEVEL, when set. Before them, in a process without a controlling terminal, like in systemd
  * before v248, the kernel command line options systemd.log_target=, systemd.log_level=, systemd.log_color,
- * systemd.log_location, systemd.log_time, systemd.log_tid and systemd.log_ratelimit_kmsg are read. Not for
- * library code. */
+ * systemd.log_location, systemd.log_time, systemd.log_tid and systemd.log_ratelimit_kmsg are read, and "debug",
+ * which is taken as systemd.log_level=debug. Not for library code. */
 void log_parse_environment(void);
 /* Whether log_parse_environment() set the maximum log level, i.e. not only the one of single targets. */
 bool log_max_level_from_environment(void);
