@@ -719,7 +719,7 @@ static size_t utf8_incomplete_tail(const char *s, size_t n) {
 
 static void spawn_read(struct spawn *spawn,
                        int fd_stdout, int fd_stderr,
-                       char *result, size_t ressize, bool *ret_truncated) {
+                       char *result, size_t result_size, bool *ret_truncated) {
         const char *cmd = spawn->cmd;
         /* for the debug messages of the output: an incomplete UTF-8 sequence at the end of the last chunk
          * of stdout and of stderr, kept for the next chunk, so that no message ends or starts in the middle
@@ -737,7 +737,7 @@ static void spawn_read(struct spawn *spawn,
                 .events = EPOLLIN,
                 .data.ptr = &fd_stderr,
         };
-        size_t respos = 0;
+        size_t result_len = 0;
         bool truncated = false;
         /* the output is logged if stderr is watched, also after the program closed its stderr, when
          * fd_stderr is -1 */
@@ -816,14 +816,14 @@ static void spawn_read(struct spawn *spawn,
                                 if (result != NULL && *fd == fd_stdout) {
                                         size_t len = count;
 
-                                        if (len > ressize - 1 - respos) {
-                                                len = ressize - 1 - respos;
+                                        if (len > result_size - 1 - result_len) {
+                                                len = result_size - 1 - result_len;
                                                 if (!truncated)
-                                                        log_warning("Truncating stdout of '%s' up to %zu byte.", cmd, ressize - 1);
+                                                        log_warning("Truncating stdout of '%s' up to %zu byte.", cmd, result_size - 1);
                                                 truncated = true;
                                         }
-                                        memcpy(&result[respos], buf + kept, len);
-                                        respos += len;
+                                        memcpy(&result[result_len], buf + kept, len);
+                                        result_len += len;
                                 }
 
                                 /* log debug output only if we watch stderr */
@@ -860,7 +860,7 @@ static void spawn_read(struct spawn *spawn,
 
         /* return the child's stdout string */
         if (result != NULL)
-                result[respos] = '\0';
+                result[result_len] = '\0';
 
         if (ret_truncated)
                 *ret_truncated = truncated;
@@ -1047,7 +1047,7 @@ static const char *test_mode_helper(const char *program) {
 int udev_event_spawn(struct udev_event *event,
                      usec_t timeout_usec,
                      const char *cmd, char **envp,
-                     char *result, size_t ressize, bool *ret_truncated) {
+                     char *result, size_t result_size, bool *ret_truncated) {
         int outpipe[2] = {-1, -1};
         int errpipe[2] = {-1, -1};
         pid_t pid;
@@ -1063,7 +1063,7 @@ int udev_event_spawn(struct udev_event *event,
 
         assert(event);
         assert(cmd);
-        assert(result || ressize == 0);
+        assert(result || result_size == 0);
 
         /* The words are written over a copy of the command, on the heap, like the argv of systemd, to keep
          * the stack small. The commands come from buffers of UTIL_LINE_SIZE, which the copy was before. */
@@ -1077,7 +1077,7 @@ int udev_event_spawn(struct udev_event *event,
 
         if (event->event_mode == EVENT_UDEVADM_TEST && !helper) {
                 log_debug("Running in test mode, skipping execution of '%s'.", cmd);
-                if (ressize > 0)
+                if (result_size > 0)
                         result[0] = '\0';
                 if (ret_truncated)
                         *ret_truncated = false;
@@ -1196,7 +1196,7 @@ int udev_event_spawn(struct udev_event *event,
                 spawn.pid = pid;
                 spawn_read(&spawn,
                            outpipe[READ_END], errpipe[READ_END],
-                           result, ressize, ret_truncated);
+                           result, result_size, ret_truncated);
 
                 err = spawn_wait(&spawn);
         }
