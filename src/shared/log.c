@@ -495,6 +495,28 @@ static void log_mark_cut(char *buffer, size_t size) {
         memcpy(buffer + n, LOG_TRUNCATED, STRLEN(LOG_TRUNCATED) + 1);
 }
 
+bool log_format_cut(char *buffer, size_t size, const char *format, ...) {
+        va_list ap;
+        int n;
+
+        assert(buffer);
+        assert(size > STRLEN(LOG_TRUNCATED) + 1);
+
+        va_start(ap, format);
+        n = vsnprintf(buffer, size, format, ap);
+        va_end(ap);
+
+        if (n < 0) {
+                buffer[0] = '\0';
+                return false;
+        }
+        if ((size_t) n < size)
+                return false;
+
+        log_mark_cut(buffer, size);
+        return true;
+}
+
 /* Like ratelimit_below() of systemd, for the RateLimit of write_to_kmsg(): at most 200 messages in 5 seconds.
  * Returns true if the message may be written, and the number of dropped messages in the interval in
  * ret_dropped otherwise. */

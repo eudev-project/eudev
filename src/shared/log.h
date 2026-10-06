@@ -90,6 +90,12 @@ int log_internal_long(
                 const char *func,
                 const char *message);
 
+/* Formats a message into buffer, of the given size, like snprintf(), and cuts a message that does not fit
+ * like the long messages that log_internal() cuts: at the start of a UTF-8 character, marked with "...".
+ * Returns whether it was cut. E.g. for a message that is to be cut at LINE_MAX, like systemd cuts every
+ * message. */
+bool log_format_cut(char *buffer, size_t size, const char *format, ...) _printf_(3,4);
+
 int log_internalv(
                 int level,
                 int error,

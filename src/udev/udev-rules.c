@@ -1207,15 +1207,43 @@ static int import_property(struct udev_event *event, struct udev_rules *rules, s
         return r;
 }
 
+/* Logs an invalid line of IMPORT{file} or IMPORT{program} like systemd: at debug level, "Failed to parse key and
+ * value from "LINE", ignoring: Invalid argument", where LINE is the line as far as it is parsed, see
+ * import_property_from_string(). The message of systemd, without the name of the device, which systemd logs
+ * apart, is cut at LINE_MAX - 1 bytes by its log buffer: a line can be up to 1 MiB long, see
+ * import_file_into_properties(). Here too, but at the start of a UTF-8 character and marked with "...", like
+ * the cuts of log.c. Unlike systemd, the line is escaped like the values in the other messages. */
+static void log_event_invalid_import_line(struct udev_event *event, struct udev_rules *rules, struct token *rule,
+                                          struct token *token, const char *line) {
+        _cleanup_free_ char *head = NULL, *escaped = NULL, *key = NULL;
+        const char *sysname;
+        char message[LINE_MAX];
+
+        if (log_get_max_level() < LOG_DEBUG)
+                return;
+
+        /* only the start of the line can fit */
+        head = strndup(line, sizeof(message) - 1);
+        if (head)
+                escaped = utf8_escape_non_printable(head);
+        key = token_to_string(rules, token);
+        sysname = udev_device_get_sysname(event_log_device(event, token));
+
+        errno = EINVAL;
+        (void) log_format_cut(message, sizeof(message), "%s:%u %s%sFailed to parse key and value from \"%s\", ignoring: %m",
+                              rules_str(rules, rule->rule.filename_off), rule->rule.filename_line,
+                              key ?: "", key ? ": " : "", escaped ?: head ?: line);
+        log_debug_errno(EINVAL, "%s%s%s", sysname ?: "", sysname ? ": " : "", message);
+}
+
 /* Imports a "KEY=VALUE" line, like get_property_from_string() of systemd: whitespace around the key and the
  * value is removed, and the value may be quoted with '"' or '\''. Lines that are empty or comments are
  * skipped; invalid lines, without '=', with an empty key or value, or with a missing closing quote, are
  * skipped with a debug message, which shows the line like systemd: as far as it is parsed, i.e. the whole
- * line if it has no '=', and the part before the key and the key otherwise. Returns -ENOMEM when out of
- * memory, 0 otherwise. */
+ * line if it has no '=', and the part before the key and the key otherwise, see
+ * log_event_invalid_import_line(). Returns -ENOMEM when out of memory, 0 otherwise. */
 static int import_property_from_string(struct udev_event *event, struct udev_rules *rules, struct token *rule,
                                        struct token *token, char *line) {
-        _cleanup_free_ char *escaped = NULL;
         char *key, *key_end = NULL, *val, *val_end, *eq;
         int r;
 
@@ -1265,9 +1293,7 @@ static int import_property_from_string(struct udev_event *event, struct udev_rul
 invalid:
         if (key_end)
                 *key_end = '\0';
-        escaped = utf8_escape_non_printable(line);
-        log_event_debug_errno(event, rules, rule, token, EINVAL,
-                              "Failed to parse key and value from \"%s\", ignoring: %m", escaped ?: line);
+        log_event_invalid_import_line(event, rules, rule, token, line);
         return 0;
 }
 
