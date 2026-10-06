@@ -243,21 +243,18 @@ static int get_file_options(struct udev *udev __attribute__((unused)),
 }
 
 static void help(void) {
-        printf("Usage: %s [OPTION...] DEVICE\n\n"
-               "SCSI device identification.\n\n"
-               "  -h --help                        Print this message\n"
-               "     --version                     Print version of the program\n\n"
-               "  -d --device=                     Device node for SG_IO commands\n"
-               "  -f --config=                     Location of config file\n"
-               "  -p --page=0x80|0x83|pre-spc3-83  SCSI page (0x80, 0x83, pre-spc3-83)\n"
-               "  -s --sg-version=3|4              Use SGv3 or SGv4\n"
-               "  -b --denylisted                  Treat device as denylisted\n"
-               "  -g --allowlisted                 Treat device as allowlisted\n"
-               "  -u --replace-whitespace          Replace all whitespace by underscores\n"
-               "  -v --verbose                     Verbose logging\n"
-               "  -x --export                      Print values as environment keys\n"
-               , program_invocation_short_name);
-
+        (void) help_print("[DEVICE]", "Identify SCSI devices.",
+                          "  -h --help                       Show this help\n"
+                          "     --version                    Show package version\n"
+                          "  -d --device=PATH                Device node for SG_IO commands\n"
+                          "  -f --config=PATH                Location of config file\n"
+                          "  -p --page=0x80|0x83|pre-spc3-83 SCSI page\n"
+                          "  -s --sg-version=3|4             Use SGv3 or SGv4\n"
+                          "  -b --denylisted                 Treat device as denylisted\n"
+                          "  -g --allowlisted                Treat device as allowlisted\n"
+                          "  -u --replace-whitespace         Replace all whitespace by underscores\n"
+                          "  -v --verbose                    Verbose logging\n"
+                          "  -x --export                     Print values as environment keys\n");
 }
 
 static int set_options(struct udev *udev __attribute__((unused)),

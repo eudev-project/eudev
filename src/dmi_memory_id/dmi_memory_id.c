@@ -649,33 +649,31 @@ static int legacy_decode(const uint8_t *buf, const char *devmem, bool no_file_of
 }
 
 static int help(void) {
-        printf("%s [OPTIONS...]\n\n"
-               "  -F --from-dump FILE  Read DMI information from a binary file\n"
-               "  -h --help            Show this help text\n"
-               "     --version         Show package version\n",
-               program_invocation_short_name);
-        return 0;
+        return help_print(NULL, "Identify memory devices from DMI/SMBIOS data.",
+                          "  -h --help           Show this help\n"
+                          "     --version        Show package version\n"
+                          "  -F --from-dump=FILE Read DMI information from a binary file\n");
 }
 
 static int parse_argv(int argc, char * const *argv) {
         static const struct option options[] = {
-                { "from-dump", required_argument, NULL, 'F' },
-                { "version",   no_argument,       NULL, 'V' },
                 { "help",      no_argument,       NULL, 'h' },
+                { "version",   no_argument,       NULL, 'V' }, /* -V is accepted but not documented */
+                { "from-dump", required_argument, NULL, 'F' },
                 {}
         };
         int c;
 
-        while ((c = getopt_long_log(argc, argv, "F:hV", options)) >= 0)
+        while ((c = getopt_long_log(argc, argv, "hVF:", options)) >= 0)
                 switch (c) {
-                case 'F':
-                        arg_source_file = optarg;
-                        break;
+                case 'h':
+                        return help();
                 case 'V':
                         (void) version();
                         return 0;
-                case 'h':
-                        return help();
+                case 'F':
+                        arg_source_file = optarg;
+                        break;
                 case '?':
                         return -EINVAL;
                 default:

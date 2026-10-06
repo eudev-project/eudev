@@ -913,18 +913,15 @@ static void print_properties(const Context *c) {
 }
 
 static int help(void) {
-        printf("%s [OPTIONS...] DEVICE\n\n"
-               "  -l --lock-media    Lock the media (to enable eject request events)\n"
-               "  -u --unlock-media  Unlock the media\n"
-               "  -e --eject-media   Eject the media\n"
-               "     --dry-run       Do not lock, unlock or eject the media, only print the\n"
-               "                     properties (used by udevadm test)\n"
-               "  -d --debug         Print debug messages to stderr\n"
-               "  -h --help          Show this help text\n"
-               "     --version       Show package version\n",
-               program_invocation_short_name);
-
-        return 0;
+        return help_print("DEVICE", "Identify CD/DVD drives and their media.",
+                          "  -h --help         Show this help\n"
+                          "     --version      Show package version\n"
+                          "  -l --lock-media   Lock the media (to enable eject request events)\n"
+                          "  -u --unlock-media Unlock the media\n"
+                          "  -e --eject-media  Eject the media\n"
+                          "     --dry-run      Do not lock, unlock or eject the media, only print the\n"
+                          "                    properties (used by udevadm test)\n"
+                          "  -d --debug        Print debug messages to stderr\n");
 }
 
 static int parse_argv(int argc, char *argv[]) {
@@ -932,18 +929,18 @@ static int parse_argv(int argc, char *argv[]) {
                 ARG_DRY_RUN = 0x100,
         };
         static const struct option options[] = {
+                { "help",         no_argument, NULL, 'h' },
+                { "version",      no_argument, NULL, 'v' },
                 { "lock-media",   no_argument, NULL, 'l' },
                 { "unlock-media", no_argument, NULL, 'u' },
                 { "eject-media",  no_argument, NULL, 'e' },
                 { "dry-run",      no_argument, NULL, ARG_DRY_RUN },
                 { "debug",        no_argument, NULL, 'd' },
-                { "help",         no_argument, NULL, 'h' },
-                { "version",      no_argument, NULL, 'v' },
                 {}
         };
         int c;
 
-        while ((c = getopt_long_log(argc, argv, "deluh", options)) >= 0)
+        while ((c = getopt_long_log(argc, argv, "hlued", options)) >= 0)
                 switch (c) {
                 case 'l':
                         arg_lock = true;

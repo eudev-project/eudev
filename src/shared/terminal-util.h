@@ -92,6 +92,11 @@ const char *ansi_highlight_magenta(void);
 const char *ansi_highlight_cyan(void);
 const char *ansi_grey(void);
 const char *ansi_highlight_grey(void);
+/* Like systemd's underline_enabled(), ansi_underline() and ansi_add_italics(): underlining and italics
+ * only with colors, and not on the Linux console ($TERM is "linux"). */
+bool underline_enabled(void);
+const char *ansi_underline(void);
+const char *ansi_add_italics(void);
 
 /* Like systemd's get_log_colors(): the colors of a log message of the priority, see write_to_console() in
  * log.c: errors and more important ones in red, warnings in yellow, notices highlighted, debug messages in

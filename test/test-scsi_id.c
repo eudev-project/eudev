@@ -303,7 +303,7 @@ int main(void) {
         r |= test_main("broken default file, -f", "garbage\n", "options=-g\n",
                        0, "1ATA_/dev/sda_page_unspecified\n", NULL, "-f", "FILE", "-d", "/dev/sda", NULL);
         r |= test_main("broken default file, --help", "garbage\n", NULL,
-                       0, "Usage: ", NULL, "--help", NULL);
+                       0, " [OPTION…] [DEVICE]\n\nIdentify SCSI devices.\n\nOptions:\n  -h --help ", NULL, "--help", NULL);
         r |= test_main("broken default file, --version", "garbage\n", NULL,
                        0, UDEV_VERSION "\n", NULL, "--version", NULL);
         r |= test_main("broken default file", "garbage\n", NULL,

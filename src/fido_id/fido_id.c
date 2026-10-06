@@ -45,11 +45,9 @@ static int parse_argv(int argc, char *argv[]) {
         while ((c = getopt_long_log(argc, argv, "h", options)) >= 0)
                 switch (c) {
                 case 'h':
-                        printf("%s [OPTIONS...] SYSFS_PATH\n\n"
-                               "  -h --help     Show this help text\n"
-                               "     --version  Show package version\n",
-                               program_invocation_short_name);
-                        return 0;
+                        return help_print("[SYSFS_PATH]", "Identify FIDO security tokens.",
+                                          "  -h --help    Show this help\n"
+                                          "     --version Show package version\n");
                 case 'v':
                         return version();
                 case '?':

@@ -270,6 +270,25 @@ DEFINE_ANSI_FUNC(highlight_cyan,        "\x1B[0;1;36m")
 DEFINE_ANSI_FUNC_256(grey,              "\x1B[0;38:5:245m", "\x1B[0;90m")
 DEFINE_ANSI_FUNC_256(highlight_grey,    "\x1B[0;1;38:5:245m", "\x1B[0;1;90m")
 
+bool underline_enabled(void) {
+        static int cached_underline_enabled = -1;
+
+        /* The Linux console doesn't support underlining, turn it off, but only there. */
+        if (cached_underline_enabled < 0)
+                cached_underline_enabled = colors_enabled() && !streq_ptr(getenv("TERM"), "linux");
+
+        return cached_underline_enabled;
+}
+
+const char *ansi_underline(void) {
+        return underline_enabled() ? "\x1B[0;4m" : "";
+}
+
+/* italics is hooked into the underline checks too, like systemd does it */
+const char *ansi_add_italics(void) {
+        return underline_enabled() ? "\x1B[3m" : "";
+}
+
 int get_ctty_devnr(pid_t pid, dev_t *ret) {
         _cleanup_free_ char *line = NULL;
         unsigned long ttynr;

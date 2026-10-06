@@ -396,27 +396,25 @@ static int disk_identify(struct udev *udev __attribute__((unused)),
 
 static int parse_argv(int argc, char *argv[]) {
         static const struct option options[] = {
-                { "export",   no_argument, NULL, 'x' },
                 { "help",     no_argument, NULL, 'h' },
                 { "version",  no_argument, NULL, 'v' },
+                { "export",   no_argument, NULL, 'x' },
                 {}
         };
         int c;
 
-        while ((c = getopt_long_log(argc, argv, "xh", options)) >= 0)
+        while ((c = getopt_long_log(argc, argv, "hx", options)) >= 0)
                 switch (c) {
+                case 'h':
+                        return help_print("DEVICE", "Identify ATA storage devices.",
+                                          "  -h --help    Show this help\n"
+                                          "     --version Show package version\n"
+                                          "  -x --export  Print values as environment keys\n");
+                case 'v':
+                        return version();
                 case 'x':
                         arg_export = true;
                         break;
-                case 'h':
-                        printf("%s [OPTIONS...] DEVICE\n\n"
-                               "  -x --export    Print values as environment keys\n"
-                               "  -h --help      Show this help text\n"
-                               "     --version   Show package version\n",
-                               program_invocation_short_name);
-                        return 0;
-                case 'v':
-                        return version();
                 case '?':
                         return -EINVAL;
                 default:

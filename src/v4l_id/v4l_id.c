@@ -55,12 +55,9 @@ int main(int argc, char *argv[]) {
 
                 switch (c) {
                 case 'h':
-                        printf("%s [OPTIONS...] DEVICE\n\n"
-                               "Video4Linux device identification.\n\n"
-                               "  -h --help     Show this help text\n"
-                               "     --version  Show package version\n",
-                               program_invocation_short_name);
-                        return 0;
+                        return help_print("DEVICE", "Identify Video4Linux devices.",
+                                          "  -h --help    Show this help\n"
+                                          "     --version Show package version\n");
                 case 'v':
                         return version();
                 case '?':

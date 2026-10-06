@@ -6,6 +6,7 @@
 
 #include "log.h"
 #include "options.h"
+#include "terminal-util.h"
 #include "util.h"
 
 /* Like the option parser of systemd: the index of the long option named by the len characters of name,
@@ -140,4 +141,22 @@ int getopt_long_log(int argc, char * const argv[], const char *optstring, const 
                 log_error("%s: unrecognized option '-%c'", program_invocation_short_name, optopt);
 
         return '?';
+}
+
+int help_print(const char *argspec, const char *abstract, const char *options) {
+        assert(abstract);
+        assert(options);
+
+        printf("%s>%s %s [OPTION…]%s%s\n"
+               "\n"
+               "%s%s%s%s\n"
+               "\n"
+               "%sOptions:%s\n"
+               "%s",
+               ansi_grey(), ansi_normal(), program_invocation_short_name, argspec ? " " : "", argspec ?: "",
+               ansi_highlight(), ansi_add_italics(), abstract, ansi_normal(),
+               ansi_underline(), ansi_normal(),
+               options);
+
+        return 0;
 }
