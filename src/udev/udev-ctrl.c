@@ -316,7 +316,10 @@ static int ctrl_send_full(struct udev_ctrl *uctrl, enum udev_ctrl_msg_type type,
         if (ret_sent)
                 *ret_sent = true;
 
-        /* wait for peer message handling or disconnect */
+        /* Wait for peer message handling or disconnect. Like udev_ctrl_wait() of systemd v261, any event on the
+         * socket means that udevd is done with the message: its reply, the end of the connection, or an error,
+         * e.g. POLLERR with ECONNRESET when udevd closes the connection without reading the message. Only a
+         * message that needs a reply fails without one. */
         for (;;) {
                 struct pollfd pfd[1];
                 int r;
@@ -328,11 +331,6 @@ static int ctrl_send_full(struct udev_ctrl *uctrl, enum udev_ctrl_msg_type type,
                         if (errno == EINTR)
                                 continue;
                         err = -errno;
-                        break;
-                }
-
-                if (r > 0 && pfd[0].revents & POLLERR) {
-                        err = -EIO;
                         break;
                 }
 
