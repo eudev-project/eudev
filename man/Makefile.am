@@ -11,8 +11,11 @@ XMLPAGES = \
 noinst_DATA = \
 	$(XMLPAGES)
 
+# make.sh regenerates the man pages from the XML pages with the style sheet custom-man.xsl
 EXTRA_DIST = \
-	$(XMLPAGES)
+	$(XMLPAGES) \
+	make.sh \
+	custom-man.xsl
 
 MANPAGES = \
 	hwdb.7 \

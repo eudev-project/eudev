@@ -36,7 +36,14 @@ regenerate-hwdb parse-hwdb:
 bashcompletiondir = @bashcompletiondir@
 zshcompletiondir = @zshcompletiondir@
 
+# with the files that tell how to build and work on eudev, and autogen.sh, which regenerates the build system
+# and, with man/make.sh, the man pages
 EXTRA_DIST = \
+	autogen.sh \
+	BUILD \
+	CONTRIBUTING \
+	LEGACY \
+	NOTES \
 	LICENSES/README.md \
 	LICENSES/BSD-3-Clause.txt \
 	LICENSES/CC0-1.0.txt \
