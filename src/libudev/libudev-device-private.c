@@ -399,12 +399,12 @@ int device_get_sysattr_safe_string(struct udev_device *device, const char *sysat
                 return r;
 
         if (!sysattr_string_is_safe(value)) {
-                /* like systemd, also with the prefix of sd-device's messages, and the value escaped like
-                 * the other values in messages */
+                /* like systemd, with the prefix of the library, "libudev:" where systemd has "sd-device:",
+                 * and the value escaped like the other values in messages */
                 if (log_get_max_level() >= LOG_DEBUG) {
                         _cleanup_free_ char *escaped = utf8_escape_non_printable(value);
 
-                        log_debug("%s: sd-device: '%s' sysattr contains invalid characters, refusing: %s",
+                        log_debug("%s: libudev: '%s' sysattr contains invalid characters, refusing: %s",
                                   udev_device_get_sysname(device), sysattr, escaped ?: "(null)");
                 }
                 return -ENXIO;
