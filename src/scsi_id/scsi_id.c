@@ -376,17 +376,21 @@ static int per_dev_options(struct udev *udev,
                            struct scsi_id_device *dev_scsi __attribute__((unused)), int *good_bad, int *page_code)
 {
         _cleanup_strv_free_ char **newargv = NULL;
-        int retval;
         int newargc;
         int option;
+        int r;
 
         *good_bad = all_good;
         *page_code = default_page_code;
 
-        retval = get_file_options(udev, vendor_str, model_str, &newargc, &newargv);
+        /* Like systemd, an error in the config file, e.g. an invalid option in the line of the device, is
+         * returned; no matching line is not an error. */
+        r = get_file_options(udev, vendor_str, model_str, &newargc, &newargv);
+        if (r != 0)
+                return r < 0 ? r : 0;
 
         optind = 1; /* reset this global extern */
-        while (retval == 0) {
+        for (;;) {
                 /* Like systemd, all options are parsed, and those that are not allowed here refused. */
                 option = getopt_long_log(newargc, newargv, optstring, options);
                 if (option == -1)
@@ -408,25 +412,21 @@ static int per_dev_options(struct udev *udev,
                                 *page_code = PAGE_83;
                         } else if (streq(optarg, "pre-spc3-83")) {
                                 *page_code = PAGE_83_PRE_SPC3;
-                        } else {
-                                log_error("Unknown page code '%s'", optarg);
-                                retval = -1;
-                        }
+                        } else
+                                return log_error_errno(SYNTHETIC_ERRNO(EINVAL), "Unknown page code '%s'", optarg);
                         break;
 
                 case '?':
                         /* logged already */
-                        retval = -1;
-                        break;
+                        return -EINVAL;
 
                 default:
                         log_config_option_unsupported(option, newargv[optind - 1]);
-                        retval = -1;
-                        break;
+                        return -EINVAL;
                 }
         }
 
-        return retval;
+        return 0;
 }
 
 static int set_inq_values(struct udev *udev, struct scsi_id_device *dev_scsi, const char *path)
@@ -472,8 +472,12 @@ static int scsi_id(struct udev *udev, char *maj_min_dev)
                 goto out;
         }
 
-        /* get per device (vendor + model) options from the config file */
-        per_dev_options(udev, &dev_scsi, &good_dev, &page_code);
+        /* get per device (vendor + model) options from the config file; like systemd, fail if it cannot be
+         * read, or the options of the device are invalid */
+        if (per_dev_options(udev, &dev_scsi, &good_dev, &page_code) < 0) {
+                retval = 1;
+                goto out;
+        }
         if (!good_dev) {
                 retval = 1;
                 goto out;

@@ -5,8 +5,9 @@
  * right line.
  *
  * Also runs of scsi_id's main() with a fake disk: the global options come from the config file that
- * -f/--config names, the command line overrides them, and --help and --version work with a broken
- * default config file.
+ * -f/--config names, the command line overrides them, --help and --version work with a broken default
+ * config file, and, like systemd, an invalid option in the line of the device, or an error in the file
+ * found when it is searched for that line, fails.
  */
 
 /* the functions of scsi_id, which are static, with its main() renamed */
@@ -321,6 +322,30 @@ int main(void) {
                        1, "", "Unknown page code '0x88'", "-p", "0x88", "-d", "/dev/sda", NULL);
         r |= test_main("no device", NULL, "options=-g\n",
                        1, "", "No device specified.", "-f", "FILE", NULL);
+
+        /* scsi_id(): like systemd, an invalid option in the line of the device fails, with no output */
+        r |= test_main("per-device options: unknown option", NULL, "vendor=\"ATA\",options=\"-g --bogus\"\n",
+                       1, "", "unrecognized option '--bogus'", "-f", "FILE", "-d", "/dev/sda", NULL);
+        r |= test_main("per-device options: unknown short option", NULL, "vendor=\"ATA\",options=\"-g -Z\"\n",
+                       1, "", "unrecognized option '-Z'", "-f", "FILE", "-d", "/dev/sda", NULL);
+        r |= test_main("per-device options: missing argument", NULL, "vendor=\"ATA\",options=\"-g -p\"\n",
+                       1, "", "option '-p' requires an argument", "-f", "FILE", "-d", "/dev/sda", NULL);
+        r |= test_main("per-device options: bad page code", NULL, "vendor=\"ATA\",options=\"-g -p 0x99\"\n",
+                       1, "", "Unknown page code '0x99'", "-f", "FILE", "-d", "/dev/sda", NULL);
+        r |= test_main("per-device options: option not allowed", NULL, "vendor=\"ATA\",options=\"-g -x\"\n",
+                       1, "", "Option -x/--export not supported in the config file.", "-f", "FILE", "/dev/sda", NULL);
+        r |= test_main("per-device options: long option not allowed", NULL,
+                       "options=-g\nvendor=\"ATA\",model=\"QEMU\",options=\"--device /dev/sdb\"\n",
+                       1, "", "Option -d/--device not supported in the config file.", "-f", "FILE", "/dev/sda", NULL);
+        r |= test_main("per-device options: invalid line of another device", NULL,
+                       "vendor=\"SEAGATE\",options=\"--bogus\"\nvendor=\"ATA\",model=\"WDC\",options=-x\n"
+                       "vendor=\"ATA\",options=\"-g -p 0x80\"\n",
+                       0, "1ATA_/dev/sda_page_0x80\n", "", "-f", "FILE", "/dev/sda", NULL);
+        r |= test_main("per-device options: error in the file after the global options", NULL, "options=-g\ngarbage\n",
+                       1, "", "/f.config line 2 'garbage'", "-f", "FILE", "/dev/sda", NULL);
+        r |= test_main("per-device options: error in the file after the line of the device", NULL,
+                       "options=-b\nvendor=\"ATA\",options=-g\ngarbage\n",
+                       0, "1ATA_/dev/sda_page_unspecified\n", "", "-f", "FILE", "/dev/sda", NULL);
 
         (void) unlink(strjoina(dir, "/scsi_id.config"));
         (void) unlink(strjoina(dir, "/default.config"));
