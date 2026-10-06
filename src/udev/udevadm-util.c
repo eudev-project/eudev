@@ -58,8 +58,10 @@ struct udev_device *find_device(struct udev *udev,
                         return dev;
         }
 
-        /* systemd tries a device unit name if the argument is not a path, eudev has none. */
-        errno = strchr(id, '/') ? -r : EINVAL;
+        /* Like systemd, a path, i.e. an argument with a slash, is no device, whatever the lookups failed
+         * with, e.g. ENOTDIR for a path below a device node, ELOOP, EACCES or ENAMETOOLONG. systemd tries
+         * a device unit name if the argument is not a path, eudev has none. */
+        errno = strchr(id, '/') ? ENODEV : EINVAL;
         return NULL;
 }
 

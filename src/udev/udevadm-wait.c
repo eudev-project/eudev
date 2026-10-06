@@ -37,6 +37,7 @@ static const char * const wait_until_table[_WAIT_UNTIL_MAX] = {
 
 static int check_device(struct udev *udev, const char *path) {
         _cleanup_udev_device_unref_ struct udev_device *dev = NULL;
+        int r;
 
         assert(path);
 
@@ -48,13 +49,13 @@ static int check_device(struct udev *udev, const char *path) {
                 return -errno;
         }
 
-        /* Like sd_device_new_from_path(): a sysfs path, or a device node or a symlink to it. */
-        errno = 0;
-        dev = find_device(udev, path, NULL);
-        if (!dev) {
-                if (IN_SET(errno, 0, ENOENT, ENODEV, ENXIO, ENOTDIR))
+        /* Like sd_device_new_from_path(): a sysfs path, or a device node or a symlink to it. Not
+         * find_device(), which fails with ENODEV for every path. */
+        r = device_new_from_path(udev, path, &dev);
+        if (r < 0) {
+                if (IN_SET(r, -ENOENT, -ENODEV, -ENXIO, -ENOTDIR))
                         return false;
-                return -errno;
+                return r;
         }
 
         if (arg_wait_until == WAIT_UNTIL_INITIALIZED)
