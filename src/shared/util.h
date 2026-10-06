@@ -454,7 +454,7 @@ _alloc_(2, 3) static inline void *realloc_multiply(void *p, size_t a, size_t b) 
                 size_t _nn_ = n;                                        \
                 assert(_nn_ <= ALLOCA_MAX);                             \
                 alloca(_nn_ == 0 ? 1 : _nn_);                           \
-        })                                                              \
+        })
 
 #define free_and_replace(a, b)                  \
         ({                                      \
