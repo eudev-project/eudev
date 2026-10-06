@@ -56,6 +56,7 @@
 #include "hashmap.h"
 #include "id128-util.h"
 #include "options.h"
+#include "process-util.h"
 #include "reread-partition-table.h"
 #include "set.h"
 
@@ -135,8 +136,6 @@ static usec_t arg_event_timeout_usec = DEFAULT_EVENT_TIMEOUT_USEC;
 static usec_t arg_event_timeout_warn_usec = DEFAULT_EVENT_TIMEOUT_USEC / 3;
 static int arg_timeout_signal = SIGKILL;
 static bool arg_blockdev_read_only = false;
-/* the signal mask udevd started with, see synthesize_change() */
-static sigset_t sigmask_orig;
 static UDEV_LIST(event_list);
 Hashmap *workers;
 /* the processes that re-read the partition table of a disk, see synthesize_change() */
@@ -1839,7 +1838,21 @@ static int synthesize_change(struct udev_device *dev) {
                         /* child */
                         (void) prctl(PR_SET_NAME, "(udev-synth)");
                         (void) prctl(PR_SET_PDEATHSIG, SIGTERM);
-                        (void) sigprocmask(SIG_SETMASK, &sigmask_orig, NULL);
+
+                        /* Like FORK_RESET_SIGNALS of systemd: every signal at its default action, and none
+                         * blocked, and not the signal mask and the ignored signals that udevd inherited, e.g.
+                         * an ignored SIGTERM, with which the SIGTERM of PR_SET_PDEATHSIG would not stop it. */
+                        r = reset_all_signal_handlers();
+                        if (r < 0) {
+                                log_error_errno(r, "Failed to reset signal handlers: %m");
+                                _exit(EXIT_FAILURE);
+                        }
+
+                        r = reset_signal_mask();
+                        if (r < 0) {
+                                log_error_errno(r, "Failed to reset signal mask: %m");
+                                _exit(EXIT_FAILURE);
+                        }
 
                         /* Like FORK_CLOSE_ALL_FDS and FORK_REOPEN_LOG of systemd: close all file descriptors
                          * above stderr, and open the log again, which is closed first, as its descriptor is
@@ -2547,7 +2560,7 @@ int main(int argc, char *argv[]) {
 
         /* block and listen to all signals on signalfd */
         sigfillset(&mask);
-        sigprocmask(SIG_SETMASK, &mask, &sigmask_orig);
+        sigprocmask(SIG_SETMASK, &mask, NULL);
         fd_signal = signalfd(-1, &mask, SFD_NONBLOCK|SFD_CLOEXEC);
         if (fd_signal < 0) {
                 r = log_error_errno(errno, "Failed to create signal event source: %m");
