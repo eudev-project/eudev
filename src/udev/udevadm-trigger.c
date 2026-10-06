@@ -786,6 +786,7 @@ static int adm_trigger(struct udev *udev, int argc, char *argv[]) {
 
         if (ping) {
                 _cleanup_udev_ctrl_unref_ struct udev_ctrl *uctrl = NULL;
+                bool sent;
                 int timeout;
 
                 uctrl = udev_ctrl_new(udev);
@@ -800,9 +801,12 @@ static int adm_trigger(struct udev *udev, int argc, char *argv[]) {
                 else
                         timeout = (ping_timeout_usec + USEC_PER_SEC - 1) / USEC_PER_SEC;
 
-                r = udev_ctrl_send_ping(uctrl, timeout);
+                /* Like systemd v261, unlike settle, a failure to reach udevd, also because it does not run,
+                 * is an error; one of waiting for its reply is told apart. */
+                r = udev_ctrl_send_ping_full(uctrl, timeout, &sent);
                 if (r < 0) {
-                        log_error_errno(r, "Failed to connect to udev daemon: %m");
+                        log_error_errno(r, sent ? "Failed to wait for daemon to reply: %m" :
+                                                  "Failed to connect to udev daemon: %m");
                         return 1;
                 }
         }
