@@ -3045,6 +3045,7 @@ static char *token_value_alternatives(struct udev_rules *rules, struct token *to
 static bool token_match_string(struct udev_event *event, struct udev_rules *rules, struct token *rule,
                                struct token *token, const char *str, bool log_result) {
         const char *value = rules_str(rules, token->key.value_off), *res;
+        _cleanup_free_ char *escaped = NULL;
         bool match, result;
 
         str = str ?: "";
@@ -3055,6 +3056,12 @@ static bool token_match_string(struct udev_event *event, struct udev_rules *rule
                 return result;
 
         res = log_result ? (result ? ": PASS" : ": FAIL") : ".";
+
+        /* unlike systemd, the string escaped like the other values in messages, so that e.g. a value of
+         * several lines, like that of some kernel parameters, is shown in one line */
+        escaped = utf8_escape_non_printable(str);
+        if (escaped)
+                str = escaped;
 
         if (token->type == TK_M_SUBSYSTEM && streq(value, "subsystem|class|bus"))
                 log_event_trace(event, rules, rule, token,
@@ -3102,8 +3109,15 @@ static bool apply_format(struct udev_event *event, struct udev_rules *rules, str
 
         (void) udev_event_apply_format(event, format, result, size, replace_whitespace, properties_list, &truncated);
         if (!truncated) {
-                if (event->trace && !streq(format, result))
-                        log_event_trace(event, rules, rule, token, "Format substitution: \"%s\" -> \"%s\"", format, result);
+                if (event->trace && !streq(format, result)) {
+                        /* unlike systemd, the result escaped like the values in the other messages, as it may
+                         * contain e.g. the value of an attribute with several lines; the format is shown as
+                         * written in the rule */
+                        _cleanup_free_ char *escaped = utf8_escape_non_printable(result);
+
+                        log_event_trace(event, rules, rule, token, "Format substitution: \"%s\" -> \"%s\"",
+                                        format, escaped ?: result);
+                }
                 return true;
         }
 
