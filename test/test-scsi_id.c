@@ -1,7 +1,8 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 /*
  * Tests of the configuration file parser of the helper program scsi_id, get_file_options(): white space
- * after the commas of a line is allowed as in udev 3.2.x, and the error messages name the right line.
+ * after the commas of a line is allowed as in udev 3.2.x, and the error messages name the file and the
+ * right line.
  *
  * Also runs of scsi_id's main() with a fake disk: the global options come from the config file that
  * -f/--config names, the command line overrides them, and --help and --version work with a broken
@@ -256,13 +257,15 @@ int main(void) {
         r |= TEST_CONFIG("space after the comma, other model", "vendor=\"ATA\", model=\"WDC\", options=-b\nvendor=\"ATA\", options=-g\n",
                          "ATA     ", "Samsung SSD 860", "-g", NULL);
         r |= TEST_CONFIG("space after the comma, vendor without options", "vendor=\"ATA\", \nOPTIONS=-g\n",
-                         "ATA     ", "Samsung SSD 860", "!", "Error parsing config file line 1 ");
+                         "ATA     ", "Samsung SSD 860", "!", "/scsi_id.config line 1 'vendor=\"ATA\", '");
         r |= TEST_CONFIG("space before the equal sign", "vendor =\"ATA\",options=-g\n",
-                         "ATA     ", "Samsung SSD 860", "!", "Error parsing config file line 1 ");
+                         "ATA     ", "Samsung SSD 860", "!", "/scsi_id.config line 1 'vendor =\"ATA\",options=-g'");
 
-        /* the error messages name the line */
+        /* the error messages name the file and the line */
         r |= TEST_CONFIG("error on line 3", "# comment\n\nvendor=\"ATA\"\nOPTIONS=-g\n",
-                         "ATA     ", "Samsung SSD 860", "!", "Error parsing config file line 3 ");
+                         "ATA     ", "Samsung SSD 860", "!", "Error parsing config file /");
+        r |= TEST_CONFIG("error on line 3, the line", "# comment\n\nvendor=\"ATA\"\nOPTIONS=-g\n",
+                         "ATA     ", "Samsung SSD 860", "!", "/scsi_id.config line 3 'vendor=\"ATA\"'");
         memset(longline, 'x', sizeof(longline));
         memcpy(longline, "OPTIONS=", 8);
         longline[sizeof(longline) - 1] = '\n';
@@ -307,7 +310,9 @@ int main(void) {
         r |= test_main("broken default file, --version", "garbage\n", NULL,
                        0, UDEV_VERSION "\n", NULL, "--version", NULL);
         r |= test_main("broken default file", "garbage\n", NULL,
-                       1, "", "Error parsing config file line 1 'garbage'", "-d", "/dev/sda", NULL);
+                       1, "", "Error parsing config file /", "-d", "/dev/sda", NULL);
+        r |= test_main("broken default file, the file and the line", "garbage\n", NULL,
+                       1, "", "/default.config line 1 'garbage'", "-d", "/dev/sda", NULL);
 
         /* main(): errors */
         r |= test_main("bad page code in the global options", NULL, "options=\"-p 0x99\"\n",

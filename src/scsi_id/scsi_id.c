@@ -169,7 +169,8 @@ static int get_file_options(struct udev *udev __attribute__((unused)),
 
                 r = extract_many_words(&buf, "=\",\n", 0, &key, &value);
                 if (r < 2)
-                        return log_error_errno(SYNTHETIC_ERRNO(EINVAL), "Error parsing config file line %d '%s'", lineno, buffer);
+                        return log_error_errno(SYNTHETIC_ERRNO(EINVAL), "Error parsing config file %s line %d '%s'",
+                                               config_file, lineno, buffer);
 
                 if (strcaseeq(key, "VENDOR")) {
                         vendor_in = TAKE_PTR(value);
@@ -182,7 +183,8 @@ static int get_file_options(struct udev *udev __attribute__((unused)),
                                 buf += strspn(buf, WHITESPACE);
                         r = extract_many_words(&buf, "=\",\n", 0, &key, &value);
                         if (r < 2)
-                                return log_error_errno(SYNTHETIC_ERRNO(EINVAL), "Error parsing config file line %d '%s'", lineno, buffer);
+                                return log_error_errno(SYNTHETIC_ERRNO(EINVAL), "Error parsing config file %s line %d '%s'",
+                                                       config_file, lineno, buffer);
 
                         if (strcaseeq(key, "MODEL")) {
                                 model_in = TAKE_PTR(value);
@@ -192,7 +194,8 @@ static int get_file_options(struct udev *udev __attribute__((unused)),
                                         buf += strspn(buf, WHITESPACE);
                                 r = extract_many_words(&buf, "=\",\n", 0, &key, &value);
                                 if (r < 2)
-                                        return log_error_errno(SYNTHETIC_ERRNO(EINVAL), "Error parsing config file line %d '%s'", lineno, buffer);
+                                        return log_error_errno(SYNTHETIC_ERRNO(EINVAL), "Error parsing config file %s line %d '%s'",
+                                                               config_file, lineno, buffer);
                         }
                 }
 
@@ -203,7 +206,8 @@ static int get_file_options(struct udev *udev __attribute__((unused)),
                  * Only allow: [vendor=foo[,model=bar]]options=stuff
                  */
                 if (!options_in || (!vendor_in && model_in))
-                        return log_error_errno(SYNTHETIC_ERRNO(EINVAL), "Error parsing config file line %d '%s'", lineno, buffer);
+                        return log_error_errno(SYNTHETIC_ERRNO(EINVAL), "Error parsing config file %s line %d '%s'",
+                                               config_file, lineno, buffer);
                 if (!vendor) {
                         if (!vendor_in)
                                 break;
