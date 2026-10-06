@@ -236,10 +236,12 @@ static int adm_monitor(struct udev *udev, int argc, char *argv[]) {
                 udev_monitor_set_receive_buffer_size(kernel_monitor, 128*1024*1024);
                 fd_kernel = udev_monitor_get_fd(kernel_monitor);
 
+                /* like systemd, the device type of -s SUBSYSTEM/DEVTYPE filters the kernel uevents too */
                 udev_list_entry_foreach(entry, udev_list_get_entry(&subsystem_match_list)) {
                         const char *subsys = udev_list_entry_get_name(entry);
+                        const char *devtype = udev_list_entry_get_value(entry);
 
-                        if (udev_monitor_filter_add_match_subsystem_devtype(kernel_monitor, subsys, NULL) < 0)
+                        if (udev_monitor_filter_add_match_subsystem_devtype(kernel_monitor, subsys, devtype) < 0)
                                 fprintf(stderr, "error: unable to apply subsystem filter '%s'\n", subsys);
                 }
 
