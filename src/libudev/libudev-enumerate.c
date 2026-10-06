@@ -70,6 +70,8 @@ struct udev_enumerate {
         unsigned int devices_max;
         /* the syspaths of devices, see add_parent_devices() */
         Set *devices_by_syspath;
+        /* the syspaths whose parents were walked during the current scan, see add_parent_devices() */
+        Set *parents_walked;
         bool devices_uptodate:1;
         bool match_is_initialized;
 };
@@ -148,6 +150,7 @@ _public_ struct udev_enumerate *udev_enumerate_unref(struct udev_enumerate *udev
         udev_device_unref(udev_enumerate->parent_match);
         udev_list_cleanup(&udev_enumerate->devices_list);
         set_free(udev_enumerate->devices_by_syspath);
+        set_free_free(udev_enumerate->parents_walked);
         for (i = 0; i < udev_enumerate->devices_cur; i++)
                 free(udev_enumerate->devices[i].syspath);
         free(udev_enumerate->devices);
@@ -718,35 +721,103 @@ static bool match_subsystem(struct udev_enumerate *udev_enumerate, const char *s
         return true;
 }
 
+static bool parent_matches(struct udev_enumerate *udev_enumerate, struct udev_device *parent)
+{
+        if (!match_sysname(udev_enumerate, udev_device_get_sysname(parent)))
+                return false;
+        if (!match_subsystem(udev_enumerate, udev_device_get_subsystem(parent)))
+                return false;
+        if (!match_parent(udev_enumerate, parent))
+                return false;
+        if (!match_tag(udev_enumerate, parent))
+                return false;
+        if (!match_initialized(udev_enumerate, parent))
+                return false;
+        if (!match_property(udev_enumerate, parent))
+                return false;
+        if (!match_sysattr(udev_enumerate, parent))
+                return false;
+        return true;
+}
+
 /* Like sd-device's enumerator, the parents of a device that a scan of /sys finds are listed too, if they match
  * the filters, also the one for subsystems, which a device without a subsystem never matches: e.g. the
  * directories /sys/bus/X/drivers, the parents of the drivers, which no scan finds. The walk stops at a
- * parent that is listed already. */
-static void add_parent_devices(struct udev_enumerate *udev_enumerate, struct udev_device *dev)
+ * parent that is listed already.
+ *
+ * The parents are looked up like udev_device_get_parent() does, from the syspath of the device, which is
+ * resolved already, so that the directories above it need not be resolved again. The walk also stops at a
+ * syspath whose parents were walked before during the scan: the one of a device found by the scan, or a
+ * directory that the walk of another device went through; the parents above it are done. So a scan looks at
+ * the directories above the devices once, not once for every device below them. A walk that fails is not
+ * remembered, so that the walk of the next device below the same directories tries again, like the one of
+ * sd-device. */
+static void add_parent_devices(struct udev_enumerate *udev_enumerate, const char *syspath)
 {
-        struct udev_device *parent;
+        _cleanup_free_ char *path = NULL;
+        unsigned n = 0, i;
+        char *pos;
+        int r;
 
-        for (parent = udev_device_get_parent(dev); parent; parent = udev_device_get_parent(parent)) {
-                if (!match_sysname(udev_enumerate, udev_device_get_sysname(parent)))
-                        continue;
-                if (!match_subsystem(udev_enumerate, udev_device_get_subsystem(parent)))
-                        continue;
-                if (!match_parent(udev_enumerate, parent))
-                        continue;
-                if (!match_tag(udev_enumerate, parent))
-                        continue;
-                if (!match_initialized(udev_enumerate, parent))
-                        continue;
-                if (!match_property(udev_enumerate, parent))
-                        continue;
-                if (!match_sysattr(udev_enumerate, parent))
-                        continue;
+        path = strdup(syspath);
+        if (!path)
+                return;
 
-                if (set_contains(udev_enumerate->devices_by_syspath, udev_device_get_syspath(parent)))
+        for (;;) {
+                struct udev_device *parent;
+                bool listed = false;
+
+                /* the parent directory, up to the directories directly below /sys */
+                pos = strrchr(path, '/');
+                if (!pos || pos == path + strlen("/sys"))
+                        break;
+                *pos = '\0';
+
+                if (set_contains(udev_enumerate->parents_walked, path))
+                        break;
+
+                /* a directory that is no device, e.g. /sys/devices/virtual, is skipped */
+                parent = udev_device_new_from_resolved_syspath(udev_enumerate->udev, path);
+                if (!parent) {
+                        if (errno != ENODEV)
+                                return;
+                        n++;
+                        continue;
+                }
+
+                r = 0;
+                if (parent_matches(udev_enumerate, parent)) {
+                        listed = set_contains(udev_enumerate->devices_by_syspath, udev_device_get_syspath(parent));
+                        if (!listed)
+                                r = syspath_add(udev_enumerate, udev_device_get_syspath(parent));
+                }
+                udev_device_unref(parent);
+                if (r < 0)
                         return;
-                if (syspath_add(udev_enumerate, udev_device_get_syspath(parent)) < 0)
-                        return;
+                if (listed)
+                        break;
+                n++;
         }
+
+        /* the device and the n directories above it that the walk went through */
+        if (set_ensure_allocated(&udev_enumerate->parents_walked, &string_hash_ops) < 0)
+                return;
+        strcpy(path, syspath);
+        for (i = 0;; i++) {
+                if (set_put_strdup(udev_enumerate->parents_walked, path) < 0)
+                        return;
+                if (i == n)
+                        break;
+                pos = strrchr(path, '/');
+                *pos = '\0';
+        }
+}
+
+/* the walks of the parents are remembered for one scan, as the filters may change before the next one */
+static void parents_walked_clear(struct udev_enumerate *udev_enumerate)
+{
+        set_free_free(udev_enumerate->parents_walked);
+        udev_enumerate->parents_walked = NULL;
 }
 
 static int scan_dir_and_add_devices(struct udev_enumerate *udev_enumerate,
@@ -794,7 +865,7 @@ static int scan_dir_and_add_devices(struct udev_enumerate *udev_enumerate,
                         goto nomatch;
 
                 syspath_add(udev_enumerate, udev_device_get_syspath(dev));
-                add_parent_devices(udev_enumerate, dev);
+                add_parent_devices(udev_enumerate, udev_device_get_syspath(dev));
 nomatch:
                 udev_device_unref(dev);
         }
@@ -988,6 +1059,8 @@ static int scan_devices_all(struct udev_enumerate *udev_enumerate)
  **/
 _public_ int udev_enumerate_scan_devices(struct udev_enumerate *udev_enumerate)
 {
+        int r;
+
         if (udev_enumerate == NULL)
                 return -EINVAL;
 
@@ -1000,7 +1073,9 @@ _public_ int udev_enumerate_scan_devices(struct udev_enumerate *udev_enumerate)
                 return scan_devices_children(udev_enumerate);
 
         /* scan devices of all subsystems */
-        return scan_devices_all(udev_enumerate);
+        r = scan_devices_all(udev_enumerate);
+        parents_walked_clear(udev_enumerate);
+        return r;
 }
 
 /**
@@ -1037,5 +1112,7 @@ _public_ int udev_enumerate_scan_subsystems(struct udev_enumerate *udev_enumerat
         /* all subsystem drivers */
         if (match_subsystem(udev_enumerate, "drivers"))
                 scan_dir(udev_enumerate, subsysdir, "drivers", "drivers");
+
+        parents_walked_clear(udev_enumerate);
         return 0;
 }

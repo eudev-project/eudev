@@ -65,6 +65,7 @@ const char *udev_get_net_altnames_invalid(struct udev *udev);
 /* libudev-device.c */
 int udev_device_read_db(struct udev_device *udev_device);
 struct udev_device *udev_device_new_from_nulstr(struct udev *udev, char *nulstr, ssize_t buflen);
+struct udev_device *udev_device_new_from_resolved_syspath(struct udev *udev, const char *syspath);
 struct udev_device *udev_device_new_from_synthetic_event(struct udev *udev, const char *syspath, const char *action);
 struct udev_device *udev_device_shallow_clone(struct udev_device *old_device);
 struct udev_device *udev_device_clone_with_db(struct udev_device *old_device);

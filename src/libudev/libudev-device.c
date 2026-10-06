@@ -1278,65 +1278,12 @@ static struct udev_device *udev_device_new(struct udev *udev)
         return udev_device;
 }
 
-/**
- * udev_device_new_from_syspath:
- * @udev: udev library context
- * @syspath: sys device path including sys directory
- *
- * Create new udev device, and fill in information from the sys
- * device and the udev database entry. The syspath is the absolute
- * path to the device, including the sys mount point.
- *
- * Like in systemd, a device below /sys/devices, and /sys/devices itself, must have a
- * "uevent" file, and any other directory below /sys, e.g. /sys/class/net or /sys/class,
- * is taken as a pseudo-device; otherwise, and for /sys itself and a path that does not
- * exist, the call fails with ENODEV. A path that does not start with /sys/ fails with
- * EINVAL.
- *
- * Like in systemd, the device must be on sysfs, otherwise the call fails with ENODEV,
- * unless the environment variable UDEV_DEVICE_VERIFY_SYSFS, or SYSTEMD_DEVICE_VERIFY_SYSFS
- * when it is not set, is false, e.g. "0", to allow tests with a directory as /sys. The
- * variables are ignored in programs that run with elevated privileges (setuid etc.).
- *
- * The initial refcount is 1, and needs to be decremented to
- * release the resources of the udev device.
- *
- * Returns: a new udev device, or #NULL, if it does not exist
- **/
-_public_ struct udev_device *udev_device_new_from_syspath(struct udev *udev, const char *syspath)
+/* The part of udev_device_new_from_syspath() after the path is resolved: whether it is a device. */
+static struct udev_device *device_new_from_resolved_syspath(struct udev *udev, const char *path)
 {
-        _cleanup_free_ char *path = NULL;
         struct stat statbuf;
         struct udev_device *udev_device;
         int r;
-
-        if (udev == NULL) {
-                errno = EINVAL;
-                return NULL;
-        }
-
-        if (syspath == NULL) {
-                errno = EINVAL;
-                return NULL;
-        }
-
-        /* path is below /sys, e.g. not /sysfoo; like systemd, /sys itself is refused below with ENODEV */
-        if (!path_startswith(syspath, "/sys/")) {
-                log_debug("not in sys :%s", syspath);
-                errno = EINVAL;
-                return NULL;
-        }
-
-        /* resolve symlinks, "." and "..", and check that the device is still below /sys; like
-         * device_set_syspath() of systemd, a path that does not exist is no device */
-        r = sysfs_resolve(syspath, &path);
-        if (r == -ENOENT)
-                r = -ENODEV;
-        if (r < 0) {
-                log_debug_errno(r, "failed to resolve %s: %m", syspath);
-                errno = -r;
-                return NULL;
-        }
 
         /* like systemd, /sys alone is no device; sysfs_resolve() refuses it already */
         if (path_equal(path, "/sys")) {
@@ -1392,6 +1339,79 @@ _public_ struct udev_device *udev_device_new_from_syspath(struct udev *udev, con
         log_trace("device %p has devpath '%s'", udev_device, udev_device_get_devpath(udev_device));
 
         return udev_device;
+}
+
+/**
+ * udev_device_new_from_syspath:
+ * @udev: udev library context
+ * @syspath: sys device path including sys directory
+ *
+ * Create new udev device, and fill in information from the sys
+ * device and the udev database entry. The syspath is the absolute
+ * path to the device, including the sys mount point.
+ *
+ * Like in systemd, a device below /sys/devices, and /sys/devices itself, must have a
+ * "uevent" file, and any other directory below /sys, e.g. /sys/class/net or /sys/class,
+ * is taken as a pseudo-device; otherwise, and for /sys itself and a path that does not
+ * exist, the call fails with ENODEV. A path that does not start with /sys/ fails with
+ * EINVAL.
+ *
+ * Like in systemd, the device must be on sysfs, otherwise the call fails with ENODEV,
+ * unless the environment variable UDEV_DEVICE_VERIFY_SYSFS, or SYSTEMD_DEVICE_VERIFY_SYSFS
+ * when it is not set, is false, e.g. "0", to allow tests with a directory as /sys. The
+ * variables are ignored in programs that run with elevated privileges (setuid etc.).
+ *
+ * The initial refcount is 1, and needs to be decremented to
+ * release the resources of the udev device.
+ *
+ * Returns: a new udev device, or #NULL, if it does not exist
+ **/
+_public_ struct udev_device *udev_device_new_from_syspath(struct udev *udev, const char *syspath)
+{
+        _cleanup_free_ char *path = NULL;
+        int r;
+
+        if (udev == NULL) {
+                errno = EINVAL;
+                return NULL;
+        }
+
+        if (syspath == NULL) {
+                errno = EINVAL;
+                return NULL;
+        }
+
+        /* path is below /sys, e.g. not /sysfoo; like systemd, /sys itself is refused below with ENODEV */
+        if (!path_startswith(syspath, "/sys/")) {
+                log_debug("not in sys :%s", syspath);
+                errno = EINVAL;
+                return NULL;
+        }
+
+        /* resolve symlinks, "." and "..", and check that the device is still below /sys; like
+         * device_set_syspath() of systemd, a path that does not exist is no device */
+        r = sysfs_resolve(syspath, &path);
+        if (r == -ENOENT)
+                r = -ENODEV;
+        if (r < 0) {
+                log_debug_errno(r, "failed to resolve %s: %m", syspath);
+                errno = -r;
+                return NULL;
+        }
+
+        return device_new_from_resolved_syspath(udev, path);
+}
+
+/* Like udev_device_new_from_syspath(), for a syspath that is resolved already, e.g. the one of a device or of a
+ * directory above it, which is not resolved again. */
+struct udev_device *udev_device_new_from_resolved_syspath(struct udev *udev, const char *syspath)
+{
+        if (udev == NULL || syspath == NULL || !path_startswith(syspath, "/sys/")) {
+                errno = EINVAL;
+                return NULL;
+        }
+
+        return device_new_from_resolved_syspath(udev, syspath);
 }
 
 /**
