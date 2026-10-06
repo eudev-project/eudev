@@ -74,17 +74,19 @@ static bool max_level_from_environment = false;
  * use here. */
 static char *log_abort_msg = NULL;
 
+/* Like log_close_console() of systemd since v237: in every process, not only in PID 1, the console is closed
+ * when the log is opened for another target, see log_open_internal(), so that e.g. a message that the
+ * maximum log level of /dev/kmsg filters out does not go to the console instead; standard error itself is
+ * not closed. Every switch to the console target must be followed by log_open() then. */
 void log_close_console(void) {
 
         if (console_fd < 0)
                 return;
 
-        if (getpid() == 1) {
-                if (console_fd >= 3)
-                        safe_close(console_fd);
+        if (console_fd >= 3)
+                safe_close(console_fd);
 
-                console_fd = -1;
-        }
+        console_fd = -1;
 }
 
 static int log_open_console(void) {
@@ -510,8 +512,10 @@ static int write_to_kmsg(
                 return 0;
 
         /* Like systemd: a safety catch for logging in a loop, per process. The first dropped message of the
-         * interval is replaced by a notice. Unlike systemd, which closes the console when it logs to
-         * /dev/kmsg, so that a dropped message does not show up there, it is taken as written. */
+         * interval is replaced by a notice. Unlike systemd, a dropped message is taken as written: like in
+         * systemd, the console is closed when log_open() opens /dev/kmsg, but the auto target also opens
+         * /dev/kmsg for a message, see log_dispatch(), while the console may still be open, e.g. a terminal,
+         * where the dropped messages would show up otherwise. */
         if (ratelimit_kmsg && !kmsg_ratelimit_below(&dropped)) {
                 if (dropped > 1)
                         return 1;
