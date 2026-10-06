@@ -160,7 +160,11 @@ should resolve names of users and groups\&. When set to
 \fBearly\fR
 (the default), names will be resolved when the rules are parsed\&. When set to
 \fBlate\fR, names will be resolved for every event\&. When set to
-\fBnever\fR, names will never be resolved and all devices will be owned by root\&.
+\fBnever\fR, names will never be resolved, and the
+\fIOWNER\fR
+and
+\fIGROUP\fR
+keys whose value is not a numeric ID, i\&.e\&. a name or a value with substitutions, will be ignored; the other keys of these rules still apply\&.
 .sp
 This is the same as the
 \fB\-\-resolve\-names=\fR

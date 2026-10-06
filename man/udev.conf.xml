@@ -178,8 +178,10 @@
           users and groups. When set to <option>early</option> (the default),
           names will be resolved when the rules are parsed. When set to
           <option>late</option>, names will be resolved for every event. When
-          set to <option>never</option>, names will never be resolved and all
-          devices will be owned by root.</para>
+          set to <option>never</option>, names will never be resolved, and the
+          <varname>OWNER</varname> and <varname>GROUP</varname> keys whose value
+          is not a numeric ID, i.e. a name or a value with substitutions, will be
+          ignored; the other keys of these rules still apply.</para>
 
           <para>This is the same as the <option>--resolve-names=</option> option of
           <citerefentry><refentrytitle>udevd</refentrytitle><manvolnum>8</manvolnum></citerefentry>.</para>
