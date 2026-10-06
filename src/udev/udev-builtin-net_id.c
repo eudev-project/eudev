@@ -37,6 +37,7 @@
 #include "netif-naming-scheme.h"
 #include "path-util.h"
 #include "socket-util.h"
+#include "terminal-util.h"
 #include "udev-util.h"
 
 #ifndef ARPHRD_MCTP
@@ -349,8 +350,9 @@ static int names_pci_onboard(struct udev_device *dev, struct udev_device *pci_de
         else
                 str[0] = '\0';
 
-        log_device_debug(dev, "PCI onboard index identifier: index=%u port=%s -> %s",
-                         idx, strna(port), isempty(str) ? "n/a" : str);
+        log_device_debug(dev, "PCI onboard index identifier: index=%u port=%s %s %s",
+                         idx, strna(port),
+                         glyph(GLYPH_ARROW_RIGHT), isempty(str) ? "n/a" : str);
 
         return 0;
 }
@@ -549,7 +551,7 @@ static int pci_get_hotplug_slot(struct udev_device *dev, uint32_t *ret) {
         pci = udev_device_new_from_subsystem_sysname(udev_device_get_udev(dev), "subsystem", "pci");
         if (!pci)
                 return log_debug_errno(errno > 0 ? errno : ENOENT,
-                                       "Failed to create udev_device object for pci subsystem: %m");
+                                       "Failed to create sd_device object for pci subsystem: %m");
 
         slots = strjoina(udev_device_get_syspath(pci), "/slots");
         dir = opendir(slots);
@@ -724,8 +726,9 @@ static int names_pci_slot(struct udev_device *dev, struct udev_device *pci_dev, 
         else
                 str[0] = '\0';
 
-        log_device_debug(dev, "PCI path identifier: domain=%s bus_and_slot=%s func=%s port=%s -> %s",
-                         strna(domain), bus_and_slot, strna(func), strna(port), isempty(str) ? "n/a" : str);
+        log_device_debug(dev, "PCI path identifier: domain=%s bus_and_slot=%s func=%s port=%s %s %s",
+                         strna(domain), bus_and_slot, strna(func), strna(port),
+                         glyph(GLYPH_ARROW_RIGHT), isempty(str) ? "n/a" : str);
 
         if (pci_get_slot_from_firmware_node_sun(pci_dev, &slot) < 0) {
                 /* If we don't find a slot using firmware_node/sun, fallback to hotplug_slot */
@@ -746,8 +749,9 @@ static int names_pci_slot(struct udev_device *dev, struct udev_device *pci_dev, 
         else
                 str[0] = '\0';
 
-        log_device_debug(dev, "PCI slot identifier: domain=%s slot=%" PRIu32 " func=%s port=%s -> %s",
-                         strna(domain), slot, strna(func), strna(port), isempty(str) ? "n/a" : str);
+        log_device_debug(dev, "PCI slot identifier: domain=%s slot=%" PRIu32 " func=%s port=%s %s %s",
+                         strna(domain), slot, strna(func), strna(port),
+                         glyph(GLYPH_ARROW_RIGHT), isempty(str) ? "n/a" : str);
 
         return 0;
 }
@@ -790,8 +794,8 @@ static int names_vio(struct udev_device *dev, const char *prefix, enum udev_even
 
         if (snprintf_ok(str, sizeof str, "%sv%u", prefix, slotid))
                 udev_builtin_add_property(dev, mode, "ID_NET_NAME_SLOT", str);
-        log_device_debug(dev, "Vio slot identifier: slotid=%u -> %s",
-                         slotid, str + strlen(prefix));
+        log_device_debug(dev, "Vio slot identifier: slotid=%u %s %s",
+                         slotid, glyph(GLYPH_ARROW_RIGHT), str + strlen(prefix));
         return 0;
 }
 
@@ -851,8 +855,8 @@ static int names_platform(struct udev_device *dev, const char *prefix, enum udev
 
         if (snprintf_ok(str, sizeof str, "%sa%s%xi%u", prefix, vendor, model, instance))
                 udev_builtin_add_property(dev, mode, "ID_NET_NAME_PATH", str);
-        log_device_debug(dev, "Platform identifier: vendor=%s model=%x instance=%u -> %s",
-                         vendor, model, instance, str + strlen(prefix));
+        log_device_debug(dev, "Platform identifier: vendor=%s model=%x instance=%u %s %s",
+                         vendor, model, instance, glyph(GLYPH_ARROW_RIGHT), str + strlen(prefix));
         return 0;
 }
 
@@ -900,7 +904,7 @@ static int names_devicetree_alias_prefix(struct udev_device *dev, const char *pr
         if (devicetree_path && path_startswith(devicetree_path, "/sys"))
                 devicetree_dev = udev_device_new_from_syspath(udev_device_get_udev(dev), devicetree_path);
         if (!devicetree_dev)
-                return log_debug_errno(ENODEV, "Failed to create udev_device object from '/proc/device-tree': %m");
+                return log_debug_errno(ENODEV, "Failed to create sd-device object from '/proc/device-tree': %m");
 
         devicetree_syspath = udev_device_get_syspath(devicetree_dev);
 
@@ -964,8 +968,8 @@ static int names_devicetree_alias_prefix(struct udev_device *dev, const char *pr
 
                 if (snprintf_ok(str, sizeof str, "%sd%u", prefix, i))
                         udev_builtin_add_property(dev, mode, "ID_NET_NAME_ONBOARD", str);
-                log_device_debug(dev, "DeviceTree identifier: alias_index=%u -> \"%s\"",
-                                 i, str + strlen(prefix));
+                log_device_debug(dev, "DeviceTree identifier: alias_index=%u %s \"%s\"",
+                                 i, glyph(GLYPH_ARROW_RIGHT), str + strlen(prefix));
                 return 1;
         }
 
@@ -1106,8 +1110,9 @@ static int get_usb_specifier(struct udev_device *dev, char **ret) {
         if (!buf)
                 return -ENOMEM;
 
-        log_device_debug(dev, "USB name identifier: ports=%s config=%s interface=%s -> %s",
-                         ports, strna(config), strna(interf), buf);
+        log_device_debug(dev, "USB name identifier: ports=%s config=%s interface=%s %s %s",
+                         ports, strna(config), strna(interf),
+                         glyph(GLYPH_ARROW_RIGHT), buf);
 
         *ret = buf;
         return 0;
@@ -1165,7 +1170,8 @@ static int get_bcma_specifier(struct udev_device *dev, char **ret) {
         if (core > 0 && asprintf(&buf, "b%u", core) < 0)
                 return -ENOMEM;
 
-        log_device_debug(dev, "BCMA core identifier: core=%u -> \"%s\"", core, strna(buf));
+        log_device_debug(dev, "BCMA core identifier: core=%u %s \"%s\"",
+                         core, glyph(GLYPH_ARROW_RIGHT), strna(buf));
 
         *ret = buf;
         return 0;
@@ -1234,8 +1240,8 @@ static int names_ccw(struct udev_device *dev, const char *prefix, enum udev_even
         /* Use the CCW bus-ID as network device name */
         if (snprintf_ok(str, sizeof str, "%sc%s", prefix, bus_id))
                 udev_builtin_add_property(dev, mode, "ID_NET_NAME_PATH", str);
-        log_device_debug(dev, "CCW identifier: ccw_busid=%s -> \"%s\"",
-                         bus_id, str + strlen(prefix));
+        log_device_debug(dev, "CCW identifier: ccw_busid=%s %s \"%s\"",
+                         bus_id, glyph(GLYPH_ARROW_RIGHT), str + strlen(prefix));
         return 0;
 }
 
@@ -1439,8 +1445,9 @@ static int names_mac(struct udev_device *dev, const char *prefix, enum udev_even
                  hw_addr.bytes[0], hw_addr.bytes[1], hw_addr.bytes[2],
                  hw_addr.bytes[3], hw_addr.bytes[4], hw_addr.bytes[5]);
         udev_builtin_add_property(dev, mode, "ID_NET_NAME_MAC", str);
-        log_device_debug(dev, "MAC address identifier: hw_addr=%s -> %s",
-                         hw_addr_to_string(&hw_addr, hw_addr_str), str + strlen(prefix));
+        log_device_debug(dev, "MAC address identifier: hw_addr=%s %s %s",
+                         hw_addr_to_string(&hw_addr, hw_addr_str),
+                         glyph(GLYPH_ARROW_RIGHT), str + strlen(prefix));
 
         (void) ieee_oui(dev, &hw_addr, mode);
         return 0;
@@ -1477,8 +1484,8 @@ static int names_netdevsim(struct udev_device *dev, const char *prefix, enum ude
 
         if (snprintf_ok(str, sizeof str, "%si%un%s", prefix, addr, phys_port_name))
                 udev_builtin_add_property(dev, mode, "ID_NET_NAME_PATH", str);
-        log_device_debug(dev, "Netdevsim identifier: address=%u, port_name=%s -> %s",
-                         addr, phys_port_name, str + strlen(prefix));
+        log_device_debug(dev, "Netdevsim identifier: address=%u, port_name=%s %s %s",
+                         addr, phys_port_name, glyph(GLYPH_ARROW_RIGHT), str + strlen(prefix));
         return 0;
 }
 
@@ -1517,8 +1524,8 @@ static int names_xen(struct udev_device *dev, const char *prefix, enum udev_even
 
         if (snprintf_ok(str, sizeof str, "%sX%u", prefix, id))
                 udev_builtin_add_property(dev, mode, "ID_NET_NAME_SLOT", str);
-        log_device_debug(dev, "Xen identifier: id=%u -> %s",
-                         id, str + strlen(prefix));
+        log_device_debug(dev, "Xen identifier: id=%u %s %s",
+                         id, glyph(GLYPH_ARROW_RIGHT), str + strlen(prefix));
         return 0;
 }
 

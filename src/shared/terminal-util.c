@@ -417,6 +417,7 @@ const char *glyph(Glyph code) {
                         [GLYPH_TREE_RIGHT]      = "`-",
                         [GLYPH_TREE_SPACE]      = "  ",
                         [GLYPH_VERTICAL_DOTTED] = ":",
+                        [GLYPH_ARROW_RIGHT]     = "->",
                         [GLYPH_ELLIPSIS]        = "...",
                 },
 
@@ -427,6 +428,7 @@ const char *glyph(Glyph code) {
                         [GLYPH_TREE_RIGHT]      = "\u2514\u2500",   /* └─ */
                         [GLYPH_TREE_SPACE]      = "  ",
                         [GLYPH_VERTICAL_DOTTED] = "\u2506",         /* ┆ */
+                        [GLYPH_ARROW_RIGHT]     = "\u2192",         /* → */
                         [GLYPH_ELLIPSIS]        = "\u2026",         /* … */
                 },
         };

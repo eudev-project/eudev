@@ -103,14 +103,15 @@ const char *ansi_add_italics(void);
  * grey, and informational ones in the normal color. */
 void get_log_colors(int priority, const char **on, const char **off, const char **highlight);
 
-/* Tree drawing glyphs, as systemd's glyph-util.h has them. UTF-8 box drawing characters are used
- * unless the locale's character set is not UTF-8, like systemd's is_locale_utf8() decides. */
+/* Tree drawing and other glyphs, as systemd's glyph-util.h has them. UTF-8 characters are used unless the
+ * locale's character set is not UTF-8, like systemd's is_locale_utf8() decides. */
 typedef enum Glyph {
         GLYPH_TREE_VERTICAL,
         GLYPH_TREE_BRANCH,
         GLYPH_TREE_RIGHT,
         GLYPH_TREE_SPACE,
         GLYPH_VERTICAL_DOTTED,
+        GLYPH_ARROW_RIGHT,
         GLYPH_ELLIPSIS,
         _GLYPH_MAX,
 } Glyph;
