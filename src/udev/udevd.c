@@ -569,20 +569,22 @@ static void worker_spawn(struct event *event) {
                 event_queue_cleanup(udev, EVENT_UNDEF);
                 udev_monitor_unref(monitor);
                 udev_ctrl_unref(udev_ctrl);
-                close(fd_signal);
-                close(fd_ep);
-                close(worker_watch[READ_END]);
+                /* reset, so that safe_close() below does not close them again, when the setup fails */
+                fd_signal = safe_close(fd_signal);
+                fd_ep = safe_close(fd_ep);
+                worker_watch[READ_END] = safe_close(worker_watch[READ_END]);
 
+                /* the messages of the worker of systemd v261 for the same steps of its event loop */
                 sigfillset(&mask);
                 fd_signal = signalfd(-1, &mask, SFD_NONBLOCK|SFD_CLOEXEC);
                 if (fd_signal < 0) {
-                        r = log_error_errno(errno, "error creating signalfd %m");
+                        r = log_error_errno(errno, "Failed to set SIGTERM event: %m");
                         goto out;
                 }
 
                 fd_ep = epoll_create1(EPOLL_CLOEXEC);
                 if (fd_ep < 0) {
-                        r = log_error_errno(errno, "error creating epoll fd: %m");
+                        r = log_error_errno(errno, "Failed to allocate event loop: %m");
                         goto out;
                 }
 
@@ -595,9 +597,12 @@ static void worker_spawn(struct event *event) {
                 ep_monitor.events = EPOLLIN;
                 ep_monitor.data.fd = fd_monitor;
 
-                if (epoll_ctl(fd_ep, EPOLL_CTL_ADD, fd_signal, &ep_signal) < 0 ||
-                    epoll_ctl(fd_ep, EPOLL_CTL_ADD, fd_monitor, &ep_monitor) < 0) {
-                        r = log_error_errno(errno, "fail to add fds to epoll: %m");
+                if (epoll_ctl(fd_ep, EPOLL_CTL_ADD, fd_signal, &ep_signal) < 0) {
+                        r = log_error_errno(errno, "Failed to set SIGTERM event: %m");
+                        goto out;
+                }
+                if (epoll_ctl(fd_ep, EPOLL_CTL_ADD, fd_monitor, &ep_monitor) < 0) {
+                        r = log_error_errno(errno, "Failed to start device monitor: %m");
                         goto out;
                 }
 
