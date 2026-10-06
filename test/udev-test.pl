@@ -2156,6 +2156,15 @@ sub can_mknod {
         return 1;
 }
 
+# check if test-udev can set up the mount namespace it runs in, e.g. not in a container without CAP_SYS_ADMIN;
+# it prints why not
+sub can_set_up_namespace {
+        system("mkdir", "-p", "$udev_rules_dir");
+        my $ok = system("$udev_bin", "--check-namespace") == 0;
+        udev_setup();
+        return $ok;
+}
+
 sub run_test {
         my ($rules, $number) = @_;
 
@@ -2244,6 +2253,12 @@ udev_setup();
 
 if (!can_mknod()) {
         print "Cannot create device nodes, skipping the test.\n";
+        system("rm", "-rf", "$udev_dev");
+        exit($EXIT_TEST_SKIP);
+}
+
+if (!can_set_up_namespace()) {
+        print "$udev_bin cannot set up the mount namespace it runs in, skipping the test.\n";
         system("rm", "-rf", "$udev_dev");
         exit($EXIT_TEST_SKIP);
 }

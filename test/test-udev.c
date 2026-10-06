@@ -294,6 +294,11 @@ int main(int argc __attribute__((unused)), char *argv[]) {
         if (err < 0)
                 return EXIT_FAILURE;
 
+        /* "test-udev --check-namespace" only tells whether the mount namespace with the fake file systems can
+         * be set up, see udev-test.pl; the reason why not is printed above */
+        if (argv[1] && streq(argv[1], "--check-namespace"))
+                return EXIT_SUCCESS;
+
         /* test/sys is a directory, which libudev refuses as sysfs by default */
         if (setenv("UDEV_DEVICE_VERIFY_SYSFS", "0", 1) < 0)
                 return EXIT_FAILURE;
