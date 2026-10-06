@@ -98,6 +98,7 @@ int udev_device_get_ifindex(struct udev_device *udev_device);
 void udev_device_set_info_loaded(struct udev_device *device);
 bool udev_device_get_db_persist(struct udev_device *udev_device);
 int device_get_driver_subsystem(struct udev_device *udev_device, char **ret);
+const char *udev_device_get_subsystem_without_uevent(struct udev_device *udev_device);
 void udev_device_set_db_persist(struct udev_device *udev_device);
 
 /* libudev-device-private.c */

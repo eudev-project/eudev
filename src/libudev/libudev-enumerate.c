@@ -721,21 +721,25 @@ static bool match_subsystem(struct udev_enumerate *udev_enumerate, const char *s
         return true;
 }
 
-static bool parent_matches(struct udev_enumerate *udev_enumerate, struct udev_device *parent)
+/* Like test_matches() of sd-device's enumerator: whether a device matches the filters, in the same order; the
+ * one for sysnames only if test_sysname is set, as a scan tests the name of the directory entry first. Like
+ * the one for subsystems, which a device without a subsystem never matches, the device's own subsystem is
+ * tested, not the name of the directory where a scan found it. */
+static bool test_matches(struct udev_enumerate *udev_enumerate, struct udev_device *dev, bool test_sysname)
 {
-        if (!match_sysname(udev_enumerate, udev_device_get_sysname(parent)))
+        if (test_sysname && !match_sysname(udev_enumerate, udev_device_get_sysname(dev)))
                 return false;
-        if (!match_subsystem(udev_enumerate, udev_device_get_subsystem(parent)))
+        if (!match_subsystem(udev_enumerate, udev_device_get_subsystem_without_uevent(dev)))
                 return false;
-        if (!match_parent(udev_enumerate, parent))
+        if (!match_parent(udev_enumerate, dev))
                 return false;
-        if (!match_tag(udev_enumerate, parent))
+        if (!match_tag(udev_enumerate, dev))
                 return false;
-        if (!match_initialized(udev_enumerate, parent))
+        if (!match_initialized(udev_enumerate, dev))
                 return false;
-        if (!match_property(udev_enumerate, parent))
+        if (!match_property(udev_enumerate, dev))
                 return false;
-        if (!match_sysattr(udev_enumerate, parent))
+        if (!match_sysattr(udev_enumerate, dev))
                 return false;
         return true;
 }
@@ -786,7 +790,7 @@ static void add_parent_devices(struct udev_enumerate *udev_enumerate, const char
                 }
 
                 r = 0;
-                if (parent_matches(udev_enumerate, parent)) {
+                if (test_matches(udev_enumerate, parent, /* test_sysname= */ true)) {
                         listed = set_contains(udev_enumerate->devices_by_syspath, udev_device_get_syspath(parent));
                         if (!listed)
                                 r = syspath_add(udev_enumerate, udev_device_get_syspath(parent));
@@ -820,6 +824,16 @@ static void parents_walked_clear(struct udev_enumerate *udev_enumerate)
         udev_enumerate->parents_walked = NULL;
 }
 
+/* Like relevant_sysfs_subdir() of sd-device's enumerator: the entries of a directory of /sys that may be devices,
+ * directories and symlinks, not files like /sys/class/gpio/export; sysfs fills in d_type. */
+static bool relevant_sysfs_subdir(const struct dirent *de)
+{
+        if (de->d_name[0] == '.')
+                return false;
+
+        return IN_SET(de->d_type, DT_DIR, DT_LNK);
+}
+
 static int scan_dir_and_add_devices(struct udev_enumerate *udev_enumerate,
                                     const char *basedir, const char *subdir1, const char *subdir2)
 {
@@ -842,7 +856,7 @@ static int scan_dir_and_add_devices(struct udev_enumerate *udev_enumerate,
                 char syspath[UTIL_PATH_SIZE];
                 struct udev_device *dev;
 
-                if (dent->d_name[0] == '.')
+                if (!relevant_sysfs_subdir(dent))
                         continue;
 
                 if (!match_sysname(udev_enumerate, dent->d_name))
@@ -853,15 +867,8 @@ static int scan_dir_and_add_devices(struct udev_enumerate *udev_enumerate,
                 if (dev == NULL)
                         continue;
 
-                if (!match_initialized(udev_enumerate, dev))
-                        goto nomatch;
-                if (!match_parent(udev_enumerate, dev))
-                        goto nomatch;
-                if (!match_tag(udev_enumerate, dev))
-                        goto nomatch;
-                if (!match_property(udev_enumerate, dev))
-                        goto nomatch;
-                if (!match_sysattr(udev_enumerate, dev))
+                /* the sysname is tested already */
+                if (!test_matches(udev_enumerate, dev, /* test_sysname= */ false))
                         goto nomatch;
 
                 syspath_add(udev_enumerate, udev_device_get_syspath(dev));
@@ -884,7 +891,7 @@ static int scan_dir(struct udev_enumerate *udev_enumerate, const char *basedir, 
         if (dir == NULL)
                 return -1;
         for (dent = readdir(dir); dent != NULL; dent = readdir(dir)) {
-                if (dent->d_name[0] == '.')
+                if (!relevant_sysfs_subdir(dent))
                         continue;
                 if (!match_subsystem(udev_enumerate, subsystem != NULL ? subsystem : dent->d_name))
                         continue;

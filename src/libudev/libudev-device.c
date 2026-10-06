@@ -282,25 +282,10 @@ static int udev_device_set_subsystem(struct udev_device *udev_device, const char
         return 0;
 }
 
-/**
- * udev_device_get_subsystem:
- * @udev_device: udev device
- *
- * Retrieve the subsystem string of the udev device. The string does not
- * contain any "/".
- *
- * Returns: the subsystem name of the udev device, or #NULL if it can not be determined
- **/
-_public_ const char *udev_device_get_subsystem(struct udev_device *udev_device)
+static const char *device_read_subsystem(struct udev_device *udev_device)
 {
         char subsystem[UTIL_NAME_SIZE];
 
-        if (udev_device == NULL)
-                return NULL;
-        /* Like sd_device_get_subsystem() of systemd, read the uevent file first, so that the property
-         * SUBSYSTEM follows its properties. */
-        if (!udev_device->subsystem_set && !udev_device->info_loaded)
-                udev_device_read_uevent_file(udev_device);
         if (!udev_device->subsystem_set) {
                 udev_device->subsystem_set = true;
                 /* read "subsystem" link */
@@ -326,6 +311,36 @@ _public_ const char *udev_device_get_subsystem(struct udev_device *udev_device)
                 }
         }
         return udev_device->subsystem;
+}
+
+/**
+ * udev_device_get_subsystem:
+ * @udev_device: udev device
+ *
+ * Retrieve the subsystem string of the udev device. The string does not
+ * contain any "/".
+ *
+ * Returns: the subsystem name of the udev device, or #NULL if it can not be determined
+ **/
+_public_ const char *udev_device_get_subsystem(struct udev_device *udev_device)
+{
+        if (udev_device == NULL)
+                return NULL;
+        /* Like sd_device_get_subsystem() of systemd, read the uevent file first, so that the property
+         * SUBSYSTEM follows its properties. */
+        if (!udev_device->subsystem_set && !udev_device->info_loaded)
+                udev_device_read_uevent_file(udev_device);
+        return device_read_subsystem(udev_device);
+}
+
+/* The same subsystem as udev_device_get_subsystem(), without reading the uevent file first, for a device that
+ * is only looked at by the enumerator: the property SUBSYSTEM then comes before the ones of the uevent file,
+ * if it is read later. A scan of all devices would take twice the time if it read their uevent files. */
+const char *udev_device_get_subsystem_without_uevent(struct udev_device *udev_device)
+{
+        if (udev_device == NULL)
+                return NULL;
+        return device_read_subsystem(udev_device);
 }
 
 mode_t udev_device_get_devnode_mode(struct udev_device *udev_device)
