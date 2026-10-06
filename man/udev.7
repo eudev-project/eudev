@@ -633,12 +633,14 @@ and the kernel uses SMACK\&.
 .PP
 \fIATTR{\fR\fI\fIkey\fR\fR\fI}\fR
 .RS 4
-The value that should be written to a sysfs attribute of the event device\&.
+The value that should be written to a sysfs attribute of the event device\&. Unlike systemd, which waits for a reader, a FIFO or a socket is not written, and the assignment fails; the attribute is written without waiting\&.
 .RE
 .PP
 \fISYSCTL{\fR\fI\fIkernel parameter\fR\fR\fI}\fR
 .RS 4
-The value that should be written to kernel parameter\&.
+The value that should be written to kernel parameter\&. Like in systemd, a kernel parameter whose name contains
+\&.\&.
+is not written\&. Unlike systemd, which waits for a reader, only a regular file is written, without waiting, e\&.g\&. not a FIFO; the assignment fails otherwise\&.
 .RE
 .PP
 \fIENV{\fR\fI\fIkey\fR\fR\fI}\fR

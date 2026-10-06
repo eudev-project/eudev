@@ -590,14 +590,20 @@
           <term><varname>ATTR{<replaceable>key</replaceable>}</varname></term>
           <listitem>
             <para>The value that should be written to a sysfs attribute of the
-            event device.</para>
+            event device. Unlike systemd, which waits for a reader, a FIFO or a
+            socket is not written, and the assignment fails; the attribute is
+            written without waiting.</para>
           </listitem>
         </varlistentry>
 
         <varlistentry>
           <term><varname>SYSCTL{<replaceable>kernel parameter</replaceable>}</varname></term>
           <listitem>
-            <para>The value that should be written to kernel parameter.</para>
+            <para>The value that should be written to kernel parameter. Like in
+            systemd, a kernel parameter whose name contains <literal>..</literal>
+            is not written. Unlike systemd, which waits for a reader, only a
+            regular file is written, without waiting, e.g. not a FIFO; the
+            assignment fails otherwise.</para>
           </listitem>
         </varlistentry>
 

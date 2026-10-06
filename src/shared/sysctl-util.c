@@ -26,6 +26,8 @@
 #include <stdio.h>
 #include <limits.h>
 #include <getopt.h>
+#include <fcntl.h>
+#include <sys/stat.h>
 
 #include "log.h"
 #include "util.h"
@@ -62,7 +64,13 @@ char *sysctl_normalize(char *s) {
         return s;
 }
 
+/* Like sysctl_write() of systemd, which writes the entry with write_string_file(). Unlike there, only a regular file
+ * is written, like sysctl_read() reads only regular files, and it is opened with O_NONBLOCK, so that a property
+ * that names something else, e.g. a FIFO, fails with EBADF instead of blocking. */
 int sysctl_write(const char *property, const char *value) {
+        _cleanup_fclose_ FILE *f = NULL;
+        _cleanup_close_ int fd = -1;
+        struct stat st;
         char *p;
 
         assert(property);
@@ -76,7 +84,26 @@ int sysctl_write(const char *property, const char *value) {
 
         log_debug("Setting '%s' to '%s'", p, value);
 
-        return write_string_file(p, value);
+        /* checked before it is opened too, so that e.g. a FIFO without a reader gives EBADF, not ENXIO */
+        if (stat(p, &st) < 0)
+                return -errno;
+        if (!S_ISREG(st.st_mode))
+                return -EBADF;
+
+        fd = open(p, O_WRONLY|O_NOCTTY|O_CLOEXEC|O_NONBLOCK);
+        if (fd < 0)
+                return -errno;
+        if (fstat(fd, &st) < 0)
+                return -errno;
+        if (!S_ISREG(st.st_mode))
+                return -EBADF;
+
+        f = fdopen(fd, "we");
+        if (!f)
+                return -errno;
+        fd = -1;
+
+        return write_string_stream(f, value);
 }
 
 /* Like sysctl_read() of systemd, which reads the entry with read_full_virtual_file(). Unlike there, the file is

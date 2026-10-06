@@ -2571,6 +2571,7 @@ static bool sysattr_is_uevent(const char *sysattr)
 _public_ int udev_device_set_sysattr_value(struct udev_device *udev_device, const char *sysattr, char *value)
 {
         _cleanup_free_ char *v = NULL, *path = NULL, *resolved = NULL, *relative = NULL;
+        struct stat st;
         ssize_t size;
         size_t len;
         int fd, r;
@@ -2619,19 +2620,33 @@ _public_ int udev_device_set_sysattr_value(struct udev_device *udev_device, cons
                 v[--len] = '\0';
 
         /* Do not check the permissions of the attribute, write-only attributes like "remove" are
-         * fine. Let the kernel do it and propagate the error. */
-        fd = open(resolved, O_WRONLY|O_CLOEXEC|O_NOFOLLOW);
-        if (fd < 0)
-                r = -errno;
+         * fine. Let the kernel do it and propagate the error. Unlike systemd, which waits for a reader, do
+         * not write to a FIFO or a socket, e.g. in a directory used as /sys for tests, like the attributes
+         * that are read, see read_virtual_file(): they are refused with EBADF, before they are opened, so
+         * that the open does not fail with ENXIO without a reader of a FIFO, and the file is opened with
+         * O_NONBLOCK, so that it does not block if it is replaced by one meanwhile. */
+        if (stat(resolved, &st) >= 0 && (S_ISFIFO(st.st_mode) || S_ISSOCK(st.st_mode)))
+                r = -EBADF;
         else {
-                size = write(fd, v, len);
-                if (size < 0)
+                fd = open(resolved, O_WRONLY|O_CLOEXEC|O_NOFOLLOW|O_NOCTTY|O_NONBLOCK);
+                if (fd < 0)
                         r = -errno;
-                else if ((size_t) size != len)
-                        r = -EIO;
-                else
-                        r = 0;
-                close(fd);
+                else {
+                        if (fstat(fd, &st) < 0)
+                                r = -errno;
+                        else if (S_ISFIFO(st.st_mode) || S_ISSOCK(st.st_mode))
+                                r = -EBADF;
+                        else {
+                                size = write(fd, v, len);
+                                if (size < 0)
+                                        r = -errno;
+                                else if ((size_t) size != len)
+                                        r = -EIO;
+                                else
+                                        r = 0;
+                        }
+                        close(fd);
+                }
         }
         if (r < 0) {
                 /* On failure, clear cache entry, as we do not know how it fails. */
