@@ -50,7 +50,15 @@ discards the queued events, tells its workers to exit, and waits up to 30 second
 .RS 4
 Detach and run in the background\&. Unless the log level is
 debug, standard input, output and error are connected to
-/dev/null\&.
+/dev/null; then, unlike systemd, which writes them to
+/dev/null, the messages for the console, e\&.g\&. with the
+\fBconsole\fR
+log target of
+\fI$SYSTEMD_LOG_TARGET\fR
+or
+\fIsystemd\&.log_target=\fR
+on the kernel command line, are written to
+/dev/console\&.
 .RE
 .PP
 \fB\-D\fR, \fB\-\-debug\fR

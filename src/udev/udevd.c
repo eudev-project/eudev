@@ -2451,6 +2451,12 @@ int main(int argc, char *argv[]) {
                                 (void) dup2(fd, STDERR_FILENO);
                                 if (fd > STDERR_FILENO)
                                         close(fd);
+
+                                /* Unlike systemd, whose console target then writes to /dev/null, e.g. for
+                                 * systemd.log_target=console on the kernel command line, the console of the
+                                 * log of udevd and its workers is /dev/console from now on. */
+                                log_set_always_reopen_console(true);
+                                log_open();
                         }
                 }
 

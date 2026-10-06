@@ -75,7 +75,12 @@
         <listitem>
           <para>Detach and run in the background. Unless the log level is
           <literal>debug</literal>, standard input, output and error are
-          connected to <filename>/dev/null</filename>.</para>
+          connected to <filename>/dev/null</filename>; then, unlike systemd,
+          which writes them to <filename>/dev/null</filename>, the messages
+          for the console, e.g. with the <constant>console</constant> log
+          target of <varname>$SYSTEMD_LOG_TARGET</varname> or
+          <varname>systemd.log_target=</varname> on the kernel command line,
+          are written to <filename>/dev/console</filename>.</para>
         </listitem>
       </varlistentry>
 

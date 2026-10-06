@@ -55,6 +55,8 @@ static int log_target_max_level[] = {
 };
 
 static int console_fd = STDERR_FILENO;
+/* see log_set_always_reopen_console() */
+static bool always_reopen_console = false;
 static int syslog_fd = -1;
 static int kmsg_fd = -1;
 
@@ -89,19 +91,42 @@ void log_close_console(void) {
         console_fd = -1;
 }
 
+/* The console is standard error, except in PID 1, which keeps standard error only until the console is
+ * closed, and after log_set_always_reopen_console(true), where it is /dev/console. */
 static int log_open_console(void) {
+        int fd;
 
-        if (console_fd >= 0)
+        if (console_fd >= 3 || (console_fd >= 0 && !always_reopen_console))
                 return 0;
 
-        if (getpid() == 1) {
-                console_fd = open_terminal("/dev/console", O_WRONLY|O_NOCTTY|O_CLOEXEC);
-                if (console_fd < 0)
-                        return console_fd;
-        } else
+        if (getpid() != 1 && !always_reopen_console) {
                 console_fd = STDERR_FILENO;
+                return 0;
+        }
 
+        fd = open_terminal("/dev/console", O_WRONLY|O_NOCTTY|O_CLOEXEC);
+        if (fd < 0)
+                return fd;
+
+        /* like fd_move_above_stdio() of systemd, so that log_close_console() closes it */
+        if (fd < 3) {
+                int copy;
+
+                copy = fcntl(fd, F_DUPFD_CLOEXEC, 3);
+                safe_close(fd);
+                if (copy < 0)
+                        return -errno;
+                fd = copy;
+        }
+
+        console_fd = fd;
         return 0;
+}
+
+/* Like log_set_always_reopen_console() of systemd: with true, the console is /dev/console from the next
+ * log_open() on, not standard error; udevd uses it when it connected standard error to /dev/null, see there. */
+void log_set_always_reopen_console(bool b) {
+        always_reopen_console = b;
 }
 
 void log_close_kmsg(void) {
@@ -342,11 +367,13 @@ static int write_to_console(
 
         if (writev(console_fd, iovec, n) < 0) {
 
-                if (errno == EIO && getpid() == 1) {
+                if (errno == EIO && (getpid() == 1 || always_reopen_console)) {
 
                         /* If somebody tried to kick us from our
                          * console tty (via vhangup() or suchlike),
-                         * try to reconnect */
+                         * try to reconnect; in PID 1 like systemd,
+                         * and with /dev/console as the console, see
+                         * log_set_always_reopen_console() */
 
                         log_close_console();
                         log_open_console();

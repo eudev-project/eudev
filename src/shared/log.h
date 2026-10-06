@@ -68,6 +68,8 @@ void log_close_journal(void);
 void log_close_kmsg(void);
 void log_close_console(void);
 
+void log_set_always_reopen_console(bool b);
+
 int log_internal(
                 int level,
                 int error,
