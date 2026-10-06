@@ -2254,7 +2254,6 @@ static int parse_argv(int argc, char *argv[]) {
 int main(int argc, char *argv[]) {
         struct udev *udev;
         sigset_t mask;
-        FILE *f;
         int fd_ctrl = -1;
         int fd_netlink = -1;
         int fd_worker = -1;
@@ -2502,11 +2501,8 @@ int main(int argc, char *argv[]) {
 
         udev_list_node_init(&event_list);
 
-        f = fopen("/dev/kmsg", "w");
-        if (f != NULL) {
-                fprintf(f, "<30>udevd[%u]: starting eudev-" VERSION " (udev " UDEV_VERSION ")\n", getpid());
-                fclose(f);
-        }
+        /* through the log, like the other messages, after the fork with --daemon, with the PID of the daemon */
+        log_info("starting eudev-" VERSION " (udev " UDEV_VERSION ")");
 
         fd_inotify = udev_watch_init(udev);
         if (fd_inotify < 0) {
