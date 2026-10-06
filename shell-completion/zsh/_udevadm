@@ -258,6 +258,9 @@ _udevadm_commands(){
         if (($#cmd)); then
             if (( $+functions[_udevadm_$cmd] )); then
                 _udevadm_$cmd
+            elif [[ $cmd == (help|version) ]]; then
+                # nothing to complete, and nothing to say, after help and version
+                return 1
             else
                 _message "no options for $cmd"
             fi

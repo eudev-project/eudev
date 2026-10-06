@@ -86,11 +86,12 @@ _udevadm() {
     local cur=${COMP_WORDS[COMP_CWORD]} prev=${COMP_WORDS[COMP_CWORD-1]}
 
     # COMP_WORDBREAKS contains "=" by default, which splits "--opt=value" into "--opt", "=" and "value":
-    # complete the value like the argument after "--opt", also when the cursor is right after "="
-    if [[ $cur == = && $prev == --?* ]]; then
+    # complete the value like the argument after "--opt", also when the cursor is right after "=";
+    # "-o=value" is split the same way, see below
+    if [[ $cur == = && $prev == -?* ]]; then
         cur=''
         optval=1
-    elif [[ $prev == = ]] && (( COMP_CWORD >= 2 )) && [[ ${COMP_WORDS[COMP_CWORD-2]} == --?* ]]; then
+    elif [[ $prev == = ]] && (( COMP_CWORD >= 2 )) && [[ ${COMP_WORDS[COMP_CWORD-2]} == -?* ]]; then
         prev=${COMP_WORDS[COMP_CWORD-2]}
         optval=1
     fi
@@ -145,8 +146,10 @@ _udevadm() {
         fi
     done
 
-    # no value for "--opt=" if --opt takes none, or only an optional one, e.g. --wait-for-initialization=SECS
-    if [[ -n $optval ]] && { [[ -z ${verb-} || -z ${ARG_OPTS[$verb]-} ]] ||
+    # no value for "--opt=" if --opt takes none, or only an optional one, e.g. --wait-for-initialization=SECS,
+    # and none for "-o=", which is -o with the argument "=...", or with no argument followed by the option -=,
+    # e.g. "udevadm -d=", not a command after -d
+    if [[ -n $optval ]] && { [[ $prev != --?* || -z ${verb-} || -z ${ARG_OPTS[$verb]-} ]] ||
                              ! __contains_word "$prev" ${OPTS[${ARG_OPTS[$verb]}]}; }; then
         COMPREPLY=()
         return 0
