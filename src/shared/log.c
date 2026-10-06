@@ -427,11 +427,12 @@ static int write_to_syslog(
         return 1;
 }
 
-/* The longest record that /dev/kmsg accepts, including the "<N>" prefix and the newline; the kernel refuses
- * longer ones with EINVAL. Since Linux 6.3 that is PRINTKRB_RECORD_MAX, 1024 bytes; from Linux 3.6 to 6.2 it
- * was LOG_LINE_MAX, 1024 - PREFIX_MAX, i.e. 992 bytes, or 976 bytes with CONFIG_PRINTK_CALLER (Linux 5.1 and
- * later); Linux 3.5 refused records of more than 1024 bytes, and older kernels took any length. */
-#define KMSG_RECORD_MAX 992U
+/* The longest record that /dev/kmsg accepts on every kernel, including the "<N>" prefix and the newline; the
+ * kernel refuses longer ones with EINVAL. Since Linux 6.3 that is PRINTKRB_RECORD_MAX, 1024 bytes; from Linux
+ * 3.6 to 6.2 it was LOG_LINE_MAX, 1024 - PREFIX_MAX, i.e. 992 bytes, but only 976 bytes on the kernels of
+ * Linux 5.1 to 6.2 that are built with CONFIG_PRINTK_CALLER, whose PREFIX_MAX is 48 instead of 32; Linux 3.5
+ * refused records of more than 1024 bytes, and older kernels took any length. */
+#define KMSG_RECORD_MAX 976U
 /* the mark of a message that is cut, to fit into a record of /dev/kmsg, or into the buffer of
  * log_internalv() or log_assert() */
 #define LOG_TRUNCATED "..."
