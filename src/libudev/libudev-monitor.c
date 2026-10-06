@@ -815,14 +815,16 @@ int udev_monitor_send_device(struct udev_monitor *udev_monitor,
         struct udev_list_entry *list_entry;
         uint64_t tag_bloom_bits;
 
-        blen = udev_device_get_properties_monitor_buf(udev_device, &buf);
-        if (blen < 32) {
-                log_debug("device buffer is too small to contain a valid device");
-                return -EINVAL;
-        }
+        /* The header and the payload describe the device the same way, like in systemd: the hashes of the
+         * header are computed first, from the values that the payload is built from below, so that whatever
+         * the getters read on the way, e.g. the uevent file or the database of a device that was not read yet,
+         * is in the payload too. systemd builds the payload first, but device_get_properties_nulstr() reads
+         * all of the device there. Like systemd, a device without a subsystem is not sent. */
 
         /* fill in versioned header */
         val = udev_device_get_subsystem(udev_device);
+        if (!val)
+                return log_debug_errno(ENOENT, "Failed to get device subsystem: %m");
         nlh.filter_subsystem_hash = htonl(util_string_hash32(val));
 
         val = udev_device_get_devtype(udev_device);
@@ -836,6 +838,12 @@ int udev_monitor_send_device(struct udev_monitor *udev_monitor,
         if (tag_bloom_bits > 0) {
                 nlh.filter_tag_bloom_hi = htonl(tag_bloom_bits >> 32);
                 nlh.filter_tag_bloom_lo = htonl(tag_bloom_bits & 0xffffffff);
+        }
+
+        blen = udev_device_get_properties_monitor_buf(udev_device, &buf);
+        if (blen < 32) {
+                log_debug("device buffer is too small to contain a valid device");
+                return -EINVAL;
         }
 
         /* add properties list */
