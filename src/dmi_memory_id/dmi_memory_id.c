@@ -424,7 +424,7 @@ static void dmi_memory_device_size_detail(
                 unsigned slot_num, uint64_t code) {
         /* 7.18.12 */
         /* 7.18.13 */
-        if (!IN_SET(code, 0x0LU, 0xFFFFFFFFFFFFFFFFLU))
+        if (!IN_SET(code, UINT64_C(0), UINT64_MAX))
                 dmi_print_memory_size("MEMORY_DEVICE", attr_suffix, slot_num, code, MEMORY_SIZE_UNIT_BYTES);
 }
 
