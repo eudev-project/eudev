@@ -78,7 +78,7 @@ and
 or an empty file disables them\&. Files that are not regular files are ignored\&. A program that uses libudev, like
 \fBudevd\fR
 and
-\fBudevadm\fR, reads the files once, when it creates its first libudev context\&.
+\fBudevadm\fR, reads the files once, when it creates its first libudev context, and again for the next context only when they could not be read completely, e\&.g\&. when a file could not be opened\&.
 .PP
 The following options can be set:
 .PP

@@ -79,6 +79,8 @@ struct udev {
         int refcount;
         /* the settings of udev.conf, which are read once per process, see udev_conf_get() */
         const struct udev_conf *conf;
+        /* conf, when the files could not be read completely, and it is not kept for later contexts */
+        struct udev_conf *conf_uncached;
         void (*log_fn)(struct udev *udev,
                        int priority, const char *file, int line, const char *fn,
                        const char *format, va_list args);
@@ -135,8 +137,8 @@ void udev_set_conf_warnings_quiet(void) {
  * asked not to, and remembered, so that udevd can warn about it, while the other users of libudev do not
  * complain about the settings of udevd. With error 0, the reason is that the signal of timeout_signal= cannot
  * terminate a process. */
-static void udev_conf_parse_error(struct udev_conf *conf, const char *filename, unsigned line,
-                                  const char *key, const char *value, int error) {
+static int udev_conf_parse_error(struct udev_conf *conf, const char *filename, unsigned line,
+                                 const char *key, const char *value, int error) {
         _cleanup_free_ char *escaped = NULL;
         char *m;
         int r;
@@ -148,11 +150,11 @@ static void udev_conf_parse_error(struct udev_conf *conf, const char *filename, 
         else
                 r = asprintf(&m, "%s:%u: Failed to parse %s=%s, ignoring: %m", filename, line, key, escaped ?: value);
         if (r < 0)
-                return;
+                return -ENOMEM;
 
         if (!conf_warnings_quiet)
                 log_debug("%s", m);
-        (void) strv_consume(&conf->conf_warnings, m);
+        return strv_consume(&conf->conf_warnings, m);
 }
 
 /* Not part of the public API, used by udevd. Parses the value of resolve_names= in udev.conf and of
@@ -170,21 +172,24 @@ int udev_parse_resolve_names(const char *s, int *ret) {
         return 0;
 }
 
-/* Reads the configuration file path into conf; the messages name it filename. */
-static void udev_read_conf(struct udev_conf *conf, const char *path, const char *filename) {
+/* Reads the configuration file path into conf; the messages name it filename. Returns 0, or a negative error when
+ * the file could not be read completely: when it cannot be opened, except when it no longer exists, when reading
+ * it fails, or when out of memory. */
+static int udev_read_conf(struct udev_conf *conf, const char *path, const char *filename) {
         _cleanup_fclose_ FILE *f = NULL;
+        int ret = 0;
 
         f = fopen(path, "re");
+        if (!f && errno != ENOENT)
+                return log_debug_errno(errno, "Failed to open %s, ignoring: %m", filename);
         if (f != NULL) {
                 /* on the heap, to keep the stack small for the programs that call udev_new() */
                 _cleanup_free_ char *line = NULL;
                 unsigned line_nr = 0;
 
                 line = malloc(UTIL_LINE_SIZE);
-                if (!line) {
-                        log_oom_debug();
-                        return;
-                }
+                if (!line)
+                        return log_oom_debug();
 
                 while (fgets(line, UTIL_LINE_SIZE, f)) {
                         size_t len;
@@ -232,11 +237,13 @@ static void udev_read_conf(struct udev_conf *conf, const char *path, const char 
                                         conf->net_altnames = -EINVAL;
                                         free(conf->net_altnames_invalid);
                                         conf->net_altnames_invalid = strdup("");
+                                        if (!conf->net_altnames_invalid)
+                                                RET_GATHER(ret, -ENOMEM);
                                 } else if (streq(key, "children_max") || streq(key, "exec_delay") ||
                                            streq(key, "event_timeout") || streq(key, "resolve_names") ||
                                            streq(key, "timeout_signal"))
                                         /* like systemd's parsers of these values */
-                                        udev_conf_parse_error(conf, filename, line_nr, key, val, -EINVAL);
+                                        RET_GATHER(ret, udev_conf_parse_error(conf, filename, line_nr, key, val, -EINVAL));
                                 continue;
                         }
                         while (isspace((unsigned char) val[len-1]))
@@ -297,6 +304,8 @@ static void udev_read_conf(struct udev_conf *conf, const char *path, const char 
                                 conf->net_altnames = b < 0 ? -EINVAL : b;
                                 free(conf->net_altnames_invalid);
                                 conf->net_altnames_invalid = b < 0 ? strdup(val) : NULL;
+                                if (b < 0 && !conf->net_altnames_invalid)
+                                        RET_GATHER(ret, -ENOMEM);
                                 continue;
                         }
 
@@ -305,6 +314,8 @@ static void udev_read_conf(struct udev_conf *conf, const char *path, const char 
                                  * empty value, e.g. "", resets it */
                                 free(conf->net_naming_scheme);
                                 conf->net_naming_scheme = val[0] != '\0' ? strdup(val) : NULL;
+                                if (val[0] != '\0' && !conf->net_naming_scheme)
+                                        RET_GATHER(ret, -ENOMEM);
                                 continue;
                         }
 
@@ -314,7 +325,7 @@ static void udev_read_conf(struct udev_conf *conf, const char *path, const char 
 
                                 r = safe_atou(val, &n);
                                 if (r < 0)
-                                        udev_conf_parse_error(conf, filename, line_nr, key, val, r);
+                                        RET_GATHER(ret, udev_conf_parse_error(conf, filename, line_nr, key, val, r));
                                 else
                                         conf->children_max = n;
                                 continue;
@@ -326,7 +337,7 @@ static void udev_read_conf(struct udev_conf *conf, const char *path, const char 
 
                                 r = parse_sec(val, &t);
                                 if (r < 0)
-                                        udev_conf_parse_error(conf, filename, line_nr, key, val, r);
+                                        RET_GATHER(ret, udev_conf_parse_error(conf, filename, line_nr, key, val, r));
                                 else if (streq(key, "exec_delay"))
                                         conf->exec_delay_usec = t;
                                 else
@@ -339,7 +350,7 @@ static void udev_read_conf(struct udev_conf *conf, const char *path, const char 
 
                                 r = udev_parse_resolve_names(val, &conf->resolve_names);
                                 if (r < 0)
-                                        udev_conf_parse_error(conf, filename, line_nr, key, val, r);
+                                        RET_GATHER(ret, udev_conf_parse_error(conf, filename, line_nr, key, val, r));
                                 else
                                         conf->resolve_names_set = true;
                                 continue;
@@ -352,15 +363,20 @@ static void udev_read_conf(struct udev_conf *conf, const char *path, const char 
                                  * anything */
                                 sig = signal_from_string(val);
                                 if (sig < 0)
-                                        udev_conf_parse_error(conf, filename, line_nr, key, val, sig);
+                                        RET_GATHER(ret, udev_conf_parse_error(conf, filename, line_nr, key, val, sig));
                                 else if (!signal_terminates(sig))
-                                        udev_conf_parse_error(conf, filename, line_nr, key, val, 0);
+                                        RET_GATHER(ret, udev_conf_parse_error(conf, filename, line_nr, key, val, 0));
                                 else
                                         conf->timeout_signal = sig;
                                 continue;
                         }
                 }
+
+                if (ferror(f))
+                        RET_GATHER(ret, log_debug_errno(errno_or_else(EIO), "Failed to read %s, ignoring: %m", filename));
         }
+
+        return ret;
 }
 
 /* The directories of udev.conf and its drop-ins, in the order of precedence, like CONF_PATHS("udev") of systemd:
@@ -466,17 +482,16 @@ int udev_conf_files(const char *root, ConfFilesFlags flags,
 /* Like config_parse_many_files() of systemd: reads the main configuration file, and then the drop-ins, see
  * udev_conf_files(), into conf; the main file is skipped when it is one of the drop-ins, e.g. a symlink to it,
  * which is read as such. The files are read with their symlinks resolved below root, the messages name them as
- * found. */
-static void udev_read_conf_files(struct udev_conf *conf, const char *root) {
+ * found. Returns 0, or the first error when the files could not be found or read completely, see
+ * udev_read_conf(); conf has the settings read anyway. */
+static int udev_read_conf_files(struct udev_conf *conf, const char *root) {
         ConfFile *main_file = NULL, **dropins = NULL;
         size_t n_dropins = 0, i;
-        int r;
+        int r, ret = 0;
 
         r = udev_conf_files(root, CONF_FILES_QUIET_MISSING, &main_file, NULL, &dropins, &n_dropins);
-        if (r < 0) {
-                log_debug_errno(r, "Failed to find the udev.conf files, ignoring: %m");
-                return;
-        }
+        if (r < 0)
+                return log_debug_errno(r, "Failed to find the udev.conf files, ignoring: %m");
 
         if (main_file) {
                 struct stat st, st_dropin;
@@ -492,14 +507,15 @@ static void udev_read_conf_files(struct udev_conf *conf, const char *root) {
                                 }
 
                 if (main_file)
-                        udev_read_conf(conf, main_file->resolved_path, main_file->original_path);
+                        RET_GATHER(ret, udev_read_conf(conf, main_file->resolved_path, main_file->original_path));
         }
 
         for (i = 0; i < n_dropins; i++)
-                udev_read_conf(conf, dropins[i]->resolved_path, dropins[i]->original_path);
+                RET_GATHER(ret, udev_read_conf(conf, dropins[i]->resolved_path, dropins[i]->original_path));
 
         conf_file_free(main_file);
         conf_file_free_array(dropins, n_dropins);
+        return ret;
 }
 
 static void udev_conf_free_contents(struct udev_conf *conf) {
@@ -508,18 +524,32 @@ static void udev_conf_free_contents(struct udev_conf *conf) {
         strv_free(conf->conf_warnings);
 }
 
+static struct udev_conf *udev_conf_free(struct udev_conf *conf) {
+        if (conf) {
+                udev_conf_free_contents(conf);
+                free(conf);
+        }
+        return NULL;
+}
+
 /* the settings of udev.conf read by the first call of udev_conf_get(), freed only when the process exits */
 static struct udev_conf *udev_conf_cached = NULL;
 
 /* Returns the settings of udev.conf and its drop-ins, which are read by the first call in the process, and reused
  * by the later ones, so that e.g. a program that creates many libudev contexts does not look for and read the
  * files every time; changes of the files are not seen then. Like the first, each later call applies udev_log=,
- * as udev_new() always did. The first calls may run at the same time, e.g. udev_new() in several threads, which
- * libudev allows for different contexts: then each reads the files, and the result that is stored first is
- * used by all of them, with atomic operations, so no locks are needed; the others are freed. Returns NULL only
- * when out of memory. */
-static const struct udev_conf *udev_conf_get(void) {
+ * as udev_new() always did. When the files could not be read completely, e.g. out of memory, or a file that
+ * cannot be opened, the settings that were read are returned in *ret_uncached too, for the caller to free, and
+ * not stored, so that the next call reads the files again. The first calls may run at the same time, e.g.
+ * udev_new() in several threads, which libudev allows for different contexts: then each reads the files, and the
+ * result that is stored first is used by all of them, with atomic operations, so no locks are needed; the others
+ * are freed. Returns NULL only when out of memory. */
+static const struct udev_conf *udev_conf_get(struct udev_conf **ret_uncached) {
         struct udev_conf *conf, *cached = NULL;
+
+        assert(ret_uncached);
+
+        *ret_uncached = NULL;
 
         conf = __atomic_load_n(&udev_conf_cached, __ATOMIC_ACQUIRE);
         if (conf) {
@@ -533,12 +563,15 @@ static const struct udev_conf *udev_conf_get(void) {
                 return NULL;
         *conf = (struct udev_conf) UDEV_CONF_INIT;
 
-        udev_read_conf_files(conf, NULL);
+        if (udev_read_conf_files(conf, NULL) < 0) {
+                /* the failure is logged at debug level already */
+                *ret_uncached = conf;
+                return conf;
+        }
 
         if (!__atomic_compare_exchange_n(&udev_conf_cached, &cached, conf, false, __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE)) {
                 /* another thread was faster, its result is the same */
-                udev_conf_free_contents(conf);
-                free(conf);
+                udev_conf_free(conf);
                 conf = cached;
         }
 
@@ -552,7 +585,8 @@ static const struct udev_conf *udev_conf_get(void) {
  * file, and fills in the default values. The configuration is read
  * by the first call in the process; later calls use the values read
  * then, so changes of the configuration files are not seen by a
- * process that has created a context already.
+ * process that has created a context already. Only when the files
+ * could not be read completely, the next call reads them again.
  *
  * The initial refcount is 1, and needs to be decremented to
  * release the resources of the udev library context.
@@ -561,17 +595,21 @@ static const struct udev_conf *udev_conf_get(void) {
  **/
 _public_ struct udev *udev_new(void) {
         const struct udev_conf *conf;
+        struct udev_conf *uncached;
         struct udev *udev;
 
-        conf = udev_conf_get();
+        conf = udev_conf_get(&uncached);
         if (!conf)
                 return NULL;
 
         udev = new0(struct udev, 1);
-        if (udev == NULL)
+        if (udev == NULL) {
+                udev_conf_free(uncached);
                 return NULL;
+        }
         udev->refcount = 1;
         udev->conf = conf;
+        udev->conf_uncached = uncached;
 
         return udev;
 }
@@ -637,7 +675,7 @@ int udev_read_hwdb_format(const char *root) {
 
         /* do not apply udev_log= of the configuration below the root */
         level = log_get_max_level();
-        udev_read_conf_files(&tmp, root);
+        (void) udev_read_conf_files(&tmp, root);
         log_set_max_level(level);
         udev_conf_free_contents(&tmp);
 
@@ -705,7 +743,9 @@ _public_ struct udev *udev_unref(struct udev *udev) {
         udev->refcount--;
         if (udev->refcount > 0)
                 return udev;
-        /* the settings of udev.conf are kept for later contexts, see udev_conf_get() */
+        /* the settings of udev.conf are kept for later contexts, unless they could not be read completely,
+         * see udev_conf_get() */
+        udev_conf_free(udev->conf_uncached);
         free(udev);
         return NULL;
 }

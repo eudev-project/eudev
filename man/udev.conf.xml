@@ -93,7 +93,8 @@
       or an empty file disables them. Files that are not regular files are
       ignored. A program that uses libudev, like <command>udevd</command> and
       <command>udevadm</command>, reads the files once, when it creates its
-      first libudev context.
+      first libudev context, and again for the next context only when they
+      could not be read completely, e.g. when a file could not be opened.
     </para>
     <para>
       The following options can be set:
