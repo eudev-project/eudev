@@ -35,7 +35,7 @@ if [ -z "${DL_IN_NS:-}" ]; then
         # The device nodes are bind mounts of the host's device nodes, and handling them as root, e.g.
         # applying the default SELinux or SMACK label, would change the host's device nodes.
         if [ "$(id -u)" = 0 ] && [ -z "${DL_ALLOW_ROOT:-}" ]; then
-                echo "not running as root, which would touch the host's device nodes, skipping"
+                echo "running as root would touch the host's device nodes, skipping (DL_ALLOW_ROOT=1 runs it anyway)"
                 exit 77
         fi
         DRIVER=$(realpath "${TEST_UDEV_DEVLINK:-./test-udev-devlink}" 2>/dev/null)
