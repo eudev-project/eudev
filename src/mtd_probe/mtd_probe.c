@@ -60,12 +60,10 @@ static int parse_argv(int argc, char *argv[]) {
                         assert_not_reached("Unknown option");
                 }
 
-        if (argc - optind > 1)
-                return log_error_errno(SYNTHETIC_ERRNO(EINVAL), "Error: unexpected argument.");
+        if (argc - optind != 1)
+                return log_error_errno(SYNTHETIC_ERRNO(EINVAL), "Need exactly one DEVICE argument.");
 
         arg_device = argv[optind];
-        if (!arg_device)
-                return log_error_errno(SYNTHETIC_ERRNO(EINVAL), "DEVICE argument missing.");
 
         return 1;
 }

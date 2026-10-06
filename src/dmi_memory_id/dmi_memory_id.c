@@ -680,6 +680,9 @@ static int parse_argv(int argc, char * const *argv) {
                         assert_not_reached("Unknown option");
                 }
 
+        if (optind < argc)
+                return log_error_errno(SYNTHETIC_ERRNO(EINVAL), "This program takes no arguments.");
+
         return 1;
 }
 
