@@ -55,6 +55,8 @@ static int log_target_max_level[] = {
 };
 
 static int console_fd = STDERR_FILENO;
+/* whether log_open() was called, see log_dispatch() */
+static bool log_opened = false;
 /* see log_set_always_reopen_console() */
 static bool always_reopen_console = false;
 static int syslog_fd = -1;
@@ -274,6 +276,7 @@ static int log_open_internal(void) {
 int log_open(void) {
         int r;
 
+        log_opened = true;
         r = log_open_internal();
 
         /* Like log_setup() of systemd, which eudev's programs do not have: the messages to the console are
@@ -614,7 +617,11 @@ static int log_dispatch(
                 if ((e = strpbrk(buffer, NEWLINE)))
                         *(e++) = 0;
 
-                if (log_target == LOG_TARGET_AUTO)
+                /* Like the auto target of systemd, which logs to the journal or to /dev/kmsg, and to the
+                 * console when they cannot be written; there is no journal here, so /dev/kmsg is opened for
+                 * the message. Like in systemd, where nothing is opened before log_open(), not before it is
+                 * called once: e.g. the warnings of log_parse_environment() go to the console. */
+                if (log_target == LOG_TARGET_AUTO && log_opened)
                         log_open_kmsg();
 
                 if (log_target == LOG_TARGET_SYSLOG_OR_KMSG ||

@@ -2290,16 +2290,20 @@ int main(int argc, char *argv[]) {
          * $SYSTEMD_LOG_LEVEL, as in systemd. Like before the environment was read here, the messages before
          * and while udev.conf is read go to standard error instead, with --debug, and when it is a terminal,
          * unless the environment or the kernel command line sets the target, see log_parse_environment() and
-         * log_target_from_environment(). Unlike systemd, with --debug the debug messages of the parser of
-         * udev.conf are shown, until a udev_log= in it lowers the level; parse_argv() sets the debug level
-         * again. */
+         * log_target_from_environment(); with --debug also then, as parse_argv() sets the console target
+         * anyway. Like in systemd, the warnings of log_parse_environment() itself go to standard error, as
+         * nothing else is opened before log_open(), see log_dispatch(). Unlike systemd, with --debug the
+         * debug messages of the parser of udev.conf are shown, until a udev_log= in it lowers the level;
+         * parse_argv() sets the debug level again. */
         early_console = arg_debug || isatty(STDERR_FILENO);
         log_set_target(early_console ? LOG_TARGET_CONSOLE : LOG_TARGET_AUTO);
         log_parse_environment();
         if (log_target_from_environment())
                 early_console = false;
-        if (arg_debug)
+        if (arg_debug) {
+                log_set_target(LOG_TARGET_CONSOLE);
                 log_set_max_level(LOG_DEBUG);
+        }
         log_open();
 
         /* the warnings about the settings in udev.conf are logged below, once */
