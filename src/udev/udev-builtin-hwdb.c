@@ -26,6 +26,7 @@
 #include <fnmatch.h>
 #include <getopt.h>
 
+#include "options.h"
 #include "udev.h"
 #include "udev-util.h"
 
@@ -164,7 +165,9 @@ static int builtin_hwdb(struct udev_device *dev, int argc, char *argv[], enum ud
         for (;;) {
                 int option;
 
-                option = getopt_long(argc, argv, "f:d:s:p:", options, NULL);
+                /* Like systemd, an invalid option fails the builtin, with the text of systemd's option
+                 * parser, e.g. "udevadm: unrecognized option '--foo'", logged at error level. */
+                option = getopt_long_log(argc, argv, "f:d:s:p:", options);
                 if (option == -1)
                         break;
 
@@ -184,6 +187,9 @@ static int builtin_hwdb(struct udev_device *dev, int argc, char *argv[], enum ud
                 case 'p':
                         prefix = optarg;
                         break;
+
+                case '?':
+                        return -EINVAL;
                 }
         }
 

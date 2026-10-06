@@ -35,6 +35,7 @@
 #include "efivars.h"
 #include "gpt.h"
 #include "id128-util.h"
+#include "options.h"
 #include "udev.h"
 #include "utf8.h"
 
@@ -573,9 +574,9 @@ static int builtin_blkid(struct udev_device *dev, int argc, char *argv[], enum u
         dev_t backing_devno = 0;
 
         static const struct option options[] = {
-                { "offset", required_argument, NULL, 'o' },
                 { "hint",   required_argument, NULL, 'H' },
-                { "noraid", no_argument, NULL, 'R' },
+                { "offset", required_argument, NULL, 'o' },
+                { "noraid", no_argument,       NULL, 'R' },
                 {}
         };
 
@@ -588,7 +589,9 @@ static int builtin_blkid(struct udev_device *dev, int argc, char *argv[], enum u
         for (;;) {
                 int option;
 
-                option = getopt_long(argc, argv, "o:H:R", options, NULL);
+                /* Like systemd, an invalid option fails the builtin, with the text of systemd's option
+                 * parser, e.g. "udevadm: unrecognized option '--foo'", logged at error level. */
+                option = getopt_long_log(argc, argv, "H:o:R", options);
                 if (option == -1)
                         break;
 
@@ -618,6 +621,8 @@ static int builtin_blkid(struct udev_device *dev, int argc, char *argv[], enum u
                 case 'R':
                         noraid = true;
                         break;
+                case '?':
+                        return -EINVAL;
                 }
         }
 
