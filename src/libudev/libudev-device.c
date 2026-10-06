@@ -1167,25 +1167,21 @@ static int udev_device_read_uevent_file(struct udev_device *udev_device)
         if (udev_device->uevent_loaded)
                 return 0;
 
-        filename = strjoin(udev_device->syspath, "/uevent", NULL);
-        if (!filename)
-                return -ENOMEM;
+        /* Like systemd, the file is read once: also a failure is remembered, so that the getters do not try
+         * again every time. */
+        udev_device->uevent_loaded = true;
+
         /* Read like an attribute, with read_virtual_file(), as systemd does, which unlike systemd opens the
          * file with O_NONBLOCK and refuses anything but a regular file, so that e.g. a FIFO named "uevent" in
          * a directory used as /sys for tests does not block. Like in systemd, the content ends at a NUL. */
-        r = read_virtual_file(filename, SIZE_MAX, &uevent, &size);
-        if (r == -EACCES)
-                /* empty uevent files may be write-only */
+        filename = strjoin(udev_device->syspath, "/uevent", NULL);
+        r = filename ? read_virtual_file(filename, SIZE_MAX, &uevent, &size) : -ENOMEM;
+        if (r < 0 && (IN_SET(r, -EACCES, -EPERM) || ERRNO_IS_DEVICE_ABSENT(r)))
+                /* Like systemd: the uevent files may be write-only, the device may be already removed, or
+                 * the device may not have the uevent file. */
                 return 0;
-        if (r == -EBADF) {
-                /* Not a regular file: like systemd, which does not read the file again after any failure,
-                 * remember it, so that the getters do not try again every time. */
-                udev_device->uevent_loaded = true;
-                return log_debug_errno(r, "%s: Failed to read uevent file: %m", udev_device->sysname ?: "n/a");
-        }
         if (r < 0)
-                return r;
-        udev_device->uevent_loaded = true;
+                return log_debug_errno(r, "%s: Failed to read uevent file: %m", udev_device->sysname ?: "n/a");
 
         /* Like systemd, split the lines at "\n" and "\r", and skip empty lines. */
         for (p = uevent;;) {
