@@ -231,7 +231,9 @@
       environment variable, set to a boolean value.</para>
       <para>In the names of the parameters, "-" and "_" are the same, e.g.
       <varname>udev.children-max=</varname> is the same as
-      <varname>udev.children_max=</varname>.</para>
+      <varname>udev.children_max=</varname>. Like systemd, <command>udevd</command> warns
+      about other parameters that start with <varname>udev.</varname>, e.g. misspelled
+      ones, and, in an initrd, with <varname>rd.udev.</varname>, and ignores them.</para>
       <varlistentry>
         <term><varname>udev.log_level=</varname></term>
         <term><varname>rd.udev.log_level=</varname></term>

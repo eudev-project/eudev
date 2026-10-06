@@ -2014,6 +2014,7 @@ static void cmdline_log_flush(void) {
  *   udev.timeout_signal=<signal>              signal sent to workers and programs on a timeout
  *   udev.blockdev_read_only[=<bool>]          mark all block devices read-only when they appear
  * "-" and "_" are the same in the keys, e.g. udev.children-max= is udev.children_max=.
+ * Other keys starting with "udev." get a warning, like in systemd.
  * The messages are logged later, see cmdline_log().
  */
 static int parse_proc_cmdline_item(const char *key, const char *value) {
@@ -2099,6 +2100,13 @@ static int parse_proc_cmdline_item(const char *key, const char *value) {
                         else
                                 arg_trace = r;
                 }
+
+                return 0;
+
+        } else {
+                /* like systemd, e.g. for a misspelled option; in an initrd, the "rd." is stripped above */
+                if (startswith(key, "udev."))
+                        cmdline_log(LOG_WARNING, 0, "Unknown udev kernel command line option \"%s\", ignoring.", key);
 
                 return 0;
         }
