@@ -25,6 +25,7 @@
 #include <errno.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <dirent.h>
 #include <poll.h>
 #include <sys/mman.h>
 #include <sys/socket.h>
@@ -723,7 +724,9 @@ static bool kernel_version_supports_uuid(void)
 
 /* The file in which uevent_trigger_with_uuid() keeps a decided result of its probe for the rest of the boot, on
  * kernels that report a version before 4.13, see uevent_uuid_cache_read(). */
-#define UEVENT_UUID_CACHE UDEV_ROOT_RUN "/udev/uevent-uuid-support"
+#define UEVENT_UUID_CACHE_DIR UDEV_ROOT_RUN "/udev"
+#define UEVENT_UUID_CACHE_NAME "uevent-uuid-support"
+#define UEVENT_UUID_CACHE UEVENT_UUID_CACHE_DIR "/" UEVENT_UUID_CACHE_NAME
 
 /* The boot ID and the release of the running kernel, which a result in UEVENT_UUID_CACHE must match. */
 static int uevent_uuid_cache_key(char **ret_boot_id, char **ret_release)
@@ -755,7 +758,8 @@ static int uevent_uuid_cache_key(char **ret_boot_id, char **ret_release)
 
 /* Reads the result of an earlier probe from UEVENT_UUID_CACHE: 1 if the kernel supports UUIDs, 0 if it does not,
  * or a negative errno if there is none, e.g. -ENOENT, or it is of another boot or another kernel release, which
- * can only be when /run is not a tmpfs (-ESTALE), or it cannot be read. The probe runs once per boot then,
+ * can only be when /run is not a tmpfs (-ESTALE), or it cannot be parsed (-EBADMSG), or it cannot be read; see
+ * uevent_trigger_with_uuid() for the messages. The probe runs once per boot then,
  * instead of once in every udevadm run and in every udevd, which matters on kernels before 4.13, where it waits
  * for a uevent that never comes, see uevent_trigger_with_uuid(). The file is written only by root, as
  * UDEV_ROOT_RUN/udev is. */
@@ -794,10 +798,38 @@ static int uevent_uuid_cache_read(void)
         return streq(file_supported, "1");
 }
 
+/* Removes the temporary files of uevent_uuid_cache_write() that a process left behind when it was killed between
+ * creating one and renaming it, ".#uevent-uuid-support" and six more characters, see tempfn_xxxxxx(). Another
+ * process that writes the file at the same time loses its temporary file then, and keeps its result to itself,
+ * see uevent_trigger_decide_uuid_supported(). */
+static void uevent_uuid_cache_remove_leftovers(void)
+{
+        _cleanup_closedir_ DIR *d = NULL;
+        struct dirent *de;
+
+        d = opendir(UEVENT_UUID_CACHE_DIR);
+        if (!d)
+                return;
+
+        while ((de = readdir(d))) {
+                const char *suffix = startswith(de->d_name, ".#" UEVENT_UUID_CACHE_NAME);
+
+                if (!suffix || strlen(suffix) != 6)
+                        continue;
+
+                if (unlinkat(dirfd(d), de->d_name, 0) < 0)
+                        log_debug_errno(errno, "Failed to remove leftover temporary file %s/%s, ignoring: %m",
+                                        UEVENT_UUID_CACHE_DIR, de->d_name);
+                else
+                        log_debug("Removed leftover temporary file %s/%s.", UEVENT_UUID_CACHE_DIR, de->d_name);
+        }
+}
+
 /* Writes a decided result of the probe to UEVENT_UUID_CACHE, atomically: a temporary file in the same directory,
- * renamed over it. Fails, e.g. with ENOENT or EROFS, when UDEV_ROOT_RUN/udev does not exist or is read-only, or
- * with EACCES when not run by root; it is not created here, the result is then kept only in the process and the
- * processes that share it, see uevent_trigger_share_uuid_supported(). */
+ * renamed over it; leftover temporary files of earlier writes are removed before. Fails, e.g. with ENOENT or
+ * EROFS, when UDEV_ROOT_RUN/udev does not exist or is read-only, or with EACCES when not run by root; it is not
+ * created here, the result is then kept only in the process and the processes that share it, see
+ * uevent_trigger_share_uuid_supported(). */
 static int uevent_uuid_cache_write(int supported)
 {
         _cleanup_free_ char *boot_id = NULL, *release = NULL, *contents = NULL, *temp = NULL;
@@ -815,6 +847,8 @@ static int uevent_uuid_cache_write(int supported)
                            "SUPPORTED=", supported > 0 ? "1" : "0", "\n", NULL);
         if (!contents)
                 return -ENOMEM;
+
+        uevent_uuid_cache_remove_leftovers();
 
         r = fopen_temporary(UEVENT_UUID_CACHE, &f, &temp);
         if (r < 0)
@@ -1229,7 +1263,11 @@ static int uevent_trigger_with_uuid(struct udev *udev, const char *syspath, cons
                         if (r == cached)
                                 log_debug("The kernel %s UUIDs of synthetic uevents, as found out before in this boot, see %s.",
                                           cached ? "supports" : "does not support", UEVENT_UUID_CACHE);
-                } else if (cached != -ENOENT)
+                } else if (cached == -ESTALE)
+                        log_debug("Ignoring %s, which is from another boot or kernel.", UEVENT_UUID_CACHE);
+                else if (cached == -EBADMSG)
+                        log_debug("Ignoring %s, which cannot be parsed.", UEVENT_UUID_CACHE);
+                else if (cached != -ENOENT)
                         log_debug_errno(cached, "Failed to read whether the kernel supports UUIDs of synthetic uevents from %s, ignoring: %m",
                                         UEVENT_UUID_CACHE);
         }
