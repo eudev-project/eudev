@@ -2429,6 +2429,12 @@ int main(int argc, char *argv[]) {
 
         udev_builtin_init(udev);
 
+        /* Create the runtime rules directory before the rules are loaded. Its creation changes no rule, but when
+         * it was created afterwards, the check of the timestamps of the rules directories in the main loop took
+         * it for a change, a few seconds after the start, and reloaded the rules and killed the idle workers. */
+        if (access(UDEV_ROOT_RUN "/udev/rules.d", F_OK) < 0)
+                udev_mkdir_p(UDEV_ROOT_RUN "/udev/rules.d", 0755);
+
         rules = udev_rules_new(udev, arg_resolve_names);
         if (!rules) {
                 r = log_error_errno(ENOMEM, "error reading rules");
@@ -2514,10 +2520,6 @@ int main(int argc, char *argv[]) {
                           IN_DELETE | IN_MOVE | IN_CLOSE_WRITE);
         inotify_add_watch(fd_inotify, UDEV_CONF_DIR "/rules.d",
                           IN_DELETE | IN_MOVE | IN_CLOSE_WRITE);
-
-        if (access(UDEV_ROOT_RUN "/udev/rules.d", F_OK) < 0) {
-                udev_mkdir_p(UDEV_ROOT_RUN "/udev/rules.d", 0755);
-        }
         inotify_add_watch(fd_inotify, UDEV_ROOT_RUN "/udev/rules.d",
                           IN_DELETE | IN_MOVE | IN_CLOSE_WRITE);
 
@@ -2711,10 +2713,13 @@ int main(int argc, char *argv[]) {
                                 is_ctrl = true;
                 }
 
-                /* check for changed config, every 3 seconds at most */
+                /* check for changed config, every 3 seconds at most; like systemd, the reload is logged at the
+                 * debug level, as are the changes of the builtins */
                 if ((now(CLOCK_MONOTONIC) - last_usec) > 3 * USEC_PER_SEC) {
-                        if (udev_rules_check_timestamp(rules))
+                        if (udev_rules_check_timestamp(rules)) {
+                                log_debug("Udev rules need reloading");
                                 reload = true;
+                        }
                         if (udev_builtin_validate(udev))
                                 reload = true;
 
