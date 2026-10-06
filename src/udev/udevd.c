@@ -2435,9 +2435,10 @@ int main(int argc, char *argv[]) {
         if (access(UDEV_ROOT_RUN "/udev/rules.d", F_OK) < 0)
                 udev_mkdir_p(UDEV_ROOT_RUN "/udev/rules.d", 0755);
 
+        errno = 0;
         rules = udev_rules_new(udev, arg_resolve_names);
         if (!rules) {
-                r = log_error_errno(ENOMEM, "error reading rules");
+                r = log_error_errno(errno_or_else(ENOMEM), "Failed to read udev rules: %m");
                 goto exit;
         }
 
@@ -2510,9 +2511,10 @@ int main(int argc, char *argv[]) {
         /* through the log, like the other messages, after the fork with --daemon, with the PID of the daemon */
         log_info("starting eudev-" VERSION " (udev " UDEV_VERSION ")");
 
+        /* logs the error itself, like systemd v261 */
         fd_inotify = udev_watch_init(udev);
         if (fd_inotify < 0) {
-                r = log_error_errno(ENOMEM, "error initializing inotify");
+                r = fd_inotify;
                 goto exit;
         }
         /* watch rules.d paths for changes */
@@ -2525,25 +2527,33 @@ int main(int argc, char *argv[]) {
 
         udev_watch_restore(udev);
 
+        /* Below, the messages of systemd v261 for the same steps of its event loop: the worker notification
+         * socket, the event loop, and the event sources of the control socket, the inotify descriptor and the
+         * device monitor; for the signals, which it adds one by one ("Failed to create SIGINT event source"),
+         * one message for all of them. Each failure exits with status 1. */
+
         /* block and listen to all signals on signalfd */
         sigfillset(&mask);
         sigprocmask(SIG_SETMASK, &mask, &sigmask_orig);
         fd_signal = signalfd(-1, &mask, SFD_NONBLOCK|SFD_CLOEXEC);
         if (fd_signal < 0) {
-                r = log_error_errno(errno, "error creating signalfd");
+                r = log_error_errno(errno, "Failed to create signal event source: %m");
                 goto exit;
         }
 
-        /* unnamed socket from workers to the main daemon */
+        /* unnamed socket from workers to the main daemon, see manager_start_worker_notify() of systemd v261 */
         if (socketpair(AF_LOCAL, SOCK_DGRAM|SOCK_CLOEXEC, 0, worker_watch) < 0) {
-                r = log_error_errno(errno, "error creating socketpair");
+                r = log_debug_errno(errno, "Failed to create notification socket: %m");
+                r = log_error_errno(r, "Failed to prepare worker notification socket: %m");
                 goto exit;
         }
         fd_worker = worker_watch[READ_END];
 
-        r = setsockopt(fd_worker, SOL_SOCKET, SO_PASSCRED, &one, sizeof(one));
-        if (r < 0)
-                return log_error_errno(errno, "could not enable SO_PASSCRED: %m");
+        if (setsockopt(fd_worker, SOL_SOCKET, SO_PASSCRED, &one, sizeof(one)) < 0) {
+                r = log_debug_errno(errno, "Failed to enable SO_PASSCRED on notification socket: %m");
+                r = log_error_errno(r, "Failed to prepare worker notification socket: %m");
+                goto exit;
+        }
 
         ep_ctrl.data.fd = fd_ctrl;
         ep_inotify.data.fd = fd_inotify;
@@ -2553,15 +2563,28 @@ int main(int argc, char *argv[]) {
 
         fd_ep = epoll_create1(EPOLL_CLOEXEC);
         if (fd_ep < 0) {
-                log_error_errno(errno, "error creating epoll fd: %m");
+                r = log_error_errno(errno, "Failed to allocate event loop: %m");
                 goto exit;
         }
-        if (epoll_ctl(fd_ep, EPOLL_CTL_ADD, fd_ctrl, &ep_ctrl) < 0 ||
-            epoll_ctl(fd_ep, EPOLL_CTL_ADD, fd_inotify, &ep_inotify) < 0 ||
-            epoll_ctl(fd_ep, EPOLL_CTL_ADD, fd_signal, &ep_signal) < 0 ||
-            epoll_ctl(fd_ep, EPOLL_CTL_ADD, fd_netlink, &ep_netlink) < 0 ||
-            epoll_ctl(fd_ep, EPOLL_CTL_ADD, fd_worker, &ep_worker) < 0) {
-                log_error_errno(errno, "fail to add fds to epoll: %m");
+        if (epoll_ctl(fd_ep, EPOLL_CTL_ADD, fd_ctrl, &ep_ctrl) < 0) {
+                r = log_error_errno(errno, "Failed to start udev control: %m");
+                goto exit;
+        }
+        if (epoll_ctl(fd_ep, EPOLL_CTL_ADD, fd_inotify, &ep_inotify) < 0) {
+                r = log_error_errno(errno, "Failed to create inotify event source: %m");
+                goto exit;
+        }
+        if (epoll_ctl(fd_ep, EPOLL_CTL_ADD, fd_signal, &ep_signal) < 0) {
+                r = log_error_errno(errno, "Failed to create signal event source: %m");
+                goto exit;
+        }
+        if (epoll_ctl(fd_ep, EPOLL_CTL_ADD, fd_netlink, &ep_netlink) < 0) {
+                r = log_error_errno(errno, "Failed to start device monitor: %m");
+                goto exit;
+        }
+        if (epoll_ctl(fd_ep, EPOLL_CTL_ADD, fd_worker, &ep_worker) < 0) {
+                r = log_debug_errno(errno, "Failed to create notification event source: %m");
+                r = log_error_errno(r, "Failed to prepare worker notification socket: %m");
                 goto exit;
         }
 

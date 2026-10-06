@@ -37,13 +37,18 @@ static int inotify_fd = -1;
 
 /* inotify descriptor, will be shared with rules directory;
  * set to cloexec since we need our children to be able to add
- * watches for us
+ * watches for us; returns it, or a negative errno after logging
+ * the error, like manager_init_inotify() of systemd v261
  */
 int udev_watch_init(struct udev *udev __attribute__((unused))) {
-        inotify_fd = inotify_init1(IN_CLOEXEC);
-        if (inotify_fd < 0)
-                log_error_errno(errno, "inotify_init failed: %m");
-        return inotify_fd;
+        int fd;
+
+        fd = inotify_init1(IN_CLOEXEC);
+        if (fd < 0)
+                return log_error_errno(errno, "Failed to create inotify descriptor: %m");
+
+        inotify_fd = fd;
+        return fd;
 }
 
 /* move any old watches directory out of the way, and then restore

@@ -2806,6 +2806,15 @@ struct udev_rules *udev_rules_new(struct udev *udev, int resolve_names) {
         return udev_rules_new_full(udev, resolve_names, NULL);
 }
 
+/* Frees the rules that could not be loaded, and returns NULL with errno set to the error, so that the callers can
+ * log it, see udev_rules_new_full(). */
+static struct udev_rules *udev_rules_fail(struct udev_rules *rules, int error) {
+        udev_rules_unref(rules);
+        errno = abs(error);
+        return NULL;
+}
+
+/* Returns the loaded rules, or NULL with errno set when they cannot be loaded, e.g. ENOMEM. */
 struct udev_rules *udev_rules_new_full(struct udev *udev, int resolve_names, char * const *extra_dirs) {
         _cleanup_strv_free_ char **dirs = NULL;
         struct udev_rules *rules;
@@ -2816,7 +2825,7 @@ struct udev_rules *udev_rules_new_full(struct udev *udev, int resolve_names, cha
 
         rules = new0(struct udev_rules, 1);
         if (rules == NULL)
-                return NULL;
+                return udev_rules_fail(NULL, ENOMEM);
         rules->udev = udev;
         rules->resolve_names = resolve_names;
         udev_list_init(udev, &file_list, true);
@@ -2824,16 +2833,16 @@ struct udev_rules *udev_rules_new_full(struct udev *udev, int resolve_names, cha
         /* init token array and string buffer */
         rules->tokens = malloc(PREALLOC_TOKEN * sizeof(struct token));
         if (rules->tokens == NULL)
-                return udev_rules_unref(rules);
+                return udev_rules_fail(rules, ENOMEM);
         rules->token_max = PREALLOC_TOKEN;
 
         rules->strbuf = strbuf_new();
         if (!rules->strbuf)
-                return udev_rules_unref(rules);
+                return udev_rules_fail(rules, ENOMEM);
 
         rules->dirs = udev_rules_get_dirs_runtime();
         if (!rules->dirs)
-                return udev_rules_unref(rules);
+                return udev_rules_fail(rules, ENOMEM);
 
         udev_rules_check_timestamp(rules);
 
@@ -2842,12 +2851,12 @@ struct udev_rules *udev_rules_new_full(struct udev *udev, int resolve_names, cha
         if (!strv_isempty(extra_dirs)) {
                 dirs = strv_copy(extra_dirs);
                 if (!dirs)
-                        return udev_rules_unref(rules);
+                        return udev_rules_fail(rules, ENOMEM);
         }
 
         STRV_FOREACH(d, rules->dirs)
                 if (strv_extend(&dirs, *d) < 0)
-                        return udev_rules_unref(rules);
+                        return udev_rules_fail(rules, ENOMEM);
 
         /* Like udev_rules_load() of systemd: only regular files are read, and masks, i.e. empty files and
          * symlinks to /dev/null, hide the files with the same name in the later directories; anything
@@ -2855,8 +2864,8 @@ struct udev_rules *udev_rules_new_full(struct udev *udev, int resolve_names, cha
         r = conf_files_list_strv(&files, ".rules", NULL, CONF_FILES_REGULAR | CONF_FILES_FILTER_MASKED,
                                  (const char* const*) dirs);
         if (r < 0) {
-                log_error_errno(r, "failed to enumerate rules files: %m");
-                return udev_rules_unref(rules);
+                log_debug_errno(r, "Failed to enumerate rules files: %m");
+                return udev_rules_fail(rules, r);
         }
 
         STRV_FOREACH(f, files) {
