@@ -3415,6 +3415,10 @@ struct udev_device *udev_device_shallow_clone(struct udev_device *old_device)
         udev_device_set_syspath(device, udev_device_get_syspath(old_device));
         udev_device_set_subsystem(device, udev_device_get_subsystem(old_device));
         udev_device_set_devnum(device, udev_device_get_devnum(old_device));
+        /* like the device number, the interface index names the database entry of a network interface,
+         * see udev_device_get_id_filename() */
+        if (udev_device_get_ifindex(old_device) > 0)
+                udev_device_set_ifindex(device, udev_device_get_ifindex(old_device));
 
         return device;
 }
@@ -3426,6 +3430,12 @@ struct udev_device *udev_device_clone_with_db(struct udev_device *old_device)
         device = udev_device_shallow_clone(old_device);
         if (!device)
                 return NULL;
+
+        /* Like device_clone_with_db() of systemd, which seals the copy: the uevent file is not read, as the
+         * device may have been removed already, or replaced by another one with the same path, like for the
+         * devices of an event, see udev_device_new_from_nulstr(); the database entry is the one named by the
+         * values of the event, see udev_device_shallow_clone(). */
+        device->uevent_loaded = true;
 
         udev_device_read_db(device);
         udev_device_set_info_loaded(device);
