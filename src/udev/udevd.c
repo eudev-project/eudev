@@ -954,7 +954,7 @@ static int event_queue_insert(struct udev_device *dev) {
 
         event = new0(struct event, 1);
         if (event == NULL)
-                return -1;
+                return log_oom();
 
         event->udev = udev_device_get_udev(dev);
         event->dev = dev;
