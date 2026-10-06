@@ -520,16 +520,17 @@ static void trigger_other_ata_compat_owners(struct udev_device *dev, enum udev_e
         }
 }
 
-/* eudev: the other way round, when the device on bus 0 with target 0 of an ATA port, the owner of the old ATA
- * link of the port, goes away, a lone device left on the port gets the link only at its next event, see
- * handle_scsi_ata(). The rules run path_id for the "remove" event of the SCSI target of that device; trigger a
- * "change" uevent for the block devices below the remaining target, if exactly one remains on the port, unless
- * they finished their event with ID_PATH_ATA_COMPAT already. Their events then find one target on the port
- * and give them the link. The SCSI target is used rather than the block device, because the kernel removes the
- * target after it is done with the device (e.g. after the cache of the disk is flushed), so that the target is
- * gone from sysfs when its event runs, while it may still be there during the "remove" event of the disk. The
- * targets are counted like scsi_host_has_one_target() does, without the removed one, in case its directory is
- * still there (or in test mode). */
+/* eudev: the other way round, when a device of an ATA port goes away, e.g. the device on bus 0 with target 0,
+ * the owner of the old ATA link of the port, or one of two devices behind a port multiplier, a lone device left
+ * on the port gets the link only at its next event, see handle_scsi_ata(). The rules run path_id for the
+ * "remove" event of the SCSI target of every device; trigger a "change" uevent for the block devices below the
+ * remaining target, if exactly one remains on the port, unless they finished their event with
+ * ID_PATH_ATA_COMPAT already, e.g. the owner on bus 0 with target 0. Their events then find one target on the
+ * port and give them the link. The SCSI target is used rather than the block device, because the kernel
+ * removes the target after it is done with the device (e.g. after the cache of the disk is flushed), so that
+ * the target is gone from sysfs when its event runs, while it may still be there during the "remove" event of
+ * the disk. The targets are counted like scsi_host_has_one_target() does, without the removed one, in case its
+ * directory is still there (or in test mode). */
 static void trigger_lone_ata_compat_device(struct udev_device *dev, enum udev_event_mode mode) {
         _cleanup_udev_enumerate_unref_ struct udev_enumerate *e = NULL;
         _cleanup_udev_device_unref_ struct udev_device *atadev = NULL, *targetdev = NULL;
@@ -544,7 +545,7 @@ static void trigger_lone_ata_compat_device(struct udev_device *dev, enum udev_ev
         struct dirent *de;
         int r;
 
-        if (sscanf(udev_device_get_sysname(dev), "target%u:%u:%u", &host, &bus, &id) != 3 || bus != 0 || id != 0)
+        if (sscanf(udev_device_get_sysname(dev), "target%u:%u:%u", &host, &bus, &id) != 3)
                 return;
 
         /* the target is gone from sysfs, so this is the nearest scsi_host above its path, which must be the

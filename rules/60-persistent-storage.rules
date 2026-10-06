@@ -3,10 +3,9 @@
 # persistent storage links: /dev/disk/{by-id,by-uuid,by-label,by-path}
 # scheme based on "Linux persistent device names", 2004, Hannes Reinecke <hare@suse.de>
 
-# eudev: when the SCSI target of the device on bus 0 with target 0 of an ATA port, the owner of the old ATA link
-# of the port (...-ata-<port>), is removed, path_id gives the link to a lone device left on the port, with a
-# "change" uevent
-ACTION=="remove", SUBSYSTEM=="scsi", ENV{DEVTYPE}=="scsi_target", KERNEL=="target*:0:0", IMPORT{builtin}="path_id"
+# eudev: when the SCSI target of a device of an ATA port is removed, path_id gives the old ATA link of the port
+# (...-ata-<port>) to a lone device left on the port that does not have it yet, with a "change" uevent
+ACTION=="remove", SUBSYSTEM=="scsi", ENV{DEVTYPE}=="scsi_target", KERNEL=="target*", IMPORT{builtin}="path_id"
 ACTION=="remove", GOTO="persistent_storage_end"
 ENV{UDEV_DISABLE_PERSISTENT_STORAGE_RULES_FLAG}=="1", GOTO="persistent_storage_end"
 
