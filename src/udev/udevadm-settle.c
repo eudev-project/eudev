@@ -144,7 +144,7 @@ static int adm_settle(struct udev *udev, int argc, char *argv[]) {
                 errno = 0;
                 uctrl = udev_ctrl_new(udev);
                 if (uctrl == NULL) {
-                        log_error_errno(errno > 0 ? errno : ENOMEM, "Failed to initialize udev control: %m");
+                        log_error_errno(errno_or_else(ENOMEM), "Failed to initialize udev control: %m");
                         return EXIT_FAILURE;
                 }
 

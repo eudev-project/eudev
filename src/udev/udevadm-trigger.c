@@ -270,9 +270,10 @@ static int include_parents(struct udev *udev, char ***list) {
 static int add_device_match(struct udev *udev, const char *s, const char *prefix, char ***parents) {
         _cleanup_udev_device_unref_ struct udev_device *dev = NULL;
 
+        errno = 0;
         dev = find_device(udev, s, prefix);
         if (!dev)
-                return log_error_errno(errno > 0 ? errno : ENODEV, "Failed to open the device '%s': %m", s);
+                return log_error_errno(errno_or_else(ENODEV), "Failed to open the device '%s': %m", s);
 
         if (strv_extend(parents, udev_device_get_syspath(dev)) < 0)
                 return log_oom();
@@ -789,9 +790,10 @@ static int adm_trigger(struct udev *udev, int argc, char *argv[]) {
                 bool sent;
                 int timeout;
 
+                errno = 0;
                 uctrl = udev_ctrl_new(udev);
                 if (!uctrl) {
-                        log_error_errno(errno > 0 ? errno : ENOMEM, "Failed to initialize udev control: %m");
+                        log_error_errno(errno_or_else(ENOMEM), "Failed to initialize udev control: %m");
                         return 1;
                 }
 
