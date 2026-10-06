@@ -107,7 +107,9 @@ static int udev_builtin_hwdb_search(struct udev_device *dev, struct udev_device 
         if (!srcdev)
                 srcdev = dev;
 
-        for (d = srcdev; d && !last; d = udev_device_get_parent(d)) {
+        /* Like systemd, the parents of a usb_device are skipped only after a lookup of its modalias, not when it
+         * has none. */
+        for (d = srcdev; d; d = udev_device_get_parent(d)) {
                 const char *dsubsys;
                 const char *modalias = NULL;
 
@@ -137,6 +139,9 @@ static int udev_builtin_hwdb_search(struct udev_device *dev, struct udev_device 
 
                 r = udev_builtin_hwdb_lookup(dev, prefix, modalias, filter, mode);
                 if (r > 0)
+                        break;
+
+                if (last)
                         break;
         }
 
