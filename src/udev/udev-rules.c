@@ -1273,16 +1273,18 @@ invalid:
 
 /* Like IMPORT{file} of systemd-udevd: returns 1 when the file was imported, 0 when it does not exist
  * or could not be read, and the key does not match, or a negative error when it cannot be opened or
- * when out of memory, which stops the processing of the rules for the event. Unlike systemd, which waits
- * for a writer and for data, a file that may block, e.g. a FIFO or a character device, is not read, like a
- * file that cannot be read, see read_virtual_file(); a directory fails to be read with EISDIR as in systemd. */
+ * when out of memory, which stops the processing of the rules for the event. Like in systemd, any file
+ * is read, e.g. a character device: /dev/null reads as empty, and is imported; a directory fails to be read
+ * with EISDIR. Unlike systemd, which waits for a writer and for data, it is read without waiting: a FIFO or
+ * a socket is not read, like a file that cannot be read, see read_virtual_file(), and a file without data,
+ * e.g. a terminal, fails to be read with EAGAIN. */
 static int import_file_into_properties(struct udev_event *event, struct udev_rules *rules, struct token *rule,
                                        struct token *token, const char *import) {
         _cleanup_fclose_ FILE *f = NULL;
         _cleanup_close_ int fd = -1;
         struct stat st;
 
-        /* O_NONBLOCK makes no difference for regular files and directories, and nothing else is read */
+        /* O_NONBLOCK makes no difference for regular files and directories */
         fd = open(import, O_RDONLY|O_NOCTTY|O_CLOEXEC|O_NONBLOCK);
         if (fd < 0) {
                 if (errno == ENOENT)
@@ -1293,7 +1295,7 @@ static int import_file_into_properties(struct udev_event *event, struct udev_rul
         if (fstat(fd, &st) < 0)
                 return log_event_error_errno(event, rules, rule, token, errno, "Failed to open \"%s\": %m", import);
 
-        if (!S_ISREG(st.st_mode) && !S_ISDIR(st.st_mode)) {
+        if (S_ISFIFO(st.st_mode) || S_ISSOCK(st.st_mode)) {
                 /* like read_virtual_file() */
                 log_event_debug_errno(event, rules, rule, token, EBADF, "Failed to read \"%s\", ignoring: %m", import);
                 return 0;

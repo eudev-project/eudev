@@ -744,9 +744,11 @@
                   <para>Import a text file specified as the assigned value, the content
                   of which must be in environment key format. A line may be up to 1 MiB
                   long; a longer line stops the import, and the key is false, while the
-                  properties imported before it are kept. Unlike systemd, which waits for
-                  them, a file that is neither a regular file nor a directory, e.g. a FIFO or
-                  a character device, is not read, and the key is false.</para>
+                  properties imported before it are kept. Like in systemd, a character
+                  device is read too, e.g. <filename>/dev/null</filename> is imported as
+                  empty. Unlike systemd, which waits for a writer and for data, the file is
+                  read without waiting: a FIFO or a socket is not read, and a file without
+                  data, e.g. a terminal, fails to be read; the key is false then.</para>
                 </listitem>
               </varlistentry>
               <varlistentry>
