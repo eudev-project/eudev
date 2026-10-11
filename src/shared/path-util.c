@@ -568,41 +568,6 @@ int path_is_mount_point(const char *t, bool allow_symlink) {
         return fd_is_mount_point(fd);
 }
 
-bool paths_check_timestamp(const char* const* paths, usec_t *timestamp, bool update) {
-        bool changed = false;
-        const char* const* i;
-
-        assert(timestamp);
-
-        if (paths == NULL)
-                return false;
-
-        STRV_FOREACH(i, paths) {
-                struct stat stats;
-                usec_t u;
-
-                if (stat(*i, &stats) < 0)
-                        continue;
-
-                u = timespec_load(&stats.st_mtim);
-
-                /* first check */
-                if (*timestamp >= u)
-                        continue;
-
-                log_debug("timestamp of '%s' changed", *i);
-
-                /* update timestamp */
-                if (update) {
-                        *timestamp = u;
-                        changed = true;
-                } else
-                        return true;
-        }
-
-        return changed;
-}
-
 char *prefix_root(const char *root, const char *path) {
         char *n, *p;
         size_t l;

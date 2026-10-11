@@ -133,7 +133,7 @@ struct udev_rules *udev_rules_new(struct udev *udev, int resolve_names);
  * directories, for 'udevadm test --extra-rules-dir='. */
 struct udev_rules *udev_rules_new_full(struct udev *udev, int resolve_names, char * const *extra_dirs);
 struct udev_rules *udev_rules_unref(struct udev_rules *rules);
-bool udev_rules_check_timestamp(struct udev_rules *rules);
+bool udev_rules_should_reload(struct udev_rules *rules);
 int udev_rules_apply_to_event(struct udev_rules *rules, struct udev_event *event,
                               usec_t timeout_usec,
                               struct udev_list *properties_list);

@@ -150,6 +150,8 @@ static char **device_trigger_args;
  * idle workers, 3 seconds after the event queue became empty, or 0, see main() */
 static usec_t exit_timeout_usec;
 static usec_t idle_timeout_usec;
+/* when the rules were loaded or reloaded, or udevd last checked whether they changed, see manager_check_reload() */
+static usec_t last_usec;
 static struct udev_list properties_list;
 static bool udev_exit;
 static char udevd_ready_string[] = "udevd ready\n";
@@ -1609,6 +1611,31 @@ static void manager_revert(void) {
                 worker_kill(false);
 }
 
+/* Like manager_reload() of systemd with force=false, which its event_queue_start() calls: before the queued
+ * events are started, every 3 seconds at most, checks whether the rules files or the files of the builtins, e.g.
+ * the hardware database, changed, and then kills the idle workers and unloads what changed, which is loaded
+ * again before the events are started, see main(). The rules files changed if their stats did, see
+ * udev_rules_should_reload(); a reload requested with udevadm control or SIGHUP reloads everything. */
+static void manager_check_reload(struct udev *udev) {
+        usec_t now_usec = now(CLOCK_MONOTONIC);
+        bool rules_changed, builtins_changed;
+
+        if (now_usec < usec_add(last_usec, 3 * USEC_PER_SEC))
+                return;
+        last_usec = now_usec;
+
+        rules_changed = udev_rules_should_reload(rules);
+        builtins_changed = udev_builtin_validate(udev);
+        if (!rules_changed && !builtins_changed)
+                return;
+
+        worker_kill(false);
+        if (rules_changed)
+                rules = udev_rules_unref(rules);
+        if (builtins_changed)
+                udev_builtin_exit(udev);
+}
+
 static void manager_set_default_children_max(void) {
         uint64_t cpu_limit, mem_limit, cpu_count = 1;
         int r;
@@ -2484,11 +2511,13 @@ int main(int argc, char *argv[]) {
 
         udev_builtin_init(udev);
 
-        /* Create the runtime rules directory before the rules are loaded. Its creation changes no rule, but when
-         * it was created afterwards, the check of the timestamps of the rules directories in the main loop took
-         * it for a change, a few seconds after the start, and reloaded the rules and killed the idle workers. */
+        /* Create the runtime rules directory, as udevd did when it watched it with inotify, unlike systemd; its
+         * creation is no change of the rules, see manager_check_reload(). */
         if (access(UDEV_ROOT_RUN "/udev/rules.d", F_OK) < 0)
                 udev_mkdir_p(UDEV_ROOT_RUN "/udev/rules.d", 0755);
+
+        /* like systemd, the first check whether the rules changed is 3 seconds after they were loaded */
+        last_usec = now(CLOCK_MONOTONIC);
 
         errno = 0;
         rules = udev_rules_new(udev, arg_resolve_names);
@@ -2568,19 +2597,13 @@ int main(int argc, char *argv[]) {
          * PID of the daemon. */
         log_info("starting eudev-" VERSION " (udev " UDEV_VERSION ")");
 
-        /* logs the error itself, like systemd v261 */
+        /* logs the error itself, like systemd v261; like systemd, the rules directories are not watched, as
+         * the rules files are checked before the queued events are started, see manager_check_reload() */
         fd_inotify = udev_watch_init(udev);
         if (fd_inotify < 0) {
                 r = fd_inotify;
                 goto exit;
         }
-        /* watch rules.d paths for changes */
-        inotify_add_watch(fd_inotify, UDEV_RULES_DIR,
-                          IN_DELETE | IN_MOVE | IN_CLOSE_WRITE);
-        inotify_add_watch(fd_inotify, UDEV_CONF_DIR "/rules.d",
-                          IN_DELETE | IN_MOVE | IN_CLOSE_WRITE);
-        inotify_add_watch(fd_inotify, UDEV_ROOT_RUN "/udev/rules.d",
-                          IN_DELETE | IN_MOVE | IN_CLOSE_WRITE);
 
         udev_watch_restore(udev);
 
@@ -2663,7 +2686,6 @@ int main(int argc, char *argv[]) {
         }
 
         for (;;) {
-                static usec_t last_usec;
                 struct epoll_event ev[8];
                 int fdcount;
                 int timeout, worker_timeout;
@@ -2793,25 +2815,14 @@ int main(int argc, char *argv[]) {
                                 is_ctrl = true;
                 }
 
-                /* check for changed config, every 3 seconds at most; like systemd, the reload is logged at the
-                 * debug level, as are the changes of the builtins */
-                if ((now(CLOCK_MONOTONIC) - last_usec) > 3 * USEC_PER_SEC) {
-                        if (udev_rules_check_timestamp(rules)) {
-                                log_debug("Udev rules need reloading");
-                                reload = true;
-                        }
-                        if (udev_builtin_validate(udev))
-                                reload = true;
-
-                        last_usec = now(CLOCK_MONOTONIC);
-                }
-
-                /* reload requested, HUP signal received, rules changed, builtin changed */
+                /* reload requested or HUP signal received; like systemd, the next check whether the rules
+                 * changed is 3 seconds later */
                 if (reload) {
                         worker_kill(false);
                         rules = udev_rules_unref(rules);
                         udev_builtin_exit(udev);
                         reload = false;
+                        last_usec = now(CLOCK_MONOTONIC);
                 }
 
                 /* event has finished */
@@ -2836,8 +2847,9 @@ int main(int argc, char *argv[]) {
                 if (!udev_exit)
                         manager_requeue_locked_events();
 
-                /* start new events */
+                /* start new events, with the rules and the builtins reloaded first, when they changed */
                 if (!udev_list_node_is_empty(&event_list) && !udev_exit && !stop_exec_queue) {
+                        manager_check_reload(udev);
                         udev_builtin_init(udev);
                         if (rules == NULL)
                                 rules = udev_rules_new(udev, arg_resolve_names);

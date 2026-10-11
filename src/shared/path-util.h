@@ -40,7 +40,6 @@ int fd_is_mount_point(int fd);
 int path_is_mount_point(const char *path, bool allow_symlink);
 int path_get_mnt_id(const char *path, int *ret);
 int dev_is_devtmpfs(void);
-bool paths_check_timestamp(const char* const* paths, usec_t *paths_ts_usec, bool update);
 
 char *prefix_root(const char *root, const char *path);
 

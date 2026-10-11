@@ -38,6 +38,7 @@
 #include "path-util.h"
 #include "conf-files.h"
 #include "fileio.h"
+#include "hashmap.h"
 #include "netif-naming-scheme.h"
 #include "socket-util.h"
 #include "strbuf.h"
@@ -197,9 +198,8 @@ char **udev_rules_get_dirs(void) {
  * position, also when it has several of the paths, like /lib/udev/rules.d and /usr/lib/udev/rules.d on a
  * merged /usr, or a bind mount; it is found out by its device and inode. The directories that do not exist
  * stay in the list, to be looked at later. Returns a new list, or NULL when out of memory. udev_rules_new()
- * looks them up once and keeps them, for loading the rules and for udev_rules_check_timestamp(); when a
- * directory is created or mounted later, its timestamp changes, so that the rules are loaded again, with the
- * directories looked up again. */
+ * looks them up when it loads the rules, and udev_rules_should_reload() every time it looks at the rules files,
+ * so that it finds the files of a directory that is created or mounted later. */
 char **udev_rules_get_dirs_runtime(void) {
         struct stat st[ELEMENTSOF(rules_dirs_all)];
         bool exists[ELEMENTSOF(rules_dirs_all)];
@@ -239,9 +239,8 @@ char **udev_rules_get_dirs_runtime(void) {
 
 struct udev_rules {
         struct udev *udev;
-        /* the directories of the rules, see udev_rules_get_dirs_runtime() */
-        char **dirs;
-        usec_t dirs_ts_usec;
+        /* the stat of every rules file that was read, by its path, see udev_rules_should_reload() */
+        Hashmap *stats_by_path;
         int resolve_names;
 
         /* every key in the rules file becomes a token */
@@ -2600,6 +2599,31 @@ ignore:
         return -1;
 }
 
+/* Like hashmap_put_stats_by_path() of systemd: remembers the stat of the rules file path. */
+static int rules_stats_put(struct udev_rules *rules, const char *path, const struct stat *st) {
+        _cleanup_free_ struct stat *st_copy = NULL;
+        _cleanup_free_ char *path_copy = NULL;
+        int r;
+
+        st_copy = new(struct stat, 1);
+        path_copy = strdup(path);
+        if (!st_copy || !path_copy)
+                return -ENOMEM;
+        *st_copy = *st;
+
+        r = hashmap_ensure_allocated(&rules->stats_by_path, &string_hash_ops);
+        if (r < 0)
+                return r;
+
+        r = hashmap_put(rules->stats_by_path, path_copy, st_copy);
+        if (r < 0)
+                return r;
+
+        path_copy = NULL;
+        st_copy = NULL;
+        return 0;
+}
+
 /* Reads the rules file path. Like systemd's udev_rules_parse_file(), which reads the file it found and
  * uses its original path in the messages and as the file name of its rules, the messages and rules use
  * filename, e.g. the name of a symlink as given to udevadm verify. */
@@ -2611,6 +2635,7 @@ static int parse_file(struct udev_rules *rules, const char *path, const char *fi
         unsigned line_nr = 0, first_line_nr = 0, too_long_line_nr = 0;
         bool ignore_line = false;
         unsigned int i, rule_idx;
+        struct stat st;
         int r;
 
         f = fopen(path, "re");
@@ -2621,11 +2646,21 @@ static int parse_file(struct udev_rules *rules, const char *path, const char *fi
                         return -errno;
         }
 
-        if (null_or_empty_fd(fileno(f))) {
+        if (fstat(fileno(f), &st) < 0)
+                return -errno;
+
+        if (null_or_empty(&st)) {
                 log_debug("Skipping empty file: %s", filename);
                 return 0;
         } else
                 log_debug("Reading rules file: %s", filename);
+
+        /* Like udev_rules_parse_file() of systemd: remember the stat of the file, see udev_rules_should_reload().
+         * Unlike systemd, which then skips the file, its rules are still read when this fails; the rules are
+         * loaded again at the next check then. */
+        r = rules_stats_put(rules, path, &st);
+        if (r < 0)
+                log_warning_errno(r, "Failed to save stat for %s, ignoring: %m", path);
 
         /* Without the name, no rule of the file can be added. Like systemd, which skips the file when out of
          * memory, see udev_rules_new(). */
@@ -2829,7 +2864,7 @@ static struct udev_rules *udev_rules_fail(struct udev_rules *rules, int error) {
 
 /* Returns the loaded rules, or NULL with errno set when they cannot be loaded, e.g. ENOMEM. */
 struct udev_rules *udev_rules_new_full(struct udev *udev, int resolve_names, char * const *extra_dirs) {
-        _cleanup_strv_free_ char **dirs = NULL;
+        _cleanup_strv_free_ char **dirs = NULL, **rules_dirs = NULL;
         struct udev_rules *rules;
         struct udev_list file_list;
         struct token end_token;
@@ -2853,11 +2888,9 @@ struct udev_rules *udev_rules_new_full(struct udev *udev, int resolve_names, cha
         if (!rules->strbuf)
                 return udev_rules_fail(rules, ENOMEM);
 
-        rules->dirs = udev_rules_get_dirs_runtime();
-        if (!rules->dirs)
+        rules_dirs = udev_rules_get_dirs_runtime();
+        if (!rules_dirs)
                 return udev_rules_fail(rules, ENOMEM);
-
-        udev_rules_check_timestamp(rules);
 
         /* Like systemd's udev_rules_load(): the extra directories come first, so that their files
          * override the ones with the same name in the rules directories. */
@@ -2867,7 +2900,7 @@ struct udev_rules *udev_rules_new_full(struct udev *udev, int resolve_names, cha
                         return udev_rules_fail(rules, ENOMEM);
         }
 
-        STRV_FOREACH(d, rules->dirs)
+        STRV_FOREACH(d, rules_dirs)
                 if (strv_extend(&dirs, *d) < 0)
                         return udev_rules_fail(rules, ENOMEM);
 
@@ -2918,7 +2951,7 @@ struct udev_rules *udev_rules_new_full(struct udev *udev, int resolve_names, cha
 struct udev_rules *udev_rules_unref(struct udev_rules *rules) {
         if (rules == NULL)
                 return NULL;
-        strv_free(rules->dirs);
+        hashmap_free_free_free(rules->stats_by_path);
         free(rules->tokens);
         strbuf_cleanup(rules->strbuf);
         free(rules->uids);
@@ -2927,11 +2960,78 @@ struct udev_rules *udev_rules_unref(struct udev_rules *rules) {
         return NULL;
 }
 
-bool udev_rules_check_timestamp(struct udev_rules *rules) {
-        if (!rules)
-                return false;
+/* Like stat_inode_unmodified() of systemd: whether a and b are the same inode with the same contents, as far
+ * as its modification time, its size, and for a device node its device number tell. */
+static bool stat_inode_unmodified(const struct stat *a, const struct stat *b) {
+        return a->st_dev == b->st_dev && a->st_ino == b->st_ino &&
+                ((a->st_mode ^ b->st_mode) & S_IFMT) == 0 &&
+                a->st_mtim.tv_sec == b->st_mtim.tv_sec &&
+                a->st_mtim.tv_nsec == b->st_mtim.tv_nsec &&
+                (!S_ISREG(a->st_mode) || a->st_size == b->st_size) &&
+                (!(S_ISCHR(a->st_mode) || S_ISBLK(a->st_mode)) || a->st_rdev == b->st_rdev);
+}
 
-        return paths_check_timestamp((const char* const*) rules->dirs, &rules->dirs_ts_usec, true);
+/* Like udev_rules_should_reload() of systemd: whether the rules files changed since the rules were read, i.e. a
+ * file was added, removed, masked, or modified, as its stat tells, see parse_file(). A new or removed directory
+ * without rules files, or a changed timestamp of a directory, is no change. The files are listed as
+ * udev_rules_new() lists them. systemd lists every entry with the suffix, and skips only the empty files and the
+ * masks, so that e.g. a directory "x.rules" in a rules directory, whose rules are not read, counts as a change at
+ * every check. */
+bool udev_rules_should_reload(struct udev_rules *rules) {
+        _cleanup_strv_free_ char **dirs = NULL, **files = NULL;
+        struct stat *st_old;
+        unsigned n = 0;
+        char **f;
+        int r;
+
+        if (!rules)
+                return true;
+
+        dirs = udev_rules_get_dirs_runtime();
+        if (!dirs) {
+                r = -ENOMEM;
+                goto fail;
+        }
+
+        r = conf_files_list_strv(&files, ".rules", NULL, CONF_FILES_REGULAR | CONF_FILES_FILTER_MASKED,
+                                 (const char* const*) dirs);
+        if (r < 0)
+                goto fail;
+
+        STRV_FOREACH(f, files) {
+                struct stat st;
+
+                if (stat(*f, &st) < 0) {
+                        if (errno == ENOENT)
+                                continue;
+
+                        r = -errno;
+                        goto fail;
+                }
+
+                /* skipping an empty file, like parse_file() */
+                if (null_or_empty(&st))
+                        continue;
+
+                st_old = hashmap_get(rules->stats_by_path, *f);
+                if (!st_old || !stat_inode_unmodified(st_old, &st))
+                        goto reload;
+                n++;
+        }
+
+        /* a file that was read is gone */
+        if (n != hashmap_size(rules->stats_by_path))
+                goto reload;
+
+        return false;
+
+reload:
+        log_debug("Udev rules need reloading");
+        return true;
+
+fail:
+        log_warning_errno(r, "Failed to get stats of udev rules, ignoring: %m");
+        return true;
 }
 
 /* returns whether the value matches the token's pattern, regardless of the operator */
