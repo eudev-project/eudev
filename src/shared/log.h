@@ -30,11 +30,12 @@ typedef enum LogTarget{
         LOG_TARGET_CONSOLE,
         LOG_TARGET_CONSOLE_PREFIXED,
         LOG_TARGET_KMSG,
-        LOG_TARGET_JOURNAL,
-        LOG_TARGET_JOURNAL_OR_KMSG,
         LOG_TARGET_SYSLOG,
         LOG_TARGET_SYSLOG_OR_KMSG,
-        LOG_TARGET_AUTO, /* console if stderr is tty, JOURNAL_OR_KMSG otherwise */
+        /* /dev/kmsg, unlike in systemd (the journal, or /dev/kmsg, or the console if stderr is a tty) also
+         * when stderr is a tty, once log_open() was called; the console before that, and when /dev/kmsg
+         * cannot be opened or written, see log_dispatch() */
+        LOG_TARGET_AUTO,
         LOG_TARGET_SAFE, /* console if stderr is tty, KMSG otherwise */
         LOG_TARGET_NULL,
         _LOG_TARGET_MAX,
@@ -64,7 +65,6 @@ void log_parse_environment(void);
 bool log_max_level_from_environment(void);
 
 void log_close_syslog(void);
-void log_close_journal(void);
 void log_close_kmsg(void);
 void log_close_console(void);
 
@@ -165,8 +165,6 @@ noreturn void log_assert_failed_unreachable(
 #else
 #  define log_trace(...) do {} while(0)
 #endif
-
-/* This modifies the buffer passed! */
 
 /* log_oom_internal() always returns -ENOMEM; spell it out here, so that
  * the value is known at the call site (e.g. to static analyzers) */
