@@ -186,10 +186,10 @@ static bool db_entry_is_safe(struct udev_device *udev_device, const char *key, c
 
 int udev_device_update_db(struct udev_device *udev_device)
 {
+        _cleanup_free_ char *filename_tmp = NULL;
         bool has_info;
         const char *id;
         char filename[UTIL_PATH_SIZE];
-        char filename_tmp[UTIL_PATH_SIZE];
         FILE *f = NULL;
         int r;
 
@@ -209,24 +209,28 @@ int udev_device_update_db(struct udev_device *udev_device)
                 return 0;
         }
 
-        /* write a database file */
-        strscpyl(filename_tmp, sizeof(filename_tmp), filename, ".tmp", NULL);
-        r = mkdir_parents(filename_tmp, 0755);
+        /* Write a database file. Like systemd, which uses fopen_temporary(), through a temporary file with a
+         * unique name in the same directory, ".#<id>" and six random characters, which is renamed over the
+         * database file: two workers may write the entry of the same device at once, e.g. for events of the
+         * device that arrived out of order, and with a fixed name one of them would write into the file of
+         * the other, and then fail to rename it, as the other renamed it already. */
+        r = mkdir_parents(filename, 0755);
         if (r < 0) {
-                log_debug_errno(r, "unable to create the parent directories of '%s': %m", filename_tmp);
+                log_debug_errno(r, "unable to create the parent directories of '%s': %m", filename);
                 goto fail;
         }
-        f = fopen(filename_tmp, "we");
-        if (f == NULL) {
-                r = log_debug_errno(errno, "unable to create temporary db file '%s': %m", filename_tmp);
+        r = fopen_temporary(filename, &f, &filename_tmp);
+        if (r < 0) {
+                log_debug_errno(r, "unable to create temporary db file for '%s': %m", filename);
                 goto fail;
         }
 
         /*
-         * set 'sticky' bit to indicate that we should not clean the
-         * database when we transition from initramfs to the real root
+         * the temporary file is created with mode 0600; like systemd, set the mode of the database
+         * file, with the 'sticky' bit to indicate that we should not clean the database when we
+         * transition from initramfs to the real root
          */
-        if (udev_device_get_db_persist(udev_device) && fchmod(fileno(f), 01644) < 0) {
+        if (fchmod(fileno(f), udev_device_get_db_persist(udev_device) ? 01644 : 0644) < 0) {
                 r = log_debug_errno(errno, "unable to chmod temporary db file '%s': %m", filename_tmp);
                 goto fail;
         }
@@ -296,7 +300,8 @@ fail:
         /* Like systemd, do not leave the old database file behind when it cannot be updated. */
         if (f != NULL)
                 fclose(f);
-        (void) unlink(filename_tmp);
+        if (filename_tmp)
+                (void) unlink(filename_tmp);
         (void) unlink(filename);
         return r;
 }
