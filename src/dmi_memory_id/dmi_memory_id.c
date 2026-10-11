@@ -238,7 +238,7 @@ static void dmi_memory_device_voltage_value(
         if (code % 100 != 0)
                 printf("MEMORY_DEVICE_%u_%s=%g\n", slot_num, attr_suffix, (double)code / 1000);
         else
-                printf("MEMORY_DEVICE_%u_%s=%.1g\n", slot_num, attr_suffix, (double)code / 1000);
+                printf("MEMORY_DEVICE_%u_%s=%.1f\n", slot_num, attr_suffix, (double)code / 1000);
 }
 
 static void dmi_memory_device_form_factor(unsigned slot_num, uint8_t code) {

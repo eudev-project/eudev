@@ -7,6 +7,9 @@
 # entry (Type 127). They test values that the dumps of real machines do not contain; the expected output
 # of each is in <dump>.txt, see dmi-memory-id-test.sh.
 #
+#   crafted-voltages.bin       minimum, maximum and configured voltage (7.18.x, offsets 0x22, 0x24, 0x26)
+#                              in mV: whole tenths of a volt (DDR, DDR2, DDR3, DDR4, DDR5), DDR3L's 1.35 V,
+#                              whole volts, and 0 (unknown)
 #   crafted-64-bit-sizes.bin   the 64-bit sizes of SMBIOS 3.2 (7.18.12, 7.18.13, offsets 0x34-0x53),
 #                              which take 64 bits also on 32-bit systems: multiples of 4 GiB, values
 #                              whose low 32 bits are all ones, 0 (none) and all ones (unknown)
@@ -70,6 +73,17 @@ def write_dump(path, entries):
 
 def main():
     directory = sys.argv[1] if len(sys.argv) > 1 else os.path.dirname(os.path.abspath(__file__))
+
+    write_dump(os.path.join(directory, 'crafted-voltages.bin'), [
+        dict(locator='DDR4', volts=(1200, 1200, 1200)),
+        dict(locator='DDR3', volts=(1500, 1500, 1500)),
+        dict(locator='DDR3L', volts=(1350, 1500, 1350)),
+        dict(locator='DDR5', volts=(1100, 1100, 1100)),
+        dict(locator='DDR2', volts=(1800, 1800, 1800)),
+        dict(locator='DDR', volts=(2500, 2600, 2500)),
+        dict(locator='whole volts', volts=(1000, 2000, 1000)),
+        dict(locator='unknown', volts=(0, 0, 0)),
+    ])
 
     # (non-volatile, volatile, cache, logical)
     write_dump(os.path.join(directory, 'crafted-64-bit-sizes.bin'), [
