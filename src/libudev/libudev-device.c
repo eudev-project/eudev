@@ -1891,7 +1891,8 @@ _public_ struct udev_device *udev_device_new_from_environment(struct udev *udev)
 /* Like device_new_from_child() of systemd: the parent is the first directory above the device, up to the
  * directories directly below /sys, that is a device itself, see udev_device_new_from_syspath(). The walk
  * stops with ENODEV when there is none, and with any other error of udev_device_new_from_syspath(), e.g.
- * EACCES or ENOMEM. */
+ * EACCES or ENOMEM. Unlike systemd, which resolves every directory again, they are taken as they are, as the
+ * syspath of the device is resolved already, see udev_device_new_from_resolved_syspath(). */
 static int device_new_from_parent(struct udev_device *udev_device, struct udev_device **ret)
 {
         _cleanup_free_ char *path = NULL;
@@ -1909,7 +1910,7 @@ static int device_new_from_parent(struct udev_device *udev_device, struct udev_d
                         return -ENODEV;
                 *pos = '\0';
 
-                parent = udev_device_new_from_syspath(udev_device->udev, path);
+                parent = udev_device_new_from_resolved_syspath(udev_device->udev, path);
                 if (parent) {
                         *ret = parent;
                         return 0;
