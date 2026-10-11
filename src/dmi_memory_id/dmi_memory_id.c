@@ -219,7 +219,8 @@ static void dmi_memory_device_size(unsigned slot_num, uint16_t code) {
 }
 
 static void dmi_memory_device_extended_size(unsigned slot_num, uint32_t code) {
-        uint64_t capacity = (uint64_t) code * 1024 * 1024;
+        /* 7.18.5: bits 30:0 are the size in MiB, bit 31 is reserved. */
+        uint64_t capacity = (uint64_t) (code & 0x7FFFFFFFU) * 1024 * 1024;
 
         printf("MEMORY_DEVICE_%u_SIZE=%"PRIu64"\n", slot_num, capacity);
 }

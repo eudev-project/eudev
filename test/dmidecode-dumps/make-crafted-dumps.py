@@ -10,6 +10,7 @@
 #   crafted-voltages.bin       minimum, maximum and configured voltage (7.18.x, offsets 0x22, 0x24, 0x26)
 #                              in mV: whole tenths of a volt (DDR, DDR2, DDR3, DDR4, DDR5), DDR3L's 1.35 V,
 #                              whole volts, and 0 (unknown)
+#   crafted-extended-size.bin  Extended Size (7.18.5, offset 0x1C) with and without its reserved bit 31
 #   crafted-64-bit-sizes.bin   the 64-bit sizes of SMBIOS 3.2 (7.18.12, 7.18.13, offsets 0x34-0x53),
 #                              which take 64 bits also on 32-bit systems: multiples of 4 GiB, values
 #                              whose low 32 bits are all ones, 0 (none) and all ones (unknown)
@@ -83,6 +84,12 @@ def main():
         dict(locator='DDR', volts=(2500, 2600, 2500)),
         dict(locator='whole volts', volts=(1000, 2000, 1000)),
         dict(locator='unknown', volts=(0, 0, 0)),
+    ])
+
+    write_dump(os.path.join(directory, 'crafted-extended-size.bin'), [
+        dict(locator='bit 31 clear', extended_size=0x00004000),
+        dict(locator='bit 31 set', extended_size=0x80004000),
+        dict(locator='largest', extended_size=0x7FFFFFFF),
     ])
 
     # (non-volatile, volatile, cache, logical)

@@ -138,6 +138,8 @@ DMIDECODE_DUMPS = \
 	dmidecode-dumps/Lenovo-Thinkcentre-m720s.bin.txt \
 	dmidecode-dumps/crafted-64-bit-sizes.bin \
 	dmidecode-dumps/crafted-64-bit-sizes.bin.txt \
+	dmidecode-dumps/crafted-extended-size.bin \
+	dmidecode-dumps/crafted-extended-size.bin.txt \
 	dmidecode-dumps/crafted-voltages.bin \
 	dmidecode-dumps/crafted-voltages.bin.txt \
 	dmidecode-dumps/make-crafted-dumps.py
