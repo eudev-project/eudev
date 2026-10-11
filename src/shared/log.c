@@ -107,8 +107,14 @@ static int log_open_console(void) {
         }
 
         fd = open_terminal("/dev/console", O_WRONLY|O_NOCTTY|O_CLOEXEC);
-        if (fd < 0)
+        if (fd < 0) {
+                /* Unlike systemd, which keeps writing to standard error then: after
+                 * log_set_always_reopen_console(true) standard error is no console, e.g. /dev/null in udevd
+                 * after --daemon; the messages for the console go to /dev/kmsg then, see log_dispatch(). */
+                if (always_reopen_console)
+                        console_fd = -1;
                 return fd;
+        }
 
         /* like fd_move_above_stdio() of systemd, so that log_close_console() closes it */
         if (fd < 3) {
@@ -632,6 +638,7 @@ static int log_dispatch(
                 level = log_facility | LOG_PRI(level);
 
         do {
+                bool kmsg_failed = false;
                 char *e;
                 int k = 0;
 
@@ -669,6 +676,7 @@ static int log_dispatch(
 
                         k = write_to_kmsg(level, error, file, line, func, object_field, object, buffer);
                         if (k < 0) {
+                                kmsg_failed = true;
                                 log_close_kmsg();
                                 log_open_console();
                         }
@@ -676,8 +684,17 @@ static int log_dispatch(
 
                 /* like systemd, a failure to write to the console is ignored, and the error that was
                  * passed is returned */
-                if (k <= 0)
-                        (void) write_to_console(level, error, file, line, func, object_field, object, buffer);
+                if (k <= 0) {
+                        k = write_to_console(level, error, file, line, func, object_field, object, buffer);
+
+                        /* Unlike systemd: when the console is /dev/console, see log_set_always_reopen_console(),
+                         * and it cannot be opened, e.g. in a container, the message goes to /dev/kmsg instead
+                         * of getting lost, unless writing to /dev/kmsg just failed. */
+                        if (k <= 0 && console_fd < 0 && always_reopen_console && !kmsg_failed &&
+                            LOG_PRI(level) <= log_target_max_level[LOG_TARGET_CONSOLE] &&
+                            log_open_kmsg() >= 0)
+                                (void) write_to_kmsg(level, error, file, line, func, object_field, object, buffer);
+                }
 
                 buffer = e;
         } while (buffer);

@@ -58,7 +58,7 @@ log target of
 or
 \fIsystemd\&.log_target=\fR
 on the kernel command line, are written to
-/dev/console\&.
+/dev/console, or, when that cannot be opened, e\&.g\&. in a container, to the kernel log buffer (/dev/kmsg)\&.
 .RE
 .PP
 \fB\-D\fR, \fB\-\-debug\fR

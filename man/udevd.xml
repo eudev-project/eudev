@@ -80,7 +80,9 @@
           for the console, e.g. with the <constant>console</constant> log
           target of <varname>$SYSTEMD_LOG_TARGET</varname> or
           <varname>systemd.log_target=</varname> on the kernel command line,
-          are written to <filename>/dev/console</filename>.</para>
+          are written to <filename>/dev/console</filename>, or, when that
+          cannot be opened, e.g. in a container, to the kernel log buffer
+          (<filename>/dev/kmsg</filename>).</para>
         </listitem>
       </varlistentry>
 

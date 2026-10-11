@@ -2489,7 +2489,8 @@ int main(int argc, char *argv[]) {
 
                                 /* Unlike systemd, whose console target then writes to /dev/null, e.g. for
                                  * systemd.log_target=console on the kernel command line, the console of the
-                                 * log of udevd and its workers is /dev/console from now on. */
+                                 * log of udevd and its workers is /dev/console from now on, or /dev/kmsg
+                                 * when /dev/console cannot be opened, e.g. in a container. */
                                 log_set_always_reopen_console(true);
                                 log_open();
                         }
