@@ -102,7 +102,8 @@ TESTS = \
 	udev-test.pl \
 	rules-test.sh \
 	udev-devlink-test.sh \
-	hwdb-test.sh
+	hwdb-test.sh \
+	dmi-memory-id-test.sh
 
 check_DATA = \
 	test/sys
@@ -123,4 +124,18 @@ EXTRA_DIST = \
 	rules-test.sh \
 	udev-devlink-test.sh \
 	hwdb-test.sh \
-	rule-syntax-check.py
+	dmi-memory-id-test.sh \
+	rule-syntax-check.py \
+	$(DMIDECODE_DUMPS)
+
+# the dumps of dmi-memory-id-test.sh with their expected outputs, and the script that writes the crafted ones
+DMIDECODE_DUMPS = \
+	dmidecode-dumps/HP-Z600.bin \
+	dmidecode-dumps/HP-Z600.bin.txt \
+	dmidecode-dumps/Lenovo-ThinkPad-X280.bin \
+	dmidecode-dumps/Lenovo-ThinkPad-X280.bin.txt \
+	dmidecode-dumps/Lenovo-Thinkcentre-m720s.bin \
+	dmidecode-dumps/Lenovo-Thinkcentre-m720s.bin.txt \
+	dmidecode-dumps/crafted-64-bit-sizes.bin \
+	dmidecode-dumps/crafted-64-bit-sizes.bin.txt \
+	dmidecode-dumps/make-crafted-dumps.py
