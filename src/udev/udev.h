@@ -239,12 +239,14 @@ int udev_ctrl_get_set_trace(struct udev_ctrl_msg *ctrl_msg);
 int udev_ctrl_get_revert(struct udev_ctrl_msg *ctrl_msg);
 
 /* Like log_device_*() of systemd: the message is prefixed with the sysname of the device and ": ", e.g.
- * "sda: ", or with nothing if there is no device or it has no sysname. */
+ * "sda: ", or with nothing if there is no device or it has no sysname. Like there, the error is evaluated
+ * before the sysname is looked up, which may change errno. */
 #define log_device_full_errno(device, level, error, format, ...)                                        \
         ({                                                                                              \
+                int _err = (error);                                                                     \
                 struct udev_device *_dev = (device);                                                    \
                 const char *_sys = _dev ? udev_device_get_sysname(_dev) : NULL;                         \
-                log_full_errno(level, error, "%s%s" format, _sys ?: "", _sys ? ": " : "", ##__VA_ARGS__); \
+                log_full_errno(level, _err, "%s%s" format, _sys ?: "", _sys ? ": " : "", ##__VA_ARGS__); \
         })
 #define log_device_full(device, level, ...) log_device_full_errno(device, level, 0, __VA_ARGS__)
 

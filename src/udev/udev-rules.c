@@ -97,17 +97,19 @@ static unsigned parse_line_nr = 0;
  * the message is about, when there is one, as the text of the token in systemd, e.g.
  * "sda: /usr/lib/udev/rules.d/60-block.rules:14 SUBSYSTEM=="block": ...". For the keys that match the
  * parent devices, e.g. ATTRS{}, the device is the parent device that is checked. rule is the TK_RULE token
- * of the rule, tok the token of the key or NULL. See token_to_string() and event_log_device(). */
+ * of the rule, tok the token of the key or NULL. See token_to_string() and event_log_device(). Like
+ * systemd, the error is evaluated first, so that errno can be passed as it is: the calls that build the
+ * prefix may change it. */
 #define log_event_full_errno(event, rules, rule, tok, level, error, fmt, ...)                     \
         ({                                                                                        \
-                int _level = (level);                                                             \
+                int _err = (error), _level = (level);                                             \
                 struct token *_token = (tok);                                                     \
                 const char *_sysname = udev_device_get_sysname(event_log_device((event), _token)); \
                 _cleanup_free_ char *_key = NULL;                                                 \
                                                                                                   \
                 if (_token && log_get_max_level() >= LOG_PRI(_level))                             \
                         _key = token_to_string((rules), _token);                                  \
-                log_full_errno(_level, error, "%s%s%s:%u %s%s" fmt,                               \
+                log_full_errno(_level, _err, "%s%s%s:%u %s%s" fmt,                                \
                                _sysname ?: "", _sysname ? ": " : "",                              \
                                rules_str(rules, (rule)->rule.filename_off),                       \
                                (rule)->rule.filename_line,                                        \
@@ -3852,10 +3854,12 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
 
                         (void) dump_event(event, cur->key.dump_flags, f);
 
-                        if (fclose(f) != 0)
-                                log_event_warning_errno(event, rules, rule, cur, errno,
+                        if (fclose(f) != 0) {
+                                int error = errno;
+
+                                log_event_warning_errno(event, rules, rule, cur, error,
                                                         "Failed to finalize memory stream, ignoring: %m");
-                        else
+                        } else
                                 log_dump(event->dev, buf);
 
                         log_event_info(event, rules, rule, cur, "DONE");
@@ -4298,7 +4302,9 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                         /* Then, make the path relative again. This also checks if the path being inside of the sysfs. */
                         canonical = realpath(attr, NULL);
                         if (canonical == NULL) {
-                                log_event_error_errno(event, rules, rule, cur, errno,
+                                int error = errno;
+
+                                log_event_error_errno(event, rules, rule, cur, error,
                                                       "Could not chase sysfs attribute \"%s\", ignoring: %m", attr);
                                 break;
                         }
