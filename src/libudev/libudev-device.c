@@ -103,6 +103,8 @@ struct udev_device {
         bool subsystem_set;
         bool devtype_set;
         bool devlinks_uptodate;
+        /* whether envp and monitor_buf hold the current properties, also DEVLINKS, TAGS and CURRENT_TAGS:
+         * false after any change of the properties, the devlinks or the tags */
         bool envp_uptodate;
         bool tags_uptodate;
         bool driver_set;
@@ -2191,6 +2193,7 @@ _public_ struct udev_list_entry *udev_device_get_devlinks_list_entry(struct udev
 void udev_device_cleanup_devlinks_list(struct udev_device *udev_device)
 {
         udev_device->devlinks_uptodate = false;
+        udev_device->envp_uptodate = false;
         udev_list_cleanup(&udev_device->devlinks_list);
 }
 
@@ -2991,6 +2994,7 @@ int udev_device_add_devlink(struct udev_device *udev_device, const char *devlink
         added = !udev_list_entry_get_by_name(udev_list_get_entry(&udev_device->devlinks_list), p);
 
         udev_device->devlinks_uptodate = false;
+        udev_device->envp_uptodate = false;
         list_entry = udev_list_entry_add(&udev_device->devlinks_list, p, NULL);
         if (list_entry == NULL)
                 return -ENOMEM;
@@ -3013,6 +3017,7 @@ int udev_device_remove_devlink(struct udev_device *udev_device, const char *devl
                 return 0;
 
         udev_device->devlinks_uptodate = false;
+        udev_device->envp_uptodate = false;
         udev_list_entry_delete(list_entry);
         return 1;
 }
@@ -3157,6 +3162,7 @@ int udev_device_add_tag(struct udev_device *udev_device, const char *tag, bool b
         }
 
         udev_device->tags_uptodate = false;
+        udev_device->envp_uptodate = false;
         return 0;
 }
 
@@ -3171,6 +3177,7 @@ void udev_device_remove_tag(struct udev_device *udev_device, const char *tag)
         e = udev_list_entry_get_by_name(e, tag);
         if (e) {
                 udev_device->tags_uptodate = false;
+        udev_device->envp_uptodate = false;
                 udev_list_entry_delete(e);
         }
 }
@@ -3182,6 +3189,7 @@ int udev_device_cleanup_tags(struct udev_device *udev_device, struct udev_device
         struct udev_list_entry *e, *tmp, *original_tags = NULL;
 
         udev_device->tags_uptodate = false;
+        udev_device->envp_uptodate = false;
         udev_list_cleanup(&udev_device->current_tags_list);
 
         if (original)
