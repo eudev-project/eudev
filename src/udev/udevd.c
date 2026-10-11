@@ -2449,8 +2449,6 @@ int main(int argc, char *argv[]) {
 
         udev_monitor_set_receive_buffer_size(monitor, 128 * 1024 * 1024);
 
-        log_info("starting version " VERSION " (udev " UDEV_VERSION ")");
-
         udev_event_check_config(udev);
 
         udev_builtin_init(udev);
@@ -2534,7 +2532,8 @@ int main(int argc, char *argv[]) {
 
         udev_list_node_init(&event_list);
 
-        /* through the log, like the other messages, after the fork with --daemon, with the PID of the daemon */
+        /* The only start line: through the log, like the other messages, after the fork with --daemon, with the
+         * PID of the daemon. */
         log_info("starting eudev-" VERSION " (udev " UDEV_VERSION ")");
 
         /* logs the error itself, like systemd v261 */
