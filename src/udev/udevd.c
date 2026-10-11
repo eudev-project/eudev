@@ -526,10 +526,33 @@ static int worker_mark_block_device_read_only(struct udev_device *dev) {
         return 0;
 }
 
+/* Like FORK_DEATHSIG_SIGTERM of systemd's safe_fork(), in a child process of udevd: requests SIGTERM when udevd
+ * exits; on failure, logs at log_level, the error level when systemd uses FORK_LOG, and exits. */
+static void child_set_death_signal(int log_level) {
+        if (prctl(PR_SET_PDEATHSIG, SIGTERM) < 0) {
+                log_full_errno(log_level, errno, "Failed to set death signal: %m");
+                _exit(EXIT_FAILURE);
+        }
+}
+
+/* The same, after child_set_death_signal(): when udevd exited before, the signal was not sent, so the child is not
+ * a child of parent_pid, the PID of udevd before the fork, anymore. Like systemd, raise SIGTERM then, and exit, as
+ * the signal may be blocked. A parent PID of 0 means that udevd is in another PID namespace. */
+static void child_check_parent(pid_t parent_pid) {
+        pid_t ppid = getppid();
+
+        if (ppid == 0 || ppid == parent_pid)
+                return;
+
+        log_debug("Parent died early, raising %s.", signal_to_string(SIGTERM));
+        (void) raise(SIGTERM);
+        _exit(EXIT_FAILURE);
+}
+
 static void worker_spawn(struct event *event) {
         struct udev *udev = event->udev;
         _cleanup_udev_monitor_unref_ struct udev_monitor *worker_monitor = NULL;
-        pid_t pid;
+        pid_t pid, parent_pid;
         int k;
 
         /* listen for new events */
@@ -546,6 +569,7 @@ static void worker_spawn(struct event *event) {
                 return;
         }
 
+        parent_pid = getpid();
         pid = fork();
         switch (pid) {
         case 0: {
@@ -556,6 +580,11 @@ static void worker_spawn(struct event *event) {
                 struct epoll_event ep_signal, ep_monitor;
                 sigset_t mask;
                 int r = 0;
+
+                /* request TERM signal if parent exits, right after the fork, like the workers of systemd, and exit
+                 * if it did already; the signal is blocked, and read from the signalfd below */
+                child_set_death_signal(LOG_DEBUG);
+                child_check_parent(parent_pid);
 
                 /* take initial device from queue */
                 dev = event->dev;
@@ -606,9 +635,6 @@ static void worker_spawn(struct event *event) {
                         r = log_error_errno(errno, "Failed to start device monitor: %m");
                         goto out;
                 }
-
-                /* request TERM signal if parent exits */
-                prctl(PR_SET_PDEATHSIG, SIGTERM);
 
                 /* The worker blocks all signals, and reads SIGTERM and SIGCHLD from the signalfd. Like the
                  * workers of systemd, let another signal that udevd sends on a timeout take its default
@@ -1876,7 +1902,7 @@ static int synthesize_change_one(struct udev_device *dev) {
 }
 
 static int synthesize_change(struct udev_device *dev) {
-        pid_t pid;
+        pid_t pid, parent_pid;
         int r;
 
         if (streq_ptr("block", udev_device_get_subsystem(dev)) &&
@@ -1895,6 +1921,7 @@ static int synthesize_change(struct udev_device *dev) {
                         return 0;
                 }
 
+                parent_pid = getpid();
                 pid = fork();
                 if (pid < 0) {
                         /* Unlike systemd, which then sends no change event at all, re-read the partition
@@ -1907,7 +1934,7 @@ static int synthesize_change(struct udev_device *dev) {
                 if (pid == 0) {
                         /* child */
                         (void) prctl(PR_SET_NAME, "(udev-synth)");
-                        (void) prctl(PR_SET_PDEATHSIG, SIGTERM);
+                        child_set_death_signal(LOG_ERR);
 
                         /* Like FORK_RESET_SIGNALS of systemd: every signal at its default action, and none
                          * blocked, and not the signal mask and the ignored signals that udevd inherited, e.g.
@@ -1923,6 +1950,9 @@ static int synthesize_change(struct udev_device *dev) {
                                 log_error_errno(r, "Failed to reset signal mask: %m");
                                 _exit(EXIT_FAILURE);
                         }
+
+                        /* like systemd, after the signals are reset, so that SIGTERM terminates the child */
+                        child_check_parent(parent_pid);
 
                         /* Like FORK_CLOSE_ALL_FDS and FORK_REOPEN_LOG of systemd: close all file descriptors
                          * above stderr, and open the log again, which is closed first, as its descriptor is
