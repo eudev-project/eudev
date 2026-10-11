@@ -378,6 +378,22 @@ AS_IF([test "x$install_rule_generator" = xyes],
 AM_CONDITIONAL([ENABLE_RULE_GENERATOR], [test "x$install_rule_generator" = xyes])
 
 # ------------------------------------------------------------------------------
+# net-ifnames-default - what happens without net.ifnames= on the kernel command line: with yes, the
+# default, network interfaces are renamed to their predictable names unless net.ifnames=0, and get the
+# alternative names regardless of it; with no, they keep the names the kernel gave them, and get the
+# predictable names and the alternative names only with net.ifnames=1. The variant of
+# 80-net-name-slot.rules and 80-net-altnames.rules that is installed (rules/net-ifnames-no/ for no) follows it.
+# ------------------------------------------------------------------------------
+AC_ARG_WITH([net-ifnames-default],
+	AS_HELP_STRING([--with-net-ifnames-default=yes|no],
+		[without net.ifnames= on the kernel command line, rename network interfaces to their predictable names and assign the alternative names, or keep the kernel names @<:@default: yes@:>@]),
+	[], [with_net_ifnames_default=yes])
+AS_CASE([$with_net_ifnames_default],
+	[yes|no], [],
+	[AC_MSG_ERROR([*** invalid value of --with-net-ifnames-default: $with_net_ifnames_default (yes or no)])])
+AM_CONDITIONAL([NET_IFNAMES_DEFAULT_NO], [test "x$with_net_ifnames_default" = xno])
+
+# ------------------------------------------------------------------------------
 # mtd_probe - autoloads FTL module for mtd devices
 # ------------------------------------------------------------------------------
 AC_ARG_ENABLE([mtd_probe],
@@ -633,4 +649,5 @@ AC_MSG_RESULT([
 	bashcompletiondir:       ${summary_bashcompletiondir}
 	zshcompletiondir:        ${summary_zshcompletiondir}
 	rule generator:          ${install_rule_generator}
+	net.ifnames default:     ${with_net_ifnames_default}
 ])
