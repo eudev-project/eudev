@@ -173,7 +173,7 @@
 
       <para>The string can be prefixed with a lowercase e (e"string\n") to mark the string as
       C-style escaped, see
-      <ulink url="https://en.wikipedia.org/wiki/Escape_sequences_in_C#Table_of_escape_sequences">Escape sequences in C</ulink>.
+      <ulink url="https://en.wikipedia.org/wiki/Escape_sequences_in_C">Escape sequences in C</ulink>.
       For example, e"string\n" is parsed as 7 characters: 6 lowercase letters and a newline.
       This can be useful for writing special characters when a kernel driver requires them.</para>
 
@@ -1328,7 +1328,7 @@ SUBSYSTEM=="net", OPTIONS="log_level=debug"</programlisting></para>
               (<literal>ty</literal>) and the firmware version
               (<literal>fw</literal>), each after its two letter code and followed by
               a colon, e.g.
-              <literal>fi2.0:lv0:rv1.16:sy2019:sd346:mfSTM:vsST33HTPHAHD8:ty1:fw73.4.65536:</literal>.
+              <literal>fi2.0:&#x200B;lv0:&#x200B;rv1.16:&#x200B;sy2019:&#x200B;sd346:&#x200B;mfSTM:&#x200B;vsST33HTPHAHD8:&#x200B;ty1:&#x200B;fw73.4.65536:</literal>.
               <filename>60-tpm2-id.rules</filename> looks up
               <literal>tpm2:</literal> followed by it in the hwdb;
               <filename>60-tpm2.hwdb</filename> sets
@@ -1442,10 +1442,10 @@ SUBSYSTEM=="net", OPTIONS="log_level=debug"</programlisting></para>
 
         <varlistentry>
           <term><varname>ID_NET_NAME_PATH=</varname><replaceable>prefix</replaceable>[<literal>P</literal><replaceable>domain</replaceable>]<literal>p</literal><replaceable>bus</replaceable><literal>s</literal><replaceable>slot</replaceable>[<literal>f</literal><replaceable>function</replaceable>][<replaceable>port</replaceable>][<replaceable>suffix</replaceable>]</term>
-          <term><varname>ID_NET_NAME_PATH=</varname><replaceable>prefix</replaceable><literal>c</literal><replaceable>bus_id</replaceable></term>
-          <term><varname>ID_NET_NAME_PATH=</varname><replaceable>prefix</replaceable><literal>a</literal><replaceable>vendor</replaceable><replaceable>model</replaceable><literal>i</literal><replaceable>instance</replaceable></term>
-          <term><varname>ID_NET_NAME_PATH=</varname><replaceable>prefix</replaceable><literal>i</literal><replaceable>address</replaceable><literal>n</literal><replaceable>port_name</replaceable></term>
-          <term><varname>ID_NET_NAME_PATH=</varname><replaceable>prefix</replaceable><literal>u</literal><replaceable>port</replaceable>...</term>
+          <term><varname>ID_NET_NAME_PATH=</varname>&#x200B;<replaceable>prefix</replaceable><literal>c</literal><replaceable>bus_id</replaceable></term>
+          <term><varname>ID_NET_NAME_PATH=</varname>&#x200B;<replaceable>prefix</replaceable><literal>a</literal><replaceable>vendor</replaceable><replaceable>model</replaceable><literal>i</literal><replaceable>instance</replaceable></term>
+          <term><varname>ID_NET_NAME_PATH=</varname>&#x200B;<replaceable>prefix</replaceable><literal>i</literal><replaceable>address</replaceable><literal>n</literal><replaceable>port_name</replaceable></term>
+          <term><varname>ID_NET_NAME_PATH=</varname>&#x200B;<replaceable>prefix</replaceable><literal>u</literal><replaceable>port</replaceable>...</term>
           <listitem>
             <para>The location of the device: the PCI bus, slot and function
             numbers; the bus ID of an s390 CCW device, without leading zeros;

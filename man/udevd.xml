@@ -210,7 +210,16 @@
 
       <varlistentry>
         <term><option>-h</option>, <option>--help</option></term>
+        <listitem>
+          <para>Print a short help text and exit.</para>
+        </listitem>
+      </varlistentry>
 
+      <varlistentry>
+        <term><option>-V</option>, <option>--version</option></term>
+        <listitem>
+          <para>Print a short version string and exit.</para>
+        </listitem>
       </varlistentry>
     </variablelist>
   </refsect1>

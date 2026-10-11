@@ -1266,7 +1266,7 @@ _\&.
 \fIID_TPM2_MODALIAS=\fR
 .RS 4
 A string that describes the TPM for hwdb lookups\&. It lists the family indicator (fi), level (lv), revision (rv), year (sy) and day of year (sd) of the specification, the manufacturer (mf), the vendor string (vs), the vendor TPM type in hexadecimal (ty) and the firmware version (fw), each after its two letter code and followed by a colon, e\&.g\&.
-fi2\&.0:lv0:rv1\&.16:sy2019:sd346:mfSTM:vsST33HTPHAHD8:ty1:fw73\&.4\&.65536:\&.
+fi2\&.0:\:lv0:\:rv1\&.16:\:sy2019:\:sd346:\:mfSTM:\:vsST33HTPHAHD8:\:ty1:\:fw73\&.4\&.65536:\&.
 60\-tpm2\-id\&.rules
 looks up
 tpm2:
@@ -1374,7 +1374,7 @@ The label the firmware provides for an on\-board PCI device\&. It is not used as
 The PCI slot number of the device, as provided by the firmware; the IBM PowerVM VIO slot number; the Xen netfront VIF number\&.
 .RE
 .PP
-\fIID_NET_NAME_PATH=\fR\fIprefix\fR[P\fIdomain\fR]p\fIbus\fRs\fIslot\fR[f\fIfunction\fR][\fIport\fR][\fIsuffix\fR], \fIID_NET_NAME_PATH=\fR\fIprefix\fRc\fIbus_id\fR, \fIID_NET_NAME_PATH=\fR\fIprefix\fRa\fIvendor\fR\fImodel\fRi\fIinstance\fR, \fIID_NET_NAME_PATH=\fR\fIprefix\fRi\fIaddress\fRn\fIport_name\fR, \fIID_NET_NAME_PATH=\fR\fIprefix\fRu\fIport\fR\&.\&.\&.
+\fIID_NET_NAME_PATH=\fR\fIprefix\fR[P\fIdomain\fR]p\fIbus\fRs\fIslot\fR[f\fIfunction\fR][\fIport\fR][\fIsuffix\fR], \fIID_NET_NAME_PATH=\fR\:\fIprefix\fRc\fIbus_id\fR, \fIID_NET_NAME_PATH=\fR\:\fIprefix\fRa\fIvendor\fR\fImodel\fRi\fIinstance\fR, \fIID_NET_NAME_PATH=\fR\:\fIprefix\fRi\fIaddress\fRn\fIport_name\fR, \fIID_NET_NAME_PATH=\fR\:\fIprefix\fRu\fIport\fR\&.\&.\&.
 .RS 4
 The location of the device: the PCI bus, slot and function numbers; the bus ID of an s390 CCW device, without leading zeros; the ACPI name of an ARM64 platform device; the address and port name of a netdevsim device; the port chain of a USB device on a USB host controller that is not a PCI device\&.
 .RE
@@ -1676,5 +1676,5 @@ is set at run\-time, and its value identifies a file in the file system, then th
 .IP " 1." 4
 Escape sequences in C
 .RS 4
-\%https://en.wikipedia.org/wiki/Escape_sequences_in_C#Table_of_escape_sequences
+\%https://en.wikipedia.org/wiki/Escape_sequences_in_C
 .RE
