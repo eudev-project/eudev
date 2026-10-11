@@ -22,7 +22,6 @@
 .SH "NAME"
 udev \- Dynamic device management
 .SH "DESCRIPTION"
-.PP
 udev supplies the system software with device events, manages permissions of device nodes, may create additional symlinks in the
 /dev
 directory and may rename network interfaces\&. The kernel usually just assigns unpredictable device names based on the order of discovery\&. Meaningful symlinks or network device names provide a way to reliably identify devices based on their properties or current configuration\&.
@@ -32,7 +31,6 @@ The udev daemon,
 .PP
 All device information udev processes is stored in the udev database and sent out to possible event subscribers\&. Access to all stored data and the event sources is provided by the library libudev\&.
 .SH "RULES FILES"
-.PP
 The udev rules are read from the files located in the system rules directories
 /lib/udev/rules\&.d
 (additionally
@@ -1112,7 +1110,6 @@ $
 character itself\&.
 .RE
 .SH "BUILT\-IN COMMANDS"
-.PP
 Built\-in commands are run with
 \fIIMPORT{builtin}\fR
 and
@@ -1122,7 +1119,6 @@ lists the available builtins, and
 \fBudevadm test\-builtin\fR
 runs one on a device and prints the properties it sets\&. The builtins and properties described here are compatible with systemd\-udevd\&.
 .SS "blkid"
-.PP
 \fBblkid\fR
 [\fB\-\-offset=\fR\fIbytes\fR] [\fB\-\-hint=\fR\fIname\fR=\fIvalue\fR] [\fB\-\-noraid\fR] probes a block device for file systems and partition tables with libblkid and sets
 \fIID_FS_*\fR
@@ -1195,7 +1191,6 @@ EFI variable\&. systemd then sets up a loop device with the sector size of
 to expose the partitions; eudev only sets the property, and ships no rule that sets up the loop device\&.
 .RE
 .SS "factory_reset"
-.PP
 \fBfactory_reset status\fR
 sets
 \fIID_FACTORY_RESET=\fR
@@ -1257,7 +1252,6 @@ The checks are done in the order listed\&. If the state cannot be determined, e\
 \fIsystemd\&.factory_reset=\fR
 has a value that is not a boolean or os\-release cannot be read, the property is not set\&.
 .SS "tpm2_id"
-.PP
 \fBtpm2_id identify\fR, which
 60\-tpm2\-id\&.rules
 runs on
@@ -1293,7 +1287,6 @@ with
 or
 \fIRUN\fR, is then ignored with an error message saying so\&.
 .SH "NETWORK INTERFACE NAMING"
-.PP
 For network interfaces, the
 \fBnet_id\fR
 builtin, which is imported by
@@ -1441,7 +1434,6 @@ b\fInumber\fR
 A Broadcom bus (BCMA) core, unless it is 0\&.
 .RE
 .SS "Naming schemes"
-.PP
 New versions add new kinds of names and improve existing ones, which changes the names of some devices\&. The naming logic of the
 \fBnet_id\fR
 builtin of a given version is called a naming scheme, and it can be selected with
@@ -1621,7 +1613,6 @@ Note that a naming scheme only fixes the rules; the names may still change when 
 phys_port_name
 attribute\&.
 .SS "Limiting the use of sysfs attributes"
-.PP
 With the systemd naming schemes, the sysfs attributes used for a name can be restricted with properties of the device the attribute belongs to\&.
 \fIID_NET_NAME_ALLOW=0\fR
 disallows all attributes that are not explicitly allowed, and
@@ -1644,7 +1635,6 @@ net:naming:drvirtio_net:*
 .RE
 .\}
 .SH "HARDWARE DATABASE FILES"
-.PP
 The hwdb files are read from the files located in the system hwdb directory
 /usr/lib/udev/hwdb\&.d, the local administration directory
 /etc/udev/hwdb\&.d, and any other directory in the
@@ -1680,7 +1670,6 @@ and compiled to a binary database located at
 \fBUDEV_HWDB_BIN\fR
 is set at run\-time, and its value identifies a file in the file system, then the binary database located under this name will be used\&. During runtime only the binary database is used\&.
 .SH "SEE ALSO"
-.PP
 \fBudevd\fR(8),
 \fBudevadm\fR(8)
 .SH "NOTES"

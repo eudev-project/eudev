@@ -27,7 +27,6 @@ systemd-hwdb \- hardware database management tool
 .HP \w'\fBsystemd\-hwdb\ \fR\fB[options]\fR\fB\ query\ \fR\fB\fImodalias\fR\fR\ 'u
 \fBsystemd\-hwdb \fR\fB[options]\fR\fB query \fR\fB\fImodalias\fR\fR
 .SH "DESCRIPTION"
-.PP
 \fBsystemd\-hwdb\fR
 expects a command and command specific arguments\&. It manages the binary hardware database\&.
 .PP
@@ -40,7 +39,7 @@ in the format configured with
 in
 \fBudev.conf\fR(5)\&.
 .SH "OPTIONS"
-.PP
+
 \fB\-\-usr\fR
 .RS 4
 Generate in the udev library directory, e\&.g\&.
@@ -68,13 +67,11 @@ Print a short version string and exit\&.
 Print a short help text and exit\&.
 .RE
 .SS "systemd\-hwdb [\fIoptions\fR] update"
-.PP
 Update the binary database\&. If no hwdb files are found, the binary database is removed\&. A directory of hwdb files that does not exist is skipped, but if one exists and cannot be read, e\&.g\&. because it is not a directory, or a hwdb file cannot be read, the update fails, and the binary database is kept as it is\&. systemd skips such a directory or file\&.
 .SS "systemd\-hwdb [\fIoptions\fR] query \fIMODALIAS\fR"
-.PP
 Query database and print result\&.
 .SH "ENVIRONMENT"
-.PP
+
 \fI$SYSTEMD_HWDB_UPDATE_BYPASS\fR
 .RS 4
 If set to a true value,
@@ -100,7 +97,6 @@ reads before the ones of the system, unless
 is given\&.
 .RE
 .SH "SEE ALSO"
-.PP
 \fBhwdb\fR(7),
 \fBudevadm\fR(8),
 \fBudev.conf\fR(5)

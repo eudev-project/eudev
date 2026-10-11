@@ -49,12 +49,11 @@ udevadm \- udev management tool
 .HP \w'\fBudevadm\ lock\ \fR\fB[options]\fR\fB\ \fR\fB\fIcommand\fR\fR\fB\&.\&.\&.\fR\ 'u
 \fBudevadm lock \fR\fB[options]\fR\fB \fR\fB\fIcommand\fR\fR\fB\&.\&.\&.\fR
 .SH "DESCRIPTION"
-.PP
 \fBudevadm\fR
 expects a command and command specific options\&. It controls the runtime behavior of
 \fBudev\fR, requests kernel events, manages the event queue, and provides simple debugging mechanisms\&.
 .SH "OPTIONS"
-.PP
+
 \fB\-d\fR, \fB\-\-debug\fR
 .RS 4
 Print debug messages to standard error\&. This option is implied in
@@ -74,7 +73,6 @@ Print version number\&.
 Print help text\&.
 .RE
 .SS "udevadm info [\fIoptions\fR] [\fIdevpath\fR|\fIfile\fR|\fIid\fR...]"
-.PP
 Queries the udev database for device information stored in the udev database\&. It can also query the properties of a device from its sysfs representation to help creating udev rules that match this device\&.
 .PP
 \fB\-q\fR, \fB\-\-query=\fR\fB\fITYPE\fR\fR
@@ -301,7 +299,6 @@ The generated output shows the current device database entry in a terse format\&
 .if d an-trap .it 1 an-trap
 .nr an-no-space-flag 1
 .nr an-break-flag 1
-.br
 .B Table\ \&1.\ \&udevadm info output prefixes
 .TS
 allbox tab(:);
@@ -405,7 +402,6 @@ T}
 .TE
 .sp 1
 .SS "udevadm trigger [\fIoptions\fR] [\fIdevpath\fR|\fIfile\fR|\fIid\fR...]"
-.PP
 Request device events from the kernel\&. Primarily used to replay events at system coldplug time\&.
 .PP
 Each event is triggered with a random UUID, which the kernel passes on in the
@@ -666,7 +662,6 @@ J:
 field of
 \fBudevadm info\fR\&.
 .SS "udevadm settle [\fIoptions\fR]"
-.PP
 Watches the udev event queue, and exits if all current events are handled\&.
 .PP
 \fB\-t\fR, \fB\-\-timeout=\fR\fB\fISEC\fR\fR
@@ -693,7 +688,6 @@ Print version\&.
 Print help text\&.
 .RE
 .SS "udevadm control \fIcommand\fR"
-.PP
 Modify the internal state of the running udev daemon\&. All options are parsed before the commands are sent to the daemon, and the timeout applies to all of them\&. Like in systemd, the commands are sent in a fixed order, whatever their order on the command line:
 \fB\-\-revert\fR,
 \fB\-\-log\-level=\fR,
@@ -812,7 +806,6 @@ Print version\&.
 Print help text\&.
 .RE
 .SS "udevadm monitor [\fIoptions\fR]"
-.PP
 Listens to the kernel uevents and events sent out by a udev rule and prints the devpath of the event to the console\&. It can be used to analyze the event timing, by comparing the timestamps of the kernel uevent and the udev event\&.
 .PP
 \fB\-k\fR, \fB\-\-kernel\fR
@@ -851,7 +844,6 @@ Print version\&.
 Print help text\&.
 .RE
 .SS "udevadm hwdb [\fIoptions\fR]"
-.PP
 Maintain the hardware database index in
 /etc/udev/hwdb\&.bin\&.
 .PP
@@ -915,7 +907,6 @@ Print version\&.
 Print help text\&.
 .RE
 .SS "udevadm test [\fIoptions\fR] [\fIdevpath\fR|\fIfile\fR|\fIid\fR]"
-.PP
 Simulate a udev event run for the given device, and print debug output\&.
 .PP
 The device may be given as its path in
@@ -1026,7 +1017,6 @@ Print version\&.
 Print help text\&.
 .RE
 .SS "udevadm test\-builtin [\fIoptions\fR] [\fIcommand\fR] [\fIdevpath\fR|\fIfile\fR|\fIid\fR]"
-.PP
 Run a built\-in command
 \fICOMMAND\fR
 for device
@@ -1066,7 +1056,6 @@ Print version\&.
 Print help text\&.
 .RE
 .SS "udevadm verify [\fIoptions\fR] [\fIfile\fR...]"
-.PP
 Verify syntactic, semantic, and stylistic correctness of udev rules files\&.
 .PP
 Positional arguments can be used to specify one or more files to check\&. Each argument must be an absolute path to a udev rules file or a directory that contains rules files, or a file name of udev rules file (e\&.g\&.
@@ -1136,7 +1125,6 @@ Print version\&.
 Print help text\&.
 .RE
 .SS "udevadm cat [\fIoptions\fR] [\fIfile\fR...]"
-.PP
 Show udev rules files or udev\&.conf\&.
 .PP
 Positional arguments can be used to specify one or more files to show\&. Each argument must be an absolute path to a udev rules file or a directory that contains rules files, or a file name of udev rules file (e\&.g\&.
@@ -1185,7 +1173,6 @@ Print version\&.
 Print help text\&.
 .RE
 .SS "udevadm wait [\fIoptions\fR] \fIdevice|syspath\fR..."
-.PP
 Wait for devices or device symlinks being created and initialized by
 \fBudevd\fR\&. Each device path must start with
 /dev/
@@ -1234,7 +1221,6 @@ Print version\&.
 Print help text\&.
 .RE
 .SS "udevadm lock [\fIoptions\fR] \fIcommand\fR..."
-.PP
 \fBudevadm lock\fR
 takes an (advisory) exclusive lock on a block device (or all specified devices), as per
 \m[blue]\fBLocking Block Device Access\fR\m[]\&\s-2\u[2]\d\s+2
@@ -1309,7 +1295,6 @@ Print version\&.
 Print help text\&.
 .RE
 .SH "ENVIRONMENT"
-.PP
 When
 \fBudevadm\fR
 has no controlling terminal, e\&.g\&. when it is run by
@@ -1667,7 +1652,6 @@ is used the same way when
 is not set\&. Both are ignored by programs that run with elevated privileges, e\&.g\&. setuid\&.
 .RE
 .SH "INITIALIZED DEVICES"
-.PP
 Initialized devices are those for which at least one udev rule already completed execution \(en for any action but
 remove
 \(em that set a property or other device setting (and thus has an entry in the udev device database)\&. Devices are no longer considered initialized if a
@@ -1685,7 +1669,6 @@ programs, the device is not yet considered initialized by
 and
 \fBudevadm info \-\-wait\-for\-initialization\fR\&.
 .SH "SEE ALSO"
-.PP
 \fBudev\fR(7),
 \fBudevd\fR(8)
 .SH "NOTES"

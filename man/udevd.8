@@ -22,12 +22,10 @@
 .SH "NAME"
 udevd \- Device event managing daemon
 .SH "SYNOPSIS"
-.PP
 udevd
 .HP \w'\fB/sbin/udevd\fR\ 'u
 \fB/sbin/udevd\fR [\fB\-\-daemon\fR] [\fB\-\-debug\fR] [\fB\-\-ready\-notify=\fR] [\fB\-\-children\-max=\fR] [\fB\-\-exec\-delay=\fR] [\fB\-\-event\-timeout=\fR] [\fB\-\-resolve\-names=early|late|never\fR] [\fB\-\-timeout\-signal=\fR] [\fB\-\-version\fR] [\fB\-\-help\fR]
 .SH "DESCRIPTION"
-.PP
 \fBudevd\fR
 listens to kernel uevents\&. For every event, udevd executes matching instructions specified in udev rules\&. See
 \fBudev\fR(7)\&.
@@ -45,7 +43,7 @@ or
 discards the queued events, tells its workers to exit, and waits up to 30 seconds for the events being processed\&. A worker that has not finished its event 5 seconds later is killed with
 \fBSIGKILL\fR\&.
 .SH "OPTIONS"
-.PP
+
 \fB\-d\fR, \fB\-\-daemon\fR
 .RS 4
 Detach and run in the background\&. Unless the log level is
@@ -174,7 +172,7 @@ in
 .RS 4
 .RE
 .SH "KERNEL COMMAND LINE"
-.PP
+
 Parameters starting with "rd\&." will be read when
 \fBudevd\fR
 is used in an initrd, and are ignored otherwise, also by
@@ -395,7 +393,6 @@ is used the same way when
 \fI$UDEV_PROC_CMDLINE\fR
 is not set\&.
 .SH "ENVIRONMENT"
-.PP
 Each of the following settings is read from
 \fI$UDEV_LOG_\fR\fI\fINAME\fR\fR, e\&.g\&.
 \fI$UDEV_LOG_LEVEL\fR, and, like in systemd, from
@@ -507,7 +504,6 @@ A boolean, true by default\&. If true, like in systemd, at most 200 messages in 
 Too many messages being logged to kmsg, ignoring\&. If false, the messages written to kmsg are not rate limited\&.
 .RE
 .SH "SEE ALSO"
-.PP
 \fBudev.conf\fR(5),
 \fBudev\fR(7),
 \fBudevadm\fR(8)

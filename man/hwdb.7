@@ -22,10 +22,8 @@
 .SH "NAME"
 hwdb \- Hardware Database
 .SH "DESCRIPTION"
-.PP
 The hardware database is a key\-value store for associating modalias\-like keys to udev\-property\-like values\&. It is used primarily by udev to add the relevant properties to matching devices, but it can also be queried directly\&.
 .SH "HARDWARE DATABASE FILES"
-.PP
 The hwdb files are read from the files located in the system hwdb directory
 /usr/lib/udev/hwdb\&.d, the local administration directory
 /etc/udev/hwdb\&.d, and the directories in the
@@ -111,7 +109,7 @@ The content of all hwdb files is read by
 /usr/lib/udev/hwdb\&.bin
 if you want ship the compiled database in an immutable image\&. During runtime, only the binary database is used\&.
 .SH "ENVIRONMENT"
-.PP
+
 \fI$UDEV_HWDB_PATH\fR
 .RS 4
 Additional directories of hwdb files, separated by colons, which
@@ -122,7 +120,6 @@ and
 \fB\-\-root=\fR\&. A relative directory is relative to that root directory, or else to the current directory\&. Only the compilation of the database reads them\&.
 .RE
 .SH "EXAMPLES"
-.PP
 \fBExample\ \&1.\ \&General syntax of hwdb files\fR
 .sp
 .if n \{\
@@ -200,7 +197,6 @@ PROPERTY_WITH_SPACES=some string
 .RE
 .\}
 .SH "SEE ALSO"
-.PP
 \fBudevadm\fR(8),
 \fBsystemd-hwdb\fR(8)
 (if installed)

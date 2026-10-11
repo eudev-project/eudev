@@ -21,7 +21,6 @@ MANPAGES = \
 	hwdb.7 \
 	udev.7 \
 	udev.conf.5 \
-	udev.conf.d.5 \
 	udevd.8 \
 	udevadm.8
 
@@ -35,3 +34,12 @@ dist_man_MANS = \
 
 EXTRA_DIST += \
 	systemd-hwdb.8
+
+# The further names of the pages, the other refnames of their XML pages, are symbolic links to them, as
+# custom-man.xsl writes no ".so" pages for them.
+install-data-hook:
+	$(MKDIR_P) $(DESTDIR)$(man5dir)
+	cd $(DESTDIR)$(man5dir) && rm -f udev.conf.d.5 && $(LN_S) udev.conf.5 udev.conf.d.5
+
+uninstall-hook:
+	rm -f $(DESTDIR)$(man5dir)/udev.conf.d.5
