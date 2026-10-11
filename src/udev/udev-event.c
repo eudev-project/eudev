@@ -588,6 +588,7 @@ size_t udev_event_apply_format(struct udev_event *event,
         return size;
 }
 
+/* Runs the program in the child, with argv and envp; cmd is the command for the messages. */
 static int spawn_exec(struct udev_event *event __attribute__((unused)),
                       const char *cmd, char *const argv[], char **envp,
                       int fd_stdout, int fd_stderr) {
@@ -633,9 +634,14 @@ static int spawn_exec(struct udev_event *event __attribute__((unused)),
         execve(argv[0], argv, envp);
 
         /* exec failed */
-        log_error_errno(errno, "failed to execute '%s' '%s': %m", argv[0], cmd);
+        r = -errno;
+        {
+                _cleanup_free_ char *escaped = log_escape(LOG_ERR, argv[0]);
 
-        return -errno;
+                log_error_errno(r, "failed to execute '%s' '%s': %m", escaped ?: argv[0], cmd);
+        }
+
+        return r;
 }
 
 /* Like Spawn of systemd: a program that udev_event_spawn() runs, and its timeouts, which, like in systemd, are
@@ -643,6 +649,7 @@ static int spawn_exec(struct udev_event *event __attribute__((unused)),
  * third of that time. */
 struct spawn {
         struct udev_event *event;
+        /* the command, escaped for the messages, see log_escape() */
         const char *cmd;
         pid_t pid;
         usec_t cmd_birth_usec;
@@ -960,7 +967,9 @@ int udev_build_argv(struct udev *udev __attribute__((unused)), char *cmd, int *r
 
                 /* leave room for the terminating NULL */
                 if (argc >= UDEV_ARGV_MAX - 1) {
-                        log_error("too many arguments in command, ignoring the rest: '%s'", r);
+                        _cleanup_free_ char *escaped = log_escape(LOG_ERR, r);
+
+                        log_error("too many arguments in command, ignoring the rest: '%s'", escaped ?: r);
                         break;
                 }
 
@@ -1051,7 +1060,7 @@ int udev_event_spawn(struct udev_event *event,
         int outpipe[2] = {-1, -1};
         int errpipe[2] = {-1, -1};
         pid_t pid;
-        _cleanup_free_ char *arg = NULL;
+        _cleanup_free_ char *arg = NULL, *escaped = NULL;
         char *argv[UDEV_ARGV_MAX];
         char program[UTIL_PATH_SIZE];
         const char *helper = NULL;
@@ -1065,6 +1074,12 @@ int udev_event_spawn(struct udev_event *event,
         assert(cmd);
         assert(result || result_size == 0);
 
+        /* the command in the messages, e.g. of a substituted value of a rule, escaped like the values in the
+         * other messages */
+        escaped = log_escape(LOG_ERR, cmd);
+        if (escaped)
+                spawn.cmd = escaped;
+
         /* The words are written over a copy of the command, on the heap, like the argv of systemd, to keep
          * the stack small. The commands come from buffers of UTIL_LINE_SIZE, which the copy was before. */
         arg = strndup(cmd, UTIL_LINE_SIZE - 1);
@@ -1076,7 +1091,7 @@ int udev_event_spawn(struct udev_event *event,
                 helper = test_mode_helper(argv[0]);
 
         if (event->event_mode == EVENT_UDEVADM_TEST && !helper) {
-                log_debug("Running in test mode, skipping execution of '%s'.", cmd);
+                log_debug("Running in test mode, skipping execution of '%s'.", spawn.cmd);
                 if (result_size > 0)
                         result[0] = '\0';
                 if (ret_truncated)
@@ -1096,7 +1111,7 @@ int udev_event_spawn(struct udev_event *event,
 
                         log_device_warning(event->dev, "The event already takes longer (%s) than the timeout (%s), skipping execution of '%s'.",
                                            format_timespan(buf, sizeof(buf), age_usec, 1),
-                                           format_timespan(buf2, sizeof(buf2), timeout_usec, 1), cmd);
+                                           format_timespan(buf2, sizeof(buf2), timeout_usec, 1), spawn.cmd);
                         return -ETIME;
                 }
 
@@ -1108,7 +1123,7 @@ int udev_event_spawn(struct udev_event *event,
          * lock, unlock or eject the media, which the rules ask for with --lock-media. */
         if (helper && streq(helper, "cdrom_id")) {
                 if (argc + 1 >= UDEV_ARGV_MAX) {
-                        log_error("Too many arguments, not running '%s' in test mode.", cmd);
+                        log_error("Too many arguments, not running '%s' in test mode.", spawn.cmd);
                         return -E2BIG;
                 }
 
@@ -1120,7 +1135,7 @@ int udev_event_spawn(struct udev_event *event,
         }
 
         if (isempty(argv[0])) {
-                log_error("Invalid command '%s'", cmd);
+                log_error("Invalid command '%s'", spawn.cmd);
                 return -EINVAL;
         }
 
@@ -1172,14 +1187,14 @@ int udev_event_spawn(struct udev_event *event,
                         errpipe[READ_END] = -1;
                 }
 
-                log_debug("starting '%s'", cmd);
+                log_debug("starting '%s'", spawn.cmd);
 
-                spawn_exec(event, cmd, argv, envp,
+                spawn_exec(event, spawn.cmd, argv, envp,
                            outpipe[WRITE_END], errpipe[WRITE_END]);
 
                 _exit(2 );
         case -1:
-                log_error_errno(errno, "fork of '%s' failed: %m", cmd);
+                log_error_errno(errno, "fork of '%s' failed: %m", spawn.cmd);
                 err = -1;
                 goto out;
         default:
@@ -1340,12 +1355,15 @@ static void netif_bring_up(int sk, const char *name) {
  * name is taken, for the caller to log, e.g. for the temporary name of netif_tmp_name(). */
 static int rename_netif_dev_fromname_toname(struct udev_event *event, const char *oldname, const char *name,
                                             usec_t wait_until, bool quiet_eexist, char ret_name[IFNAMSIZ]) {
+        _cleanup_free_ char *escaped = NULL;
         int r;
         int sk;
         int altname_dropped;
         struct ifreq ifr;
 
-        log_debug("changing net interface name from '%s' to '%s'\n",oldname,name);
+        /* the requested name, e.g. of NAME=, before it is checked */
+        escaped = log_escape(LOG_ERR, name);
+        log_debug("changing net interface name from '%s' to '%s'\n", oldname, escaped ?: name);
 
         if (ret_name && ret_name != oldname)
                 strscpy(ret_name, IFNAMSIZ, oldname);
@@ -1355,9 +1373,9 @@ static int rename_netif_dev_fromname_toname(struct udev_event *event, const char
         if (!ifname_valid(name)) {
                 if (strlen(name) >= IFNAMSIZ)
                         return log_error_errno(EINVAL, "Error changing net interface name %s to %s, the name is longer than %i characters: %m",
-                                               oldname, name, IFNAMSIZ - 1);
+                                               oldname, escaped ?: name, IFNAMSIZ - 1);
                 return log_error_errno(EINVAL, "Error changing net interface name %s to %s, the name is not a valid interface name: %m",
-                                       oldname, name);
+                                       oldname, escaped ?: name);
         }
 
         sk = socket(PF_INET, SOCK_DGRAM, 0);
@@ -1476,7 +1494,9 @@ static const char *netif_new_name(struct udev_event *event) {
 
         if (FLAGS_SET(naming_scheme_init(event->udev)->flags, NAMING_REPLACE_STRICTLY) &&
             !ifname_valid(event->name)) {
-                log_warning("Invalid network interface name, ignoring: %s", event->name);
+                _cleanup_free_ char *escaped = log_escape(LOG_WARNING, event->name);
+
+                log_warning("Invalid network interface name, ignoring: %s", escaped ?: event->name);
                 return NULL;
         }
 
@@ -1821,9 +1841,12 @@ int udev_event_execute_rules(struct udev_event *event,
                                                   sysname, tmpname);
                         }
 #endif
-                        if (event->name != NULL && !streq(event->name, sysname))
+                        if (event->name != NULL && !streq(event->name, sysname)) {
+                                _cleanup_free_ char *escaped = log_escape(LOG_DEBUG, event->name);
+
                                 log_debug("Running in test mode, skipping renaming network interface '%s' to '%s'.",
-                                          sysname, event->name);
+                                          sysname, escaped ?: event->name);
+                        }
                 }
 
                 /* ENABLE_RULE_GENERATOR conditional:
@@ -1910,9 +1933,12 @@ int udev_event_execute_rules(struct udev_event *event,
                                 rename_r = r;
                                 if (r >= 0)
                                         netif_update_device(dev, name);
-                                else if (r != -EBUSY)
+                                else if (r != -EBUSY) {
+                                        _cleanup_free_ char *escaped = log_escape(LOG_WARNING, name);
+
                                         log_warning_errno(r, "could not rename interface '%d' from '%s' to '%s': %m", udev_device_get_ifindex(dev),
-                                                          udev_device_get_sysname(dev), name);
+                                                          udev_device_get_sysname(dev), escaped ?: name);
+                                }
                         }
                 }
 #endif

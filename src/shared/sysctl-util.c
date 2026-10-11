@@ -34,6 +34,7 @@
 #include "fileio.h"
 #include "path-util.h"
 #include "sysctl-util.h"
+#include "utf8.h"
 
 char *sysctl_normalize(char *s) {
         char *n;
@@ -82,7 +83,14 @@ int sysctl_write(const char *property, const char *value) {
         if (!path_is_normalized(p))
                 return -EINVAL;
 
-        log_debug("Setting '%s' to '%s'", p, value);
+        /* like systemd, with the name and the value escaped like the values in the other messages, as they
+         * may be substituted values of a rule */
+        if (log_get_max_level() >= LOG_DEBUG) {
+                _cleanup_free_ char *escaped_p = utf8_escape_non_printable(p),
+                        *escaped_value = utf8_escape_non_printable(value);
+
+                log_debug("Setting '%s' to '%s'", escaped_p ?: p, escaped_value ?: value);
+        }
 
         /* checked before it is opened too, so that e.g. a FIFO without a reader gives EBADF, not ENXIO */
         if (stat(p, &st) < 0)

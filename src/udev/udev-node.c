@@ -920,11 +920,14 @@ static int udev_node_apply_permissions_impl(
 
                 /* apply SECLABEL{$module}=$label */
                 udev_list_entry_foreach(entry, seclabel_list ? udev_list_get_entry(seclabel_list) : NULL) {
+                        _cleanup_free_ char *escaped = NULL;
                         const char *name, *label;
                         int q;
 
                         name = udev_list_entry_get_name(entry);
                         label = udev_list_entry_get_value(entry);
+                        /* for the messages: the label, a substituted value of the rule */
+                        escaped = log_escape(LOG_ERR, label);
 
                         if (streq(name, "selinux")) {
                                 selinux = true;
@@ -932,9 +935,9 @@ static int udev_node_apply_permissions_impl(
                                 q = mac_selinux_apply_fd(node_fd, devnode, label);
                                 if (q < 0)
                                         log_full_errno(q == -ENOENT ? LOG_DEBUG : LOG_ERR, q,
-                                                       "SECLABEL: failed to set SELinux label '%s': %m", label);
+                                                       "SECLABEL: failed to set SELinux label '%s': %m", escaped ?: label);
                                 else
-                                        log_debug("SECLABEL: set SELinux label '%s'", label);
+                                        log_debug("SECLABEL: set SELinux label '%s'", escaped ?: label);
 
                         } else if (streq(name, "smack")) {
                                 smack = true;
@@ -942,12 +945,12 @@ static int udev_node_apply_permissions_impl(
                                 q = mac_smack_apply_fd(node_fd, label);
                                 if (q < 0)
                                         log_full_errno(q == -ENOENT ? LOG_DEBUG : LOG_ERR, q,
-                                                       "SECLABEL: failed to set SMACK label '%s': %m", label);
+                                                       "SECLABEL: failed to set SMACK label '%s': %m", escaped ?: label);
                                 else
-                                        log_debug("SECLABEL: set SMACK label '%s'", label);
+                                        log_debug("SECLABEL: set SMACK label '%s'", escaped ?: label);
 
                         } else
-                                log_error("SECLABEL: unknown subsystem, ignoring '%s'='%s'", name, label);
+                                log_error("SECLABEL: unknown subsystem, ignoring '%s'='%s'", name, escaped ?: label);
                 }
 
                 /* set the defaults */

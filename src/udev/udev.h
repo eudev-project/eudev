@@ -29,7 +29,17 @@
 #include "libudev-private.h"
 #include "util.h"
 #include "label.h"
+#include "log.h"
 #include "strv.h"
+#include "utf8.h"
+
+/* For the messages about an event: s, e.g. a value substituted into a key of a rule, escaped like the values
+ * in the other messages, with utf8_escape_non_printable(), i.e. control characters and invalid UTF-8 as \xNN,
+ * if a message at the given level is logged; NULL otherwise, and without memory, where the message shows s as
+ * it is: "escaped ?: s". */
+static inline char *log_escape(int level, const char *s) {
+        return s && log_get_max_level() >= LOG_PRI(level) ? utf8_escape_non_printable(s) : NULL;
+}
 
 /* The context an event is processed in: a udevd worker, 'udevadm test', 'udevadm test-builtin'
  * or the rule runner of the test suite (test/test-udev). */
