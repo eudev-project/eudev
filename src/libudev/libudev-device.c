@@ -3448,12 +3448,19 @@ int udev_device_rename(struct udev_device *udev_device, const char *name)
         return 0;
 }
 
+/* Like device_clone_with_db() of systemd without reading the database: a sealed copy of the device of an
+ * event, see udev_device_clone_with_db(). */
 struct udev_device *udev_device_shallow_clone(struct udev_device *old_device)
 {
+        struct udev_list_entry *entry;
         struct udev_device *device;
+        int r;
 
-        if (old_device == NULL)
+        if (old_device == NULL) {
+                errno = EINVAL;
+
                 return NULL;
+        }
 
         device = udev_device_new(old_device->udev);
         if (!device) {
@@ -3462,17 +3469,55 @@ struct udev_device *udev_device_shallow_clone(struct udev_device *old_device)
                 return NULL;
         }
 
-        udev_device_set_syspath(device, udev_device_get_syspath(old_device));
-        udev_device_set_subsystem(device, udev_device_get_subsystem(old_device));
-        udev_device_set_devnum(device, udev_device_get_devnum(old_device));
-        /* like the device number, the interface index names the database entry of a network interface,
-         * see udev_device_get_id_filename() */
-        if (udev_device_get_ifindex(old_device) > 0)
-                udev_device_set_ifindex(device, udev_device_get_ifindex(old_device));
+        /* Like systemd, which seals the copy: the uevent file is not read, as the device may have been
+         * removed already, or replaced by another one with the same path, like for the devices of an event,
+         * see udev_device_new_from_nulstr(). */
+        device->uevent_loaded = true;
+
+        /* the values that name the database entry, see udev_device_get_id_filename() */
+        r = udev_device_set_syspath(device, udev_device_get_syspath(old_device));
+        if (r >= 0 && udev_device_get_subsystem(old_device))
+                r = udev_device_set_subsystem(device, udev_device_get_subsystem(old_device));
+        if (r >= 0 && major(udev_device_get_devnum(old_device)) > 0)
+                r = udev_device_set_devnum(device, udev_device_get_devnum(old_device));
+        if (r >= 0 && udev_device_get_ifindex(old_device) > 0)
+                r = udev_device_set_ifindex(device, udev_device_get_ifindex(old_device));
+
+        /* Like systemd, the copy carries the properties of the event, e.g. for IMPORT{db} of a property that
+         * the database does not have, and, like device_amend() there, the ones that libudev interprets set
+         * its values, e.g. ACTION or DEVNAME. The list is taken as it is, without reading the uevent file or
+         * the database of the device, like systemd takes them from its hashmap. */
+        udev_list_entry_foreach(entry, udev_list_get_entry(&old_device->properties_list)) {
+                _cleanup_free_ char *property = NULL;
+                const char *key = udev_list_entry_get_name(entry);
+
+                if (r < 0)
+                        break;
+
+                /* set above */
+                if (STR_IN_SET(key, "DEVPATH", "SUBSYSTEM", "MAJOR", "MINOR", "IFINDEX"))
+                        continue;
+
+                property = strjoin(key, "=", udev_list_entry_get_value(entry) ?: "", NULL);
+                if (!property)
+                        r = -ENOMEM;
+                else
+                        r = udev_device_add_property_from_string_parse(device, property);
+        }
+
+        if (r < 0) {
+                udev_device_unref(device);
+                errno = -r;
+
+                return NULL;
+        }
 
         return device;
 }
 
+/* Like device_clone_with_db() of systemd: the copy of the device of an event that the worker keeps, with the
+ * properties of the event, and the database entry they name, which is read last, so that its values take
+ * precedence. Only its properties are written to the database, see udev_device_update_db(). */
 struct udev_device *udev_device_clone_with_db(struct udev_device *old_device)
 {
         struct udev_device *device;
@@ -3480,12 +3525,6 @@ struct udev_device *udev_device_clone_with_db(struct udev_device *old_device)
         device = udev_device_shallow_clone(old_device);
         if (!device)
                 return NULL;
-
-        /* Like device_clone_with_db() of systemd, which seals the copy: the uevent file is not read, as the
-         * device may have been removed already, or replaced by another one with the same path, like for the
-         * devices of an event, see udev_device_new_from_nulstr(); the database entry is the one named by the
-         * values of the event, see udev_device_shallow_clone(). */
-        device->uevent_loaded = true;
 
         udev_device_read_db(device);
         udev_device_set_info_loaded(device);
