@@ -599,8 +599,15 @@ static int builtin_blkid(struct udev_device *dev, int argc, char *argv[], enum u
                 case 'H':
 #ifdef HAVE_BLKID_PROBE_SET_HINT
                         errno = 0;
-                        if (blkid_probe_set_hint(pr, optarg, 0) < 0)
-                                return log_device_error_errno(dev, errno_or_else(ENOMEM), "Failed to use '%s' probing hint: %m", optarg);
+                        if (blkid_probe_set_hint(pr, optarg, 0) < 0) {
+                                _cleanup_free_ char *escaped = NULL;
+
+                                r = errno_or_else(ENOMEM);
+                                /* the argument, which may come from a substitution, escaped like the values in
+                                 * the messages of the rules */
+                                escaped = log_escape(LOG_ERR, optarg);
+                                return log_device_error_errno(dev, r, "Failed to use '%s' probing hint: %m", escaped ?: optarg);
+                        }
                         break;
 #else
                         /* Use the hint <name>=<offset> as probing offset for old versions */
@@ -613,8 +620,11 @@ static int builtin_blkid(struct udev_device *dev, int argc, char *argv[], enum u
 #endif
                 case 'o':
                         r = safe_atoi64(optarg, &offset);
-                        if (r < 0)
-                                return log_device_error_errno(dev, r, "Failed to parse '%s' as an integer: %m", optarg);
+                        if (r < 0) {
+                                _cleanup_free_ char *escaped = log_escape(LOG_ERR, optarg);
+
+                                return log_device_error_errno(dev, r, "Failed to parse '%s' as an integer: %m", escaped ?: optarg);
+                        }
                         if (offset < 0)
                                 return log_device_error_errno(dev, EINVAL, "Invalid offset %"PRIi64".", offset);
                         break;

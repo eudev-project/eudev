@@ -99,6 +99,7 @@ static int udev_builtin_hwdb_search(struct udev_device *dev, struct udev_device 
         /* Like systemd, the parents of a usb_device are skipped only after a lookup of its modalias, not when it
          * has none. */
         for (d = srcdev; d; d = udev_device_get_parent(d)) {
+                _cleanup_free_ char *escaped = NULL;
                 const char *dsubsys;
                 const char *modalias = NULL;
 
@@ -129,7 +130,9 @@ static int udev_builtin_hwdb_search(struct udev_device *dev, struct udev_device 
                 if (!modalias)
                         continue;
 
-                log_device_debug(dev, "hwdb modalias key: \"%s\"", modalias);
+                /* the property, which may be set by the rules, escaped like the values in their messages */
+                escaped = log_escape(LOG_DEBUG, modalias);
+                log_device_debug(dev, "hwdb modalias key: \"%s\"", escaped ?: modalias);
 
                 r = udev_builtin_hwdb_lookup(dev, prefix, modalias, filter, mode);
                 if (r > 0)
@@ -206,8 +209,15 @@ static int builtin_hwdb(struct udev_device *dev, int argc, char *argv[], enum ud
         if (device) {
                 errno = 0;
                 srcdev = udev_device_new_from_device_id(udev_device_get_udev(dev), device);
-                if (!srcdev)
-                        return log_device_debug_errno(dev, errno > 0 ? errno : ENODEV, "Failed to create sd_device object '%s': %m", device);
+                if (!srcdev) {
+                        _cleanup_free_ char *escaped = NULL;
+
+                        r = errno > 0 ? -errno : -ENODEV;
+                        /* the argument, which may come from a substitution, escaped like the values in the
+                         * messages of the rules */
+                        escaped = log_escape(LOG_DEBUG, device);
+                        return log_device_debug_errno(dev, r, "Failed to create sd_device object '%s': %m", escaped ?: device);
+                }
         }
 
         r = udev_builtin_hwdb_search(dev, srcdev, subsystem, prefix, filter, mode);

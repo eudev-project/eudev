@@ -139,9 +139,13 @@ int udev_builtin_add_property(struct udev_device *dev, enum udev_event_mode mode
                 val = NULL;
 
         r = udev_device_add_property(dev, key, val);
-        if (r < 0)
+        if (r < 0) {
+                /* escaped like the values in the messages of the rules */
+                _cleanup_free_ char *k = log_escape(LOG_DEBUG, key), *v = log_escape(LOG_DEBUG, val);
+
                 return log_device_debug_errno(dev, r, "Failed to %s property '%s%s%s'",
-                                              val ? "add" : "remove", key, val ? "=" : "", val ?: "");
+                                              val ? "add" : "remove", k ?: key, val ? "=" : "", v ?: val ?: "");
+        }
 
         if (mode == EVENT_UDEVADM_TEST_BUILTIN) {
                 if (val)

@@ -52,19 +52,22 @@ static int parse_proc_cmdline_item(const char *key, const char *value) {
 /* Like module_load_and_warn() of systemd, which the kmod builtin calls with verbose=false, so that
  * everything is logged at debug level. */
 static int load_module(const char *module) {
+        /* the name as given, which may come from a substitution, escaped like the values in the messages of
+         * the rules */
+        _cleanup_free_ char *escaped = log_escape(LOG_DEBUG, module);
         struct kmod_list *list = NULL;
         struct kmod_list *l;
         bool denylist_parsed = false;
         int r;
 
-        log_debug("Loading module: %s", module);
+        log_debug("Loading module: %s", escaped ?: module);
 
         r = kmod_module_new_from_lookup(ctx, module, &list);
         if (r < 0)
-                return log_debug_errno(r, "Failed to look up module alias '%s': %m", module);
+                return log_debug_errno(r, "Failed to look up module alias '%s': %m", escaped ?: module);
 
         if (!list)
-                return log_debug_errno(ENOENT, "Failed to find module '%s'", module);
+                return log_debug_errno(ENOENT, "Failed to find module '%s'", escaped ?: module);
 
         kmod_list_foreach(l, list) {
                 struct kmod_module *mod = kmod_module_get_module(l);

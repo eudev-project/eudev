@@ -286,6 +286,35 @@ static int dump_event_json(struct udev_event *event, JsonFormatFlags flags, FILE
         return json_writer_finish(&w);
 }
 
+/* Unlike systemd, the values of the dump are escaped like the values in the messages, see
+ * utf8_escape_non_printable(): control characters and invalid UTF-8 are shown as \xNN, so that each value
+ * stays on its line, also in the messages of OPTIONS="dump". Without memory, a value is shown as it is. */
+
+static char *dump_escape(const char *s) {
+        return s ? utf8_escape_non_printable(s) : NULL;
+}
+
+/* "<label>:\n  <value>\n" */
+static void dump_field(FILE *f, const char *label, const char *value) {
+        _cleanup_free_ char *escaped = dump_escape(value);
+
+        fprintf(f, "%s%s:%s\n  %s\n", ansi_highlight(), label, ansi_normal(), escaped ?: strna(value));
+}
+
+/* "  <value>\n" */
+static void dump_value(FILE *f, const char *value) {
+        _cleanup_free_ char *escaped = dump_escape(value);
+
+        fprintf(f, "  %s\n", escaped ?: strna(value));
+}
+
+/* "  <name> : <value>\n" */
+static void dump_pair(FILE *f, const char *name, const char *value) {
+        _cleanup_free_ char *escaped_name = dump_escape(name), *escaped = dump_escape(value);
+
+        fprintf(f, "  %s : %s\n", escaped_name ?: strna(name), escaped ?: strna(value));
+}
+
 int dump_event(struct udev_event *event, JsonFormatFlags flags, FILE *f) {
         struct udev_device *dev = event->dev;
         struct udev_list_entry *entry;
@@ -302,31 +331,31 @@ int dump_event(struct udev_event *event, JsonFormatFlags flags, FILE *f) {
 
         str = udev_device_get_devpath(dev);
         if (str)
-                fprintf(f, "%sDevice path:%s\n  %s\n", ansi_highlight(), ansi_normal(), str);
+                dump_field(f, "Device path", str);
 
         str = udev_device_get_sysname(dev);
         if (str)
-                fprintf(f, "%sDevice name:%s\n  %s\n", ansi_highlight(), ansi_normal(), str);
+                dump_field(f, "Device name", str);
 
         str = udev_device_get_sysnum(dev);
         if (str)
-                fprintf(f, "%sDevice number:%s\n  %s\n", ansi_highlight(), ansi_normal(), str);
+                dump_field(f, "Device number", str);
 
         str = udev_device_get_id_filename(dev);
         if (str)
-                fprintf(f, "%sDevice ID:%s\n  %s\n", ansi_highlight(), ansi_normal(), str);
+                dump_field(f, "Device ID", str);
 
         subsys = udev_device_get_subsystem(dev);
         if (subsys)
-                fprintf(f, "%sSubsystem:%s\n  %s\n", ansi_highlight(), ansi_normal(), subsys);
+                dump_field(f, "Subsystem", subsys);
 
         str = udev_device_get_devtype(dev);
         if (str)
-                fprintf(f, "%sDevice type:%s\n  %s\n", ansi_highlight(), ansi_normal(), str);
+                dump_field(f, "Device type", str);
 
         str = udev_device_get_driver(dev);
         if (str)
-                fprintf(f, "%sDevice driver:%s\n  %s\n", ansi_highlight(), ansi_normal(), str);
+                dump_field(f, "Device driver", str);
 
         str = udev_device_get_devnode(dev);
         if (str) {
@@ -336,22 +365,27 @@ int dump_event(struct udev_event *event, JsonFormatFlags flags, FILE *f) {
                 mode_t mode = 0;
                 bool perms = event_get_node_perms(event, &uid, &gid, &mode);
 
-                if (major(devnum) > 0)
-                        fprintf(f, "%sDevice node:%s\n  %s (%s %u:%u)\n", ansi_highlight(), ansi_normal(), str,
+                if (major(devnum) > 0) {
+                        _cleanup_free_ char *escaped = dump_escape(str);
+
+                        fprintf(f, "%sDevice node:%s\n  %s (%s %u:%u)\n", ansi_highlight(), ansi_normal(), escaped ?: str,
                                 streq_ptr(subsys, "block") ? "block" : "char", major(devnum), minor(devnum));
+                }
 
                 if (perms) {
                         struct passwd *pw = getpwuid(uid);
+                        _cleanup_free_ char *escaped = pw ? dump_escape(pw->pw_name) : NULL;
 
                         fprintf(f, "%sDevice node owner user:%s\n  %s (uid="UID_FMT")\n", ansi_highlight(), ansi_normal(),
-                                pw ? pw->pw_name : "n/a", uid);
+                                escaped ?: pw ? pw->pw_name : "n/a", uid);
                 }
 
                 if (perms) {
                         struct group *gr = getgrgid(gid);
+                        _cleanup_free_ char *escaped = gr ? dump_escape(gr->gr_name) : NULL;
 
                         fprintf(f, "%sDevice node owner group:%s\n  %s (gid="GID_FMT")\n", ansi_highlight(), ansi_normal(),
-                                gr ? gr->gr_name : "n/a", gid);
+                                escaped ?: gr ? gr->gr_name : "n/a", gid);
                 }
 
                 if (perms)
@@ -361,13 +395,13 @@ int dump_event(struct udev_event *event, JsonFormatFlags flags, FILE *f) {
                         fprintf(f, "%sDevice node symlinks:%s (priority=%i)\n", ansi_highlight(), ansi_normal(),
                                 udev_device_get_devlink_priority(dev));
                         udev_list_entry_foreach(entry, udev_device_get_devlinks_list_entry(dev))
-                                fprintf(f, "  %s\n", udev_list_entry_get_name(entry));
+                                dump_value(f, udev_list_entry_get_name(entry));
                 }
 
                 if (udev_list_get_entry(&event->seclabel_list)) {
                         fprintf(f, "%sDevice node security label:%s\n", ansi_highlight(), ansi_normal());
                         udev_list_entry_foreach(entry, udev_list_get_entry(&event->seclabel_list))
-                                fprintf(f, "  %s : %s\n", udev_list_entry_get_name(entry), udev_list_entry_get_value(entry));
+                                dump_pair(f, udev_list_entry_get_name(entry), udev_list_entry_get_value(entry));
                 }
 
                 fprintf(f, "%sInotify watch:%s\n  %s\n", ansi_highlight(), ansi_normal(),
@@ -379,38 +413,38 @@ int dump_event(struct udev_event *event, JsonFormatFlags flags, FILE *f) {
                 fprintf(f, "%sNetwork interface index:%s\n  %i\n", ansi_highlight(), ansi_normal(), ifindex);
 
                 if (!isempty(event->name))
-                        fprintf(f, "%sNetwork interface name:%s\n  %s\n", ansi_highlight(), ansi_normal(), event->name);
+                        dump_field(f, "Network interface name", event->name);
 
                 /* like systemd, all requested names, sorted, also the name of the interface */
                 if (!strv_isempty(event->altnames)) {
                         fprintf(f, "%sAlternative interface names:%s\n", ansi_highlight(), ansi_normal());
                         STRV_FOREACH(p, strv_sort(event->altnames))
-                                fprintf(f, "  %s\n", *p);
+                                dump_value(f, *p);
                 }
         }
 
         if (udev_list_get_entry(&event->written_sysattr_list)) {
                 fprintf(f, "%sWritten sysfs attributes:%s\n", ansi_highlight(), ansi_normal());
                 udev_list_entry_foreach(entry, udev_list_get_entry(&event->written_sysattr_list))
-                        fprintf(f, "  %s : %s\n", udev_list_entry_get_name(entry), udev_list_entry_get_value(entry));
+                        dump_pair(f, udev_list_entry_get_name(entry), udev_list_entry_get_value(entry));
         }
 
         if (udev_list_get_entry(&event->written_sysctl_list)) {
                 fprintf(f, "%sWritten sysctl entries:%s\n", ansi_highlight(), ansi_normal());
                 udev_list_entry_foreach(entry, udev_list_get_entry(&event->written_sysctl_list))
-                        fprintf(f, "  %s : %s\n", udev_list_entry_get_name(entry), udev_list_entry_get_value(entry));
+                        dump_pair(f, udev_list_entry_get_name(entry), udev_list_entry_get_value(entry));
         }
 
         if (udev_device_get_tags_list_entry(dev)) {
                 fprintf(f, "%sTags:%s\n", ansi_highlight(), ansi_normal());
                 udev_list_entry_foreach(entry, udev_device_get_tags_list_entry(dev))
-                        fprintf(f, "  %s\n", udev_list_entry_get_name(entry));
+                        dump_value(f, udev_list_entry_get_name(entry));
         }
 
         if (udev_device_get_current_tags_list_entry(dev)) {
                 fprintf(f, "%sCurrent Tags:%s\n", ansi_highlight(), ansi_normal());
                 udev_list_entry_foreach(entry, udev_device_get_current_tags_list_entry(dev))
-                        fprintf(f, "  %s\n", udev_list_entry_get_name(entry));
+                        dump_value(f, udev_list_entry_get_name(entry));
         }
 
         properties = dump_properties_strv(dev);
@@ -418,15 +452,15 @@ int dump_event(struct udev_event *event, JsonFormatFlags flags, FILE *f) {
                 return log_oom();
         fprintf(f, "%sProperties:%s\n", ansi_highlight(), ansi_normal());
         STRV_FOREACH(p, properties)
-                fprintf(f, "  %s\n", *p);
+                dump_value(f, *p);
 
         if (udev_list_get_entry(&event->run_list)) {
                 fprintf(f, "%sQueued commands:%s\n", ansi_highlight(), ansi_normal());
                 udev_list_entry_foreach(entry, udev_list_get_entry(&event->run_list)) {
-                        if (udev_list_entry_get_num(entry) < UDEV_BUILTIN_MAX)
-                                fprintf(f, "  RUN{builtin} : %s\n", udev_list_entry_get_name(entry));
-                        else
-                                fprintf(f, "  RUN{program} : %s\n", udev_list_entry_get_name(entry));
+                        _cleanup_free_ char *escaped = dump_escape(udev_list_entry_get_name(entry));
+
+                        fprintf(f, "  RUN{%s} : %s\n", udev_list_entry_get_num(entry) < UDEV_BUILTIN_MAX ? "builtin" : "program",
+                                escaped ?: udev_list_entry_get_name(entry));
                 }
         }
 

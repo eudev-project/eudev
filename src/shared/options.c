@@ -7,7 +7,17 @@
 #include "log.h"
 #include "options.h"
 #include "terminal-util.h"
+#include "utf8.h"
 #include "util.h"
+
+/* The first len characters of an argument for the messages about it, escaped like the values in the
+ * messages of the rules of udev, see utf8_escape_non_printable(), as it may be e.g. an argument of a builtin
+ * that was substituted into its command. NULL without memory. */
+static char *option_escape(const char *arg, size_t len) {
+        _cleanup_free_ char *s = strndup(arg, len);
+
+        return s ? utf8_escape_non_printable(s) : NULL;
+}
 
 /* Like the option parser of systemd: the index of the long option named by the len characters of name,
  * of the one with this name, or of the only one whose name begins with them, -1 if there is none, or
@@ -36,7 +46,7 @@ static int find_long_option(const struct option *longopts, const char *name, siz
 /* "udevadm: option '--na' is ambiguous; possibilities: --name, --name-match", the long options in the
  * order of longopts, like systemd. arg is the argument as given, len the length of the name in it. */
 static void log_ambiguous_option(const struct option *longopts, const char *arg, size_t len) {
-        _cleanup_free_ char *list = NULL;
+        _cleanup_free_ char *list = NULL, *escaped = NULL;
         size_t n = 0;
         char *p;
         int i;
@@ -57,8 +67,9 @@ static void log_ambiguous_option(const struct option *longopts, const char *arg,
                         p = stpcpy(stpcpy(p, p == list ? "--" : ", --"), longopts[i].name);
         *p = '\0';
 
-        log_error("%s: option '%.*s' is ambiguous; possibilities: %s",
-                  program_invocation_short_name, (int) (len + 2), arg, list);
+        escaped = option_escape(arg, len + 2);
+        log_error("%s: option '%s' is ambiguous; possibilities: %s",
+                  program_invocation_short_name, escaped ?: arg, list);
 }
 
 int getopt_long_log(int argc, char * const argv[], const char *optstring, const struct option *longopts) {
@@ -116,29 +127,40 @@ int getopt_long_log(int argc, char * const argv[], const char *optstring, const 
                                 long_option = true;
 
                 if (long_option) {
+                        _cleanup_free_ char *escaped = NULL;
+
                         /* the texts of systemd, with the name as given, without the argument */
                         if (j == -2)
                                 log_ambiguous_option(longopts, arg, len);
-                        else if (j < 0)
-                                log_error("%s: unrecognized option '%.*s'",
-                                          program_invocation_short_name, (int) (len + 2), arg);
-                        else if (arg[2 + len] == '=')
-                                log_error("%s: option '%.*s' doesn't allow an argument",
-                                          program_invocation_short_name, (int) (len + 2), arg);
-                        else
+                        else if (j < 0) {
+                                escaped = option_escape(arg, len + 2);
+                                log_error("%s: unrecognized option '%s'",
+                                          program_invocation_short_name, escaped ?: arg);
+                        } else if (arg[2 + len] == '=') {
+                                escaped = option_escape(arg, len + 2);
+                                log_error("%s: option '%s' doesn't allow an argument",
+                                          program_invocation_short_name, escaped ?: arg);
+                        } else {
+                                escaped = option_escape(arg, strlen(arg));
                                 log_error("%s: option '%s' requires an argument",
-                                          program_invocation_short_name, arg);
+                                          program_invocation_short_name, escaped ?: arg);
+                        }
                         return '?';
                 }
         }
 
-        /* a short option: unknown, or its argument is missing */
+        /* a short option: unknown, or its argument is missing; the character escaped, see option_escape() */
         p = optstring + (optstring[0] == '+' || optstring[0] == '-');
         p = optopt > 0 && optopt <= UCHAR_MAX && optopt != ':' ? strchr(p, optopt) : NULL;
-        if (p && p[1] == ':')
-                log_error("%s: option '-%c' requires an argument", program_invocation_short_name, optopt);
-        else
-                log_error("%s: unrecognized option '-%c'", program_invocation_short_name, optopt);
+        {
+                char c_str[2] = { (char) optopt, '\0' };
+                _cleanup_free_ char *escaped = option_escape(c_str, 1);
+
+                if (p && p[1] == ':')
+                        log_error("%s: option '-%s' requires an argument", program_invocation_short_name, escaped ?: c_str);
+                else
+                        log_error("%s: unrecognized option '-%s'", program_invocation_short_name, escaped ?: c_str);
+        }
 
         return '?';
 }

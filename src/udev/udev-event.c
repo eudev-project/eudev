@@ -85,8 +85,11 @@ void udev_event_unref(struct udev_event *event) {
 
 static void event_cache_written_value(struct udev_list *values, const char *attr, const char *value) {
         /* The list is unique, this replaces an earlier value. */
-        if (udev_list_entry_add(values, attr, value) == NULL)
-                log_debug("Failed to remember the value written to '%s', ignoring.", attr);
+        if (udev_list_entry_add(values, attr, value) == NULL) {
+                _cleanup_free_ char *escaped = log_escape(LOG_DEBUG, attr);
+
+                log_debug("Failed to remember the value written to '%s', ignoring.", escaped ?: attr);
+        }
 }
 
 void event_cache_written_sysattr(struct udev_event *event, const char *attr, const char *value) {
@@ -544,8 +547,10 @@ size_t udev_event_apply_format(struct udev_event *event,
 
                 r = get_subst_type(&s, /* strict= */ false, &type, attr);
                 if (r < 0) {
+                        _cleanup_free_ char *escaped = log_escape(LOG_WARNING, src);
+
                         log_warning_errno(r, "%s: Invalid format string, ignoring: %s",
-                                          udev_device_get_sysname(event->dev) ?: "n/a", src);
+                                          udev_device_get_sysname(event->dev) ?: "n/a", escaped ?: src);
                         break;
                 } else if (r == 0) {
                         if (size < 2) {
@@ -842,17 +847,30 @@ static void spawn_read(struct spawn *spawn,
                                         memcpy(partial[k].bytes, buf + n - partial[k].len, partial[k].len);
                                         buf[n - partial[k].len] = '\0';
 
+                                        /* each line escaped like the values in the other messages, see
+                                         * log_escape() */
                                         pos = buf;
                                         while ((line = strsep(&pos, "\n"))) {
-                                                if (pos != NULL || line[0] != '\0')
-                                                        log_debug("'%s'(%s) '%s'", cmd, *fd == fd_stdout ? "out" : "err" , line);
+                                                if (pos != NULL || line[0] != '\0') {
+                                                        _cleanup_free_ char *escaped = log_escape(LOG_DEBUG, line);
+
+                                                        log_debug("'%s'(%s) '%s'", cmd, *fd == fd_stdout ? "out" : "err",
+                                                                  escaped ?: line);
+                                                }
                                         }
                                 }
                         } else if (ev[i].events & EPOLLHUP) {
-                                /* the output ended with an incomplete character */
-                                if (partial[k].len > 0)
-                                        log_debug("'%s'(%s) '%.*s'", cmd, *fd == fd_stdout ? "out" : "err",
-                                                  (int) partial[k].len, partial[k].bytes);
+                                /* the output ended with an incomplete character, i.e. invalid UTF-8, which is
+                                 * escaped */
+                                if (partial[k].len > 0) {
+                                        _cleanup_free_ char *escaped = NULL;
+                                        char tail[sizeof(partial[0].bytes) + 1];
+
+                                        memcpy(tail, partial[k].bytes, partial[k].len);
+                                        tail[partial[k].len] = '\0';
+                                        escaped = log_escape(LOG_DEBUG, tail);
+                                        log_debug("'%s'(%s) '%s'", cmd, *fd == fd_stdout ? "out" : "err", escaped ?: tail);
+                                }
                                 partial[k].len = 0;
 
                                 r = epoll_ctl(fd_ep, EPOLL_CTL_DEL, *fd, NULL);
@@ -1658,9 +1676,13 @@ static void event_assign_altnames(struct udev_event *event) {
                         free_and_replace(names, n);
                 }
 
-                if (!isempty(names))
+                if (!isempty(names)) {
+                        /* the requested name is not checked yet, see netif_new_name() */
+                        _cleanup_free_ char *escaped = log_escape(LOG_DEBUG, newname);
+
                         log_debug("Running in test mode, skipping assigning alternative names '%s' to network interface '%s'.",
-                                  names, newname);
+                                  names, escaped ?: newname);
+                }
                 return;
         }
 
@@ -2058,6 +2080,7 @@ void udev_event_execute_run(struct udev_event *event, usec_t timeout_usec) {
                         char **envp;
 
                         if (event->exec_delay_usec > 0) {
+                                _cleanup_free_ char *escaped = log_escape(LOG_WARNING, command);
                                 char buf[FORMAT_TIMESPAN_MAX];
                                 struct timespec ts;
 
@@ -2067,12 +2090,14 @@ void udev_event_execute_run(struct udev_event *event, usec_t timeout_usec) {
                                     event->exec_delay_usec >= usec_sub_unsigned(timeout_usec,
                                                                                 usec_sub_unsigned(now(CLOCK_MONOTONIC), event->birth_usec))) {
                                         log_device_warning(event->dev, "Cannot delay execution of \"%s\" for %s, skipping.",
-                                                           command, format_timespan(buf, sizeof(buf), event->exec_delay_usec, USEC_PER_SEC));
+                                                           escaped ?: command,
+                                                           format_timespan(buf, sizeof(buf), event->exec_delay_usec, USEC_PER_SEC));
                                         continue;
                                 }
 
                                 log_device_debug(event->dev, "Delaying execution of \"%s\" for %s.",
-                                                 command, format_timespan(buf, sizeof(buf), event->exec_delay_usec, USEC_PER_SEC));
+                                                 escaped ?: command,
+                                                 format_timespan(buf, sizeof(buf), event->exec_delay_usec, USEC_PER_SEC));
                                 (void) nanosleep(timespec_store(&ts, event->exec_delay_usec), NULL);
                         }
 

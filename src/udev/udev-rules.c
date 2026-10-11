@@ -671,6 +671,12 @@ static char *escape_key_text(const char *s) {
         return utf8_escape_non_printable_full(s, /* escape_quote= */ true);
 }
 
+/* For the trace messages: s escaped like log_escape() if the event is traced, otherwise NULL, so that nothing
+ * is escaped for the messages that log_event_trace() does not log. */
+static char *trace_escape(struct udev_event *event, const char *s) {
+        return event->trace ? log_escape(LOG_DEBUG, s) : NULL;
+}
+
 /* Formats a token like the key of the rule line it comes from, e.g. KERNEL=="sd*", for the trace
  * logs, like the token text of systemd, which is the key as written in the rules. The text of the rules
  * is not kept, so the key is put together again, and the values of OPTIONS are shown one by one. Unlike
@@ -1203,8 +1209,11 @@ static int import_property(struct udev_event *event, struct udev_rules *rules, s
 
                 log_event_warning_errno(event, rules, rule, token, r, "Failed to import property \"%s=%s\", ignoring: %m",
                                         k ?: key, v ?: "");
-        } else
-                log_event_trace(event, rules, rule, token, "Imported property \"%s=%s\".", key, val ?: "");
+        } else if (event->trace) {
+                _cleanup_free_ char *k = trace_escape(event, key), *v = trace_escape(event, val ?: "");
+
+                log_event_trace(event, rules, rule, token, "Imported property \"%s=%s\".", k ?: key, v ?: val ?: "");
+        }
         return r;
 }
 
@@ -3142,12 +3151,20 @@ static bool log_event_result(struct udev_event *event, struct udev_rules *rules,
 
 /* The alternatives of the value of a match, like the trace messages of token_match_string() of systemd
  * show them: "" once if one of them is empty, then the others, quoted and separated by ", ", e.g.
- * "", "a", "b*" for "a||b*". Returns the number of alternatives in *ret_n. */
+ * "", "a", "b*" for "a||b*". Unlike systemd, they are escaped like the values in the other messages, see
+ * utf8_escape_non_printable(), which keeps the "|" that separate them. Returns the number of alternatives
+ * in *ret_n. */
 static char *token_value_alternatives(struct udev_rules *rules, struct token *token, unsigned *ret_n) {
+        _cleanup_free_ char *escaped = NULL;
         const char *value = rules_str(rules, token->key.value_off), *v;
         bool split = IN_SET(token->key.glob, GL_SPLIT, GL_SPLIT_GLOB), empty = false;
         unsigned n = 0;
         char *buf, *t;
+
+        escaped = utf8_escape_non_printable(value);
+        if (!escaped)
+                return NULL;
+        value = escaped;
 
         buf = new(char, strlen(value) * 4 + 8);
         if (!buf)
@@ -3257,30 +3274,35 @@ static bool token_match_list(struct udev_event *event, struct udev_rules *rules,
 static bool apply_format(struct udev_event *event, struct udev_rules *rules, struct token *rule, struct token *token,
                          const char *format, char *result, size_t size, bool replace_whitespace,
                          struct udev_list *properties_list, const char *what) {
+        _cleanup_free_ char *escaped_format = NULL;
         bool truncated = false;
 
         (void) udev_event_apply_format(event, format, result, size, replace_whitespace, properties_list, &truncated);
         if (!truncated) {
                 if (event->trace && !streq(format, result)) {
-                        /* unlike systemd, the result escaped like the values in the other messages, as it may
-                         * contain e.g. the value of an attribute with several lines; the format is shown as
-                         * written in the rule */
-                        _cleanup_free_ char *escaped = utf8_escape_non_printable(result);
+                        /* unlike systemd, the format and the result escaped like the values in the other
+                         * messages, as the result may contain e.g. the value of an attribute with several
+                         * lines, and the format e.g. a control character of a value written as e"..." */
+                        _cleanup_free_ char *escaped = trace_escape(event, result);
 
+                        escaped_format = trace_escape(event, format);
                         log_event_trace(event, rules, rule, token, "Format substitution: \"%s\" -> \"%s\"",
-                                        format, escaped ?: result);
+                                        escaped_format ?: format, escaped ?: result);
                 }
                 return true;
         }
 
-        if (token->type < TK_M_MAX)
+        if (token->type < TK_M_MAX) {
+                escaped_format = log_escape(LOG_DEBUG, format);
                 log_event_debug(event, rules, rule, token,
                                 "The %s is truncated while substituting into \"%s\", assuming the token fails.",
-                                what, format);
-        else
+                                what, escaped_format ?: format);
+        } else {
+                escaped_format = log_escape(LOG_WARNING, format);
                 log_event_warning(event, rules, rule, token,
                                   "The %s is truncated while substituting into \"%s\", refusing to apply the token.",
-                                  what, format);
+                                  what, escaped_format ?: format);
+        }
         return false;
 }
 
@@ -3378,11 +3400,14 @@ static int apply_devlink(struct udev_event *event, struct udev_rules *rules, str
         else
                 r = udev_device_add_devlink(event->dev, link);
         if (r >= 0) {
-                /* like systemd, only when the symlink was there, or was not there yet */
+                /* like systemd, only when the symlink was there, or was not there yet; it has no control
+                 * characters, but may have invalid UTF-8 */
+                if (r > 0)
+                        escaped = log_escape(LOG_DEBUG, link);
                 if (op == OP_REMOVE && r > 0)
-                        log_event_debug(event, rules, rule, token, "Removed device node symlink \"%s\"", link);
+                        log_event_debug(event, rules, rule, token, "Removed device node symlink \"%s\"", escaped ?: link);
                 else if (op != OP_REMOVE && r > 0)
-                        log_event_debug(event, rules, rule, token, "Added device node symlink \"%s\".", link);
+                        log_event_debug(event, rules, rule, token, "Added device node symlink \"%s\".", escaped ?: link);
                 return 0;
         }
         if (r == -ENOMEM)
@@ -3612,10 +3637,12 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                                 goto nomatch;
                         r = util_resolve_subsys_kernel(event->udev, filename, filename, sizeof(filename));
                         if (r == -ENAMETOOLONG) {
+                                _cleanup_free_ char *escaped = log_escape(LOG_DEBUG, rules_str(rules, cur->key.value_off));
+
                                 /* unlike systemd, which cuts the path, like a truncated substitution */
                                 log_event_debug(event, rules, rule, cur,
                                                 "The path of the file name \"%s\" is too long, assuming the token fails.",
-                                                rules_str(rules, cur->key.value_off));
+                                                escaped ?: rules_str(rules, cur->key.value_off));
                                 goto nomatch;
                         }
                         if (r < 0) {
@@ -3695,10 +3722,13 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                                 util_remove_trailing_chars(result, '\n');
                                 if (esc == ESCAPE_UNSET || esc == ESCAPE_REPLACE) {
                                         count = util_replace_chars(result, UDEV_ALLOWED_CHARS_INPUT);
-                                        if (count > 0)
+                                        if (count > 0) {
+                                                _cleanup_free_ char *escaped_result = trace_escape(event, result);
+
                                                 log_event_trace(event, rules, rule, cur,
                                                                 "Replaced %i character(s) from command output, results to \"%s\"",
-                                                                count, result);
+                                                                count, escaped_result ?: result);
+                                        }
                                 }
                                 event->program_result = strdup(result);
                                 if (!log_event_result(event, rules, rule, cur, cur->key.op != OP_NOMATCH))
@@ -3808,9 +3838,13 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
 
                         /* Like systemd, an error stops the processing of the rules for the event. */
                         r = proc_cmdline_get_key(key, &value);
-                        if (r < 0)
+                        if (r < 0) {
+                                _cleanup_free_ char *escaped = log_escape(LOG_ERR, key);
+
                                 return log_event_error_errno(event, rules, rule, cur, r,
-                                                             "Failed to read \"%s\" option from /proc/cmdline: %m", key);
+                                                             "Failed to read \"%s\" option from /proc/cmdline: %m",
+                                                             escaped ?: key);
+                        }
                         if (r > 0) {
                                 imported = true;
 
@@ -4050,7 +4084,7 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                         break;
                 case TK_A_SECLABEL: {
                         char label_str[UTIL_LINE_SIZE] = {};
-                        _cleanup_free_ char *escaped = NULL;
+                        _cleanup_free_ char *escaped = NULL, *escaped_name = NULL;
                         const char *name, *label;
 
                         name = rules_str(rules, cur->key.attr_off);
@@ -4068,7 +4102,9 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                         if (!udev_list_entry_add(&event->seclabel_list, name, label))
                                 return log_oom();
                         escaped = log_escape(LOG_DEBUG, label);
-                        log_event_debug(event, rules, rule, cur, "Set security label: %s=%s", name, escaped ?: label);
+                        escaped_name = log_escape(LOG_DEBUG, name);
+                        log_event_debug(event, rules, rule, cur, "Set security label: %s=%s",
+                                        escaped_name ?: name, escaped ?: label);
                         break;
                 }
                 case TK_A_ENV: {
@@ -4086,10 +4122,17 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                                 }
                                 /* like systemd, a failure stops the processing of the event */
                                 r = udev_device_add_property(event->dev, name, NULL);
-                                if (r < 0)
+                                if (r < 0) {
+                                        _cleanup_free_ char *escaped = log_escape(LOG_ERR, name);
+
                                         return log_event_error_errno(event, rules, rule, cur, r,
-                                                                     "Failed to remove property \"%s\": %m", name);
-                                log_event_trace(event, rules, rule, cur, "Removed property \"%s\".", name);
+                                                                     "Failed to remove property \"%s\": %m", escaped ?: name);
+                                }
+                                if (event->trace) {
+                                        _cleanup_free_ char *escaped = trace_escape(event, name);
+
+                                        log_event_trace(event, rules, rule, cur, "Removed property \"%s\".", escaped ?: name);
+                                }
                                 break;
                         }
 
@@ -4102,9 +4145,12 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
 
                                 l = strpcpyl_full(&p, l, &truncated, value_old, " ", NULL);
                                 if (truncated) {
+                                        _cleanup_free_ char *n = log_escape(LOG_WARNING, name),
+                                                *v = log_escape(LOG_WARNING, value);
+
                                         log_event_warning(event, rules, rule, cur,
                                                           "The buffer for the property is full, refusing to append new property \"%s=%s\".",
-                                                          name, value);
+                                                          n ?: name, v ?: value);
                                         break;
                                 }
                         }
@@ -4114,10 +4160,13 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
 
                         if (esc == ESCAPE_REPLACE) {
                                 int count = util_replace_chars(p, NULL);
-                                if (count > 0)
+                                if (count > 0) {
+                                        _cleanup_free_ char *escaped = trace_escape(event, p);
+
                                         log_event_trace(event, rules, rule, cur,
                                                         "Replaced %i character(s) from property value, results to \"%s\"",
-                                                        count, p);
+                                                        count, escaped ?: p);
+                                }
                         }
 
                         /* like systemd, running out of memory stops the processing of the event */
@@ -4130,8 +4179,11 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
 
                                 log_event_warning_errno(event, rules, rule, cur, r, "Failed to set property \"%s=%s\", ignoring: %m",
                                                         n ?: name, v ?: "");
-                        } else
-                                log_event_trace(event, rules, rule, cur, "Set property \"%s=%s\".", name, value_new);
+                        } else if (event->trace) {
+                                _cleanup_free_ char *n = trace_escape(event, name), *v = trace_escape(event, value_new);
+
+                                log_event_trace(event, rules, rule, cur, "Set property \"%s=%s\".", n ?: name, v ?: value_new);
+                        }
                         break;
                 }
                 case TK_A_TAG: {
@@ -4148,7 +4200,7 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                                                                 "Failed to clear previously assigned tags, ignoring: %m");
                         }
                         if (cur->key.op == OP_REMOVE) {
-                                _cleanup_free_ char *escaped = event->trace ? log_escape(LOG_DEBUG, tag) : NULL;
+                                _cleanup_free_ char *escaped = trace_escape(event, tag);
 
                                 udev_device_remove_tag(event->dev, tag);
                                 log_event_trace(event, rules, rule, cur, "Removed tag \"%s\".", escaped ?: tag);
@@ -4162,8 +4214,12 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
 
                                         log_event_warning_errno(event, rules, rule, cur, r, "Failed to %s tag \"%s\", ignoring: %m",
                                                                 assign ? "set" : "add", escaped ?: tag);
-                                } else
-                                        log_event_trace(event, rules, rule, cur, "%s tag \"%s\".", assign ? "Set" : "Added", tag);
+                                } else if (event->trace) {
+                                        _cleanup_free_ char *escaped = trace_escape(event, tag);
+
+                                        log_event_trace(event, rules, rule, cur, "%s tag \"%s\".", assign ? "Set" : "Added",
+                                                        escaped ?: tag);
+                                }
                         }
                         break;
                 }
@@ -4190,10 +4246,13 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                                 break;
                         if (esc == ESCAPE_UNSET || esc == ESCAPE_REPLACE) {
                                 count = udev_replace_ifname(event->udev, name_str);
-                                if (count > 0)
+                                if (count > 0) {
+                                        _cleanup_free_ char *escaped_name = trace_escape(event, name_str);
+
                                         log_event_trace(event, rules, rule, cur,
                                                         "Replaced %i character(s) from network interface name, results to \"%s\"",
-                                                        count, name_str);
+                                                        count, escaped_name ?: name_str);
+                                }
                         }
                         /* like systemd, running out of memory stops the processing of the event */
                         r = free_and_strdup(&event->name, name_str);
@@ -4232,10 +4291,13 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                                 count = util_replace_chars(temp, "/ ");
                         else if (esc == ESCAPE_REPLACE)
                                 count = util_replace_chars(temp, "/");
-                        if (count > 0)
+                        if (count > 0) {
+                                _cleanup_free_ char *escaped = trace_escape(event, temp);
+
                                 log_event_trace(event, rules, rule, cur,
                                                 "Replaced %i character(s) from device node symlink, results to \"%s\"",
-                                                count, temp);
+                                                count, escaped ?: temp);
+                        }
                         pos = temp;
                         while (isspace((unsigned char) pos[0]))
                                 pos++;
@@ -4260,7 +4322,8 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                 case TK_A_ATTR: {
                         const char *key_name = rules_str(rules, cur->key.attr_off);
                         const char *syspath = udev_device_get_syspath(event->dev);
-                        _cleanup_free_ char *canonical = NULL, *escaped = NULL;
+                        /* the paths and the value in the messages escaped, see log_escape() */
+                        _cleanup_free_ char *canonical = NULL, *escaped = NULL, *escaped_path = NULL;
                         char attr[UTIL_PATH_SIZE];
                         char resolved[UTIL_PATH_SIZE];
                         char value[UTIL_NAME_SIZE];
@@ -4269,32 +4332,39 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                         /* First, try to resolve "[<SUBSYSTEM>/<KERNEL>]<attribute>" format. */
                         r = util_resolve_subsys_kernel(event->udev, key_name, attr, sizeof(attr));
                         if (r == -ENAMETOOLONG) {
+                                escaped_path = log_escape(LOG_WARNING, key_name);
                                 /* unlike systemd, which cuts the path */
                                 log_event_warning(event, rules, rule, cur,
                                                   "The path to the attribute \"%s\" is too long, refusing to set the attribute.",
-                                                  key_name);
+                                                  escaped_path ?: key_name);
                                 break;
                         }
                         if (r < 0) {
                                 if (key_name[0] == '[') {
+                                        escaped_path = log_escape(LOG_WARNING, key_name);
                                         log_event_warning(event, rules, rule, cur, "Failed to resolve sysfs attribute \"%s\", ignoring.",
-                                                          key_name);
+                                                          escaped_path ?: key_name);
                                         break;
                                 }
 
                                 /* If not, make the path to sysfs attribute absolute, to make '*' resolvable by attr_subst_subdir(). */
                                 if (strscpyl(attr, sizeof(attr), syspath, "/", key_name, NULL) == 0) {
+                                        _cleanup_free_ char *escaped_syspath = log_escape(LOG_WARNING, syspath);
+
+                                        escaped_path = log_escape(LOG_WARNING, key_name);
                                         log_event_warning(event, rules, rule, cur,
                                                           "The path to the attribute \"%s/%s\" is too long, refusing to set the attribute.",
-                                                          syspath, key_name);
+                                                          escaped_syspath ?: syspath, escaped_path ?: key_name);
                                         break;
                                 }
 
                                 /* Resolve '*' in the path. */
                                 r = attr_subst_subdir(attr);
                                 if (r < 0) {
+                                        escaped_path = log_escape(LOG_ERR, attr);
                                         log_event_error_errno(event, rules, rule, cur, r,
-                                                              "Could not find file matches \"%s\", ignoring: %m", attr);
+                                                              "Could not find file matches \"%s\", ignoring: %m",
+                                                              escaped_path ?: attr);
                                         break;
                                 }
                         }
@@ -4304,20 +4374,23 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                         if (canonical == NULL) {
                                 int error = errno;
 
+                                escaped_path = log_escape(LOG_ERR, attr);
                                 log_event_error_errno(event, rules, rule, cur, error,
-                                                      "Could not chase sysfs attribute \"%s\", ignoring: %m", attr);
+                                                      "Could not chase sysfs attribute \"%s\", ignoring: %m", escaped_path ?: attr);
                                 break;
                         }
                         /* like systemd, which refuses it with EINVAL */
                         if (isempty(path_startswith(canonical, "/sys"))) {
+                                escaped_path = log_escape(LOG_ERR, attr);
                                 log_event_error_errno(event, rules, rule, cur, EINVAL,
-                                                      "Could not chase sysfs attribute \"%s\", ignoring: %m", attr);
+                                                      "Could not chase sysfs attribute \"%s\", ignoring: %m", escaped_path ?: attr);
                                 break;
                         }
                         r = make_relative_path(syspath, canonical, resolved, sizeof(resolved));
                         if (r < 0) {
+                                escaped_path = log_escape(LOG_ERR, attr);
                                 log_event_error_errno(event, rules, rule, cur, r,
-                                                      "Could not chase sysfs attribute \"%s\", ignoring: %m", attr);
+                                                      "Could not chase sysfs attribute \"%s\", ignoring: %m", escaped_path ?: attr);
                                 break;
                         }
 
@@ -4326,16 +4399,17 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                                           false, properties_list, "attribute value"))
                                 break;
 
-                        /* the value as written, unless it has to be escaped */
+                        /* the value and the path as written, unless they have to be escaped */
                         escaped = log_escape(LOG_ERR, value);
+                        escaped_path = log_escape(LOG_ERR, resolved);
                         if (EVENT_MODE_DESTRUCTIVE(event)) {
                                 log_event_debug(event, rules, rule, cur, "Writing \"%s\" to sysfs attribute \"%s\".",
-                                                escaped ?: value, resolved);
+                                                escaped ?: value, escaped_path ?: resolved);
                                 r = udev_device_set_sysattr_value(event->dev, resolved, value);
                                 if (r < 0)
                                         log_event_error_errno(event, rules, rule, cur, r,
                                                               "Failed to write \"%s\" to sysfs attribute \"%s\", ignoring: %m",
-                                                              escaped ?: value, resolved);
+                                                              escaped ?: value, escaped_path ?: resolved);
                                 else {
                                         event_cache_written_sysattr(event, resolved, value);
                                         log_event_done(event, rules, rule, cur);
@@ -4343,7 +4417,7 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                         } else {
                                 log_event_debug(event, rules, rule, cur,
                                                 "Running in test mode, skipping writing \"%s\" to sysfs attribute \"%s\".",
-                                                escaped ?: value, resolved);
+                                                escaped ?: value, escaped_path ?: resolved);
 
                                 /* We assume the attribute is writable if the path points to a regular file, and cache
                                  * the value to make it shown by 'udevadm test' or obtained by later ATTR match token. */
@@ -4351,7 +4425,7 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                                 if (r < 0 && !IN_SET(r, -EACCES, -EPERM))
                                         log_event_error_errno(event, rules, rule, cur, r,
                                                               "Failed to verify sysfs attribute \"%s\" is a regular file: %m",
-                                                              resolved);
+                                                              escaped_path ?: resolved);
                                 else {
                                         event_cache_written_sysattr(event, resolved, value);
 
@@ -4363,7 +4437,7 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                                         if (r < 0)
                                                 log_event_warning_errno(event, rules, rule, cur, r,
                                                                         "Failed to cache sysfs attribute \"%s\", ignoring: %m",
-                                                                        resolved);
+                                                                        escaped_path ?: resolved);
                                 }
                         }
                         break;
@@ -4452,7 +4526,11 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                         if (cur->key.rule_goto == 0)
                                 break;
                         /* like systemd, which logs it after the other keys of the line, as here */
-                        trace_line(event, rules, rule, "GOTO=%s", rules_str(rules, cur->key.value_off));
+                        if (event->trace) {
+                                _cleanup_free_ char *escaped = trace_escape(event, rules_str(rules, cur->key.value_off));
+
+                                trace_line(event, rules, rule, "GOTO=%s", escaped ?: rules_str(rules, cur->key.value_off));
+                        }
                         cur = &rules->tokens[cur->key.rule_goto];
                         continue;
                 case TK_END:
@@ -4583,8 +4661,10 @@ int udev_rules_assigning_name_to(struct udev_rules *rules, const char *match_nam
                         if (count > 0)
                                 log_debug("%i character(s) replaced\n", count);
                         if (streq(name_str,match_name)) {
+                                _cleanup_free_ char *escaped = log_escape(LOG_DEBUG, name);
+
                                 log_debug("found a match! NAME assigns %s in: %s:%u\n",
-                                          name,
+                                          escaped ?: name,
                                           rules_str(rules, rule->rule.filename_off),
                                           rule->rule.filename_line);
                                 return 1; /* no need to find more than one */
