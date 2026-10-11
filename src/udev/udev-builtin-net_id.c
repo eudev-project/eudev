@@ -927,9 +927,12 @@ static int names_devicetree_alias_prefix(struct udev_device *dev, const char *pr
         if (!aliases_dev)
                 return log_device_debug_errno(devicetree_dev, ENODEV, "Failed to get 'aliases' child device: %m");
 
+        /* Like systemd, aliases that cannot be read are not found. */
         dir = opendir(udev_device_get_syspath(aliases_dev));
-        if (!dir)
-                return log_device_debug_errno(aliases_dev, errno, "Failed to open directory: %m");
+        if (!dir) {
+                log_device_debug_errno(aliases_dev, errno, "Failed to open directory, ignoring: %m");
+                return 0;
+        }
 
         while ((de = readdir(dir))) {
                 const char *alias = de->d_name, *alias_path, *alias_index, *conflict;
