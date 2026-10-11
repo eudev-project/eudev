@@ -3,14 +3,20 @@
 This directory contains the full texts of the licenses used by the files of
 the eudev source tree, named by their SPDX identifiers (https://spdx.org/).
 The license notice at the top of a file, either an SPDX-License-Identifier
-line or the full notice, says which license applies to it. This file only
-lists those notices, by license; eudev has no default license for the files
-that have no notice (see the end). COPYING in the top directory is the text of
-the GPL version 2, the same as GPL-2.0-or-later.txt.
+line or the full notice, says which license applies to it. This file lists
+those notices, by license. COPYING in the top directory is the text of the GPL
+version 2, the same as GPL-2.0-or-later.txt.
 
 Most of eudev comes from udev of systemd, whose files carry the same licenses.
 
 ## Main licenses
+
+Unless otherwise noted, the eudev sources are licensed under the terms and
+conditions of **LGPL-2.1-or-later** (**GNU Lesser General Public License v2.1
+or later**), like the systemd sources. This also applies to the files that
+have no license notice of their own (see the end).
+
+The license notices of the files name these two licenses:
 
  * **GPL-2.0-or-later** (GNU General Public License v2.0 or later,
    GPL-2.0-or-later.txt):
@@ -84,9 +90,12 @@ below, under LGPL-2.1-or-later.
 The other files have no license notice of their own: the udev rules in rules/
 and rule_generator/, the hwdb files in hwdb.d/ except the ones named above, the
 other man page sources and the generated man pages, the build system files,
-the documentation, the test scripts test/udev-test.pl and test/rules-test.sh,
-and the test data. eudev states no license for them: there is no default
-license.
+the configuration file src/udev/udev.conf, the documentation, the test scripts
+test/udev-test.pl and test/rules-test.sh, and the test data. Like the files of
+systemd without a license notice, they are licensed under
+**LGPL-2.1-or-later** (see "Main licenses"), with one exception, as in
+systemd: the test data without an explicit license, the sysfs tree in
+test/sys.tar.xz, is assumed to be non-copyrightable.
 
 The data files from which some of the hwdb files are generated (see
 hwdb.d/README) come from public registries and lists: hwdb.d/usb.ids
@@ -94,4 +103,4 @@ hwdb.d/README) come from public registries and lists: hwdb.d/usb.ids
 registration authority), hwdb.d/acpi_id_registry.csv and
 hwdb.d/pnp_id_registry.csv (UEFI), and the Bluetooth SIG list of
 20-bluetooth-vendor-product.hwdb; apart from pci.ids, they do not state a
-license.
+license of their own.
