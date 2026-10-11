@@ -3059,16 +3059,17 @@ int device_get_driver_subsystem(struct udev_device *udev_device, char **ret)
         return 0;
 }
 
+/* Like sd_device_get_device_id() of systemd: the ID of the device, which names its database entry, its entries in
+ * the tag index and in the stack directories of its symlinks. A device with a device number or an interface index
+ * gets an ID from it also without a subsystem, then with "c" for the device number, as it is not a block device;
+ * only the ID from the name needs the subsystem. */
 const char *udev_device_get_id_filename(struct udev_device *udev_device)
 {
         if (udev_device->id_filename == NULL) {
-                if (udev_device_get_subsystem(udev_device) == NULL)
-                        return NULL;
-
                 if (major(udev_device_get_devnum(udev_device)) > 0) {
                         /* use dev_t -- b259:131072, c254:0 */
                         if (asprintf(&udev_device->id_filename, "%c%u:%u",
-                                     streq(udev_device_get_subsystem(udev_device), "block") ? 'b' : 'c',
+                                     streq_ptr(udev_device_get_subsystem(udev_device), "block") ? 'b' : 'c',
                                      major(udev_device_get_devnum(udev_device)),
                                      minor(udev_device_get_devnum(udev_device))) < 0)
                                 udev_device->id_filename = NULL;
@@ -3082,6 +3083,10 @@ const char *udev_device_get_id_filename(struct udev_device *udev_device)
                          * sysname() has '!' translated, get it from devpath
                          */
                         const char *sysname;
+
+                        if (udev_device_get_subsystem(udev_device) == NULL)
+                                return NULL;
+
                         sysname = strrchr(udev_device->devpath, '/');
                         if (sysname == NULL)
                                 return NULL;

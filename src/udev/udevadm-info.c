@@ -273,11 +273,12 @@ static int device_get_diskseq(struct udev_device *device, uint64_t *ret) {
         return 0;
 }
 
-/* The properties of the device to show. Like systemd, none for a device without a subsystem, e.g.
- * /sys/class or /sys/devices/platform: sd-device cannot read the properties of such a device, as it
- * has no ID in the udev database, so systemd shows not even DEVPATH. */
+/* The properties of the device to show. Like systemd, none for a device without an ID in the udev database,
+ * i.e. without a subsystem, and without a device number or an interface index, e.g. /sys/class or
+ * /sys/devices/platform: sd-device cannot read the properties of such a device, so systemd shows not even
+ * DEVPATH. See udev_device_get_id_filename(). */
 static struct udev_list_entry *device_get_properties_to_show(struct udev_device *device) {
-        if (!udev_device_get_subsystem(device))
+        if (!udev_device_get_id_filename(device))
                 return NULL;
 
         return udev_device_get_properties_list_entry(device);
