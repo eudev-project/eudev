@@ -150,7 +150,7 @@ static char **device_trigger_args;
  * idle workers, 3 seconds after the event queue became empty, or 0, see main() */
 static usec_t exit_timeout_usec;
 static usec_t idle_timeout_usec;
-/* when the rules were loaded or reloaded, or udevd last checked whether they changed, see manager_check_reload() */
+/* when the rules were loaded or reloaded, or udevd last checked whether they changed, see manager_reload() */
 static usec_t last_usec;
 static struct udev_list properties_list;
 static bool udev_exit;
@@ -1611,29 +1611,41 @@ static void manager_revert(void) {
                 worker_kill(false);
 }
 
-/* Like manager_reload() of systemd with force=false, which its event_queue_start() calls: before the queued
- * events are started, every 3 seconds at most, checks whether the rules files or the files of the builtins, e.g.
- * the hardware database, changed, and then kills the idle workers and unloads what changed, which is loaded
- * again before the events are started, see main(). The rules files changed if their stats did, see
- * udev_rules_should_reload(); a reload requested with udevadm control or SIGHUP reloads everything. */
-static void manager_check_reload(struct udev *udev) {
+/* Like manager_reload() of systemd: kills the idle workers and reloads the rules, when the rules files changed, see
+ * udev_rules_should_reload(), and unloads the builtins, when their files changed, e.g. the hardware database; they
+ * are loaded again before the next event is started, see main(). Like systemd, when the rules cannot be loaded,
+ * the previously loaded rules stay in use. Before the queued events are started, this checks every 3 seconds
+ * at most whether something changed, like systemd's event_queue_start(). With force, on a reload requested with
+ * udevadm control or SIGHUP, it reloads both, unlike systemd, which reloads only what changed then too. */
+static void manager_reload(struct udev *udev, bool force) {
         usec_t now_usec = now(CLOCK_MONOTONIC);
+        struct udev_rules *new_rules;
         bool rules_changed, builtins_changed;
 
-        if (now_usec < usec_add(last_usec, 3 * USEC_PER_SEC))
+        if (!force && now_usec < usec_add(last_usec, 3 * USEC_PER_SEC))
                 return;
         last_usec = now_usec;
 
-        rules_changed = udev_rules_should_reload(rules);
-        builtins_changed = udev_builtin_validate(udev);
+        rules_changed = force || udev_rules_should_reload(rules);
+        builtins_changed = force || udev_builtin_validate(udev);
         if (!rules_changed && !builtins_changed)
                 return;
 
         worker_kill(false);
-        if (rules_changed)
-                rules = udev_rules_unref(rules);
+
         if (builtins_changed)
                 udev_builtin_exit(udev);
+
+        if (rules_changed) {
+                errno = 0;
+                new_rules = udev_rules_new(udev, arg_resolve_names);
+                if (!new_rules)
+                        log_warning_errno(errno_or_else(ENOMEM), "Failed to read udev rules, using the previously loaded rules, ignoring: %m");
+                else {
+                        udev_rules_unref(rules);
+                        rules = new_rules;
+                }
+        }
 }
 
 static void manager_set_default_children_max(void) {
@@ -2512,7 +2524,7 @@ int main(int argc, char *argv[]) {
         udev_builtin_init(udev);
 
         /* Create the runtime rules directory, as udevd did when it watched it with inotify, unlike systemd; its
-         * creation is no change of the rules, see manager_check_reload(). */
+         * creation is no change of the rules, see manager_reload(). */
         if (access(UDEV_ROOT_RUN "/udev/rules.d", F_OK) < 0)
                 udev_mkdir_p(UDEV_ROOT_RUN "/udev/rules.d", 0755);
 
@@ -2598,7 +2610,7 @@ int main(int argc, char *argv[]) {
         log_info("starting eudev-" VERSION " (udev " UDEV_VERSION ")");
 
         /* logs the error itself, like systemd v261; like systemd, the rules directories are not watched, as
-         * the rules files are checked before the queued events are started, see manager_check_reload() */
+         * the rules files are checked before the queued events are started, see manager_reload() */
         fd_inotify = udev_watch_init(udev);
         if (fd_inotify < 0) {
                 r = fd_inotify;
@@ -2815,14 +2827,11 @@ int main(int argc, char *argv[]) {
                                 is_ctrl = true;
                 }
 
-                /* reload requested or HUP signal received; like systemd, the next check whether the rules
-                 * changed is 3 seconds later */
+                /* reload requested or HUP signal received */
                 if (reload) {
-                        worker_kill(false);
-                        rules = udev_rules_unref(rules);
-                        udev_builtin_exit(udev);
                         reload = false;
-                        last_usec = now(CLOCK_MONOTONIC);
+                        if (!udev_exit)
+                                manager_reload(udev, /* force= */ true);
                 }
 
                 /* event has finished */
@@ -2849,12 +2858,9 @@ int main(int argc, char *argv[]) {
 
                 /* start new events, with the rules and the builtins reloaded first, when they changed */
                 if (!udev_list_node_is_empty(&event_list) && !udev_exit && !stop_exec_queue) {
-                        manager_check_reload(udev);
+                        manager_reload(udev, /* force= */ false);
                         udev_builtin_init(udev);
-                        if (rules == NULL)
-                                rules = udev_rules_new(udev, arg_resolve_names);
-                        if (rules != NULL)
-                                event_queue_start(udev);
+                        event_queue_start(udev);
                 }
 
                 if (is_signal) {
