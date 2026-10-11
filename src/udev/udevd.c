@@ -1894,9 +1894,10 @@ static void synthesized_event_received(struct udev_device *dev) {
 }
 
 /* Like synthesize_change_one() of systemd: triggers a change event of the device, and remembers its UUID, so
- * that /run/udev/queue is kept until udevd received the event. */
+ * that /run/udev/queue is kept until udevd received the event, unless the kernel sent none. */
 static int synthesize_change_one(struct udev_device *dev) {
         char uuid[ID128_UUID_STRING_MAX];
+        uint64_t seqnum;
         char *copy;
         int r;
 
@@ -1906,12 +1907,25 @@ static int synthesize_change_one(struct udev_device *dev) {
         /* Synthetic uevents with a UUID, which the kernel passes on as SYNTH_UUID=, and the caller arguments
          * need Linux 4.13 or newer. This finds out whether the kernel supports them, and triggers the uevent
          * without both when it does not, see uevent_trigger_with_args(). */
+        seqnum = uevent_seqnum();
         r = device_trigger_with_timestamp(dev, "change", device_trigger_args, uuid);
         if (r < 0)
                 return log_debug_errno(r, "%s: Failed to trigger 'change' uevent: %m", udev_device_get_devpath(dev));
         if (r == 0)
                 /* without a UUID, there is nothing to wait for */
                 return 0;
+
+        /* Unlike systemd, which then keeps /run/udev/queue for a minute, for a uevent that never comes: the
+         * kernel takes a new sequence number for every uevent it sends, before the write returns, so if the
+         * number did not change, the write sent nothing, whatever the reason, e.g. as the kernel suppresses
+         * the uevents of the device. If it changed, some uevent was sent, maybe not this one but one of
+         * another device meanwhile, and the UUID is remembered as before, like udevadm trigger --settle
+         * waits then. */
+        if (uevent_seqnum_unchanged(seqnum, uevent_seqnum())) {
+                log_debug("%s: The kernel sent no uevent for the device, not waiting for the 'change' uevent with UUID %s.",
+                          udev_device_get_devpath(dev), uuid);
+                return 0;
+        }
 
         /* Avoid /run/udev/queue file being removed by event_queue_update(). */
         copy = strdup(uuid);
