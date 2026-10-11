@@ -275,11 +275,9 @@ Print help text\&.
 Do not pipe output into a pager\&.
 .RE
 .PP
-In addition optional positional arguments can be used to specify one or more devices\&. Each one may be a device name or a sys path, which must start with
-/dev
-or
-/sys
-respectively, or a device ID, as shown in the
+In addition optional positional arguments can be used to specify one or more devices\&. Each one may be a device node, e\&.g\&.
+/dev/sda, a sys path, e\&.g\&.
+/sys/class/block/sda, or a symlink to either, also relative to the current directory, or a device ID, as shown in the
 J:
 field of the output (such as
 n1,
@@ -511,6 +509,17 @@ bind
 and
 unbind
 actions need Linux 4\&.14 or later\&.
+.sp
+The triggered events run the rules like the events of the kernel\&. With
+change, e\&.g\&. a sound card is triggered together with its children: its own
+change
+event, which sets
+SOUND_INITIALIZED=1
+(see
+78\-sound\-card\&.rules), runs before the events of its children of the same call, as the event of their parent; the
+change
+event of the card that the event of its control device triggers follows after them, so the card gets two such events, see
+\fBudev\fR(7)\&.
 .RE
 .PP
 \fB\-\-prioritized\-subsystem=\fR\fB\fISUBSYSTEM\fR\fI[,\fISUBSYSTEM\fR\&...]\fR\fR
@@ -559,12 +568,20 @@ Trigger events for devices with a matching sys device path\&. This option can be
 .PP
 \fB\-\-name\-match=\fR\fB\fINAME\fR\fR
 .RS 4
-Trigger events for devices with a matching device path\&. When this option is specified more than once, then each matching result is ORed, that is, all specified devices are triggered\&.
+Trigger events for the device with the given device node name and for all its children\&. A name that does not start with
+/dev/
+is looked up below
+/dev/, e\&.g\&.
+sda; the device specifications of the positional arguments are accepted as well\&. When this option is specified more than once, then each matching result is ORed, that is, all specified devices and their children are triggered\&.
 .RE
 .PP
 \fB\-b\fR, \fB\-\-parent\-match=\fR\fB\fISYSPATH\fR\fR
 .RS 4
-Trigger events for all children of a given device\&. When this option is specified more than once, then each matching result is ORed, that is, all children of each specified device are triggered\&.
+Trigger events for the given device and all its children\&. A path that does not start with
+/sys
+is looked up below
+/sys, e\&.g\&.
+class/block/sda; the device specifications of the positional arguments are accepted as well\&. When this option is specified more than once, then each matching result is ORed, that is, each specified device and all its children are triggered\&.
 .RE
 .PP
 \fB\-\-initialized\-match\fR, \fB\-\-initialized\-nomatch\fR
@@ -624,6 +641,19 @@ waiting, also when
 \fBudevd\fR
 does not run, see
 \fB\-\-wait\-daemon\fR\&.
+.sp
+Only the events that
+\fBudevadm trigger\fR
+triggered itself are waited for, not the events that rules trigger in response to them, e\&.g\&. the
+change
+event of a sound card that
+78\-sound\-card\&.rules
+triggers from the event of its control device, see
+\fBudev\fR(7), which may start only after
+\fBudevadm trigger\fR
+returned\&.
+\fBudevadm settle\fR
+waits for those too\&.
 .RE
 .PP
 \fB\-\-uuid\fR
@@ -653,14 +683,20 @@ Print version\&.
 Print help text\&.
 .RE
 .PP
-In addition optional positional arguments can be used to specify device names or sys paths, which must start with
-/dev
-or
-/sys
-respectively, or device IDs, as shown in the
+In addition optional positional arguments can be used to specify devices, as for
+\fBudevadm info\fR: a device node, e\&.g\&.
+/dev/sda, a sys path, e\&.g\&.
+/sys/class/block/sda, or a symlink to either, also relative to the current directory, or a device ID, as shown in the
 J:
 field of
-\fBudevadm info\fR\&.
+\fBudevadm info\fR\&. Like with
+\fB\-\-parent\-match=\fR, each of these devices is triggered together with all its children, the devices below it in
+/sys/devices, e\&.g\&.
+/dev/sda
+also triggers the partitions of the disk, and
+/sys/class/sound/card0
+the PCM, control and other devices of the sound card\&. To trigger a device without its children, use
+\fB\-\-sysname\-match=\fR\&.
 .SS "udevadm settle [\fIoptions\fR]"
 Watches the udev event queue, and exits if all current events are handled\&.
 .PP

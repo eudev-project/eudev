@@ -337,9 +337,10 @@
       </variablelist>
 
       <para>In addition optional positional arguments can be used
-      to specify one or more devices. Each one may be a device name or
-      a sys path, which must start with <filename>/dev</filename> or
-      <filename>/sys</filename> respectively, or a device ID, as shown in the
+      to specify one or more devices. Each one may be a device node, e.g.
+      <filename>/dev/sda</filename>, a sys path, e.g.
+      <filename>/sys/class/block/sda</filename>, or a symlink to either,
+      also relative to the current directory, or a device ID, as shown in the
       <literal>J:</literal> field of the output (such as <literal>n1</literal>,
       <literal>c5:1</literal>, <literal>b259:1</literal>, or
       <literal>+net:lo</literal>). The devices given with
@@ -529,6 +530,14 @@
             to list the possible actions. The default value is <literal>change</literal>.
             The <literal>bind</literal> and <literal>unbind</literal> actions need Linux 4.14 or
             later.</para>
+            <para>The triggered events run the rules like the events of the kernel. With
+            <literal>change</literal>, e.g. a sound card is triggered together with its children:
+            its own <literal>change</literal> event, which sets
+            <literal>SOUND_INITIALIZED=1</literal> (see <filename>78-sound-card.rules</filename>),
+            runs before the events of its children of the same call, as the event of their parent;
+            the <literal>change</literal> event of the card that the event of its control device
+            triggers follows after them, so the card gets two such events, see
+            <citerefentry><refentrytitle>udev</refentrytitle><manvolnum>7</manvolnum></citerefentry>.</para>
           </listitem>
         </varlistentry>
         <varlistentry>
@@ -616,16 +625,23 @@
         <varlistentry>
           <term><option>--name-match=<replaceable>NAME</replaceable></option></term>
           <listitem>
-            <para>Trigger events for devices with a matching device path. When this option is specified more than once,
-            then each matching result is ORed, that is, all specified devices are triggered.</para>
+            <para>Trigger events for the device with the given device node name and for all its children. A
+            name that does not start with <filename>/dev/</filename> is looked up below
+            <filename>/dev/</filename>, e.g. <literal>sda</literal>; the device specifications of the
+            positional arguments are accepted as well. When this option is specified more than once, then
+            each matching result is ORed, that is, all specified devices and their children are
+            triggered.</para>
           </listitem>
         </varlistentry>
         <varlistentry>
           <term><option>-b</option></term>
           <term><option>--parent-match=<replaceable>SYSPATH</replaceable></option></term>
           <listitem>
-            <para>Trigger events for all children of a given device. When this option is specified more than once,
-            then each matching result is ORed, that is, all children of each specified device are triggered.</para>
+            <para>Trigger events for the given device and all its children. A path that does not start with
+            <filename>/sys</filename> is looked up below <filename>/sys</filename>, e.g.
+            <literal>class/block/sda</literal>; the device specifications of the positional arguments are
+            accepted as well. When this option is specified more than once, then each matching result is ORed,
+            that is, each specified device and all its children are triggered.</para>
           </listitem>
         </varlistentry>
         <varlistentry>
@@ -698,6 +714,15 @@
             <command>udevadm</command> waiting, also when
             <command>udevd</command> does not run, see
             <option>--wait-daemon</option>.</para>
+            <para>Only the events that <command>udevadm trigger</command>
+            triggered itself are waited for, not the events that rules
+            trigger in response to them, e.g. the <literal>change</literal>
+            event of a sound card that <filename>78-sound-card.rules</filename>
+            triggers from the event of its control device, see
+            <citerefentry><refentrytitle>udev</refentrytitle><manvolnum>7</manvolnum></citerefentry>,
+            which may start only after <command>udevadm trigger</command>
+            returned. <command>udevadm settle</command> waits for those
+            too.</para>
           </listitem>
         </varlistentry>
         <varlistentry>
@@ -742,10 +767,18 @@
       </variablelist>
 
       <para>In addition optional positional arguments can be used
-      to specify device names or sys paths, which must start with
-      <filename>/dev</filename> or <filename>/sys</filename>
-      respectively, or device IDs, as shown in the <literal>J:</literal>
-      field of <command>udevadm info</command>.</para>
+      to specify devices, as for <command>udevadm info</command>: a device
+      node, e.g. <filename>/dev/sda</filename>, a sys path, e.g.
+      <filename>/sys/class/block/sda</filename>, or a symlink to either,
+      also relative to the current directory, or a device ID, as shown in
+      the <literal>J:</literal> field of <command>udevadm info</command>.
+      Like with <option>--parent-match=</option>, each of these devices is
+      triggered together with all its children, the devices below it in
+      <filename>/sys/devices</filename>, e.g. <filename>/dev/sda</filename>
+      also triggers the partitions of the disk, and
+      <filename>/sys/class/sound/card0</filename> the PCM, control and other
+      devices of the sound card. To trigger a device without its children,
+      use <option>--sysname-match=</option>.</para>
     </refsect2>
 
     <refsect2><title>udevadm settle

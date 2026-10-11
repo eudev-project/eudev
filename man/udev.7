@@ -30,6 +30,24 @@ The udev daemon,
 \fBudevd\fR(8), receives device uevents directly from the kernel whenever a device is added or removed from the system, or it changes its state\&. When udev receives a device event, it matches its configured set of rules against various device attributes to identify the device\&. Rules that match may provide additional device information to be stored in the udev database or to be used to create meaningful symlink names\&.
 .PP
 All device information udev processes is stored in the udev database and sent out to possible event subscribers\&. Access to all stored data and the event sources is provided by the library libudev\&.
+.PP
+\fBudevd\fR
+processes an event only after the earlier events of the same device, of its parent devices and of its children have finished, but the events of other devices, also of its siblings, in parallel\&. So an event that the kernel sends last need not finish last\&. For example, the kernel creates the control device of a sound card (controlC\fIN\fR) after all other devices of the card, but the events of other children of the card may still be in progress when the event of the control device has finished\&. Therefore
+78\-sound\-card\&.rules
+triggers a
+change
+event of the card from the event of its control device: as the event of their parent, it starts only after all earlier events of the card\*(Aqs children, and it sets
+\fISOUND_INITIALIZED=1\fR; this event is the point at which the card is ready\&.
+\fBudevadm trigger \-\-settle\fR
+does not wait for it, as it waits only for the events that it triggered itself, not for events that rules trigger in response\&. And
+\fBudevadm trigger\fR
+with its default action
+change
+triggers the card itself too: its own
+change
+event runs first, before the events of its children of the same call, and also sets
+\fISOUND_INITIALIZED=1\fR, and the event triggered by its control device follows, so the card gets two such events\&. See
+\fBudevadm\fR(8)\&.
 .SH "RULES FILES"
 The udev rules are read from the files located in the system rules directories
 /lib/udev/rules\&.d
