@@ -946,8 +946,8 @@ int uevent_trigger_share_uuid_supported(void)
 /* The sequence number of the last uevent that the kernel sent, from /sys/kernel/uevent_seqnum, or UINT64_MAX if
  * it cannot be read. The kernel counts it up for every uevent it sends, and only then, before the write to the
  * uevent attribute that triggered the uevent returns, so when it is the same before and after such a write, the
- * write triggered no uevent at all. */
-static uint64_t uevent_seqnum(void)
+ * write triggered no uevent at all, see uevent_seqnum_unchanged(). */
+uint64_t uevent_seqnum(void)
 {
         _cleanup_free_ char *s = NULL;
         uint64_t seqnum;
@@ -958,7 +958,10 @@ static uint64_t uevent_seqnum(void)
         return seqnum;
 }
 
-static bool uevent_seqnum_unchanged(uint64_t before, uint64_t after)
+/* Whether the sequence numbers of uevent_seqnum() read before and after a write to an uevent attribute show that
+ * the kernel sent no uevent for it, e.g. as it suppresses the uevents of a disk while add_disk() scans its
+ * partitions, or of a hidden block device. False when the number could not be read before. */
+bool uevent_seqnum_unchanged(uint64_t before, uint64_t after)
 {
         return before != UINT64_MAX && before == after;
 }

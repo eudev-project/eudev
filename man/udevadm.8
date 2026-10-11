@@ -616,6 +616,18 @@ with
 \fB\-\-include\-parents\fR, and hidden block devices, whose
 hidden
 attribute is 1, e\&.g\&. the path devices of native NVMe multipath (nvme0c0n1), are not waited for, as the kernel sends no events for them\&.
+.sp
+Neither is a device for which the kernel sends no event when it is triggered, e\&.g\&. a disk whose partition table the kernel is still reading after the disk appeared, as the kernel suppresses its events until then (the
+add
+event of the disk follows, without the UUID):
+\fBudevadm\fR
+reads
+/sys/kernel/uevent_seqnum, the sequence number of the last event the kernel sent, before and after it triggers the event of a device, and if the number did not change, the kernel sent nothing\&. If it changed, e\&.g\&. as other devices sent events meanwhile, the event is waited for\&. There is no timeout: an event that does not come keeps
+\fBudevadm\fR
+waiting, also when
+\fBudevd\fR
+does not run, see
+\fB\-\-wait\-daemon\fR\&.
 .RE
 .PP
 \fB\-\-uuid\fR
@@ -623,7 +635,8 @@ attribute is 1, e\&.g\&. the path devices of native NVMe multipath (nvme0c0n1), 
 Print the randomized UUIDs that the synthetic device events are triggered with to standard output, one line for each event\&. These UUIDs are included in the uevent environment block (in the
 SYNTH_UUID=
 property) and may be used to track delivery of the generated events\&. This requires Linux 4\&.13 or newer: with older kernels, the events are triggered without UUIDs, with a warning, and no UUIDs are printed, see
-\fB\-\-settle\fR\&. No UUID is printed, with a warning, for an event that was triggered without one before it was known whether the kernel supports them\&. No UUID is printed for a device without a subsystem or a hidden block device, which is triggered without one, as the kernel sends no event for it, and for a device whose event the kernel refused with the UUID, as it did not fit, which is triggered without one, with a warning\&.
+\fB\-\-settle\fR\&. No UUID is printed, with a warning, for an event that was triggered without one before it was known whether the kernel supports them\&. No UUID is printed for a device without a subsystem or a hidden block device, which is triggered without one, as the kernel sends no event for it, for a device for which the kernel sent no event when it was triggered (see
+\fB\-\-settle\fR), and for a device whose event the kernel refused with the UUID, as it did not fit, which is triggered without one, with a warning\&.
 .RE
 .PP
 \fB\-\-wait\-daemon[=\fR\fB\fISECONDS\fR\fR\fB]\fR

@@ -376,6 +376,7 @@ static int exec_list(struct udev *udev, char **list, const char *action, Set *se
                 char filename[UTIL_PATH_SIZE];
                 char id[UUID_STRING_MAX] = "";
                 const char *syspath;
+                uint64_t seqnum = UINT64_MAX;
                 bool with_uuid = false, sends;
 
                 syspath = *entry;
@@ -404,21 +405,12 @@ static int exec_list(struct udev *udev, char **list, const char *action, Set *se
                  * triggered without a UUID, and not waited for, see syspath_sends_uevents(). */
                 sends = syspath_sends_uevents(syspath);
                 if (sends) {
+                        /* for the check below, only when there is something to wait for or to print */
+                        if (settle_set || arg_uuid)
+                                seqnum = uevent_seqnum();
+
                         r = uevent_trigger_with_args(udev, syspath, action, args, id);
                         with_uuid = r > 0;
-                        if (r == 0 && arg_uuid) {
-                                if (uevent_trigger_uuid_supported() != 0)
-                                        /* e.g. the kernel refused the uevent with the UUID, as it did
-                                         * not fit, see uevent_trigger_fitting(), or the uevents of the
-                                         * probe did not tell whether the kernel supports UUIDs, e.g. as
-                                         * the kernel suppresses the uevents of the device */
-                                        log_warning("%s: Could not trigger the uevent with a UUID, triggered it without one.",
-                                                    eudev_basename(syspath));
-                                else if (!warned_uuid) {
-                                        log_warning("The kernel does not support UUIDs of synthetic uevents (its synthetic uevents carry no SYNTH_UUID=, as before Linux 4.13), triggering uevents without them.");
-                                        warned_uuid = true;
-                                }
-                        }
                 } else
                         r = write_uevent(filename, action, NULL);
                 if (r < 0) {
@@ -459,8 +451,45 @@ static int exec_list(struct udev *udev, char **list, const char *action, Set *se
                         if (ret == 0 && !ignore)
                                 ret = r;
                         continue;
-                } else
-                        log_debug("%s: Triggered device with action '%s'.", eudev_basename(syspath), action);
+                }
+
+                log_debug("%s: Triggered device with action '%s'.", eudev_basename(syspath), action);
+
+                if (!sends) {
+                        if (settle_set)
+                                log_debug("%s: The device has no subsystem or is a hidden block device, the kernel sends no uevent for it, not waiting for it.",
+                                          eudev_basename(syspath));
+                        continue;
+                }
+
+                /* Unlike systemd, which then prints a UUID that no uevent carries, and with --settle waits
+                 * for it forever: the kernel takes a new sequence number for every uevent it sends, before
+                 * the write returns, so if the number did not change, the write sent nothing, whatever the
+                 * reason, e.g. the kernel suppresses the uevents of a disk while add_disk() scans its
+                 * partitions (the "add" uevent of the disk follows then, without the UUID). There is
+                 * nothing to wait for, and no UUID to print. If the number changed, some uevent was sent,
+                 * maybe not this one but one of another device meanwhile, and it is waited for as before,
+                 * so this never skips a wait that would end. */
+                if (seqnum != UINT64_MAX && uevent_seqnum_unchanged(seqnum, uevent_seqnum())) {
+                        log_debug("%s: The kernel sent no uevent for the device, not %s.",
+                                  eudev_basename(syspath),
+                                  settle_set && arg_uuid ? "printing its UUID or waiting for it" :
+                                  settle_set ? "waiting for it" : "printing its UUID");
+                        continue;
+                }
+
+                if (!with_uuid && arg_uuid) {
+                        if (uevent_trigger_uuid_supported() != 0)
+                                /* e.g. the kernel refused the uevent with the UUID, as it did not fit, see
+                                 * uevent_trigger_fitting(), or the uevents of the probe did not tell
+                                 * whether the kernel supports UUIDs, e.g. as the socket lost them */
+                                log_warning("%s: Could not trigger the uevent with a UUID, triggered it without one.",
+                                            eudev_basename(syspath));
+                        else if (!warned_uuid) {
+                                log_warning("The kernel does not support UUIDs of synthetic uevents (its synthetic uevents carry no SYNTH_UUID=, as before Linux 4.13), triggering uevents without them.");
+                                warned_uuid = true;
+                        }
+                }
 
                 /* If the user asked for it, write event UUID to stdout */
                 if (arg_uuid && with_uuid)
@@ -468,10 +497,7 @@ static int exec_list(struct udev *udev, char **list, const char *action, Set *se
 
                 /* Wait for the UUID if the kernel supports it, as the device may be renamed while the
                  * event is processed. Otherwise, wait for an event for the device. */
-                if (settle_set != NULL && !sends)
-                        log_debug("%s: The device has no subsystem or is a hidden block device, the kernel sends no uevent for it, not waiting for it.",
-                                  eudev_basename(syspath));
-                else if (settle_set != NULL && set_put_strdup(settle_set, with_uuid ? id : syspath) < 0)
+                if (settle_set && set_put_strdup(settle_set, with_uuid ? id : syspath) < 0)
                         return log_oom();
         }
 

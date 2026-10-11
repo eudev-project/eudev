@@ -130,6 +130,8 @@ int device_get_sysattr_u16_full(struct udev_device *device, const char *sysattr,
 int device_get_sysattr_bool(struct udev_device *device, const char *sysattr);
 int device_get_sysattr_u64(struct udev_device *device, const char *sysattr, uint64_t *ret);
 bool syspath_sends_uevents(const char *syspath);
+uint64_t uevent_seqnum(void);
+bool uevent_seqnum_unchanged(uint64_t before, uint64_t after);
 /* Like sd_device_trigger_with_args() of systemd 66563e97b7, with the UUID of ID128_UUID_STRING_MAX bytes in ret_uuid */
 int uevent_trigger_with_args(struct udev *udev, const char *syspath, const char *action, char * const *args,
                              char *ret_uuid);

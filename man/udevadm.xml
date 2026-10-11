@@ -683,6 +683,21 @@
             devices of native NVMe multipath
             (<filename>nvme0c0n1</filename>), are not waited for, as the
             kernel sends no events for them.</para>
+            <para>Neither is a device for which the kernel sends no event
+            when it is triggered, e.g. a disk whose partition table the
+            kernel is still reading after the disk appeared, as the kernel
+            suppresses its events until then (the <literal>add</literal>
+            event of the disk follows, without the UUID):
+            <command>udevadm</command> reads
+            <filename>/sys/kernel/uevent_seqnum</filename>, the sequence
+            number of the last event the kernel sent, before and after it
+            triggers the event of a device, and if the number did not
+            change, the kernel sent nothing. If it changed, e.g. as other
+            devices sent events meanwhile, the event is waited for. There is
+            no timeout: an event that does not come keeps
+            <command>udevadm</command> waiting, also when
+            <command>udevd</command> does not run, see
+            <option>--wait-daemon</option>.</para>
           </listitem>
         </varlistentry>
         <varlistentry>
@@ -696,9 +711,10 @@
             <option>--settle</option>. No UUID is printed, with a warning, for an event that was
             triggered without one before it was known whether the kernel supports them. No UUID is
             printed for a device without a subsystem or a hidden
-            block device, which is triggered without one, as the kernel sends no event for it, and for a
-            device whose event the kernel refused with the UUID, as it did not fit, which is triggered
-            without one, with a warning.</para>
+            block device, which is triggered without one, as the kernel sends no event for it, for a
+            device for which the kernel sent no event when it was triggered (see
+            <option>--settle</option>), and for a device whose event the kernel refused with the UUID, as
+            it did not fit, which is triggered without one, with a warning.</para>
           </listitem>
         </varlistentry>
         <varlistentry>
