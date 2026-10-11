@@ -834,6 +834,17 @@ static bool relevant_sysfs_subdir(const struct dirent *de)
         return IN_SET(de->d_type, DT_DIR, DT_LNK);
 }
 
+/* Like the scan functions of sd-device's enumerator: a directory that does not exist (any more) is skipped
+ * silently, as scanning is racy; another failure to open it is logged at debug level, with the text of systemd,
+ * "libudev-enumerate:" where systemd has "sd-device-enumerator:", and the path as systemd shows it. */
+static int log_open_dir_failed(int error, const char *path, const char *suffix)
+{
+        if (error == ENOENT)
+                return 0;
+
+        return log_debug_errno(error, "libudev-enumerate: Failed to open directory '%s%s': %m", path, suffix);
+}
+
 static int scan_dir_and_add_devices(struct udev_enumerate *udev_enumerate,
                                     const char *basedir, const char *subdir1, const char *subdir2)
 {
@@ -851,7 +862,8 @@ static int scan_dir_and_add_devices(struct udev_enumerate *udev_enumerate,
                 strpcpyl(&s, l, "/", subdir2, NULL);
         dir = opendir(path);
         if (dir == NULL)
-                return -ENOENT;
+                /* systemd's path ends with a slash */
+                return log_open_dir_failed(errno, path, "/");
         for (dent = readdir(dir); dent != NULL; dent = readdir(dir)) {
                 char syspath[UTIL_PATH_SIZE];
                 struct udev_device *dev;
@@ -889,7 +901,7 @@ static int scan_dir(struct udev_enumerate *udev_enumerate, const char *basedir, 
         strscpyl(path, sizeof(path), "/sys/", basedir, NULL);
         dir = opendir(path);
         if (dir == NULL)
-                return -1;
+                return log_open_dir_failed(errno, path, "");
         for (dent = readdir(dir); dent != NULL; dent = readdir(dir)) {
                 if (!relevant_sysfs_subdir(dent))
                         continue;
@@ -939,8 +951,10 @@ static int scan_devices_tags(struct udev_enumerate *udev_enumerate)
 
                 strscpyl(path, sizeof(path), UDEV_ROOT_RUN "/udev/tags/", udev_list_entry_get_name(list_entry), NULL);
                 dir = opendir(path);
-                if (dir == NULL)
+                if (dir == NULL) {
+                        (void) log_open_dir_failed(errno, path, "");
                         continue;
+                }
                 for (dent = readdir(dir); dent != NULL; dent = readdir(dir)) {
                         struct udev_device *dev;
 
@@ -1008,7 +1022,7 @@ static int parent_crawl_children(struct udev_enumerate *enumerate, const char *p
 
         d = opendir(path);
         if (d == NULL)
-                return -errno;
+                return log_open_dir_failed(errno, path, "");
 
         for (dent = readdir(d); dent != NULL; dent = readdir(d)) {
                 char *child;
