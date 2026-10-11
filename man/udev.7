@@ -1343,8 +1343,8 @@ imports for USB and PCI devices\&.
 .PP
 80\-net\-altnames\&.rules
 requests
-\fIOPTIONS+="net_altnames"\fR, so that these names, except the one the interface is renamed to, are also assigned as alternative names of the interface, also the ones longer than 15 characters, like systemd does by default\&. That is independent of
-\fInet\&.ifnames=\fR, and it is also done for interfaces that are not renamed, and with the rule generator, which replaces
+\fIOPTIONS+="net_altnames"\fR, so that these names, except the one the interface is renamed to, are also assigned as alternative names of the interface, also the ones longer than 15 characters, like systemd does by default\&. That is independent of \fInet\&.ifnames=\fR, and it
+is also done for interfaces that are not renamed, and with the rule generator, which replaces
 80\-net\-name\-slot\&.rules\&. The alternative names are shown by e\&.g\&.
 \fBip link show\fR, and can be used instead of the interface name by
 \fBip\fR

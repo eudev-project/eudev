@@ -332,8 +332,13 @@
       <varlistentry>
         <term><varname>net.ifnames=</varname></term>
         <listitem>
-          <para>Network interfaces are renamed to give them predictable names
-          when possible. It is enabled by default; specifying 0 disables it.</para>
+          <para><phrase condition="net-ifnames-yes">Network interfaces are renamed to give them predictable names
+          when possible. It is enabled by default; specifying 0 disables it.</phrase><phrase condition="net-ifnames-no">Network
+          interfaces are renamed to give them predictable names when possible. It is
+          disabled by default, as eudev was configured with
+          <option>--with-net-ifnames-default=no</option>; specifying 1 enables it, and also the
+          alternative names of network interfaces, which are only assigned with 1 (see
+          <citerefentry><refentrytitle>udev</refentrytitle><manvolnum>7</manvolnum></citerefentry>).</phrase></para>
         </listitem>
       </varlistentry>
       <varlistentry>
@@ -402,12 +407,13 @@
     <command>udevd</command> and <command>udevadm</command>, when it is set, even to
     an empty string. It applies to the options described here, to the
     <varname>net.ifnames=</varname> option used by
+    <phrase condition="net-ifnames-no"><filename>80-net-altnames.rules</filename> and</phrase>
     <filename>80-net-name-slot.rules</filename>, and to
     <varname>IMPORT{cmdline}</varname> in the rules in general, and it is handled like
     the kernel command line, e.g. options starting with "rd." are ignored outside of an
     initrd:</para>
     <programlisting>UDEV_PROC_CMDLINE="net.naming_scheme=v250" udevadm test-builtin net_id /sys/class/net/eth0
-UDEV_PROC_CMDLINE="net.ifnames=0" udevadm test /sys/class/net/eth0</programlisting>
+UDEV_PROC_CMDLINE="<phrase condition="net-ifnames-yes">net.ifnames=0</phrase><phrase condition="net-ifnames-no">net.ifnames=1</phrase>" udevadm test /sys/class/net/eth0</programlisting>
     <para>For compatibility with systemd, <varname>$SYSTEMD_PROC_CMDLINE</varname>
     is used the same way when <varname>$UDEV_PROC_CMDLINE</varname> is not set.</para>
  </refsect1>

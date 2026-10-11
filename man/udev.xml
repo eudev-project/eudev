@@ -1379,7 +1379,10 @@ SUBSYSTEM=="net", OPTIONS="log_level=debug"</programlisting></para>
       <varname>ID_NET_NAME_MAC</varname> that is a valid interface name (see
       <varname>NAME</varname>), e.g. not longer than 15 characters, as systemd
       does, unless an earlier rule assigned
-      <varname>NAME=</varname>. This is the order of the default
+      <varname>NAME=</varname>. <phrase condition="net-ifnames-no">As eudev was configured with
+      <option>--with-net-ifnames-default=no</option>, this is only done with
+      <varname>net.ifnames=1</varname>; by default, interfaces keep the names the kernel gave
+      them.</phrase> This is the order of the default
       <varname>NamePolicy=</varname> of systemd, which however does not use
       <varname>ID_NET_NAME_MAC</varname>. Like its <literal>keep</literal> and
       <literal>kernel</literal> policies, the interface is not renamed when
@@ -1397,10 +1400,15 @@ SUBSYSTEM=="net", OPTIONS="log_level=debug"</programlisting></para>
       devices.</para>
 
       <para><filename>80-net-altnames.rules</filename> requests
-      <varname>OPTIONS+="net_altnames"</varname>, so that these names, except
+      <phrase condition="net-ifnames-yes"><varname>OPTIONS+="net_altnames"</varname>, so that these names, except
       the one the interface is renamed to, are also assigned as alternative
       names of the interface, also the ones longer than 15 characters, like
-      systemd does by default. That is independent of <varname>net.ifnames=</varname>, and it
+      systemd does by default. That is independent of <varname>net.ifnames=</varname>, and it</phrase><phrase condition="net-ifnames-no"><varname>OPTIONS+="net_altnames"</varname>,
+      so that these names, except the one the interface is renamed to, are also assigned
+      as alternative names of the interface, also the ones longer than 15 characters,
+      like systemd does by default. As eudev was configured with
+      <option>--with-net-ifnames-default=no</option>, that is only done with
+      <varname>net.ifnames=1</varname>, like the renaming, and it</phrase>
       is also done for interfaces that are not renamed, and with the rule
       generator, which replaces <filename>80-net-name-slot.rules</filename>.
       The alternative names are shown by e.g. <command>ip link show</command>,

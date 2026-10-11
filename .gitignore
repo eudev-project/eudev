@@ -25,6 +25,11 @@ rule_generator/write_net_rules
 
 rules/64-btrfs.rules
 
+# the man pages for --with-net-ifnames-default=no, made by the build, and the work directory of man/make.sh
+man/net-ifnames-no/*.[0-9]
+man/net-ifnames-no/*.tmp
+man/net-ifnames-no.tmp/
+
 # the work directory of "make regenerate-hwdb", left behind only if it was killed with SIGKILL
 hwdb.d/regenerate-hwdb.tmp/
 
