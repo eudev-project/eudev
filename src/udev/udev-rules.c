@@ -1237,62 +1237,52 @@ static void log_event_invalid_import_line(struct udev_event *event, struct udev_
 }
 
 /* Imports a "KEY=VALUE" line, like get_property_from_string() of systemd: whitespace around the key and the
- * value is removed, and the value may be quoted with '"' or '\''. Lines that are empty or comments are
- * skipped; invalid lines, without '=', with an empty key or value, or with a missing closing quote, are
- * skipped with a debug message, which shows the line like systemd: as far as it is parsed, i.e. the whole
- * line if it has no '=', and the part before the key and the key otherwise, see
- * log_event_invalid_import_line(). Returns -ENOMEM when out of memory, 0 otherwise. */
+ * value is removed, like systemd's strstrip() only spaces, tabs and line breaks, not e.g. vertical tabs, and
+ * the value may be quoted with '"' or '\''. Lines that are empty or comments are skipped; invalid lines,
+ * without '=', with an empty key or value, or with a missing closing quote, are skipped with a debug message,
+ * which shows the line like systemd: as far as it is parsed, i.e. the whole line if it has no '=', and the
+ * part before the key and the key otherwise, see log_event_invalid_import_line(). Returns -ENOMEM when out of
+ * memory, 0 otherwise. */
 static int import_property_from_string(struct udev_event *event, struct udev_rules *rules, struct token *rule,
                                        struct token *token, char *line) {
-        char *key, *key_end = NULL, *val, *val_end, *eq;
+        char *key, *val;
+        size_t len;
         int r;
 
         /* find key */
-        key = line;
-        while (isspace((unsigned char) key[0]))
-                key++;
+        key = skip_leading_chars(line, WHITESPACE);
 
         /* comment or empty line */
-        if (key[0] == '#' || key[0] == '\0')
+        if (IN_SET(key[0], '#', '\0'))
                 return 0;
 
         /* split key/value */
-        eq = strchr(key, '=');
-        if (!eq)
+        val = strchr(key, '=');
+        if (!val)
+                goto invalid;
+        *val++ = '\0';
+
+        key = strstrip(key);
+        if (isempty(key))
                 goto invalid;
 
-        key_end = eq;
-        while (key_end > key && isspace((unsigned char) key_end[-1]))
-                key_end--;
-        if (key_end == key)
-                goto invalid;
-
-        val = eq + 1;
-        while (isspace((unsigned char) val[0]))
-                val++;
-        val_end = val + strlen(val);
-        while (val_end > val && isspace((unsigned char) val_end[-1]))
-                val_end--;
-        if (val_end == val)
+        val = strstrip(val);
+        if (isempty(val))
                 goto invalid;
 
         /* unquote */
-        if (val[0] == '"' || val[0] == '\'') {
-                if (val_end - val == 1 || val_end[-1] != val[0])
+        if (IN_SET(val[0], '"', '\'')) {
+                len = strlen(val);
+                if (len == 1 || val[len-1] != val[0])
                         goto invalid;
+                val[len-1] = '\0';
                 val++;
-                val_end--;
         }
-
-        *key_end = '\0';
-        *val_end = '\0';
 
         r = import_property(event, rules, rule, token, key, val);
         return r == -ENOMEM ? r : 0;
 
 invalid:
-        if (key_end)
-                *key_end = '\0';
         log_event_invalid_import_line(event, rules, rule, token, line);
         return 0;
 }
@@ -1380,31 +1370,36 @@ static int import_program_into_properties(struct udev_event *event, struct udev_
         }
 
         if (truncated) {
+                char *last = NULL;
+
                 log_event_debug(event, rules, rule, token,
                                 "Result of \"%s\" is too long and truncated, ignoring the last line of the result.",
                                 program);
 
-                /* Drop the last line. */
-                line = strrchr(result, '\n');
-                if (line)
-                        line[0] = '\0';
+                /* Drop the last line, like systemd: after the last line break, "\n" or "\r". */
+                for (line = result; *line != '\0'; line++)
+                        if (strchr(NEWLINE, *line))
+                                last = line;
+                if (last)
+                        *last = '\0';
                 else
                         result[0] = '\0';
         }
 
-        line = result;
-        while (line != NULL) {
-                char *pos;
+        /* Like systemd, which splits the result with strv_split_newlines_full(EXTRACT_RETAIN_ESCAPE): the
+         * lines end at "\n" and at "\r", and runs of them are one line break; a backslash or a quote has no
+         * special meaning there. */
+        for (line = result + strspn(result, NEWLINE); *line != '\0'; line += strspn(line, NEWLINE)) {
+                size_t n = strcspn(line, NEWLINE);
+                bool end = line[n] == '\0';
 
-                pos = strchr(line, '\n');
-                if (pos != NULL) {
-                        pos[0] = '\0';
-                        pos = &pos[1];
-                }
+                line[n] = '\0';
                 err = import_property_from_string(event, rules, rule, token, line);
                 if (err < 0)
                         return err;
-                line = pos;
+                if (end)
+                        break;
+                line += n + 1;
         }
         return 1;
 }
