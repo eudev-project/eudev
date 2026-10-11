@@ -9,9 +9,7 @@
                 extension-element-prefixes="exsl"
                 version="1.0">
 
-<!-- The profiling variant of the man page style sheet: make.sh selects the text for the configured default
-     of net.ifnames= with the parameter profile.condition, see there. -->
-<xsl:import href="http://docbook.sourceforge.net/release/xsl/current/manpages/profile-docbook.xsl"/>
+<xsl:import href="http://docbook.sourceforge.net/release/xsl/current/manpages/docbook.xsl"/>
 
 <xsl:template name="top.comment" />
 

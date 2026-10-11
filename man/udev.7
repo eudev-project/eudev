@@ -1344,10 +1344,20 @@ for the virtual USB network interface of Dell iDRAC by
 75\-net\-description\&.rules
 imports for USB and PCI devices\&.
 .PP
+By default,
+80\-net\-name\-slot\&.rules
+renames interfaces unless the kernel command line has
+\fInet\&.ifnames=0\fR\&. When eudev is built with
+\fB\-\-with\-net\-ifnames\-default=no\fR, interfaces keep the names the kernel gave them unless the kernel command line has
+\fInet\&.ifnames=1\fR\&.
+.PP
 80\-net\-altnames\&.rules
 requests
-\fIOPTIONS+="net_altnames"\fR, so that these names, except the one the interface is renamed to, are also assigned as alternative names of the interface, also the ones longer than 15 characters, like systemd does by default\&. That is independent of \fInet\&.ifnames=\fR, and it
-is also done for interfaces that are not renamed, and with the rule generator, which replaces
+\fIOPTIONS+="net_altnames"\fR, so that these names, except the one the interface is renamed to, are also assigned as alternative names of the interface, also the ones longer than 15 characters, like systemd does by default\&. That is independent of
+\fInet\&.ifnames=\fR
+by default; when eudev is built with
+\fB\-\-with\-net\-ifnames\-default=no\fR, it is only done with
+\fInet\&.ifnames=1\fR, like the renaming\&. It is also done for interfaces that are not renamed, and with the rule generator, which replaces
 80\-net\-name\-slot\&.rules\&. The alternative names are shown by e\&.g\&.
 \fBip link show\fR, and can be used instead of the interface name by
 \fBip\fR

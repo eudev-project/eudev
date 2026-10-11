@@ -263,9 +263,9 @@
           When set to <option>no</option>, <varname>OPTIONS+="net_altnames"</varname>
           is ignored, i.e. no alternative names are assigned to network
           interfaces, which <filename>80-net-altnames.rules</filename> requests
-          <phrase condition="net-ifnames-yes">by default</phrase><phrase condition="net-ifnames-no">only with <varname>net.ifnames=1</varname> on the kernel
-          command line, as eudev was configured with
-          <option>--with-net-ifnames-default=no</option></phrase> (see
+          by default, or, when eudev is built with
+          <option>--with-net-ifnames-default=no</option>, only with
+          <varname>net.ifnames=1</varname> on the kernel command line (see
           <citerefentry><refentrytitle>udev</refentrytitle><manvolnum>7</manvolnum></citerefentry>).
           An invalid or empty value is ignored, with a warning whenever the
           configuration is read: when <command>udevd</command> starts, and by

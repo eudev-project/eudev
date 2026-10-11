@@ -382,9 +382,8 @@ AM_CONDITIONAL([ENABLE_RULE_GENERATOR], [test "x$install_rule_generator" = xyes]
 # default, network interfaces are renamed to their predictable names unless net.ifnames=0, and get the
 # alternative names regardless of it; with no, they keep the names the kernel gave them, and get the
 # predictable names and the alternative names only with net.ifnames=1. The variant of
-# 80-net-name-slot.rules and 80-net-altnames.rules that is installed (rules/net-ifnames-no/ for no) follows it,
-# and so do the man pages udev(7), udevd(8) and udev.conf(5) (made with the sed scripts in man/net-ifnames-no/
-# for no).
+# 80-net-name-slot.rules and 80-net-altnames.rules that is installed (rules/net-ifnames-no/ for no) follows it;
+# the man pages udev(7), udevd(8) and udev.conf(5) describe both.
 # ------------------------------------------------------------------------------
 AC_ARG_WITH([net-ifnames-default],
 	AS_HELP_STRING([--with-net-ifnames-default=yes|no],
