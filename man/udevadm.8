@@ -712,7 +712,13 @@ and
 \fB\-\-property=\fR
 are set\&.
 \fB\-\-exit\fR
-is sent alone, the other commands are ignored then\&. The first command that fails stops
+is sent alone, the other commands are ignored then\&. Like in systemd, all the commands are sent over one connection, and then
+\fBudevadm control\fR
+waits once until
+\fBudevd\fR
+handled all of them; an
+\fBudevd\fR
+of an older eudev version, which handles only one command per connection, gets each command over a connection of its own, with a wait each\&. The first command that fails stops
 \fBudevadm control\fR, which then exits with status 1, also when
 \fBudevd\fR
 is too old for a command\&. Sending commands requires root privileges\&.
@@ -788,7 +794,8 @@ will be cleared\&.
 .PP
 \fB\-t\fR, \fB\-\-timeout=\fR\fB\fISECONDS\fR\fR
 .RS 4
-The maximum number of seconds to wait for a reply from udevd\&. Takes a value in seconds, or in the usual supported time units, e\&.g\&.
+The maximum number of seconds to wait for a reply from udevd, i\&.e\&. until it handled all the commands, or each command with an older
+\fBudevd\fR\&. Takes a value in seconds, or in the usual supported time units, e\&.g\&.
 500ms
 or
 1min, which is rounded up to whole seconds, or

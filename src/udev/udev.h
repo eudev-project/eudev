@@ -184,6 +184,25 @@ int udev_node_remove(struct udev_device *dev);
 int udev_node_update(struct udev_device *dev, struct udev_device *dev_old);
 
 /* udev-ctrl.c */
+enum udev_ctrl_msg_type {
+        /* like systemd v261: ends the messages of a connection, see udev_ctrl_wait(); 0 was
+         * UDEV_CTRL_UNKNOWN, which udevd refused */
+        _UDEV_CTRL_END_MESSAGES,
+        UDEV_CTRL_SET_LOG_LEVEL,
+        UDEV_CTRL_STOP_EXEC_QUEUE,
+        UDEV_CTRL_START_EXEC_QUEUE,
+        UDEV_CTRL_RELOAD,
+        UDEV_CTRL_SET_ENV,
+        UDEV_CTRL_SET_CHILDREN_MAX,
+        UDEV_CTRL_PING,
+        UDEV_CTRL_EXIT,
+        UDEV_CTRL_SET_TRACE,
+        UDEV_CTRL_REVERT,
+        /* eudev: starts a connection with several messages, see udev_ctrl_send() */
+        UDEV_CTRL_BEGIN_MESSAGES,
+        _UDEV_CTRL_MSG_TYPE_MAX,
+};
+
 struct udev_ctrl;
 struct udev_ctrl *udev_ctrl_new(struct udev *udev);
 struct udev_ctrl *udev_ctrl_new_from_fd(struct udev *udev, int fd);
@@ -192,23 +211,20 @@ struct udev_ctrl *udev_ctrl_unref(struct udev_ctrl *uctrl);
 int udev_ctrl_cleanup(struct udev_ctrl *uctrl);
 struct udev *udev_ctrl_get_udev(struct udev_ctrl *uctrl);
 int udev_ctrl_get_fd(struct udev_ctrl *uctrl);
-int udev_ctrl_send_set_log_level(struct udev_ctrl *uctrl, int priority, int timeout);
-int udev_ctrl_send_stop_exec_queue(struct udev_ctrl *uctrl, int timeout);
-int udev_ctrl_send_start_exec_queue(struct udev_ctrl *uctrl, int timeout);
-int udev_ctrl_send_reload(struct udev_ctrl *uctrl, int timeout);
-int udev_ctrl_send_ping(struct udev_ctrl *uctrl, int timeout);
+int udev_ctrl_send(struct udev_ctrl *uctrl, enum udev_ctrl_msg_type type, int intval, const char *buf);
+int udev_ctrl_wait(struct udev_ctrl *uctrl, int timeout);
+int udev_ctrl_send_one(struct udev_ctrl *uctrl, enum udev_ctrl_msg_type type, int intval, const char *buf, int timeout,
+                       bool *ret_sent);
 int udev_ctrl_send_ping_full(struct udev_ctrl *uctrl, int timeout, bool *ret_sent);
 int udev_ctrl_send_exit(struct udev_ctrl *uctrl, int timeout);
-int udev_ctrl_send_set_env(struct udev_ctrl *uctrl, const char *key, int timeout);
-int udev_ctrl_send_set_children_max(struct udev_ctrl *uctrl, int count, int timeout);
-int udev_ctrl_send_set_trace(struct udev_ctrl *uctrl, bool enable, int timeout);
-int udev_ctrl_send_revert(struct udev_ctrl *uctrl, int timeout);
 struct udev_ctrl_connection;
 struct udev_ctrl_connection *udev_ctrl_get_connection(struct udev_ctrl *uctrl);
 struct udev_ctrl_connection *udev_ctrl_connection_ref(struct udev_ctrl_connection *conn);
 struct udev_ctrl_connection *udev_ctrl_connection_unref(struct udev_ctrl_connection *conn);
 struct udev_ctrl_msg;
-struct udev_ctrl_msg *udev_ctrl_receive_msg(struct udev_ctrl_connection *conn);
+struct udev_ctrl_msg *udev_ctrl_receive_msg(struct udev_ctrl_connection *conn, int timeout_msec);
+bool udev_ctrl_msg_is_begin(struct udev_ctrl_msg *ctrl_msg);
+bool udev_ctrl_msg_is_end(struct udev_ctrl_msg *ctrl_msg);
 struct udev_ctrl_msg *udev_ctrl_msg_unref(struct udev_ctrl_msg *ctrl_msg);
 int udev_ctrl_msg_reply(struct udev_ctrl_msg *ctrl_msg);
 int udev_ctrl_get_set_log_level(struct udev_ctrl_msg *ctrl_msg, int *ret);

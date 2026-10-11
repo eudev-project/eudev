@@ -54,11 +54,31 @@ static void print_help(void) {
         print_man_page_link();
 }
 
-/* Like send_control_commands() of systemd: the commands are sent in a fixed order, whatever their order
- * on the command line, and the first one that fails stops it. --exit is sent alone. */
+/* A control message of udevadm control, with what the messages of send_control_commands() call it. */
+struct control_command {
+        enum udev_ctrl_msg_type type;
+        int intval;
+        const char *buf;
+        const char *what;
+        /* the message when udevd does not know it, see udev_ctrl_send_one() */
+        const char *unsupported;
+};
+
+static int log_send_failure(const struct control_command *c, int r) {
+        if (r == -EOPNOTSUPP && c->unsupported)
+                return log_error_errno(r, "%s", c->unsupported);
+
+        return log_error_errno(r, "Failed to send %s: %m", c->what);
+}
+
+/* Like send_control_commands_via_ctrl() of systemd v261: the commands are sent in a fixed order, whatever their
+ * order on the command line, and then udevadm waits once until udevd handled all of them; the first one that
+ * fails stops it. --exit is sent alone, and waits until udevd exits. */
 static int send_control_commands(struct udev_ctrl *uctrl, int timeout,
                                  bool arg_exit, bool arg_revert, int arg_log_level, int arg_start_exec_queue,
                                  bool arg_reload, char **arg_env, int arg_max_children, bool arg_ping, int arg_trace) {
+        _cleanup_free_ struct control_command *commands = NULL;
+        size_t n = 0, i;
         char **e;
         int r;
 
@@ -69,60 +89,90 @@ static int send_control_commands(struct udev_ctrl *uctrl, int timeout,
                 return 0;
         }
 
-        if (arg_revert) {
-                r = udev_ctrl_send_revert(uctrl, timeout);
-                if (r == -EOPNOTSUPP)
-                        return log_error_errno(r, "udevd does not support --revert, restart it after upgrading.");
+        commands = new0(struct control_command, 7 + strv_length(arg_env));
+        if (!commands)
+                return log_oom();
+
+        if (arg_revert)
+                commands[n++] = (struct control_command) {
+                        .type = UDEV_CTRL_REVERT,
+                        .what = "revert request",
+                        .unsupported = "udevd does not support --revert, restart it after upgrading.",
+                };
+
+        if (arg_log_level >= 0)
+                commands[n++] = (struct control_command) {
+                        .type = UDEV_CTRL_SET_LOG_LEVEL,
+                        .intval = arg_log_level,
+                        .what = "request to set log level",
+                };
+
+        if (arg_start_exec_queue >= 0)
+                commands[n++] = (struct control_command) {
+                        .type = arg_start_exec_queue ? UDEV_CTRL_START_EXEC_QUEUE : UDEV_CTRL_STOP_EXEC_QUEUE,
+                        .what = arg_start_exec_queue ? "request to start exec queue" : "request to stop exec queue",
+                };
+
+        if (arg_reload)
+                commands[n++] = (struct control_command) {
+                        .type = UDEV_CTRL_RELOAD,
+                        .what = "reload request",
+                };
+
+        STRV_FOREACH(e, arg_env)
+                commands[n++] = (struct control_command) {
+                        .type = UDEV_CTRL_SET_ENV,
+                        .buf = *e,
+                        .what = "request to update environment",
+                };
+
+        if (arg_max_children >= 0)
+                commands[n++] = (struct control_command) {
+                        .type = UDEV_CTRL_SET_CHILDREN_MAX,
+                        .intval = arg_max_children,
+                        .what = "request to set number of children",
+                };
+
+        if (arg_ping)
+                commands[n++] = (struct control_command) {
+                        .type = UDEV_CTRL_PING,
+                        .what = "a ping message",
+                };
+
+        if (arg_trace >= 0)
+                commands[n++] = (struct control_command) {
+                        .type = UDEV_CTRL_SET_TRACE,
+                        .intval = arg_trace,
+                        .what = "request to set trace logging",
+                        .unsupported = "udevd does not support --trace, restart it after upgrading.",
+                };
+
+        for (i = 0; i < n; i++) {
+                r = udev_ctrl_send(uctrl, commands[i].type, commands[i].intval, commands[i].buf);
+                if (r == -EPROTONOSUPPORT)
+                        goto one_by_one;
                 if (r < 0)
-                        return log_error_errno(r, "Failed to send revert request: %m");
+                        return log_send_failure(&commands[i], r);
         }
 
-        if (arg_log_level >= 0) {
-                r = udev_ctrl_send_set_log_level(uctrl, arg_log_level, timeout);
-                if (r < 0)
-                        return log_error_errno(r, "Failed to send request to set log level: %m");
-        }
+        r = udev_ctrl_wait(uctrl, timeout);
+        if (r == -EPROTONOSUPPORT)
+                goto one_by_one;
+        if (r < 0)
+                return log_error_errno(r, "Failed to wait for daemon to reply: %m");
 
-        if (arg_start_exec_queue >= 0) {
-                if (arg_start_exec_queue)
-                        r = udev_ctrl_send_start_exec_queue(uctrl, timeout);
-                else
-                        r = udev_ctrl_send_stop_exec_queue(uctrl, timeout);
-                if (r < 0)
-                        return log_error_errno(r, "Failed to send request to %s exec queue: %m",
-                                               arg_start_exec_queue ? "start" : "stop");
-        }
+        return 0;
 
-        if (arg_reload) {
-                r = udev_ctrl_send_reload(uctrl, timeout);
-                if (r < 0)
-                        return log_error_errno(r, "Failed to send reload request: %m");
-        }
+one_by_one:
+        /* udevd of eudev before udev_ctrl_send() handles only the first message of a connection, and handled
+         * none of these, see udev_ctrl_send(): send each message on a connection of its own, and wait each
+         * time, which also finds out whether it knows --trace and --revert. */
+        log_debug("udevd handles one control message per connection, sending each one alone.");
 
-        STRV_FOREACH(e, arg_env) {
-                r = udev_ctrl_send_set_env(uctrl, *e, timeout);
+        for (i = 0; i < n; i++) {
+                r = udev_ctrl_send_one(uctrl, commands[i].type, commands[i].intval, commands[i].buf, timeout, NULL);
                 if (r < 0)
-                        return log_error_errno(r, "Failed to send request to update environment: %m");
-        }
-
-        if (arg_max_children >= 0) {
-                r = udev_ctrl_send_set_children_max(uctrl, arg_max_children, timeout);
-                if (r < 0)
-                        return log_error_errno(r, "Failed to send request to set number of children: %m");
-        }
-
-        if (arg_ping) {
-                r = udev_ctrl_send_ping(uctrl, timeout);
-                if (r < 0)
-                        return log_error_errno(r, "Failed to send a ping message: %m");
-        }
-
-        if (arg_trace >= 0) {
-                r = udev_ctrl_send_set_trace(uctrl, arg_trace, timeout);
-                if (r == -EOPNOTSUPP)
-                        return log_error_errno(r, "udevd does not support --trace, restart it after upgrading.");
-                if (r < 0)
-                        return log_error_errno(r, "Failed to send request to set trace logging: %m");
+                        return log_send_failure(&commands[i], r);
         }
 
         return 0;

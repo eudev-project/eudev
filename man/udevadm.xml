@@ -801,10 +801,13 @@
       <option>--ping</option> and <option>--trace=</option>. When an option is given more than once,
       the last one counts, and so does the last one of <option>--stop-exec-queue</option> and
       <option>--start-exec-queue</option>; all the properties of <option>--property=</option> are set.
-      <option>--exit</option> is sent alone, the other commands are ignored then. The first command that
-      fails stops <command>udevadm control</command>, which then exits with status 1, also when
-      <command>udevd</command> is too old for a command. Sending commands requires root
-      privileges.</para>
+      <option>--exit</option> is sent alone, the other commands are ignored then. Like in systemd, all
+      the commands are sent over one connection, and then <command>udevadm control</command> waits once
+      until <command>udevd</command> handled all of them; an <command>udevd</command> of an older eudev
+      version, which handles only one command per connection, gets each command over a connection of its
+      own, with a wait each. The first command that fails stops <command>udevadm control</command>,
+      which then exits with status 1, also when <command>udevd</command> is too old for a command.
+      Sending commands requires root privileges.</para>
       <variablelist>
         <varlistentry>
           <term><option>-e</option></term>
@@ -893,7 +896,8 @@
           <term><option>-t</option></term>
           <term><option>--timeout=<replaceable>SECONDS</replaceable></option></term>
           <listitem>
-            <para>The maximum number of seconds to wait for a reply from udevd. Takes a value in
+            <para>The maximum number of seconds to wait for a reply from udevd, i.e. until it handled
+            all the commands, or each command with an older <command>udevd</command>. Takes a value in
             seconds, or in the usual supported time units, e.g. <literal>500ms</literal> or
             <literal>1min</literal>, which is rounded up to whole seconds, or
             <literal>infinity</literal>. The default is 60 seconds, which 0 selects too.</para>

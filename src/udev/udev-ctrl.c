@@ -27,21 +27,6 @@
 /* wire protocol magic must match */
 #define UDEV_CTRL_MAGIC                                0xdead1dea
 
-enum udev_ctrl_msg_type {
-        UDEV_CTRL_UNKNOWN,
-        UDEV_CTRL_SET_LOG_LEVEL,
-        UDEV_CTRL_STOP_EXEC_QUEUE,
-        UDEV_CTRL_START_EXEC_QUEUE,
-        UDEV_CTRL_RELOAD,
-        UDEV_CTRL_SET_ENV,
-        UDEV_CTRL_SET_CHILDREN_MAX,
-        UDEV_CTRL_PING,
-        UDEV_CTRL_EXIT,
-        UDEV_CTRL_SET_TRACE,
-        UDEV_CTRL_REVERT,
-        _UDEV_CTRL_MSG_TYPE_MAX,
-};
-
 struct udev_ctrl_msg_wire {
         char version[16];
         unsigned int magic;
@@ -67,6 +52,8 @@ struct udev_ctrl {
         bool bound;
         bool cleanup_socket;
         bool connected;
+        /* udev_ctrl_send() started the connection with UDEV_CTRL_BEGIN_MESSAGES, udev_ctrl_wait() ends it */
+        bool batch;
 };
 
 struct udev_ctrl_connection {
@@ -264,16 +251,35 @@ static bool ctrl_msg_type_has_reply(enum udev_ctrl_msg_type type) {
         return IN_SET(type, UDEV_CTRL_SET_TRACE, UDEV_CTRL_REVERT);
 }
 
-/* Sends a message, and waits until udevd handled it, or for its reply. ret_sent, if not NULL, tells whether the
- * message was sent, so that a failure is one of waiting for udevd, like udev_ctrl_wait() of systemd v261, rather
- * than one of connecting to it or sending the message, like its udev_ctrl_send(). */
-static int ctrl_send_full(struct udev_ctrl *uctrl, enum udev_ctrl_msg_type type, int intval, const char *buf, int timeout,
-                          bool *ret_sent) {
-        struct udev_ctrl_msg_wire ctrl_msg_wire;
-        int err = 0;
+/* Connects the socket, a new one if it was connected before, as udevd handles one connection at a time and
+ * closes it when it is done with it. */
+static int ctrl_connect(struct udev_ctrl *uctrl) {
+        if (uctrl->connected) {
+                const int on = 1;
+                int fd;
 
-        if (ret_sent)
-                *ret_sent = false;
+                fd = socket(AF_LOCAL, SOCK_SEQPACKET|SOCK_NONBLOCK|SOCK_CLOEXEC, 0);
+                if (fd < 0)
+                        return -errno;
+                if (setsockopt(fd, SOL_SOCKET, SO_PASSCRED, &on, sizeof(on)) < 0)
+                        log_warning_errno(errno, "could not set SO_PASSCRED: %m");
+
+                safe_close(uctrl->sock);
+                uctrl->sock = fd;
+                uctrl->connected = false;
+                uctrl->batch = false;
+        }
+
+        if (connect(uctrl->sock, &uctrl->saddr.sa, uctrl->addrlen) < 0)
+                return -errno;
+
+        uctrl->connected = true;
+        return 0;
+}
+
+/* Sends one message on the connected socket, without waiting. */
+static int ctrl_send_msg(struct udev_ctrl *uctrl, enum udev_ctrl_msg_type type, int intval, const char *buf) {
+        struct udev_ctrl_msg_wire ctrl_msg_wire;
 
         memzero(&ctrl_msg_wire, sizeof(struct udev_ctrl_msg_wire));
         snprintf(ctrl_msg_wire.version, sizeof(ctrl_msg_wire.version), "%.*s", (int)(sizeof(ctrl_msg_wire.version) - 1), "udev-" VERSION);
@@ -285,34 +291,31 @@ static int ctrl_send_full(struct udev_ctrl *uctrl, enum udev_ctrl_msg_type type,
         else
                 ctrl_msg_wire.intval = intval;
 
-        if (uctrl->connected) {
-                const int on = 1;
-                int fd;
+        /* no SIGPIPE when udevd closed the connection already, see udev_ctrl_send() */
+        if (send(uctrl->sock, &ctrl_msg_wire, sizeof(ctrl_msg_wire), MSG_NOSIGNAL) < 0)
+                return -errno;
 
-                /* udevd handles one message on a connection and closes it, so connect again for each
-                 * message. */
-                fd = socket(AF_LOCAL, SOCK_SEQPACKET|SOCK_NONBLOCK|SOCK_CLOEXEC, 0);
-                if (fd < 0)
-                        return -errno;
-                if (setsockopt(fd, SOL_SOCKET, SO_PASSCRED, &on, sizeof(on)) < 0)
-                        log_warning_errno(errno, "could not set SO_PASSCRED: %m");
+        return 0;
+}
 
-                safe_close(uctrl->sock);
-                uctrl->sock = fd;
-                uctrl->connected = false;
-        }
+/* Sends a message on a connection of its own, and waits until udevd handled it, or for its reply. Every udevd
+ * handles such a connection, the one of eudev before udev_ctrl_send() too. ret_sent, if not NULL, tells
+ * whether the message was sent, so that a failure is one of waiting for udevd, like udev_ctrl_wait() of
+ * systemd v261, rather than one of connecting to it or sending the message, like its udev_ctrl_send(). */
+int udev_ctrl_send_one(struct udev_ctrl *uctrl, enum udev_ctrl_msg_type type, int intval, const char *buf, int timeout,
+                       bool *ret_sent) {
+        int err = 0;
 
-        if (!uctrl->connected) {
-                if (connect(uctrl->sock, &uctrl->saddr.sa, uctrl->addrlen) < 0) {
-                        err = -errno;
-                        goto out;
-                }
-                uctrl->connected = true;
-        }
-        if (send(uctrl->sock, &ctrl_msg_wire, sizeof(ctrl_msg_wire), 0) < 0) {
-                err = -errno;
+        if (ret_sent)
+                *ret_sent = false;
+
+        err = ctrl_connect(uctrl);
+        if (err < 0)
                 goto out;
-        }
+
+        err = ctrl_send_msg(uctrl, type, intval, buf);
+        if (err < 0)
+                goto out;
         if (ret_sent)
                 *ret_sent = true;
 
@@ -355,52 +358,108 @@ out:
         return err;
 }
 
-static int ctrl_send(struct udev_ctrl *uctrl, enum udev_ctrl_msg_type type, int intval, const char *buf, int timeout) {
-        return ctrl_send_full(uctrl, type, intval, buf, timeout, NULL);
-}
-
-int udev_ctrl_send_set_log_level(struct udev_ctrl *uctrl, int priority, int timeout) {
-        return ctrl_send(uctrl, UDEV_CTRL_SET_LOG_LEVEL, priority, NULL, timeout);
-}
-
-int udev_ctrl_send_stop_exec_queue(struct udev_ctrl *uctrl, int timeout) {
-        return ctrl_send(uctrl, UDEV_CTRL_STOP_EXEC_QUEUE, 0, NULL, timeout);
-}
-
-int udev_ctrl_send_start_exec_queue(struct udev_ctrl *uctrl, int timeout) {
-        return ctrl_send(uctrl, UDEV_CTRL_START_EXEC_QUEUE, 0, NULL, timeout);
-}
-
-int udev_ctrl_send_reload(struct udev_ctrl *uctrl, int timeout) {
-        return ctrl_send(uctrl, UDEV_CTRL_RELOAD, 0, NULL, timeout);
-}
-
-int udev_ctrl_send_set_env(struct udev_ctrl *uctrl, const char *key, int timeout) {
-        return ctrl_send(uctrl, UDEV_CTRL_SET_ENV, 0, key, timeout);
-}
-
-int udev_ctrl_send_set_children_max(struct udev_ctrl *uctrl, int count, int timeout) {
-        return ctrl_send(uctrl, UDEV_CTRL_SET_CHILDREN_MAX, count, NULL, timeout);
-}
-
-int udev_ctrl_send_ping(struct udev_ctrl *uctrl, int timeout) {
-        return ctrl_send(uctrl, UDEV_CTRL_PING, 0, NULL, timeout);
-}
-
 int udev_ctrl_send_ping_full(struct udev_ctrl *uctrl, int timeout, bool *ret_sent) {
-        return ctrl_send_full(uctrl, UDEV_CTRL_PING, 0, NULL, timeout, ret_sent);
+        return udev_ctrl_send_one(uctrl, UDEV_CTRL_PING, 0, NULL, timeout, ret_sent);
 }
 
 int udev_ctrl_send_exit(struct udev_ctrl *uctrl, int timeout) {
-        return ctrl_send(uctrl, UDEV_CTRL_EXIT, 0, NULL, timeout);
+        return udev_ctrl_send_one(uctrl, UDEV_CTRL_EXIT, 0, NULL, timeout, NULL);
 }
 
-int udev_ctrl_send_set_trace(struct udev_ctrl *uctrl, bool enable, int timeout) {
-        return ctrl_send(uctrl, UDEV_CTRL_SET_TRACE, enable, NULL, timeout);
+/* Like udev_ctrl_send() of systemd v261: sends the message on the connection that udev_ctrl_wait() ends,
+ * without waiting for udevd to handle it. Returns 0, or a negative errno if connecting or sending failed, e.g.
+ * -ENOENT or -ECONNREFUSED when udevd does not run.
+ *
+ * Unlike systemd, the connection starts with UDEV_CTRL_BEGIN_MESSAGES, which tells udevd to handle all the
+ * messages of the connection until _UDEV_CTRL_END_MESSAGES, as the udevd of systemd does with every connection.
+ * Without it, udevd handles the first message of a connection and closes it, as before, for an older udevadm,
+ * which sends one message per connection and waits until the connection ends. The udevd of an older eudev
+ * handles every connection that way: it ignores UDEV_CTRL_BEGIN_MESSAGES as a message of unknown type and
+ * closes the connection, so none of the messages is handled. That shows when a later message cannot be sent,
+ * here, or in udev_ctrl_wait(), as the connection was closed already, and -EPROTONOSUPPORT is returned then: each
+ * message needs to be sent with udev_ctrl_send_one() instead. */
+int udev_ctrl_send(struct udev_ctrl *uctrl, enum udev_ctrl_msg_type type, int intval, const char *buf) {
+        int r;
+
+        if (!uctrl->batch) {
+                r = ctrl_connect(uctrl);
+                if (r < 0)
+                        return r;
+
+                r = ctrl_send_msg(uctrl, UDEV_CTRL_BEGIN_MESSAGES, 0, NULL);
+                if (r < 0)
+                        return r;
+
+                uctrl->batch = true;
+        }
+
+        r = ctrl_send_msg(uctrl, type, intval, buf);
+        if (IN_SET(r, -EPIPE, -ECONNRESET))
+                return -EPROTONOSUPPORT;
+
+        return r;
 }
 
-int udev_ctrl_send_revert(struct udev_ctrl *uctrl, int timeout) {
-        return ctrl_send(uctrl, UDEV_CTRL_REVERT, 0, NULL, timeout);
+/* Like udev_ctrl_wait() of systemd v261: ends the messages of udev_ctrl_send() with _UDEV_CTRL_END_MESSAGES, and
+ * waits once, at most timeout seconds (-1 forever), until udevd handled all of them, which it tells by closing
+ * the connection after it read the last one. The replies of the messages that have one (see
+ * ctrl_msg_type_has_reply()) are skipped: an udevd that knows UDEV_CTRL_BEGIN_MESSAGES knows them too. Returns 0
+ * then, -ETIMEDOUT, -EPROTONOSUPPORT when an older udevd closed the connection without reading all the messages,
+ * see udev_ctrl_send(), or another negative errno. */
+int udev_ctrl_wait(struct udev_ctrl *uctrl, int timeout) {
+        usec_t deadline = USEC_INFINITY;
+        int r;
+
+        if (!uctrl->batch)
+                return 0;
+        uctrl->batch = false;
+
+        r = ctrl_send_msg(uctrl, _UDEV_CTRL_END_MESSAGES, 0, NULL);
+        if (IN_SET(r, -EPIPE, -ECONNRESET))
+                return -EPROTONOSUPPORT;
+        if (r < 0)
+                return r;
+
+        if (timeout >= 0)
+                deadline = usec_add(now(CLOCK_MONOTONIC), timeout * USEC_PER_SEC);
+
+        for (;;) {
+                struct pollfd pfd = { .fd = uctrl->sock, .events = POLLIN };
+                char reply[16];
+                int timeout_msec = -1;
+                ssize_t n;
+
+                if (deadline != USEC_INFINITY) {
+                        usec_t t = now(CLOCK_MONOTONIC);
+
+                        if (t >= deadline)
+                                return -ETIMEDOUT;
+                        timeout_msec = (int) MIN(DIV_ROUND_UP(deadline - t, USEC_PER_MSEC), (usec_t) INT_MAX);
+                }
+
+                r = poll(&pfd, 1, timeout_msec);
+                if (r < 0) {
+                        if (errno == EINTR)
+                                continue;
+                        return -errno;
+                }
+                if (r == 0)
+                        return -ETIMEDOUT;
+
+                n = recv(uctrl->sock, reply, sizeof(reply), MSG_DONTWAIT);
+                if (n > 0)
+                        /* replies */
+                        continue;
+                if (n == 0)
+                        /* udevd read all the messages, handled them and closed the connection */
+                        return 0;
+                if (IN_SET(errno, EINTR, EAGAIN))
+                        continue;
+                if (errno == ECONNRESET)
+                        /* udevd closed the connection without reading all the messages */
+                        return -EPROTONOSUPPORT;
+                return -errno;
+        }
 }
 
 /* Tells the sender of a message that has a reply that udevd handled it, see ctrl_msg_type_has_reply(). */
@@ -413,7 +472,9 @@ int udev_ctrl_msg_reply(struct udev_ctrl_msg *ctrl_msg) {
         return 0;
 }
 
-struct udev_ctrl_msg *udev_ctrl_receive_msg(struct udev_ctrl_connection *conn) {
+/* Receives the next message of the connection, waiting for it at most timeout_msec milliseconds. Returns NULL on
+ * an error, which is logged, and when the sender closed the connection, which is logged at debug level only. */
+struct udev_ctrl_msg *udev_ctrl_receive_msg(struct udev_ctrl_connection *conn, int timeout_msec) {
         struct udev_ctrl_msg *uctrl_msg;
         ssize_t size;
         struct cmsghdr *cmsg;
@@ -442,7 +503,7 @@ struct udev_ctrl_msg *udev_ctrl_receive_msg(struct udev_ctrl_connection *conn) {
                 pfd[0].fd = conn->sock;
                 pfd[0].events = POLLIN;
 
-                r = poll(pfd, 1, 10000);
+                r = poll(pfd, 1, timeout_msec);
                 if (r  < 0) {
                         if (errno == EINTR)
                                 continue;
@@ -466,6 +527,11 @@ struct udev_ctrl_msg *udev_ctrl_receive_msg(struct udev_ctrl_connection *conn) {
         size = recvmsg(conn->sock, &smsg, 0);
         if (size <  0) {
                 log_error_errno(errno, "unable to receive ctrl message: %m");
+                goto err;
+        }
+        if (size == 0) {
+                /* e.g. the sender exited without _UDEV_CTRL_END_MESSAGES, see udev_ctrl_send() */
+                log_debug("ctrl connection closed by the sender");
                 goto err;
         }
 
@@ -498,7 +564,7 @@ struct udev_ctrl_msg *udev_ctrl_receive_msg(struct udev_ctrl_connection *conn) {
         }
 
         /* e.g. from a newer udevadm, which then finds the message unsupported, if it expects a reply */
-        if (uctrl_msg->ctrl_msg_wire.type <= UDEV_CTRL_UNKNOWN ||
+        if (uctrl_msg->ctrl_msg_wire.type < _UDEV_CTRL_END_MESSAGES ||
             uctrl_msg->ctrl_msg_wire.type >= _UDEV_CTRL_MSG_TYPE_MAX) {
                 log_warning("received control message of unknown type %i, message ignored",
                             (int) uctrl_msg->ctrl_msg_wire.type);
@@ -518,6 +584,14 @@ struct udev_ctrl_msg *udev_ctrl_msg_unref(struct udev_ctrl_msg *ctrl_msg) {
         }
 
         return NULL;
+}
+
+bool udev_ctrl_msg_is_begin(struct udev_ctrl_msg *ctrl_msg) {
+        return ctrl_msg->ctrl_msg_wire.type == UDEV_CTRL_BEGIN_MESSAGES;
+}
+
+bool udev_ctrl_msg_is_end(struct udev_ctrl_msg *ctrl_msg) {
+        return ctrl_msg->ctrl_msg_wire.type == _UDEV_CTRL_END_MESSAGES;
 }
 
 /* Returns 1 and the log level in *ret if this is a SET_LOG_LEVEL message, and 0 otherwise, so that the caller

@@ -1696,22 +1696,10 @@ static void manager_set_default_children_max(void) {
         log_debug("Set children_max to %u", arg_children_max);
 }
 
-/* receive the udevd message from userspace */
-static void handle_ctrl_msg(struct udev_ctrl *uctrl) {
-        _cleanup_udev_ctrl_connection_unref_ struct udev_ctrl_connection *ctrl_conn = NULL;
-        _cleanup_udev_ctrl_msg_unref_ struct udev_ctrl_msg *ctrl_msg = NULL;
+/* handle one udevd message from userspace */
+static void handle_ctrl_msg_one(struct udev_ctrl_connection *ctrl_conn, struct udev_ctrl_msg *ctrl_msg) {
         const char *str;
         int i;
-
-        assert(uctrl);
-
-        ctrl_conn = udev_ctrl_get_connection(uctrl);
-        if (!ctrl_conn)
-                return;
-
-        ctrl_msg = udev_ctrl_receive_msg(ctrl_conn);
-        if (!ctrl_msg)
-                return;
 
         if (udev_ctrl_get_set_log_level(ctrl_msg, &i) > 0) {
                 /* this also refuses a negative level, which was ignored silently */
@@ -1805,8 +1793,60 @@ static void handle_ctrl_msg(struct udev_ctrl *uctrl) {
                 /* keep reference to block the client until we exit */
                 udev_ctrl_conn = udev_ctrl_connection_ref(ctrl_conn);
         }
+}
 
-        return;
+/* How long udevd waits for the messages of a control connection, which blocks its loop. */
+#define CTRL_MSG_TIMEOUT_USEC (10 * USEC_PER_SEC)
+
+/* receive the udevd messages from userspace */
+static void handle_ctrl_msg(struct udev_ctrl *uctrl) {
+        _cleanup_udev_ctrl_connection_unref_ struct udev_ctrl_connection *ctrl_conn = NULL;
+        _cleanup_udev_ctrl_msg_unref_ struct udev_ctrl_msg *ctrl_msg = NULL;
+        usec_t deadline;
+
+        assert(uctrl);
+
+        ctrl_conn = udev_ctrl_get_connection(uctrl);
+        if (!ctrl_conn)
+                return;
+
+        deadline = usec_add(now(CLOCK_MONOTONIC), CTRL_MSG_TIMEOUT_USEC);
+
+        ctrl_msg = udev_ctrl_receive_msg(ctrl_conn, CTRL_MSG_TIMEOUT_USEC / USEC_PER_MSEC);
+        if (!ctrl_msg)
+                return;
+
+        /* One message, as from udevadm before udev_ctrl_send(), which waits for the end of the connection. */
+        if (!udev_ctrl_msg_is_begin(ctrl_msg)) {
+                handle_ctrl_msg_one(ctrl_conn, ctrl_msg);
+                return;
+        }
+
+        /* Like systemd v261, all the messages of the connection, until _UDEV_CTRL_END_MESSAGES, which udevadm
+         * control sends right after them, then the end of the connection tells udevadm that all of them are
+         * handled. Unlike systemd, whose udevd reads them in its event loop, they are read here, at most until
+         * the deadline, while the loop of udevd waits. */
+        for (;;) {
+                usec_t n;
+
+                ctrl_msg = udev_ctrl_msg_unref(ctrl_msg);
+
+                /* after EXIT, the connection is kept until udevd exits, see handle_ctrl_msg_one() */
+                if (udev_exit)
+                        return;
+
+                n = now(CLOCK_MONOTONIC);
+                if (n >= deadline) {
+                        log_warning("Timed out waiting for the end of the control messages, closing the connection.");
+                        return;
+                }
+
+                ctrl_msg = udev_ctrl_receive_msg(ctrl_conn, (int) DIV_ROUND_UP(deadline - n, USEC_PER_MSEC));
+                if (!ctrl_msg || udev_ctrl_msg_is_end(ctrl_msg))
+                        return;
+
+                handle_ctrl_msg_one(ctrl_conn, ctrl_msg);
+        }
 }
 
 static void synthesized_events_clear(void) {
