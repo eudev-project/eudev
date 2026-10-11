@@ -388,9 +388,13 @@ static int run_command(void) {
                 if (prctl(PR_SET_PDEATHSIG, SIGTERM) < 0 || getppid() != parent)
                         _exit(EXIT_FAILURE);
 
+                /* Like FORK_CLOSE_ALL_FDS of systemd: close the log first, as its descriptors are closed
+                 * too, and, like systemd, open it again only when the command cannot be run. */
+                log_close();
                 close_all_fds();
 
                 execvp(arg_cmdline[0], arg_cmdline);
+                log_open();
                 log_error_errno(errno, "Failed to execute %s: %m", arg_cmdline[0]);
                 _exit(EXIT_FAILURE);
         }

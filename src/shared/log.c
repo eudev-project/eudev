@@ -276,6 +276,10 @@ static int log_open_internal(void) {
 int log_open(void) {
         int r;
 
+        /* Like systemd: errno is kept, so that a message right after log_open() can still show an error of
+         * the call before, e.g. in a child process that opens the log again after a failed exec. */
+        PROTECT_ERRNO;
+
         log_opened = true;
         r = log_open_internal();
 
