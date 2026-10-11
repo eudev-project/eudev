@@ -50,13 +50,15 @@ static int check_device(struct udev *udev, const char *path) {
         }
 
         /* Like sd_device_new_from_path(): a sysfs path, or a device node or a symlink to it. Not
-         * find_device(), which fails with ENODEV for every path. */
+         * find_device(), which fails with ENODEV for every path. Like systemd, only a device that does not
+         * exist (yet) is not there yet, which device_new_from_path() tells with ENODEV, also for a path
+         * that does not exist; any other error, e.g. ENOTDIR for a path below a file, is one, which check()
+         * warns about. */
         r = device_new_from_path(udev, path, &dev);
-        if (r < 0) {
-                if (IN_SET(r, -ENOENT, -ENODEV, -ENXIO, -ENOTDIR))
-                        return false;
+        if (r == -ENODEV)
+                return false;
+        if (r < 0)
                 return r;
-        }
 
         if (arg_wait_until == WAIT_UNTIL_INITIALIZED)
                 return device_is_processed(dev);
