@@ -66,6 +66,33 @@ static void print_device(struct udev_device *device, const char *source, int pro
         }
 }
 
+/* Like the filters of setup_monitor() of systemd, with its messages; a failure ends udevadm monitor. */
+static int apply_filters(struct udev_monitor *monitor, struct udev_list *subsystem_match_list,
+                         struct udev_list *tag_match_list) {
+        struct udev_list_entry *entry;
+        int r;
+
+        udev_list_entry_foreach(entry, udev_list_get_entry(subsystem_match_list)) {
+                const char *subsys = udev_list_entry_get_name(entry);
+                const char *devtype = udev_list_entry_get_value(entry);
+
+                r = udev_monitor_filter_add_match_subsystem_devtype(monitor, subsys, devtype);
+                if (r < 0)
+                        return log_error_errno(r, "Failed to apply subsystem filter '%s%s%s': %m",
+                                               subsys, devtype ? "/" : "", devtype ?: "");
+        }
+
+        udev_list_entry_foreach(entry, udev_list_get_entry(tag_match_list)) {
+                const char *tag = udev_list_entry_get_name(entry);
+
+                r = udev_monitor_filter_add_match_tag(monitor, tag);
+                if (r < 0)
+                        return log_error_errno(r, "Failed to apply tag filter '%s': %m", tag);
+        }
+
+        return 0;
+}
+
 static void help(void) {
         pager_open(0);
 
@@ -109,7 +136,9 @@ static int adm_monitor(struct udev *udev, int argc, char *argv[]) {
                 {}
         };
 
-        udev_list_init(udev, &subsystem_match_list, true);
+        /* Like systemd, every -s counts, also several with the same subsystem and different device types,
+         * e.g. -s block/disk -s block/partition, which are ORed. */
+        udev_list_init(udev, &subsystem_match_list, false);
         udev_list_init(udev, &tag_match_list, true);
 
         while((c = getopt_long_log(argc, argv, "pekus:t:hV", options)) >= 0)
@@ -184,8 +213,6 @@ static int adm_monitor(struct udev *udev, int argc, char *argv[]) {
 
         printf("monitor will print the received events for:\n");
         if (print_udev) {
-                struct udev_list_entry *entry;
-
                 udev_monitor = udev_monitor_new_from_netlink(udev, "udev");
                 if (udev_monitor == NULL) {
                         fprintf(stderr, "error: unable to create netlink socket\n");
@@ -194,20 +221,8 @@ static int adm_monitor(struct udev *udev, int argc, char *argv[]) {
                 udev_monitor_set_receive_buffer_size(udev_monitor, 128*1024*1024);
                 fd_udev = udev_monitor_get_fd(udev_monitor);
 
-                udev_list_entry_foreach(entry, udev_list_get_entry(&subsystem_match_list)) {
-                        const char *subsys = udev_list_entry_get_name(entry);
-                        const char *devtype = udev_list_entry_get_value(entry);
-
-                        if (udev_monitor_filter_add_match_subsystem_devtype(udev_monitor, subsys, devtype) < 0)
-                                fprintf(stderr, "error: unable to apply subsystem filter '%s'\n", subsys);
-                }
-
-                udev_list_entry_foreach(entry, udev_list_get_entry(&tag_match_list)) {
-                        const char *tag = udev_list_entry_get_name(entry);
-
-                        if (udev_monitor_filter_add_match_tag(udev_monitor, tag) < 0)
-                                fprintf(stderr, "error: unable to apply tag filter '%s'\n", tag);
-                }
+                if (apply_filters(udev_monitor, &subsystem_match_list, &tag_match_list) < 0)
+                        return 1;
 
                 if (udev_monitor_enable_receiving(udev_monitor) < 0) {
                         fprintf(stderr, "error: unable to subscribe to udev events\n");
@@ -226,8 +241,6 @@ static int adm_monitor(struct udev *udev, int argc, char *argv[]) {
         }
 
         if (print_kernel) {
-                struct udev_list_entry *entry;
-
                 kernel_monitor = udev_monitor_new_from_netlink(udev, "kernel");
                 if (kernel_monitor == NULL) {
                         fprintf(stderr, "error: unable to create netlink socket\n");
@@ -236,14 +249,10 @@ static int adm_monitor(struct udev *udev, int argc, char *argv[]) {
                 udev_monitor_set_receive_buffer_size(kernel_monitor, 128*1024*1024);
                 fd_kernel = udev_monitor_get_fd(kernel_monitor);
 
-                /* like systemd, the device type of -s SUBSYSTEM/DEVTYPE filters the kernel uevents too */
-                udev_list_entry_foreach(entry, udev_list_get_entry(&subsystem_match_list)) {
-                        const char *subsys = udev_list_entry_get_name(entry);
-                        const char *devtype = udev_list_entry_get_value(entry);
-
-                        if (udev_monitor_filter_add_match_subsystem_devtype(kernel_monitor, subsys, devtype) < 0)
-                                fprintf(stderr, "error: unable to apply subsystem filter '%s'\n", subsys);
-                }
+                /* Like systemd, the filters apply to the kernel uevents too: the device type of -s
+                 * SUBSYSTEM/DEVTYPE, and -t, which no kernel uevent passes, as it has no tags. */
+                if (apply_filters(kernel_monitor, &subsystem_match_list, &tag_match_list) < 0)
+                        return 1;
 
                 if (udev_monitor_enable_receiving(kernel_monitor) < 0) {
                         fprintf(stderr, "error: unable to subscribe to kernel events\n");

@@ -949,7 +949,10 @@
           <term><option>-s</option></term>
           <term><option>--subsystem-match=<replaceable>string[/string]</replaceable></option></term>
           <listitem>
-            <para>Filter kernel uevents and udev events by subsystem[/devtype]. Only events with a matching subsystem value will pass.</para>
+            <para>Filter kernel uevents and udev events by subsystem[/devtype]. Only events with a matching subsystem value will pass.
+            When this option is specified more than once, then each matching result is ORed, that is, all devices in the specified
+            subsystems are monitored, also with several device types of the same subsystem, e.g.
+            <literal>-s block/disk -s block/partition</literal>.</para>
           </listitem>
         </varlistentry>
         <varlistentry>
@@ -958,7 +961,7 @@
           <listitem>
             <para>Filter udev events by tag. Only udev events with a given tag attached will pass. When
             this option is specified more than once, the events of devices that have any of the given tags
-            pass.</para>
+            pass. Kernel uevents carry no tags, so with this option no kernel uevent passes.</para>
           </listitem>
         </varlistentry>
         <varlistentry>
