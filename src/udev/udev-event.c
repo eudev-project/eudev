@@ -1796,7 +1796,12 @@ int udev_event_execute_rules(struct udev_event *event,
                 if (EVENT_MODE_DESTRUCTIVE(event) && major(udev_device_get_devnum(dev)) != 0)
                         udev_watch_end(event->udev, dev);
 
+                /* Like systemd, the event stops when the copy cannot be made, e.g. without memory: without it,
+                 * the database entry of the device would be lost, and IMPORT{db} would find nothing. */
                 event->dev_db = udev_device_clone_with_db(dev);
+                if (!event->dev_db)
+                        return log_device_debug_errno(dev, errno > 0 ? errno : ENOMEM,
+                                                      "Failed to clone sd_device object: %m");
 
                 if (copy_all_tags(dev, event->dev_db) < 0)
                         log_warning("%s: Failed to copy all tags from old database entry, ignoring",
