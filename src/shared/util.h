@@ -63,6 +63,9 @@ int cpus_in_affinity_mask(void);
 
 int close_all_fds(void);
 
+int fd_nonblock(int fd, bool nonblock);
+int stdio_disable_nonblock(void);
+
 #define streq(a,b) (strcmp((a),(b)) == 0)
 #define strneq(a, b, n) (strncmp((a), (b), (n)) == 0)
 #define strcaseeq(a,b) (strcasecmp((a),(b)) == 0)

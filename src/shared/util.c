@@ -417,6 +417,43 @@ int close_all_fds(void) {
         return r;
 }
 
+/* Like fd_nonblock() of systemd: sets or clears O_NONBLOCK of the open file description of fd. Returns 1 if it
+ * was changed, 0 if it was like that already, and a negative errno on failure. */
+int fd_nonblock(int fd, bool nonblock) {
+        int flags, nflags;
+
+        assert(fd >= 0);
+
+        flags = fcntl(fd, F_GETFL, 0);
+        if (flags < 0)
+                return -errno;
+
+        nflags = nonblock ? flags | O_NONBLOCK : flags & ~O_NONBLOCK;
+        if (nflags == flags)
+                return 0;
+
+        if (fcntl(fd, F_SETFL, nflags) < 0)
+                return -errno;
+
+        return 1;
+}
+
+/* Like stdio_disable_nonblock() of systemd: clears O_NONBLOCK of stdin, stdout and stderr, e.g. in a child
+ * whose stdout is the write end of a pipe that was created with O_NONBLOCK for the read end of the parent:
+ * programs do not expect it, and their writes would fail with EAGAIN whenever the pipe is full. Returns 0, or
+ * the first negative errno. */
+int stdio_disable_nonblock(void) {
+        int fd, r, ret = 0;
+
+        for (fd = STDIN_FILENO; fd <= STDERR_FILENO; fd++) {
+                r = fd_nonblock(fd, false);
+                if (r < 0 && ret == 0)
+                        ret = r;
+        }
+
+        return ret;
+}
+
 bool streq_ptr(const char *a, const char *b) {
 
         /* Like streq(), but tries to make sense of NULL pointers */

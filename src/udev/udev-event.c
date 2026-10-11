@@ -621,6 +621,11 @@ static int spawn_exec(struct udev_event *event __attribute__((unused)),
                 safe_close(fd_stderr);
         }
 
+        /* Like FORK_REARRANGE_STDIO of systemd: pipe2() set O_NONBLOCK, meant for the read ends of the worker,
+         * also for the write ends, so turn it off for the program, whose writes would otherwise fail with
+         * EAGAIN when it writes more than the pipe holds, faster than the worker reads it. */
+        (void) stdio_disable_nonblock();
+
         /* terminate child in case parent goes away */
         prctl(PR_SET_PDEATHSIG, SIGTERM);
 
@@ -1164,16 +1169,16 @@ int udev_event_spawn(struct udev_event *event,
                 return log_error_errno(ENOMEM, "%s: Failed to get device properties: %m",
                                        udev_device_get_sysname(event->dev) ?: "n/a");
 
-        /* pipes from child to parent */
+        /* pipes from child to parent; like systemd, the program gets blocking write ends, see spawn_exec() */
         if (result != NULL || log_get_max_level() >= LOG_INFO) {
-                if (pipe2(outpipe, O_NONBLOCK) != 0) {
+                if (pipe2(outpipe, O_NONBLOCK|O_CLOEXEC) != 0) {
                         err = -errno;
                         log_error_errno(errno, "pipe failed: %m");
                         goto out;
                 }
         }
         if (log_get_max_level() >= LOG_INFO) {
-                if (pipe2(errpipe, O_NONBLOCK) != 0) {
+                if (pipe2(errpipe, O_NONBLOCK|O_CLOEXEC) != 0) {
                         err = -errno;
                         log_error_errno(errno, "pipe failed: %m");
                         goto out;
