@@ -33,7 +33,7 @@ The license notices of the files name these two licenses:
    - test/test-collect.c, which includes src/collect/collect.c, and
      test/test-scsi_id.c, which includes src/scsi_id/scsi_id.c
    - test/rule-syntax-check.py, test/hwdb-test.sh, hwdb.d/dedup-hwdb.py and
-     tools/gen-80-net-name-slot.py
+     tools/gen-net-naming-rules.py
 
  * **LGPL-2.1-or-later** (GNU Lesser General Public License v2.1 or later,
    LGPL-2.1-or-later.txt):

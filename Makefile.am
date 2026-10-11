@@ -55,7 +55,7 @@ EXTRA_DIST = \
 	LICENSES/murmurhash2-public-domain.txt \
 	shell-completion/bash/udevadm \
 	shell-completion/zsh/_udevadm \
-	tools/gen-80-net-name-slot.py
+	tools/gen-net-naming-rules.py
 
 if ENABLE_PROGRAMS
 if ENABLE_BASH_COMPLETION
