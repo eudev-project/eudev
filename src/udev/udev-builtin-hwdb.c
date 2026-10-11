@@ -103,16 +103,21 @@ static int udev_builtin_hwdb_search(struct udev_device *dev, struct udev_device 
                 const char *modalias = NULL;
 
                 dsubsys = udev_device_get_subsystem(d);
-                if (!dsubsys)
-                        continue;
 
                 /* look only at devices of a specific subsystem */
-                if (subsystem && !streq(dsubsys, subsystem))
+                if (subsystem && !streq_ptr(dsubsys, subsystem))
+                        continue;
+
+                /* Like systemd, the MODALIAS of a device without a subsystem is read only if the device has a
+                 * device number or an interface index: sd-device reads the properties of a device together
+                 * with its database, whose name needs one of them or the subsystem, and the lookup fails
+                 * without. */
+                if (!dsubsys && major(udev_device_get_devnum(d)) == 0 && udev_device_get_ifindex(d) <= 0)
                         continue;
 
                 modalias = udev_device_get_property_value(d, "MODALIAS");
 
-                if (streq(dsubsys, "usb") && streq_ptr(udev_device_get_devtype(d), "usb_device")) {
+                if (streq_ptr(dsubsys, "usb") && streq_ptr(udev_device_get_devtype(d), "usb_device")) {
                         /* if the usb_device does not have a modalias, compose one */
                         if (!modalias)
                                 modalias = modalias_usb(d, s, sizeof(s));
