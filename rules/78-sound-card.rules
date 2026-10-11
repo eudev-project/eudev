@@ -2,9 +2,15 @@
 
 # eudev: unlike systemd's copy, ID_PATH is imported early, see below (systemd imports it in 71-seat.rules,
 # which eudev does not have), and the explanation below says that the event of the control device need not
-# finish last, and that the "change" event of the card is the synchronization point.
+# finish last, and that the "change" event of the card is the synchronization point. Also unlike systemd's
+# copy, the "add" event of a card imports SOUND_INITIALIZED from the database, so that a card that was
+# initialized keeps it when its "add" event is replayed.
 
 SUBSYSTEM!="sound", GOTO="sound_end"
+
+# Keep SOUND_INITIALIZED (see below) when the 'add' event of a card that was
+# already initialized is replayed, e.g. by "udevadm trigger --action=add".
+ACTION=="add", KERNEL=="card*", IMPORT{db}="SOUND_INITIALIZED"
 
 ACTION=="add|change", KERNEL=="controlC*", ATTR{../uevent}="change"
 ACTION!="change", GOTO="sound_end"
