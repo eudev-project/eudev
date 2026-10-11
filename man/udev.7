@@ -808,7 +808,10 @@ is imported as empty\&. Unlike systemd, which waits for a writer and for data, t
 .PP
 db
 .RS 4
-Import a single property specified as the assigned value from the current device database\&. This works only if the database is already populated by an earlier event\&.
+Import a single property specified as the assigned value from the current device database\&. Besides the properties stored there by an earlier event, this finds the properties of the current event, such as
+\fIDEVNAME\fR
+or
+\fIACTION\fR, even when the database has no entry for the device yet; when both have the property, the value of the database is imported\&.
 .RE
 .PP
 cmdline

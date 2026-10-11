@@ -779,8 +779,11 @@
                 <term><literal>db</literal></term>
                 <listitem>
                   <para>Import a single property specified as the assigned value from the
-                  current device database. This works only if the database is already populated
-                  by an earlier event.</para>
+                  current device database. Besides the properties stored there by an earlier
+                  event, this finds the properties of the current event, such as
+                  <varname>DEVNAME</varname> or <varname>ACTION</varname>, even when the
+                  database has no entry for the device yet; when both have the property, the
+                  value of the database is imported.</para>
                 </listitem>
               </varlistentry>
               <varlistentry>
