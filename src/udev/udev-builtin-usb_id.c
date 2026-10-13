@@ -102,6 +102,7 @@ static const char* set_scsi_type(unsigned type_num) {
 #define USB_DT_INTERFACE                0x04
 
 static int dev_if_packed_info(struct udev_device *dev, char *ifs_str, size_t len) {
+        _cleanup_free_ char *lesc1 = NULL;
         _cleanup_close_ int fd = -1;
         ssize_t size;
         unsigned char buf[18 + 65535];
@@ -127,12 +128,13 @@ static int dev_if_packed_info(struct udev_device *dev, char *ifs_str, size_t len
         filename = strjoina(udev_device_get_syspath(dev), "/descriptors");
         fd = open(filename, O_RDONLY|O_CLOEXEC|O_NOCTTY);
         if (fd < 0)
-                return log_device_debug_errno(dev, errno, "Failed to open \"%s\": %m", filename);
+                return log_device_debug_errno(dev, errno, "Failed to open \"%s\": %m",
+                                              utf8_escape_for_log(filename, &lesc1));
 
         size = read(fd, buf, sizeof(buf));
         if (size < 18)
                 return log_device_warning_errno(dev, SYNTHETIC_ERRNO(EIO),
-                                                "Short read from \"%s\"", filename);
+                                                "Short read from \"%s\"", utf8_escape_for_log(filename, &lesc1));
         assert((size_t) size <= sizeof buf);
 
         ifs_str[0] = '\0';
@@ -146,7 +148,7 @@ static int dev_if_packed_info(struct udev_device *dev, char *ifs_str, size_t len
                 if (desc->bLength < 3)
                         break;
                 if (desc->bLength > (size_t) size - pos) {
-                        log_device_debug(dev, "Corrupt data read from \"%s\"", filename);
+                        log_device_debug(dev, "Corrupt data read from \"%s\"", utf8_escape_for_log(filename, &lesc1));
                         return -EIO;
                 }
                 pos += desc->bLength;

@@ -186,6 +186,7 @@ static bool db_entry_is_safe(struct udev_device *udev_device, const char *key, c
 
 int udev_device_update_db(struct udev_device *udev_device)
 {
+        _cleanup_free_ char *lesc1 = NULL, *lesc2 = NULL;
         _cleanup_free_ char *filename_tmp = NULL;
         bool has_info;
         const char *id;
@@ -216,12 +217,14 @@ int udev_device_update_db(struct udev_device *udev_device)
          * the other, and then fail to rename it, as the other renamed it already. */
         r = mkdir_parents(filename, 0755);
         if (r < 0) {
-                log_debug_errno(r, "unable to create the parent directories of '%s': %m", filename);
+                log_debug_errno(r, "unable to create the parent directories of '%s': %m",
+                                utf8_escape_for_log(filename, &lesc1));
                 goto fail;
         }
         r = fopen_temporary(filename, &f, &filename_tmp);
         if (r < 0) {
-                log_debug_errno(r, "unable to create temporary db file for '%s': %m", filename);
+                log_debug_errno(r, "unable to create temporary db file for '%s': %m",
+                                utf8_escape_for_log(filename, &lesc1));
                 goto fail;
         }
 
@@ -231,7 +234,8 @@ int udev_device_update_db(struct udev_device *udev_device)
          * transition from initramfs to the real root
          */
         if (fchmod(fileno(f), udev_device_get_db_persist(udev_device) ? 01644 : 0644) < 0) {
-                r = log_debug_errno(errno, "unable to chmod temporary db file '%s': %m", filename_tmp);
+                r = log_debug_errno(errno, "unable to chmod temporary db file '%s': %m",
+                                    utf8_escape_for_log(filename_tmp, &lesc1));
                 goto fail;
         }
 
@@ -279,21 +283,24 @@ int udev_device_update_db(struct udev_device *udev_device)
 
         errno = 0;
         if (fflush(f) != 0 || ferror(f)) {
-                r = log_debug_errno(errno > 0 ? errno : EIO, "unable to write temporary db file '%s': %m", filename_tmp);
+                r = log_debug_errno(errno > 0 ? errno : EIO, "unable to write temporary db file '%s': %m",
+                                    utf8_escape_for_log(filename_tmp, &lesc1));
                 goto fail;
         }
         r = fclose(f);
         f = NULL;
         if (r != 0) {
-                r = log_debug_errno(errno, "unable to write temporary db file '%s': %m", filename_tmp);
+                r = log_debug_errno(errno, "unable to write temporary db file '%s': %m",
+                                    utf8_escape_for_log(filename_tmp, &lesc1));
                 goto fail;
         }
         if (rename(filename_tmp, filename) < 0) {
-                r = log_debug_errno(errno, "unable to rename temporary db file '%s' to '%s': %m", filename_tmp, filename);
+                r = log_debug_errno(errno, "unable to rename temporary db file '%s' to '%s': %m",
+                                    utf8_escape_for_log(filename_tmp, &lesc1), utf8_escape_for_log(filename, &lesc2));
                 goto fail;
         }
         log_debug("created %s file '%s' for '%s'", has_info ? "db" : "empty",
-             filename, udev_device_get_devpath(udev_device));
+             utf8_escape_for_log(filename, &lesc1), utf8_escape_for_log(udev_device_get_devpath(udev_device), &lesc2));
         return 0;
 
 fail:
@@ -410,8 +417,8 @@ int device_get_sysattr_safe_string(struct udev_device *device, const char *sysat
                 if (log_get_max_level() >= LOG_DEBUG) {
                         _cleanup_free_ char *escaped = utf8_escape_non_printable(value);
 
-                        log_debug("%s: libudev: '%s' sysattr contains invalid characters, refusing: %s",
-                                  udev_device_get_sysname(device), sysattr, escaped ?: "(null)");
+                        log_device_debug(device, "libudev: '%s' sysattr contains invalid characters, refusing: %s",
+                                         sysattr, escaped ?: "(null)");
                 }
                 return -ENXIO;
         }
@@ -856,6 +863,7 @@ static int uevent_uuid_cache_read(void)
  * see uevent_trigger_decide_uuid_supported(). */
 static void uevent_uuid_cache_remove_leftovers(void)
 {
+        _cleanup_free_ char *lesc1 = NULL;
         _cleanup_closedir_ DIR *d = NULL;
         struct dirent *de;
 
@@ -871,9 +879,10 @@ static void uevent_uuid_cache_remove_leftovers(void)
 
                 if (unlinkat(dirfd(d), de->d_name, 0) < 0)
                         log_debug_errno(errno, "Failed to remove leftover temporary file %s/%s, ignoring: %m",
-                                        UEVENT_UUID_CACHE_DIR, de->d_name);
+                                        UEVENT_UUID_CACHE_DIR, utf8_escape_for_log(de->d_name, &lesc1));
                 else
-                        log_debug("Removed leftover temporary file %s/%s.", UEVENT_UUID_CACHE_DIR, de->d_name);
+                        log_debug("Removed leftover temporary file %s/%s.",
+                                  UEVENT_UUID_CACHE_DIR, utf8_escape_for_log(de->d_name, &lesc1));
         }
 }
 
@@ -1232,6 +1241,7 @@ bool syspath_sends_uevents(const char *syspath)
  * it was triggered without it, and a negative errno on failure. */
 static int uevent_trigger_fitting(const char *syspath, const char *action, const char *uuid, const char *args)
 {
+        _cleanup_free_ char *lesc1 = NULL, *lesc2 = NULL;
         int r;
 
         assert(syspath);
@@ -1243,7 +1253,7 @@ static int uevent_trigger_fitting(const char *syspath, const char *action, const
                         return r < 0 ? r : 1;
 
                 log_debug_errno(r, "%s: The kernel refused the uevent with the caller arguments, they may not fit into it, triggering '%s' without them: %m",
-                                syspath, action);
+                                utf8_escape_for_log(syspath, &lesc1), utf8_escape_for_log(action, &lesc2));
         }
 
         if (uuid) {
@@ -1252,7 +1262,7 @@ static int uevent_trigger_fitting(const char *syspath, const char *action, const
                         return r < 0 ? r : 1;
 
                 log_debug_errno(r, "%s: The kernel refused the uevent with the UUID, it may not fit into it, triggering '%s' without it: %m",
-                                syspath, action);
+                                utf8_escape_for_log(syspath, &lesc1), utf8_escape_for_log(action, &lesc2));
         }
 
         r = uevent_trigger_full(syspath, action, NULL, NULL);
@@ -1291,6 +1301,7 @@ static int uevent_trigger_fitting(const char *syspath, const char *action, const
 static int uevent_trigger_with_uuid(struct udev *udev, const char *syspath, const char *action,
                                     const char *uuid, const char *args)
 {
+        _cleanup_free_ char *lesc1 = NULL, *lesc2 = NULL;
         _cleanup_(udev_monitor_unrefp) struct udev_monitor *monitor = NULL;
         struct uevent_probe p = {
                 .syspath = syspath,
@@ -1344,11 +1355,12 @@ static int uevent_trigger_with_uuid(struct udev *udev, const char *syspath, cons
 
                 r = uevent_probe_filter(monitor, syspath, action);
                 if (r < 0)
-                        log_debug_errno(r, "Failed to filter the uevents of the kernel for %s, ignoring: %m", syspath);
+                        log_debug_errno(r, "Failed to filter the uevents of the kernel for %s, ignoring: %m",
+                                        utf8_escape_for_log(syspath, &lesc1));
         }
         if (!monitor || udev_monitor_enable_receiving(monitor) < 0) {
                 log_debug("Failed to watch the uevents of the kernel, triggering '%s' on %s without a UUID.",
-                          action, syspath);
+                          utf8_escape_for_log(action, &lesc1), utf8_escape_for_log(syspath, &lesc2));
                 r = uevent_trigger(syspath, action, NULL);
                 return r < 0 ? r : 0;
         }
@@ -1396,13 +1408,14 @@ static int uevent_trigger_with_uuid(struct udev *udev, const char *syspath, cons
         if (!uevent_seqnum_unchanged(before, after)) {
                 r = uevent_probe_wait(monitor, &p, usec_add(now(CLOCK_MONOTONIC), SYNTHETIC_UUID_PROBE_USEC));
                 if (r < 0)
-                        log_debug_errno(r, "Failed to wait for the uevent of %s without a UUID, ignoring: %m", syspath);
+                        log_debug_errno(r, "Failed to wait for the uevent of %s without a UUID, ignoring: %m",
+                                        utf8_escape_for_log(syspath, &lesc1));
         }
 
         if (p.synth_uuid_seen) {
                 if (uevent_trigger_decide_uuid_supported(1))
                         log_debug("The kernel supports UUIDs of synthetic uevents, but the uevent with UUID %s of %s did not arrive, triggered '%s' without a UUID.",
-                                  uuid, syspath, action);
+                                  uuid, utf8_escape_for_log(syspath, &lesc1), utf8_escape_for_log(action, &lesc2));
                 return 0;
         }
 
@@ -1417,7 +1430,8 @@ static int uevent_trigger_with_uuid(struct udev *udev, const char *syspath, cons
         }
 
         log_debug("Could not find out whether the kernel supports UUIDs of synthetic uevents, %s, triggered '%s' on %s without a UUID, trying again with the next uevent.",
-                  p.lost ? "uevents were lost" : "no uevent of the device arrived", action, syspath);
+                  p.lost ? "uevents were lost" : "no uevent of the device arrived",
+                  utf8_escape_for_log(action, &lesc1), utf8_escape_for_log(syspath, &lesc2));
         return 0;
 }
 

@@ -458,6 +458,7 @@ static char *get_hwdb_bin_paths (void) {
  * systemd's sd-hwdb, the reason of a failure is logged at debug level with the error; and like udev_hwdb_new()
  * of systemd's libudev, errno is set to the error, e.g. ENOENT when there is no hwdb.bin. */
 static struct udev_hwdb *hwdb_new(struct udev *udev, char *bin_paths) {
+        _cleanup_free_ char *lesc1 = NULL;
         struct udev_hwdb *hwdb;
         const char *hwdb_bin_path;
         const char sig[] = HWDB_SIG;
@@ -482,12 +483,12 @@ static struct udev_hwdb *hwdb_new(struct udev *udev, char *bin_paths) {
          * path of the opened one is shown */
         hwdb->bin_paths = bin_paths;
         NULSTR_FOREACH(hwdb_bin_path, hwdb->bin_paths) {
-                log_debug("Trying to open \"%s\"...", hwdb_bin_path);
+                log_debug("Trying to open \"%s\"...", utf8_escape_for_log(hwdb_bin_path, &lesc1));
                 hwdb->f = fopen(hwdb_bin_path, "re");
                 if (hwdb->f)
                         break;
                 if (errno != ENOENT) {
-                        r = log_debug_errno(errno, "Failed to open %s: %m", hwdb_bin_path);
+                        r = log_debug_errno(errno, "Failed to open %s: %m", utf8_escape_for_log(hwdb_bin_path, &lesc1));
                         goto fail;
                 }
         }
@@ -498,28 +499,29 @@ static struct udev_hwdb *hwdb_new(struct udev *udev, char *bin_paths) {
         }
 
         if (fstat(fileno(hwdb->f), &hwdb->st) < 0) {
-                r = log_debug_errno(errno, "Failed to stat %s: %m", hwdb_bin_path);
+                r = log_debug_errno(errno, "Failed to stat %s: %m", utf8_escape_for_log(hwdb_bin_path, &lesc1));
                 goto fail;
         }
         if (hwdb->st.st_size < (off_t) offsetof(struct trie_header_f, strings_len) + 8) {
-                r = log_debug_errno(EIO, "File %s is too short.", hwdb_bin_path);
+                r = log_debug_errno(EIO, "File %s is too short.", utf8_escape_for_log(hwdb_bin_path, &lesc1));
                 goto fail;
         }
         if (file_offset_beyond_memory_size(hwdb->st.st_size)) {
-                r = log_debug_errno(EFBIG, "File %s is too long.", hwdb_bin_path);
+                r = log_debug_errno(EFBIG, "File %s is too long.", utf8_escape_for_log(hwdb_bin_path, &lesc1));
                 goto fail;
         }
 
         hwdb->map = mmap(0, hwdb->st.st_size, PROT_READ, MAP_SHARED, fileno(hwdb->f), 0);
         if (hwdb->map == MAP_FAILED) {
-                r = log_debug_errno(errno, "Failed to map %s: %m", hwdb_bin_path);
+                r = log_debug_errno(errno, "Failed to map %s: %m", utf8_escape_for_log(hwdb_bin_path, &lesc1));
                 hwdb->map = NULL;
                 goto fail;
         }
 
         if (memcmp(hwdb->map, sig, sizeof(hwdb->head->signature)) != 0 ||
             (size_t)hwdb->st.st_size != le64toh(hwdb->head->file_size)) {
-                r = log_debug_errno(EINVAL, "Failed to recognize the format of %s.", hwdb_bin_path);
+                r = log_debug_errno(EINVAL, "Failed to recognize the format of %s.",
+                                    utf8_escape_for_log(hwdb_bin_path, &lesc1));
                 goto fail;
         }
 

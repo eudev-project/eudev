@@ -839,10 +839,13 @@ static bool relevant_sysfs_subdir(const struct dirent *de)
  * "libudev-enumerate:" where systemd has "sd-device-enumerator:", and the path as systemd shows it. */
 static int log_open_dir_failed(int error, const char *path, const char *suffix)
 {
+        _cleanup_free_ char *lesc1 = NULL, *lesc2 = NULL;
+
         if (error == ENOENT)
                 return 0;
 
-        return log_debug_errno(error, "libudev-enumerate: Failed to open directory '%s%s': %m", path, suffix);
+        return log_debug_errno(error, "libudev-enumerate: Failed to open directory '%s%s': %m",
+                               utf8_escape_for_log(path, &lesc1), utf8_escape_for_log(suffix, &lesc2));
 }
 
 static int scan_dir_and_add_devices(struct udev_enumerate *udev_enumerate,

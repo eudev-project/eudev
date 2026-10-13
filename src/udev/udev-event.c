@@ -1923,6 +1923,7 @@ int udev_event_execute_rules(struct udev_event *event,
                              usec_t timeout_usec,
                              struct udev_list *properties_list,
                              struct udev_rules *rules) {
+        _cleanup_free_ char *lesc1 = NULL, *lesc2 = NULL;
         struct udev_device *dev = event->dev;
         int r;
 
@@ -2211,7 +2212,8 @@ int udev_event_execute_rules(struct udev_event *event,
                         } else
                                 log_debug("Running in test mode, skipping handling device node '%s', devnum=%s, "
                                           "mode=%#o, uid="UID_FMT", gid="GID_FMT".",
-                                          udev_device_get_devnode(dev), udev_device_get_id_filename(dev),
+                                          utf8_escape_for_log(udev_device_get_devnode(dev), &lesc1),
+                                          utf8_escape_for_log(udev_device_get_id_filename(dev), &lesc2),
                                           event->mode, event->uid, event->gid);
                 }
 

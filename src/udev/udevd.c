@@ -350,6 +350,7 @@ static int worker_send_message(int fd, enum event_result result, const char *who
 /* Like udev_get_whole_disk() of systemd: returns 1 and the whole disk device and its device node, if the
  * events of the device are processed with a lock on the whole disk, otherwise 0. */
 static int udev_get_whole_disk(struct udev_device *dev, struct udev_device **ret_device, const char **ret_devname) {
+        _cleanup_free_ char *lesc1 = NULL;
         struct udev_device *whole_disk;
         const char *val;
         int r;
@@ -367,7 +368,8 @@ static int udev_get_whole_disk(struct udev_device *dev, struct udev_device **ret
          * For "drbd", see the commit message of fee854ee8ccde0cd28e0f925dea18cce35f3993d. */
         val = udev_device_get_sysname(dev);
         if (!val)
-                return log_debug_errno(ENOENT, "%s: Failed to check sysname: %m", udev_device_get_devpath(dev));
+                return log_debug_errno(ENOENT, "%s: Failed to check sysname: %m",
+                                       utf8_escape_for_log(udev_device_get_devpath(dev), &lesc1));
         if (startswith(val, "dm-") || startswith(val, "md") || startswith(val, "drbd"))
                 goto irrelevant;
 
@@ -377,11 +379,13 @@ static int udev_get_whole_disk(struct udev_device *dev, struct udev_device **ret
                    -ENODEV   /* The whole disk device was not found, it may already be removed. */))
                 goto irrelevant;
         if (r < 0)
-                return log_debug_errno(r, "%s: Failed to get whole disk device: %m", udev_device_get_devpath(dev));
+                return log_debug_errno(r, "%s: Failed to get whole disk device: %m",
+                                       utf8_escape_for_log(udev_device_get_devpath(dev), &lesc1));
 
         val = udev_device_get_devnode(whole_disk);
         if (!val)
-                return log_debug_errno(ENOENT, "%s: Failed to get devname: %m", udev_device_get_devpath(dev));
+                return log_debug_errno(ENOENT, "%s: Failed to get devname: %m",
+                                       utf8_escape_for_log(udev_device_get_devpath(dev), &lesc1));
 
         if (ret_device)
                 *ret_device = whole_disk;
@@ -420,6 +424,7 @@ static int device_open_block(struct udev_device *dev, int flags) {
  * disk that holds the lock, 0 and -1 if the event is processed without a lock, and -EAGAIN and the device
  * node of the whole disk, if another process holds a lock on it. */
 static int worker_lock_whole_disk(struct udev_device *dev, int *ret_fd, const char **ret_whole_disk) {
+        _cleanup_free_ char *lesc1 = NULL, *lesc2 = NULL;
         _cleanup_close_ int fd = -1;
         struct udev_device *dev_whole_disk;
         const char *whole_disk;
@@ -450,7 +455,9 @@ static int worker_lock_whole_disk(struct udev_device *dev, int *ret_fd, const ch
         if (fd < 0) {
                 bool ignore = ERRNO_IS_DEVICE_ABSENT_OR_EMPTY(fd);
 
-                log_debug_errno(fd, "%s: Failed to open '%s'%s: %m", udev_device_get_devpath(dev), whole_disk,
+                log_debug_errno(fd, "%s: Failed to open '%s'%s: %m",
+                                utf8_escape_for_log(udev_device_get_devpath(dev), &lesc1),
+                                utf8_escape_for_log(whole_disk, &lesc2),
                                 ignore ? ", ignoring" : "");
                 if (!ignore)
                         return fd;
@@ -460,10 +467,13 @@ static int worker_lock_whole_disk(struct udev_device *dev, int *ret_fd, const ch
 
         if (flock(fd, LOCK_SH|LOCK_NB) < 0) {
                 if (errno != EAGAIN)
-                        return log_debug_errno(errno, "%s: Failed to flock(%s): %m", udev_device_get_devpath(dev), whole_disk);
+                        return log_debug_errno(errno, "%s: Failed to flock(%s): %m",
+                                               utf8_escape_for_log(udev_device_get_devpath(dev), &lesc1),
+                                               utf8_escape_for_log(whole_disk, &lesc2));
 
                 log_debug_errno(errno, "%s: Block device %s is currently locked, requeuing the event.",
-                                udev_device_get_devpath(dev), whole_disk);
+                                utf8_escape_for_log(udev_device_get_devpath(dev), &lesc1),
+                                utf8_escape_for_log(whole_disk, &lesc2));
 
                 *ret_fd = -1;
                 *ret_whole_disk = whole_disk;
@@ -471,7 +481,7 @@ static int worker_lock_whole_disk(struct udev_device *dev, int *ret_fd, const ch
         }
 
         log_debug("%s: Successfully took flock(LOCK_SH) for %s, it will be released after the event has been processed.",
-                  udev_device_get_devpath(dev), whole_disk);
+                  utf8_escape_for_log(udev_device_get_devpath(dev), &lesc1), utf8_escape_for_log(whole_disk, &lesc2));
         *ret_fd = TAKE_FD(fd);
         *ret_whole_disk = NULL;
         return 1;
@@ -483,6 +493,7 @@ nolock:
 }
 
 static int worker_mark_block_device_read_only(struct udev_device *dev) {
+        _cleanup_free_ char *lesc1 = NULL, *lesc2 = NULL;
         _cleanup_close_ int fd = -1;
         const char *node, *val;
         int state = 1;
@@ -503,14 +514,16 @@ static int worker_mark_block_device_read_only(struct udev_device *dev) {
          * underlying block devices to receive changes. */
         val = udev_device_get_sysname(dev);
         if (!val)
-                return log_debug_errno(ENOENT, "%s: Failed to check sysname: %m", udev_device_get_devpath(dev));
+                return log_debug_errno(ENOENT, "%s: Failed to check sysname: %m",
+                                       utf8_escape_for_log(udev_device_get_devpath(dev), &lesc1));
         if (startswith(val, "dm-") || startswith(val, "md") || startswith(val, "drbd") ||
             startswith(val, "loop") || startswith(val, "nbd") || startswith(val, "zram"))
                 return 0;
 
         node = udev_device_get_devnode(dev);
         if (!node)
-                return log_debug_errno(ENOENT, "%s: Failed to get device node: %m", udev_device_get_devpath(dev));
+                return log_debug_errno(ENOENT, "%s: Failed to get device node: %m",
+                                       utf8_escape_for_log(udev_device_get_devpath(dev), &lesc1));
 
         fd = device_open_block(dev, O_RDONLY|O_CLOEXEC|O_NONBLOCK|O_NOCTTY);
         if (fd < 0) {
@@ -518,15 +531,18 @@ static int worker_mark_block_device_read_only(struct udev_device *dev) {
 
                 log_full_errno(ignore ? LOG_DEBUG : LOG_WARNING, fd,
                                "%s: Failed to open device node '%s'%s: %m",
-                               udev_device_get_devpath(dev), node, ignore ? ", ignoring" : "");
+                               utf8_escape_for_log(udev_device_get_devpath(dev), &lesc1),
+                               utf8_escape_for_log(node, &lesc2), ignore ? ", ignoring" : "");
                 return ignore ? 0 : fd;
         }
 
         if (ioctl(fd, BLKROSET, &state) < 0)
                 return log_warning_errno(errno, "%s: Failed to mark block device '%s' read-only: %m",
-                                         udev_device_get_devpath(dev), node);
+                                         utf8_escape_for_log(udev_device_get_devpath(dev), &lesc1),
+                                         utf8_escape_for_log(node, &lesc2));
 
-        log_info("%s: Successfully marked block device '%s' read-only.", udev_device_get_devpath(dev), node);
+        log_info("%s: Successfully marked block device '%s' read-only.",
+                 utf8_escape_for_log(udev_device_get_devpath(dev), &lesc1), utf8_escape_for_log(node, &lesc2));
         return 0;
 }
 
@@ -1277,6 +1293,7 @@ static void manager_requeue_locked_events_by_device(struct udev_device *dev) {
 }
 
 static int event_enter_locked(struct event *event, const char *whole_disk) {
+        _cleanup_free_ char *lesc1 = NULL;
         char buf[FORMAT_TIMESPAN_MAX];
         usec_t now_usec;
         char *copy;
@@ -1290,7 +1307,7 @@ static int event_enter_locked(struct event *event, const char *whole_disk) {
         if (event->requeue_timeout_usec > 0 && event->requeue_timeout_usec <= now_usec)
                 return log_warning_errno(ETIMEDOUT,
                                          "%s: The underlying block device is locked by a process more than %s, skipping event (SEQNUM=%llu, ACTION=%s).",
-                                         event->devpath,
+                                         utf8_escape_for_log(event->devpath, &lesc1),
                                          format_timespan(buf, sizeof(buf), EVENT_REQUEUE_TIMEOUT_USEC, USEC_PER_MINUTE),
                                          event->seqnum, strna(udev_device_get_action(event->dev)));
 
@@ -1301,7 +1318,8 @@ static int event_enter_locked(struct event *event, const char *whole_disk) {
         if (isempty(whole_disk))
                 return log_warning_errno(EBADMSG,
                                          "%s: Unexpected message from worker received, skipping event (SEQNUM=%llu, ACTION=%s).",
-                                         event->devpath, event->seqnum, strna(udev_device_get_action(event->dev)));
+                                         utf8_escape_for_log(event->devpath, &lesc1), event->seqnum,
+                                         strna(udev_device_get_action(event->dev)));
 
         copy = strdup(whole_disk);
         if (!copy)
@@ -1914,13 +1932,15 @@ static void synthesized_event_received(struct udev_device *dev) {
 /* Like synthesize_change_one() of systemd: triggers a change event of the device, and remembers its UUID, so
  * that /run/udev/queue is kept until udevd received the event, unless the kernel sent none. */
 static int synthesize_change_one(struct udev_device *dev) {
+        _cleanup_free_ char *lesc1 = NULL, *lesc2 = NULL;
         char uuid[ID128_UUID_STRING_MAX];
         struct synthesized_event *e;
         uint64_t seqnum;
         int r;
 
         log_debug("device %s closed, synthesising 'change' on %s",
-                  udev_device_get_devnode(dev), udev_device_get_syspath(dev));
+                  utf8_escape_for_log(udev_device_get_devnode(dev), &lesc1),
+                  utf8_escape_for_log(udev_device_get_syspath(dev), &lesc2));
 
         /* Synthetic uevents with a UUID, which the kernel passes on as SYNTH_UUID=, and the caller arguments
          * need Linux 4.13 or newer. This finds out whether the kernel supports them, and triggers the uevent
@@ -1928,7 +1948,8 @@ static int synthesize_change_one(struct udev_device *dev) {
         seqnum = uevent_seqnum();
         r = device_trigger_with_timestamp(dev, "change", device_trigger_args, uuid);
         if (r < 0)
-                return log_debug_errno(r, "%s: Failed to trigger 'change' uevent: %m", udev_device_get_devpath(dev));
+                return log_debug_errno(r, "%s: Failed to trigger 'change' uevent: %m",
+                                       utf8_escape_for_log(udev_device_get_devpath(dev), &lesc1));
         if (r == 0)
                 /* without a UUID, there is nothing to wait for */
                 return 0;
@@ -1941,7 +1962,7 @@ static int synthesize_change_one(struct udev_device *dev) {
          * waits then. */
         if (uevent_seqnum_unchanged(seqnum, uevent_seqnum())) {
                 log_debug("%s: The kernel sent no uevent for the device, not waiting for the 'change' uevent with UUID %s.",
-                          udev_device_get_devpath(dev), uuid);
+                          utf8_escape_for_log(udev_device_get_devpath(dev), &lesc1), uuid);
                 return 0;
         }
 
@@ -1977,6 +1998,7 @@ static int synthesize_change_one(struct udev_device *dev) {
 }
 
 static int synthesize_change(struct udev_device *dev) {
+        _cleanup_free_ char *lesc1 = NULL;
         pid_t pid, parent_pid;
         int r;
 
@@ -1991,7 +2013,7 @@ static int synthesize_change(struct udev_device *dev) {
                         r = set_reserve(synthesize_change_children, 1);
                 if (r < 0) {
                         log_warning_errno(r, "Failed to allocate memory to remember the process re-reading the partition table of %s, re-reading it synchronously: %m",
-                                          udev_device_get_devnode(dev));
+                                          utf8_escape_for_log(udev_device_get_devnode(dev), &lesc1));
                         (void) reread_partition_table(dev, REREADPT_FORCE_UEVENT|REREADPT_BSD_LOCK, device_trigger_args);
                         return 0;
                 }
@@ -2002,7 +2024,7 @@ static int synthesize_change(struct udev_device *dev) {
                         /* Unlike systemd, which then sends no change event at all, re-read the partition
                          * table synchronously, as before the child was introduced. */
                         log_warning_errno(errno, "Failed to fork process to re-read the partition table of %s, re-reading it synchronously: %m",
-                                          udev_device_get_devnode(dev));
+                                          utf8_escape_for_log(udev_device_get_devnode(dev), &lesc1));
                         (void) reread_partition_table(dev, REREADPT_FORCE_UEVENT|REREADPT_BSD_LOCK, device_trigger_args);
                         return 0;
                 }
@@ -2058,6 +2080,8 @@ static int synthesize_change(struct udev_device *dev) {
 }
 
 static int handle_inotify(struct udev *udev) {
+        _cleanup_free_ char *lesc1 = NULL;
+
         union inotify_event_buffer buffer;
         struct inotify_event *e;
         ssize_t l;
@@ -2077,7 +2101,8 @@ static int handle_inotify(struct udev *udev) {
                 if (!dev)
                         continue;
 
-                log_debug("inotify event: %x for %s", e->mask, udev_device_get_devnode(dev));
+                log_debug("inotify event: %x for %s",
+                          e->mask, utf8_escape_for_log(udev_device_get_devnode(dev), &lesc1));
                 if (e->mask & IN_CLOSE_WRITE) {
                         manager_requeue_locked_events_by_device(dev);
                         synthesize_change(dev);
@@ -2093,6 +2118,8 @@ static int handle_inotify(struct udev *udev) {
 }
 
 static void handle_signal(struct udev *udev __attribute__((unused)), int signo) {
+        _cleanup_free_ char *lesc1 = NULL;
+
         switch (signo) {
         case SIGINT:
         case SIGTERM:
@@ -2139,7 +2166,8 @@ static void handle_signal(struct udev *udev __attribute__((unused)), int signo) 
 
                         if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
                                 if (worker->event) {
-                                        log_error("worker ["PID_FMT"] failed while handling '%s'", pid, worker->event->devpath);
+                                        log_error("worker ["PID_FMT"] failed while handling '%s'",
+                                                  pid, utf8_escape_for_log(worker->event->devpath, &lesc1));
                                         event_broadcast_on_error(worker->event);
                                 }
                         }
@@ -2206,6 +2234,7 @@ static void cmdline_log_flush(void) {
  * The messages are logged later, see cmdline_log().
  */
 static int parse_proc_cmdline_item(const char *key, const char *value) {
+        _cleanup_free_ char *lesc1 = NULL;
         int r = 0;
 
         assert(key);
@@ -2254,7 +2283,8 @@ static int parse_proc_cmdline_item(const char *key, const char *value) {
                 r = signal_from_string(value);
                 if (r > 0 && !signal_terminates(r)) {
                         /* e.g. SIGCHLD, with which the timeout would not stop anything */
-                        cmdline_log(LOG_WARNING, 0, "%s=%s cannot terminate a process, ignoring.", key, value);
+                        cmdline_log(LOG_WARNING, 0, "%s=%s cannot terminate a process, ignoring.",
+                                    key, utf8_escape_for_log(value, &lesc1));
                         return 0;
                 }
                 if (r > 0)
@@ -2267,7 +2297,9 @@ static int parse_proc_cmdline_item(const char *key, const char *value) {
                 else {
                         r = parse_boolean(value);
                         if (r < 0)
-                                cmdline_log(LOG_WARNING, r, "Failed to parse udev.blockdev-read-only argument, ignoring: %s", value);
+                                cmdline_log(LOG_WARNING, r,
+                                            "Failed to parse udev.blockdev-read-only argument, ignoring: %s",
+                                            utf8_escape_for_log(value, &lesc1));
                         else
                                 config_by_kernel.blockdev_read_only = r;
                 }
@@ -2284,7 +2316,8 @@ static int parse_proc_cmdline_item(const char *key, const char *value) {
                 else {
                         r = parse_boolean(value);
                         if (r < 0)
-                                cmdline_log(LOG_WARNING, r, "Failed to parse udev.trace argument, ignoring: %s", value);
+                                cmdline_log(LOG_WARNING, r, "Failed to parse udev.trace argument, ignoring: %s",
+                                            utf8_escape_for_log(value, &lesc1));
                         else
                                 arg_trace = r;
                 }
@@ -2294,13 +2327,15 @@ static int parse_proc_cmdline_item(const char *key, const char *value) {
         } else {
                 /* like systemd, e.g. for a misspelled option; in an initrd, the "rd." is stripped above */
                 if (startswith(key, "udev."))
-                        cmdline_log(LOG_WARNING, 0, "Unknown udev kernel command line option \"%s\", ignoring.", key);
+                        cmdline_log(LOG_WARNING, 0, "Unknown udev kernel command line option \"%s\", ignoring.",
+                                    utf8_escape_for_log(key, &lesc1));
 
                 return 0;
         }
 
         if (r < 0)
-                cmdline_log(LOG_WARNING, r, "Failed to parse \"%s=%s\", ignoring: %m", key, value);
+                cmdline_log(LOG_WARNING, r, "Failed to parse \"%s=%s\", ignoring: %m",
+                            key, utf8_escape_for_log(value, &lesc1));
 
         return 0;
 }

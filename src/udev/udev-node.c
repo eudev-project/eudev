@@ -46,17 +46,20 @@
                                                    0x9e, 0x19, 0xec, 0x8b, 0xae, 0xf3, 0xe3, 0x2f })
 
 static int node_remove_symlink(struct udev_device *dev, const char *slink) {
+        _cleanup_free_ char *lesc1 = NULL;
+
         assert(dev);
         assert(slink);
 
         if (unlink(slink) < 0 && errno != ENOENT)
-                return log_debug_errno(errno, "Failed to remove '%s': %m", slink);
+                return log_debug_errno(errno, "Failed to remove '%s': %m", utf8_escape_for_log(slink, &lesc1));
 
         (void) rmdir_parents(slink, "/dev");
         return 0;
 }
 
 static int node_create_symlink(struct udev_device *dev, const char *devnode, const char *slink) {
+        _cleanup_free_ char *lesc1 = NULL, *lesc2 = NULL;
         struct stat st;
         int r;
 
@@ -73,32 +76,37 @@ static int node_create_symlink(struct udev_device *dev, const char *devnode, con
                 if (!S_ISLNK(st.st_mode))
                         return log_debug_errno(EEXIST,
                                                "Conflicting inode '%s' found, symlink to '%s' will not be created.",
-                                               slink, devnode);
+                                               utf8_escape_for_log(slink, &lesc1),
+                                               utf8_escape_for_log(devnode, &lesc2));
         } else if (errno != ENOENT)
-                return log_debug_errno(errno, "Failed to lstat() '%s': %m", slink);
+                return log_debug_errno(errno, "Failed to lstat() '%s': %m", utf8_escape_for_log(slink, &lesc1));
 
         for (unsigned i = 0;; i++) {
                 bool retry = i < NODE_CREATE_SYMLINK_MAX_RETRIES;
 
                 r = mkdir_parents_label(slink, 0755);
                 if (r < 0 && (r != -ENOENT || !retry))
-                        return log_debug_errno(r, "Failed to create parent directory of '%s': %m", slink);
+                        return log_debug_errno(r, "Failed to create parent directory of '%s': %m",
+                                               utf8_escape_for_log(slink, &lesc1));
                 if (r >= 0) {
                         /* use relative link */
                         r = symlink_atomic_full_label(devnode, slink, /* make_relative = */ true);
                         if (r >= 0)
                                 break;
                         if (r != -ENOENT || !retry)
-                                return log_debug_errno(r, "Failed to create symlink '%s' to '%s': %m", slink, devnode);
+                                return log_debug_errno(r, "Failed to create symlink '%s' to '%s': %m",
+                                                       utf8_escape_for_log(slink, &lesc1),
+                                                       utf8_escape_for_log(devnode, &lesc2));
                 }
 
                 /* Another worker removed the last devlink in a parent directory, and then the directory
                  * itself, after we created it. The lock of the other devlink does not protect ours.
                  * Let's try again. */
-                log_debug("A parent directory of '%s' vanished, retrying.", slink);
+                log_debug("A parent directory of '%s' vanished, retrying.", utf8_escape_for_log(slink, &lesc1));
         }
 
-        log_debug("Successfully created symlink '%s' to '%s'", slink, devnode);
+        log_debug("Successfully created symlink '%s' to '%s'",
+                  utf8_escape_for_log(slink, &lesc1), utf8_escape_for_log(devnode, &lesc2));
         return 0;
 }
 
@@ -192,6 +200,7 @@ finalize:
 }
 
 static int stack_directory_find_prioritized_devnode(struct udev_device *dev, int dirfd, bool add, char **ret) {
+        _cleanup_free_ char *lesc1 = NULL;
         struct udev *udev = udev_device_get_udev(dev);
         _cleanup_closedir_ DIR *dir = NULL;
         _cleanup_free_ char *devnode = NULL;
@@ -238,7 +247,8 @@ static int stack_directory_find_prioritized_devnode(struct udev_device *dev, int
 
                 r = stack_directory_read_one(udev, dirfd, de->d_name, &devnode, &priority);
                 if (r < 0 && r != -ENODEV)
-                        log_debug_errno(r, "Failed to read '%s', ignoring: %m", de->d_name);
+                        log_debug_errno(r, "Failed to read '%s', ignoring: %m",
+                                        utf8_escape_for_log(de->d_name, &lesc1));
         }
 
         *ret = TAKE_PTR(devnode);
@@ -246,6 +256,7 @@ static int stack_directory_find_prioritized_devnode(struct udev_device *dev, int
 }
 
 static int link_search_and_update(struct udev_device *dev, const char *slink, int dirfd, bool add) {
+        _cleanup_free_ char *lesc1 = NULL;
         int r;
 
         assert(dev);
@@ -255,11 +266,12 @@ static int link_search_and_update(struct udev_device *dev, const char *slink, in
         _cleanup_free_ char *devnode = NULL;
         r = stack_directory_find_prioritized_devnode(dev, dirfd, add, &devnode);
         if (r < 0)
-                return log_debug_errno(r, "Failed to determine device node with the highest priority for '%s': %m", slink);
+                return log_debug_errno(r, "Failed to determine device node with the highest priority for '%s': %m",
+                                       utf8_escape_for_log(slink, &lesc1));
         if (r > 0)
                 return node_create_symlink(dev, devnode, slink);
 
-        log_debug("No reference left for '%s', removing", slink);
+        log_debug("No reference left for '%s', removing", utf8_escape_for_log(slink, &lesc1));
         return node_remove_symlink(dev, slink);
 }
 
@@ -410,6 +422,7 @@ static int stack_directory_get_name(const char *slink, char **ret, char **ret_ol
  * entry that exists in both directories was written by this version, which is kept. Returns the number
  * of entries found in the old directory. */
 static int stack_directory_migrate_old(int fd, const char *old_name) {
+        _cleanup_free_ char *lesc1 = NULL, *lesc2 = NULL;
         _cleanup_closedir_ DIR *dir = NULL;
         _cleanup_free_ char *old_path = NULL;
         struct dirent *de;
@@ -438,21 +451,27 @@ static int stack_directory_migrate_old(int fd, const char *old_name) {
 
                 if (fstatat(fd, de->d_name, &st, AT_SYMLINK_NOFOLLOW) >= 0) {
                         if (unlinkat(dirfd(dir), de->d_name, 0) < 0 && errno != ENOENT)
-                                log_debug_errno(errno, "Failed to remove '%s/%s', ignoring: %m", old_path, de->d_name);
+                                log_debug_errno(errno, "Failed to remove '%s/%s', ignoring: %m",
+                                                utf8_escape_for_log(old_path, &lesc1),
+                                                utf8_escape_for_log(de->d_name, &lesc2));
                         continue;
                 }
 
                 if (renameat(dirfd(dir), de->d_name, fd, de->d_name) < 0) {
                         if (errno != ENOENT)
-                                log_debug_errno(errno, "Failed to move '%s/%s', ignoring: %m", old_path, de->d_name);
+                                log_debug_errno(errno, "Failed to move '%s/%s', ignoring: %m",
+                                                utf8_escape_for_log(old_path, &lesc1),
+                                                utf8_escape_for_log(de->d_name, &lesc2));
                         continue;
                 }
 
-                log_debug("Moved '%s' from the old stack directory '%s'.", de->d_name, old_path);
+                log_debug("Moved '%s' from the old stack directory '%s'.",
+                          utf8_escape_for_log(de->d_name, &lesc1), utf8_escape_for_log(old_path, &lesc2));
         }
 
         if (rmdir(old_path) < 0 && !IN_SET(errno, ENOENT, ENOTEMPTY))
-                log_debug_errno(errno, "Failed to remove the old stack directory '%s', ignoring: %m", old_path);
+                log_debug_errno(errno, "Failed to remove the old stack directory '%s', ignoring: %m",
+                                utf8_escape_for_log(old_path, &lesc1));
 
         return n;
 }
@@ -462,6 +481,7 @@ static int stack_directory_open_and_lock(
                 char **ret_dirpath,
                 int *ret_dirfd,
                 LockFile *ret_lockfile) {
+        _cleanup_free_ char *lesc1 = NULL;
 
         static const char *const dirs[] = {
                 UDEV_ROOT_RUN "/udev/links/",
@@ -479,12 +499,13 @@ static int stack_directory_open_and_lock(
 
         r = stack_directory_get_name(slink, &name, &old_name);
         if (r < 0)
-                return log_debug_errno(r, "Failed to build stack directory name for '%s': %m", slink);
+                return log_debug_errno(r, "Failed to build stack directory name for '%s': %m",
+                                       utf8_escape_for_log(slink, &lesc1));
 
         for (size_t i = 0; i < ELEMENTSOF(dirs); i++) {
                 r = udev_mkdir_p(dirs[i], 0755);
                 if (r < 0)
-                        return log_debug_errno(r, "Failed to create '%s': %m", dirs[i]);
+                        return log_debug_errno(r, "Failed to create '%s': %m", utf8_escape_for_log(dirs[i], &lesc1));
         }
 
         /* 1. Take a lock for the stack directory. */
@@ -494,7 +515,7 @@ static int stack_directory_open_and_lock(
 
         r = make_lock_file(lockname, LOCK_EX, &lockfile);
         if (r < 0)
-                return log_debug_errno(r, "Failed to create and lock '%s': %m", lockname);
+                return log_debug_errno(r, "Failed to create and lock '%s': %m", utf8_escape_for_log(lockname, &lesc1));
 
         /* 2. Create and open the stack directory. Do not create the stack directory before taking a lock,
          * otherwise the directory may be removed by another worker. */
@@ -504,12 +525,14 @@ static int stack_directory_open_and_lock(
 
         dirfd = open_mkdir_at(AT_FDCWD, dirpath, O_CLOEXEC | O_DIRECTORY | O_NOFOLLOW | O_RDONLY, 0755);
         if (dirfd < 0)
-                return log_debug_errno(dirfd, "Failed to open stack directory '%s': %m", dirpath);
+                return log_debug_errno(dirfd, "Failed to open stack directory '%s': %m",
+                                       utf8_escape_for_log(dirpath, &lesc1));
 
         /* 3. Take over the entries of the stack directory of an older eudev, if any. */
         r = stack_directory_migrate_old(dirfd, old_name);
         if (r < 0)
-                log_debug_errno(r, "Failed to take over the old stack directory of '%s', ignoring: %m", slink);
+                log_debug_errno(r, "Failed to take over the old stack directory of '%s', ignoring: %m",
+                                utf8_escape_for_log(slink, &lesc1));
 
         *ret_dirpath = TAKE_PTR(dirpath);
         *ret_dirfd = TAKE_FD(dirfd);
@@ -619,6 +642,8 @@ static int devlink_resolve_target(const char *slink, const char *target, char **
 }
 
 static int link_update(struct udev_device *dev, const char *slink, bool add) {
+        _cleanup_free_ char *lesc1 = NULL, *lesc2 = NULL;
+
         /* On cleaning up,
          * 1. close the stack directory,
          * 2. remove the stack directory if it is empty,
@@ -647,12 +672,14 @@ static int link_update(struct udev_device *dev, const char *slink, bool add) {
                         /* E.g. the devlink points outside of /dev/ or to something that is not a device
                          * node, or the entry of its owner cannot be read. Then the devlink is repaired
                          * by searching the device with the highest priority below. */
-                        log_debug_errno(r, "Failed to get the current device node priority for '%s', ignoring: %m", slink);
+                        log_debug_errno(r, "Failed to get the current device node priority for '%s', ignoring: %m",
+                                        utf8_escape_for_log(slink, &lesc1));
         }
 
         r = stack_directory_update(dev, dirfd, add);
         if (r < 0)
-                return log_debug_errno(r, "Failed to update stack directory for '%s': %m", slink);
+                return log_debug_errno(r, "Failed to update stack directory for '%s': %m",
+                                       utf8_escape_for_log(slink, &lesc1));
 
         if (taken_over)
                 /* An older eudev, which is still running during an upgrade, handled the devlink since its
@@ -673,7 +700,8 @@ static int link_update(struct udev_device *dev, const char *slink, bool add) {
                 r = readlink_malloc(slink, &target);
                 if (r < 0) {
                         if (r != -ENOENT)
-                                log_debug_errno(r, "Failed to read symbolic link '%s', ignoring: %m", slink);
+                                log_debug_errno(r, "Failed to read symbolic link '%s', ignoring: %m",
+                                                utf8_escape_for_log(slink, &lesc1));
 
                         /* The devlink does not exist. Let's find the most suitable owner, and create the
                          * devlink. This is typically not necessary and does nothing, but for safety in the
@@ -689,7 +717,8 @@ static int link_update(struct udev_device *dev, const char *slink, bool add) {
                 /* udev creates devlinks with relative targets, compare the path they refer to. */
                 r = devlink_resolve_target(slink, target, &resolved);
                 if (r < 0)
-                        return log_debug_errno(r, "Failed to resolve the target '%s' of '%s': %m", target, slink);
+                        return log_debug_errno(r, "Failed to resolve the target '%s' of '%s': %m",
+                                               utf8_escape_for_log(target, &lesc1), utf8_escape_for_log(slink, &lesc2));
 
                 if (streq(node, resolved)) /* owned by us, needs to update. */
                         return link_search_and_update(dev, slink, dirfd, add);
@@ -698,21 +727,24 @@ static int link_update(struct udev_device *dev, const char *slink, bool add) {
                  * current devlink, in case that the devlink is manually modified by user. */
 
                 if (!path_startswith(resolved, "/dev/")) {
-                        log_debug("Symbolic link '%s' points to '%s' which is outside of '/dev/', updating it.", slink, target);
+                        log_debug("Symbolic link '%s' points to '%s' which is outside of '/dev/', updating it.",
+                                  utf8_escape_for_log(slink, &lesc1), utf8_escape_for_log(target, &lesc2));
                         return link_search_and_update(dev, slink, dirfd, add);
                 }
 
                 struct stat st;
                 if (lstat(resolved, &st) < 0) {
                         if (errno != ENOENT)
-                                log_debug_errno(errno, "Failed to stat '%s', ignoring: %m", resolved);
+                                log_debug_errno(errno, "Failed to stat '%s', ignoring: %m",
+                                                utf8_escape_for_log(resolved, &lesc1));
 
                         /* The current target device is also already removed? Let's update. */
                         return link_search_and_update(dev, slink, dirfd, add);
                 }
 
                 if (!IN_SET(st.st_mode & S_IFMT, S_IFBLK, S_IFCHR)) {
-                        log_debug("Symbolic link '%s' points to '%s' which is not a device node, updating it.", slink, target);
+                        log_debug("Symbolic link '%s' points to '%s' which is not a device node, updating it.",
+                                  utf8_escape_for_log(slink, &lesc1), utf8_escape_for_log(target, &lesc2));
                         return link_search_and_update(dev, slink, dirfd, add);
                 }
 
@@ -765,6 +797,7 @@ static void device_get_devpath_by_devnum(struct udev_device *dev, char *buf, siz
 }
 
 int udev_node_update(struct udev_device *dev, struct udev_device *dev_old) {
+        _cleanup_free_ char *lesc1 = NULL;
         char filename[UTIL_PATH_SIZE];
         struct udev_list_entry *list_entry;
         int r;
@@ -780,12 +813,12 @@ int udev_node_update(struct udev_device *dev, struct udev_device *dev_old) {
                         continue;
 
                 log_debug("Removing/updating old device symlink '%s', which is no longer belonging to this device.",
-                          devlink);
+                          utf8_escape_for_log(devlink, &lesc1));
 
                 r = link_update(dev, devlink, /* add = */ false);
                 if (r < 0)
                         log_warning_errno(r, "Failed to remove/update device symlink '%s', ignoring: %m",
-                                          devlink);
+                                          utf8_escape_for_log(devlink, &lesc1));
         }
 
         /* create/update symlinks, add symlinks to name index */
@@ -795,7 +828,7 @@ int udev_node_update(struct udev_device *dev, struct udev_device *dev_old) {
                 r = link_update(dev, devlink, /* add = */ true);
                 if (r < 0)
                         log_warning_errno(r, "Failed to create/update device symlink '%s', ignoring: %m",
-                                          devlink);
+                                          utf8_escape_for_log(devlink, &lesc1));
         }
 
         device_get_devpath_by_devnum(dev, filename, sizeof(filename));
@@ -803,12 +836,14 @@ int udev_node_update(struct udev_device *dev, struct udev_device *dev_old) {
         /* always add /dev/{block,char}/$major:$minor */
         r = node_create_symlink(dev, /* devnode = */ NULL, filename);
         if (r < 0)
-                return log_warning_errno(r, "Failed to create device symlink '%s': %m", filename);
+                return log_warning_errno(r, "Failed to create device symlink '%s': %m",
+                                         utf8_escape_for_log(filename, &lesc1));
 
         return 0;
 }
 
 int udev_node_remove(struct udev_device *dev) {
+        _cleanup_free_ char *lesc1 = NULL;
         char filename[UTIL_PATH_SIZE];
         struct udev_list_entry *list_entry;
         int r;
@@ -822,7 +857,7 @@ int udev_node_remove(struct udev_device *dev) {
                 r = link_update(dev, devlink, /* add = */ false);
                 if (r < 0)
                         log_warning_errno(r, "Failed to remove/update device symlink '%s', ignoring: %m",
-                                          devlink);
+                                          utf8_escape_for_log(devlink, &lesc1));
         }
 
         device_get_devpath_by_devnum(dev, filename, sizeof(filename));
@@ -871,6 +906,7 @@ static int udev_node_apply_permissions_impl(
                 uid_t uid,
                 gid_t gid,
                 struct udev_list *seclabel_list) {
+        _cleanup_free_ char *lesc1 = NULL;
 
         bool apply_mode, apply_uid, apply_gid;
         struct stat stats;
@@ -881,7 +917,7 @@ static int udev_node_apply_permissions_impl(
         assert(devnode);
 
         if (fstat(node_fd, &stats) < 0)
-                return log_debug_errno(errno, "cannot stat() node %s: %m", devnode);
+                return log_debug_errno(errno, "cannot stat() node %s: %m", utf8_escape_for_log(devnode, &lesc1));
 
         /* If group is set, but mode is not set, "upgrade" mode for the group. */
         if (mode == MODE_INVALID && gid != GID_INVALID && gid > 0)
@@ -897,7 +933,7 @@ static int udev_node_apply_permissions_impl(
 
                 if (apply_mode || apply_uid || apply_gid) {
                         log_debug("Setting permissions %s, uid=" UID_FMT ", gid=" GID_FMT ", mode=%#o",
-                                  devnode,
+                                  utf8_escape_for_log(devnode, &lesc1),
                                   uid != UID_INVALID ? uid : stats.st_uid,
                                   gid != GID_INVALID ? gid : stats.st_gid,
                                   mode != MODE_INVALID ? mode & 0777 : stats.st_mode & 0777);
@@ -907,13 +943,13 @@ static int udev_node_apply_permissions_impl(
                                 log_full_errno(r == -ENOENT ? LOG_DEBUG : LOG_ERR, r,
                                                "Failed to set owner/mode of %s to uid=" UID_FMT
                                                ", gid=" GID_FMT ", mode=%#o: %m",
-                                               devnode,
+                                               utf8_escape_for_log(devnode, &lesc1),
                                                uid != UID_INVALID ? uid : stats.st_uid,
                                                gid != GID_INVALID ? gid : stats.st_gid,
                                                mode != MODE_INVALID ? mode & 0777 : stats.st_mode & 0777);
                 } else
                         log_debug("Preserve permissions of %s, uid=" UID_FMT ", gid=" GID_FMT ", mode=%#o",
-                                  devnode,
+                                  utf8_escape_for_log(devnode, &lesc1),
                                   uid != UID_INVALID ? uid : stats.st_uid,
                                   gid != GID_INVALID ? gid : stats.st_gid,
                                   mode != MODE_INVALID ? mode & 0777 : stats.st_mode & 0777);
@@ -963,7 +999,7 @@ static int udev_node_apply_permissions_impl(
         /* always update timestamp when we re-use the node, like on media change events */
         r = futimens_opath(node_fd, NULL);
         if (r < 0)
-                log_debug_errno(r, "Failed to adjust timestamp of node %s: %m", devnode);
+                log_debug_errno(r, "Failed to adjust timestamp of node %s: %m", utf8_escape_for_log(devnode, &lesc1));
 
         return 0;
 }
@@ -971,6 +1007,7 @@ static int udev_node_apply_permissions_impl(
 int udev_node_apply_permissions(struct udev_device *dev, bool apply_mac,
                                 mode_t mode, uid_t uid, gid_t gid,
                                 struct udev_list *seclabel_list) {
+        _cleanup_free_ char *lesc1 = NULL;
         _cleanup_close_ int node_fd = -1;
         const char *devnode;
 
@@ -983,11 +1020,12 @@ int udev_node_apply_permissions(struct udev_device *dev, bool apply_mac,
         node_fd = device_open_node_opath(dev);
         if (node_fd < 0) {
                 if (ERRNO_IS_DEVICE_ABSENT_OR_EMPTY(node_fd)) {
-                        log_debug_errno(node_fd, "Device node %s is missing, skipping handling.", devnode);
+                        log_debug_errno(node_fd, "Device node %s is missing, skipping handling.",
+                                        utf8_escape_for_log(devnode, &lesc1));
                         return 0; /* This is necessarily racey, so ignore missing the device */
                 }
 
-                return log_debug_errno(node_fd, "Cannot open node %s: %m", devnode);
+                return log_debug_errno(node_fd, "Cannot open node %s: %m", utf8_escape_for_log(devnode, &lesc1));
         }
 
         return udev_node_apply_permissions_impl(node_fd, devnode, apply_mac, mode, uid, gid, seclabel_list);
@@ -999,6 +1037,7 @@ int static_node_apply_permissions(
                 uid_t uid,
                 gid_t gid,
                 char **tags) {
+        _cleanup_free_ char *lesc1 = NULL, *lesc2 = NULL;
 
         _cleanup_free_ char *unescaped_filename = NULL;
         _cleanup_close_ int node_fd = -1;
@@ -1021,15 +1060,16 @@ int static_node_apply_permissions(
 
                 log_full_errno(ignore ? LOG_DEBUG : LOG_WARNING, r,
                                "Failed to open device node '%s'%s: %m",
-                               devnode, ignore ? ", ignoring" : "");
+                               utf8_escape_for_log(devnode, &lesc1), ignore ? ", ignoring" : "");
                 return ignore ? 0 : r;
         }
 
         if (fstat(node_fd, &stats) < 0)
-                return log_error_errno(errno, "Failed to stat %s: %m", devnode);
+                return log_error_errno(errno, "Failed to stat %s: %m", utf8_escape_for_log(devnode, &lesc1));
 
         if (!S_ISBLK(stats.st_mode) && !S_ISCHR(stats.st_mode)) {
-                log_warning("%s is neither block nor character device, ignoring.", devnode);
+                log_warning("%s is neither block nor character device, ignoring.",
+                            utf8_escape_for_log(devnode, &lesc1));
                 return 0;
         }
 
@@ -1049,11 +1089,13 @@ int static_node_apply_permissions(
 
                 r = mkdir_parents(p, 0755);
                 if (r < 0)
-                        return log_error_errno(r, "Failed to create parent directory for %s: %m", p);
+                        return log_error_errno(r, "Failed to create parent directory for %s: %m",
+                                               utf8_escape_for_log(p, &lesc1));
 
                 r = symlink(devnode, p);
                 if (r < 0 && errno != EEXIST)
-                        return log_error_errno(errno, "Failed to create symlink %s -> %s: %m", p, devnode);
+                        return log_error_errno(errno, "Failed to create symlink %s -> %s: %m",
+                                               utf8_escape_for_log(p, &lesc1), utf8_escape_for_log(devnode, &lesc2));
         }
 
         return udev_node_apply_permissions_impl(node_fd, devnode, false, mode, uid, gid, NULL);

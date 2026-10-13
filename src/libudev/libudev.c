@@ -139,11 +139,12 @@ void udev_set_conf_warnings_quiet(void) {
  * terminate a process. */
 static int udev_conf_parse_error(struct udev_conf *conf, const char *filename, unsigned line,
                                  const char *key, const char *value, int error) {
-        _cleanup_free_ char *escaped = NULL;
+        _cleanup_free_ char *escaped = NULL, *escaped_filename = NULL;
         char *m;
         int r;
 
         escaped = utf8_escape_non_printable(value);
+        filename = utf8_escape_for_log(filename, &escaped_filename);
         errno = abs(error);
         if (error == 0)
                 r = asprintf(&m, "%s:%u: %s=%s cannot terminate a process, ignoring.", filename, line, key, escaped ?: value);
@@ -176,12 +177,13 @@ int udev_parse_resolve_names(const char *s, int *ret) {
  * the file could not be read completely: when it cannot be opened, except when it no longer exists, when reading
  * it fails, or when out of memory. */
 static int udev_read_conf(struct udev_conf *conf, const char *path, const char *filename) {
+        _cleanup_free_ char *lesc1 = NULL, *lesc2 = NULL;
         _cleanup_fclose_ FILE *f = NULL;
         int ret = 0;
 
         f = fopen(path, "re");
         if (!f && errno != ENOENT)
-                return log_debug_errno(errno, "Failed to open %s, ignoring: %m", filename);
+                return log_debug_errno(errno, "Failed to open %s, ignoring: %m", utf8_escape_for_log(filename, &lesc1));
         if (f != NULL) {
                 /* on the heap, to keep the stack small for the programs that call udev_new() */
                 _cleanup_free_ char *line = NULL;
@@ -210,7 +212,8 @@ static int udev_read_conf(struct udev_conf *conf, const char *path, const char *
                         /* split key/value */
                         val = strchr(key, '=');
                         if (val == NULL) {
-                                log_debug("%s:%u: missing assignment, skipping line.", filename, line_nr);
+                                log_debug("%s:%u: missing assignment, skipping line.",
+                                          utf8_escape_for_log(filename, &lesc1), line_nr);
                                 continue;
                         }
                         val[0] = '\0';
@@ -233,7 +236,8 @@ static int udev_read_conf(struct udev_conf *conf, const char *path, const char *
                         if (len == 0) {
                                 /* an empty value is invalid, which udevd warns about, see below */
                                 if (streq(key, "net_altnames")) {
-                                        log_debug("%s:%u: empty net_altnames=, ignoring.", filename, line_nr);
+                                        log_debug("%s:%u: empty net_altnames=, ignoring.",
+                                                  utf8_escape_for_log(filename, &lesc1), line_nr);
                                         conf->net_altnames = -EINVAL;
                                         free(conf->net_altnames_invalid);
                                         conf->net_altnames_invalid = strdup("");
@@ -256,7 +260,8 @@ static int udev_read_conf(struct udev_conf *conf, const char *path, const char *
                         /* unquote */
                         if (val[0] == '"' || val[0] == '\'') {
                                 if (len == 1 || val[len-1] != val[0]) {
-                                        log_debug("%s:%u: inconsistent quoting, skipping line.", filename, line_nr);
+                                        log_debug("%s:%u: inconsistent quoting, skipping line.",
+                                                  utf8_escape_for_log(filename, &lesc1), line_nr);
                                         continue;
                                 }
                                 val[len-1] = '\0';
@@ -266,7 +271,9 @@ static int udev_read_conf(struct udev_conf *conf, const char *path, const char *
                         if (streq(key, "hwdb_format")) {
                                 conf->hwdb_format = udev_parse_hwdb_format(val);
                                 if (conf->hwdb_format < 0)
-                                        log_debug("%s:%u: invalid hwdb_format '%s'.", filename, line_nr, val);
+                                        log_debug("%s:%u: invalid hwdb_format '%s'.",
+                                                  utf8_escape_for_log(filename, &lesc1), line_nr,
+                                                  utf8_escape_for_log(val, &lesc2));
                                 continue;
                         }
 
@@ -275,7 +282,9 @@ static int udev_read_conf(struct udev_conf *conf, const char *path, const char *
 
                                 prio = util_log_priority(val);
                                 if (prio < 0)
-                                        log_debug("%s:%u: invalid log level '%s', ignoring.", filename, line_nr, val);
+                                        log_debug("%s:%u: invalid log level '%s', ignoring.",
+                                                  utf8_escape_for_log(filename, &lesc1), line_nr,
+                                                  utf8_escape_for_log(val, &lesc2));
                                 else {
                                         log_set_max_level(prio);
                                         conf->log_level = prio;
@@ -288,7 +297,9 @@ static int udev_read_conf(struct udev_conf *conf, const char *path, const char *
 
                                 b = parse_boolean(val);
                                 if (b < 0)
-                                        log_debug("%s:%u: invalid boolean '%s' for sas_legacy_path, ignoring.", filename, line_nr, val);
+                                        log_debug("%s:%u: invalid boolean '%s' for sas_legacy_path, ignoring.",
+                                                  utf8_escape_for_log(filename, &lesc1), line_nr,
+                                                  utf8_escape_for_log(val, &lesc2));
                                 else
                                         conf->sas_legacy_path = b;
                                 continue;
@@ -300,7 +311,9 @@ static int udev_read_conf(struct udev_conf *conf, const char *path, const char *
                                 /* an invalid value is kept as -EINVAL, which udevd warns about */
                                 b = parse_boolean(val);
                                 if (b < 0)
-                                        log_debug("%s:%u: invalid boolean '%s' for net_altnames, ignoring.", filename, line_nr, val);
+                                        log_debug("%s:%u: invalid boolean '%s' for net_altnames, ignoring.",
+                                                  utf8_escape_for_log(filename, &lesc1), line_nr,
+                                                  utf8_escape_for_log(val, &lesc2));
                                 conf->net_altnames = b < 0 ? -EINVAL : b;
                                 free(conf->net_altnames_invalid);
                                 conf->net_altnames_invalid = b < 0 ? strdup(val) : NULL;
@@ -373,7 +386,8 @@ static int udev_read_conf(struct udev_conf *conf, const char *path, const char *
                 }
 
                 if (ferror(f))
-                        RET_GATHER(ret, log_debug_errno(errno_or_else(EIO), "Failed to read %s, ignoring: %m", filename));
+                        RET_GATHER(ret, log_debug_errno(errno_or_else(EIO), "Failed to read %s, ignoring: %m",
+                                                        utf8_escape_for_log(filename, &lesc1)));
         }
 
         return ret;
@@ -398,6 +412,7 @@ static const char* const udev_conf_dirs[] = {
 /* Not part of the public API, used by udevadm cat. Like conf_files_cat() of systemd, logs the files and directories
  * that udev_conf_files() looks at below root, at debug level. */
 void udev_conf_log_search_dirs(const char *root) {
+        _cleanup_free_ char *lesc1 = NULL;
         size_t i;
         int pass;
 
@@ -413,7 +428,7 @@ void udev_conf_log_search_dirs(const char *root) {
                                 return;
                         }
                         path_simplify(p);
-                        log_debug("   %s%s", p, pass == 0 ? "" : "/*.conf");
+                        log_debug("   %s%s", utf8_escape_for_log(p, &lesc1), pass == 0 ? "" : "/*.conf");
                 }
 }
 
@@ -485,6 +500,7 @@ int udev_conf_files(const char *root, ConfFilesFlags flags,
  * found. Returns 0, or the first error when the files could not be found or read completely, see
  * udev_read_conf(); conf has the settings read anyway. */
 static int udev_read_conf_files(struct udev_conf *conf, const char *root) {
+        _cleanup_free_ char *lesc1 = NULL;
         ConfFile *main_file = NULL, **dropins = NULL;
         size_t n_dropins = 0, i;
         int r, ret = 0;
@@ -501,7 +517,7 @@ static int udev_read_conf_files(struct udev_conf *conf, const char *root) {
                                 if (stat(dropins[i]->resolved_path, &st_dropin) >= 0 &&
                                     st.st_dev == st_dropin.st_dev && st.st_ino == st_dropin.st_ino) {
                                         log_debug("%s: symlink to/symlinked as drop-in, will be read later.",
-                                                  main_file->original_path);
+                                                  utf8_escape_for_log(main_file->original_path, &lesc1));
                                         main_file = conf_file_free(main_file);
                                         break;
                                 }

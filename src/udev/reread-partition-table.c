@@ -109,6 +109,7 @@ static int list_append(char **list, const char *name) {
  * disk or its medium is gone. */
 static void log_reread_failed(struct udev_device *dev, struct udev_enumerate *e, const struct uevents_sent *sent,
                               int error) {
+        _cleanup_free_ char *lesc1 = NULL, *lesc2 = NULL;
         _cleanup_free_ char *triggered = NULL, *skipped = NULL;
         int level = ERRNO_IS_DEVICE_ABSENT_OR_EMPTY(error) ? LOG_DEBUG : LOG_WARNING;
         struct udev_list_entry *item;
@@ -135,13 +136,13 @@ static void log_reread_failed(struct udev_device *dev, struct udev_enumerate *e,
 
         if (!triggered) {
                 log_device_full_errno(dev, level, error, "Failed to re-read the partition table, %s got a uevent already: %m",
-                                      skipped);
+                                      utf8_escape_for_log(skipped, &lesc1));
                 return;
         }
 
         log_device_full_errno(dev, level, error,
                               "Failed to re-read the partition table, triggering 'change' events for %s instead, %s got a uevent already: %m",
-                              triggered, skipped);
+                              utf8_escape_for_log(triggered, &lesc1), utf8_escape_for_log(skipped, &lesc2));
         return;
 
 generic:
@@ -250,6 +251,7 @@ static int process_partition(
                 bool *changed,
                 struct uevents_sent *sent,
                 char ***resized) {
+        _cleanup_free_ char *lesc1 = NULL;
 
         _cleanup_udev_device_unref_ struct udev_device *partition = NULL;
         _cleanup_free_ char *subnode = NULL;
@@ -296,42 +298,56 @@ static int process_partition(
 
         r = partition_node_of(node, nr, &subnode);
         if (r < 0)
-                return log_device_debug_errno(d, r, "Failed to determine partition node %i for '%s': %m", nr, node);
+                return log_device_debug_errno(d, r, "Failed to determine partition node %i for '%s': %m",
+                                              nr, utf8_escape_for_log(node, &lesc1));
 
         r = device_new_from_devname(udev_device_get_udev(d), subnode, &partition);
         if (r < 0) {
                 if (r != -ENODEV)
-                        return log_device_debug_errno(d, r, "Failed to acquire device '%s': %m", subnode);
+                        return log_device_debug_errno(d, r, "Failed to acquire device '%s': %m",
+                                                      utf8_escape_for_log(subnode, &lesc1));
         } else {
                 uint64_t start_kernel, size_kernel;
 
                 r = device_get_sysattr_u64(partition, "start", &start_kernel);
                 if (r < 0)
-                        return log_device_debug_errno(partition, r, "Failed to get start of kernel partition device '%s': %m", subnode);
+                        return log_device_debug_errno(partition, r,
+                                                      "Failed to get start of kernel partition device '%s': %m",
+                                                      utf8_escape_for_log(subnode, &lesc1));
 
                 r = device_get_sysattr_u64(partition, "size", &size_kernel);
                 if (r < 0)
-                        return log_device_debug_errno(partition, r, "Failed to get size of kernel partition device '%s': %m", subnode);
+                        return log_device_debug_errno(partition, r,
+                                                      "Failed to get size of kernel partition device '%s': %m",
+                                                      utf8_escape_for_log(subnode, &lesc1));
 
                 if (start_kernel == (uint64_t) start && size_kernel == (uint64_t) size) {
-                        log_device_debug(partition, "Kernel partition device '%s' already matches partition table, not modifying.", subnode);
+                        log_device_debug(partition,
+                                         "Kernel partition device '%s' already matches partition table, not modifying.",
+                                         utf8_escape_for_log(subnode, &lesc1));
 
                         if (FLAGS_SET(flags, REREADPT_FORCE_UEVENT)) {
                                 if (!sent->disk) {
                                         /* Make sure to synthesize a change event on the main device, before we issue the first one on a partition device */
                                         r = device_trigger_with_timestamp(d, "change", args, /* ret_uuid= */ NULL);
                                         if (r < 0)
-                                                return log_device_debug_errno(d, r, "Failed to issue 'change' uevent on device '%s': %m", node);
+                                                return log_device_debug_errno(d, r,
+                                                                              "Failed to issue 'change' uevent on device '%s': %m",
+                                                                              utf8_escape_for_log(node, &lesc1));
 
-                                        log_device_debug(d, "Successfully issued 'change' uevent on device '%s'.", node);
+                                        log_device_debug(d, "Successfully issued 'change' uevent on device '%s'.",
+                                                         utf8_escape_for_log(node, &lesc1));
                                         sent->disk = true;
                                 }
 
                                 r = device_trigger_with_timestamp(partition, "change", args, /* ret_uuid= */ NULL);
                                 if (r < 0)
-                                        return log_device_debug_errno(partition, r, "Failed to issue 'change' uevent on partition '%s': %m", subnode);
+                                        return log_device_debug_errno(partition, r,
+                                                                      "Failed to issue 'change' uevent on partition '%s': %m",
+                                                                      utf8_escape_for_log(subnode, &lesc1));
 
-                                log_device_debug(partition, "Successfully issued 'change' uevent on partition '%s'.", subnode);
+                                log_device_debug(partition, "Successfully issued 'change' uevent on partition '%s'.",
+                                                 utf8_escape_for_log(subnode, &lesc1));
                                 uevents_sent_add_partition(sent, nr);
                         }
 
@@ -344,9 +360,13 @@ static int process_partition(
 
                         r = block_device_resize_partition(fd, nr, (uint64_t) start * 512U, (uint64_t) size * 512U);
                         if (r < 0)
-                                return log_device_debug_errno(partition, r, "Failed to resize kernel partition device '%s' to partition table values: %m", subnode);
+                                return log_device_debug_errno(partition, r,
+                                                              "Failed to resize kernel partition device '%s' to partition table values: %m",
+                                                              utf8_escape_for_log(subnode, &lesc1));
 
-                        log_device_debug(partition, "Successfully resized kernel partition device '%s' to match partition table.", subnode);
+                        log_device_debug(partition,
+                                         "Successfully resized kernel partition device '%s' to match partition table.",
+                                         utf8_escape_for_log(subnode, &lesc1));
                         *changed = true;
 
                         /* eudev: the kernel sends no uevent for a resized partition, see
@@ -368,10 +388,13 @@ static int process_partition(
 
                 r = block_device_remove_partition(fd, nr);
                 if (r < 0)
-                        return log_device_debug_errno(d, r, "Failed to remove kernel partition device '%s' in order to recreate it: %m", subnode);
+                        return log_device_debug_errno(d, r,
+                                                      "Failed to remove kernel partition device '%s' in order to recreate it: %m",
+                                                      utf8_escape_for_log(subnode, &lesc1));
 
                 /* And now add it the partition anew */
-                log_device_debug(d, "Successfully removed kernel partition device '%s' in order to recreate it.", subnode);
+                log_device_debug(d, "Successfully removed kernel partition device '%s' in order to recreate it.",
+                                 utf8_escape_for_log(subnode, &lesc1));
         }
 
         log_device_debug(d, "Adding partition %i...", nr);
@@ -390,6 +413,7 @@ static int process_partition(
 }
 
 static int remove_partitions(struct udev_device *d, int fd, struct udev_enumerate *e, Set *partnos, bool *changed) {
+        _cleanup_free_ char *lesc1 = NULL;
         struct udev_list_entry *item;
         int ret = 0, r;
 
@@ -408,7 +432,8 @@ static int remove_partitions(struct udev_device *d, int fd, struct udev_enumerat
 
                 partition = udev_device_new_from_syspath(udev_device_get_udev(d), udev_list_entry_get_name(item));
                 if (!partition) {
-                        log_device_debug(d, "Kernel partition device '%s' disappeared, ignoring.", udev_list_entry_get_name(item));
+                        log_device_debug(d, "Kernel partition device '%s' disappeared, ignoring.",
+                                         utf8_escape_for_log(udev_list_entry_get_name(item), &lesc1));
                         continue;
                 }
 
@@ -429,7 +454,9 @@ static int remove_partitions(struct udev_device *d, int fd, struct udev_enumerat
 
                 r = block_device_remove_partition(fd, (int) nr);
                 if (r < 0) /* NB: when logging we use the parent device below, after all the partition device ceased existing by now, most likely */
-                        RET_GATHER(ret, log_device_debug_errno(d, r, "Failed to remove kernel partition device '%s' that vanished from partition table: %m", devname));
+                        RET_GATHER(ret, log_device_debug_errno(d, r,
+                                                               "Failed to remove kernel partition device '%s' that vanished from partition table: %m",
+                                                               utf8_escape_for_log(devname, &lesc1)));
                 else  {
                         log_device_debug(d, "Removed partition %u from kernel.", nr);
                         *changed = true;
@@ -444,6 +471,7 @@ static int remove_partitions(struct udev_device *d, int fd, struct udev_enumerat
  * is returned. */
 static int reread_partition_table_full(struct udev_device *dev, int fd, RereadPartitionTableFlags flags,
                                        char * const *args, struct uevents_sent *sent) {
+        _cleanup_free_ char *lesc1 = NULL;
         _cleanup_close_ int lock_fd = -1;
         const char *p;
         int r;
@@ -459,13 +487,17 @@ static int reread_partition_table_full(struct udev_device *dev, int fd, RereadPa
         if (FLAGS_SET(flags, REREADPT_BSD_LOCK)) {
                 lock_fd = device_open(dev, O_RDONLY|O_CLOEXEC|O_NOCTTY);
                 if (lock_fd < 0)
-                        return log_device_debug_errno(dev, lock_fd, "Failed to open lock fd for block device '%s': %m", p);
+                        return log_device_debug_errno(dev, lock_fd, "Failed to open lock fd for block device '%s': %m",
+                                                      utf8_escape_for_log(p, &lesc1));
 
                 if (flock(lock_fd, LOCK_EX|LOCK_NB) < 0) {
-                        r = log_device_debug_errno(dev, errno, "Failed to take BSD lock on block device '%s': %m", p);
+                        r = log_device_debug_errno(dev, errno, "Failed to take BSD lock on block device '%s': %m",
+                                                   utf8_escape_for_log(p, &lesc1));
 
                         if (r == -EAGAIN && FLAGS_SET(flags, REREADPT_FORCE_UEVENT)) {
-                                log_device_debug(dev, "Giving up rereading partition table of '%s'. Triggering change events for the device and its partitions.", p);
+                                log_device_debug(dev,
+                                                 "Giving up rereading partition table of '%s'. Triggering change events for the device and its partitions.",
+                                                 utf8_escape_for_log(p, &lesc1));
                                 (void) trigger_partitions(dev, args, /* blkrrpart_success= */ false, /* sent= */ NULL, /* error= */ 0);
                                 sent->all = true;
                         }
@@ -476,7 +508,9 @@ static int reread_partition_table_full(struct udev_device *dev, int fd, RereadPa
 
         r = blockdev_partscan_enabled(dev);
         if (r < 0)
-                return log_device_debug_errno(dev, r, "Failed to test if block device '%s' knows partition scanning: %m", p);
+                return log_device_debug_errno(dev, r,
+                                              "Failed to test if block device '%s' knows partition scanning: %m",
+                                              utf8_escape_for_log(p, &lesc1));
         if (r == 0) {
                 /* No partition scanning? Generate a uevent at least, if that's requested */
                 if (FLAGS_SET(flags, REREADPT_FORCE_UEVENT)) {
@@ -488,7 +522,8 @@ static int reread_partition_table_full(struct udev_device *dev, int fd, RereadPa
                         return 0;
                 }
 
-                return log_device_debug_errno(dev, ENOTTY, "Block device '%s' does not support partition scanning.", p);
+                return log_device_debug_errno(dev, ENOTTY, "Block device '%s' does not support partition scanning.",
+                                              utf8_escape_for_log(p, &lesc1));
         }
 
 #ifdef HAVE_BLKID
@@ -508,7 +543,8 @@ static int reread_partition_table_full(struct udev_device *dev, int fd, RereadPa
         errno = 0;
         r = blkid_probe_set_device(b, fd, /* off= */ 0, /* size= */ 0);
         if (r != 0)
-                return log_device_debug_errno(dev, errno_or_else(ENOMEM), "Failed to open block device '%s': %m", p);
+                return log_device_debug_errno(dev, errno_or_else(ENOMEM), "Failed to open block device '%s': %m",
+                                              utf8_escape_for_log(p, &lesc1));
 
         (void) blkid_probe_enable_partitions(b, 1);
         (void) blkid_probe_set_partitions_flags(b, BLKID_PARTS_ENTRY_DETAILS);
@@ -516,9 +552,12 @@ static int reread_partition_table_full(struct udev_device *dev, int fd, RereadPa
         errno = 0;
         r = blkid_do_safeprobe(b);
         if (r == _BLKID_SAFEPROBE_ERROR)
-                return log_device_debug_errno(dev, errno_or_else(EIO), "Unable to probe for partition table of '%s': %m", p);
+                return log_device_debug_errno(dev, errno_or_else(EIO),
+                                              "Unable to probe for partition table of '%s': %m",
+                                              utf8_escape_for_log(p, &lesc1));
         if (IN_SET(r, _BLKID_SAFEPROBE_AMBIGUOUS, _BLKID_SAFEPROBE_NOT_FOUND)) {
-                log_device_debug(dev, "Didn't find partition table on block device '%s', falling back to BLKRRPART.", p);
+                log_device_debug(dev, "Didn't find partition table on block device '%s', falling back to BLKRRPART.",
+                                 utf8_escape_for_log(p, &lesc1));
                 sent->all = true;
                 return fallback_ioctl(dev, fd, flags, args);
         }
@@ -527,7 +566,8 @@ static int reread_partition_table_full(struct udev_device *dev, int fd, RereadPa
 
         (void) blkid_probe_lookup_value(b, "PTTYPE", &pttype, NULL);
         if (!streq_ptr(pttype, "gpt")) {
-                log_device_debug(dev, "Didn't find a GPT partition table on '%s', falling back to BLKRRPART.", p);
+                log_device_debug(dev, "Didn't find a GPT partition table on '%s', falling back to BLKRRPART.",
+                                 utf8_escape_for_log(p, &lesc1));
                 sent->all = true;
                 return fallback_ioctl(dev, fd, flags, args);
         }
@@ -535,12 +575,15 @@ static int reread_partition_table_full(struct udev_device *dev, int fd, RereadPa
         errno = 0;
         pl = blkid_probe_get_partitions(b);
         if (!pl)
-                return log_device_debug_errno(dev, errno_or_else(EIO), "Unable to read partition table of '%s': %m", p);
+                return log_device_debug_errno(dev, errno_or_else(EIO), "Unable to read partition table of '%s': %m",
+                                              utf8_escape_for_log(p, &lesc1));
 
         errno = 0;
         n_partitions = blkid_partlist_numof_partitions(pl);
         if (n_partitions < 0)
-                return log_device_debug_errno(dev, errno_or_else(EIO), "Unable to acquire number of entries in partition table of '%s': %m", p);
+                return log_device_debug_errno(dev, errno_or_else(EIO),
+                                              "Unable to acquire number of entries in partition table of '%s': %m",
+                                              utf8_escape_for_log(p, &lesc1));
 
         r = partition_enumerator_new(dev, &e);
         if (r < 0)
@@ -554,7 +597,9 @@ static int reread_partition_table_full(struct udev_device *dev, int fd, RereadPa
                 errno = 0;
                 pp = blkid_partlist_get_partition(pl, i);
                 if (!pp)
-                        return log_device_debug_errno(dev, errno_or_else(EIO), "Unable to get partition data of partition %i of partition table of '%s': %m", i, p);
+                        return log_device_debug_errno(dev, errno_or_else(EIO),
+                                                      "Unable to get partition data of partition %i of partition table of '%s': %m",
+                                                      i, utf8_escape_for_log(p, &lesc1));
 
                 RET_GATHER(ret, process_partition(dev, fd, pp, &found_partnos, flags, args, &changed, sent, &resized));
         }
@@ -586,7 +631,9 @@ static int reread_partition_table_full(struct udev_device *dev, int fd, RereadPa
                 if (!sent->disk) {
                         r = device_trigger_with_timestamp(dev, "change", args, /* ret_uuid= */ NULL);
                         if (r < 0)
-                                return log_device_debug_errno(dev, r, "Failed to issue 'change' uevent on device '%s': %m", p);
+                                return log_device_debug_errno(dev, r,
+                                                              "Failed to issue 'change' uevent on device '%s': %m",
+                                                              utf8_escape_for_log(p, &lesc1));
                 }
 
                 STRV_FOREACH(path, resized) {
@@ -594,7 +641,8 @@ static int reread_partition_table_full(struct udev_device *dev, int fd, RereadPa
 
                         partition = udev_device_new_from_syspath(udev_device_get_udev(dev), *path);
                         if (!partition) {
-                                log_device_debug(dev, "Resized kernel partition device '%s' disappeared, ignoring.", *path);
+                                log_device_debug(dev, "Resized kernel partition device '%s' disappeared, ignoring.",
+                                                 utf8_escape_for_log(*path, &lesc1));
                                 continue;
                         }
 
@@ -611,7 +659,8 @@ static int reread_partition_table_full(struct udev_device *dev, int fd, RereadPa
 
         return changed;
 #else
-        log_device_debug(dev, "We don't have libblkid, falling back to BLKRRPART on '%s'.", p);
+        log_device_debug(dev, "We don't have libblkid, falling back to BLKRRPART on '%s'.",
+                         utf8_escape_for_log(p, &lesc1));
         sent->all = true;
         return fallback_ioctl(dev, fd, flags, args);
 #endif

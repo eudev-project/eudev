@@ -391,6 +391,7 @@ static int64_t trie_store_nodes(struct trie_f *trie, struct trie_node *node) {
 }
 
 static int trie_store(struct trie *trie, const char *filename) {
+        _cleanup_free_ char *lesc1 = NULL;
         struct trie_f t = {
                 .trie = trie,
         };
@@ -459,7 +460,7 @@ static int trie_store(struct trie *trie, const char *filename) {
         }
 
         log_debug("=== trie on-disk ===");
-        log_debug("filename:         %s", filename);
+        log_debug("filename:         %s", utf8_escape_for_log(filename, &lesc1));
         log_debug("size:             %8"PRIi64" bytes", size);
         log_debug("header:           %8zu bytes", sizeof(struct trie_header_f));
         log_debug("nodes:            %8"PRIu64" bytes (%8"PRIu64")",
@@ -474,14 +475,20 @@ static int trie_store(struct trie *trie, const char *filename) {
         return 0;
 }
 
-/* Like systemd's log_syntax() for a line of a file: "FILE:LINE: message". */
-#define log_syntax(level, filename, line_number, fmt, ...) \
-        log_full(level, "%s:%u: " fmt, filename, (unsigned) (line_number), ##__VA_ARGS__)
+/* Like systemd's log_syntax() for a line of a file: "FILE:LINE: message". The name of the file is escaped like the
+ * values in the messages of udev. */
+#define log_syntax(level, filename, line_number, fmt, ...)                                              \
+        ({                                                                                              \
+                _cleanup_free_ char *_fn = NULL;                                                        \
+                log_full(level, "%s:%u: " fmt, utf8_escape_for_log(filename, &_fn), (unsigned) (line_number), \
+                         ##__VA_ARGS__);                                                                \
+        })
 
 /* Returns 0, 1 if the line has a syntax error, which is logged and the line ignored, or a negative errno,
  * e.g. -ENOMEM, if the data cannot be inserted. */
 static int insert_data(struct trie *trie, struct udev_list *match_list,
                        char *line, const char *filename, uint16_t file_priority, uint32_t line_number) {
+        _cleanup_free_ char *lesc1 = NULL, *lesc2 = NULL;
         char *value;
         struct udev_list_entry *entry;
         int r;
@@ -491,7 +498,7 @@ static int insert_data(struct trie *trie, struct udev_list *match_list,
         value = strchr(line, '=');
         if (!value) {
                 log_syntax(LOG_WARNING, filename, line_number,
-                           "Key-value pair expected but got \"%s\", ignoring.", line);
+                           "Key-value pair expected but got \"%s\", ignoring.", utf8_escape_for_log(line, &lesc1));
                 return 1;
         }
 
@@ -504,7 +511,8 @@ static int insert_data(struct trie *trie, struct udev_list *match_list,
 
         if (isempty(line + 1)) {
                 log_syntax(LOG_WARNING, filename, line_number,
-                           "Empty key in \"%s=%s\", ignoring.", line, value);
+                           "Empty key in \"%s=%s\", ignoring.",
+                           utf8_escape_for_log(line, &lesc1), utf8_escape_for_log(value, &lesc2));
                 return 1;
         }
 
@@ -513,7 +521,8 @@ static int insert_data(struct trie *trie, struct udev_list *match_list,
                                 filename, file_priority, line_number);
                 if (r < 0)
                         return log_error_errno(r, "%s:%u: Failed to insert '%s': %m",
-                                               filename, line_number, udev_list_entry_get_name(entry));
+                                               utf8_escape_for_log(filename, &lesc1), line_number,
+                                               utf8_escape_for_log(udev_list_entry_get_name(entry), &lesc2));
         }
 
         return 0;
@@ -524,6 +533,7 @@ static int insert_data(struct trie *trie, struct udev_list *match_list,
  * with the file and line, *ret_logged is set to true. */
 static int import_file(struct udev *udev, struct trie *trie, const char *filename, const char *path_in_root,
                        uint16_t file_priority, bool *ret_logged) {
+        _cleanup_free_ char *lesc1 = NULL;
         enum {
                 HW_MATCH,
                 HW_DATA,
@@ -580,7 +590,8 @@ static int import_file(struct udev *udev, struct trie *trie, const char *filenam
 
                         if (line[0] == ' ') {
                                 log_syntax(LOG_WARNING, path_in_root, line_number,
-                                           "Match expected but got indented property \"%s\", ignoring line.", line);
+                                           "Match expected but got indented property \"%s\", ignoring line.",
+                                           utf8_escape_for_log(line, &lesc1));
                                 syntax_errors = true;
                                 break;
                         }
@@ -634,7 +645,8 @@ static int import_file(struct udev *udev, struct trie *trie, const char *filenam
 
                         if (line[0] != ' ') {
                                 log_syntax(LOG_WARNING, path_in_root, line_number,
-                                           "Property or empty line expected, got \"%s\", ignoring record.", line);
+                                           "Property or empty line expected, got \"%s\", ignoring record.",
+                                           utf8_escape_for_log(line, &lesc1));
                                 syntax_errors = true;
                                 state = HW_NONE;
                                 udev_list_cleanup(&match_list);
@@ -667,6 +679,7 @@ finish:
 }
 
 int hwdb_update(struct udev *udev, const char *root, const char *hwdb_bin, bool strict) {
+        _cleanup_free_ char *lesc1 = NULL, *lesc2 = NULL;
         _cleanup_free_ char *conf_file_path = NULL, *full_hwdb_bin = NULL;
         _cleanup_strv_free_ char **dirs = NULL;
         struct trie *trie = NULL;
@@ -750,20 +763,23 @@ int hwdb_update(struct udev *udev, const char *root, const char *hwdb_bin, bool 
                                         CONF_FILES_FAIL_ON_UNREADABLE_DIR,
                                         (const char * const *) dirs, &files, &n_files);
         if (err < 0) {
-                log_error_errno(err, "Failed to enumerate hwdb files, not updating %s: %m", hwdb_bin);
+                log_error_errno(err, "Failed to enumerate hwdb files, not updating %s: %m",
+                                utf8_escape_for_log(hwdb_bin, &lesc1));
                 goto out;
         }
 
         if (n_files == 0) {
                 if (unlink(hwdb_bin) < 0) {
                         if (errno != ENOENT) {
-                                err = log_error_errno(errno, "Failed to remove compiled hwdb database %s: %m", hwdb_bin);
+                                err = log_error_errno(errno, "Failed to remove compiled hwdb database %s: %m",
+                                                      utf8_escape_for_log(hwdb_bin, &lesc1));
                                 goto out;
                         }
 
                         log_info("No hwdb files found, skipping.");
                 } else
-                        log_info("No hwdb files found, compiled hwdb database %s removed.", hwdb_bin);
+                        log_info("No hwdb files found, compiled hwdb database %s removed.",
+                                 utf8_escape_for_log(hwdb_bin, &lesc1));
 
                 err = 0;
                 goto out;
@@ -784,7 +800,8 @@ int hwdb_update(struct udev *udev, const char *root, const char *hwdb_bin, bool 
                                 path_in_root = p - 1;
                 }
 
-                log_debug("Reading file \"%s\" -> \"%s\"", c->original_path, c->resolved_path);
+                log_debug("Reading file \"%s\" -> \"%s\"",
+                          utf8_escape_for_log(c->original_path, &lesc1), utf8_escape_for_log(c->resolved_path, &lesc2));
                 err = import_file(udev, trie, c->resolved_path, path_in_root, file_priority++, &logged);
                 if (err < 0) {
                         /* Unlike systemd, which writes a database without the data that could not be
@@ -792,7 +809,8 @@ int hwdb_update(struct udev *udev, const char *root, const char *hwdb_bin, bool 
                          * to insert the data is logged with the file and line already. */
                         if (!logged)
                                 log_error_errno(err, "Failed to read hwdb file '%s', not updating %s: %m",
-                                                c->original_path, hwdb_bin);
+                                                utf8_escape_for_log(c->original_path, &lesc1),
+                                                utf8_escape_for_log(hwdb_bin, &lesc2));
                         goto out;
                 }
                 if (err > 0 && ret == 0)
@@ -818,7 +836,7 @@ int hwdb_update(struct udev *udev, const char *root, const char *hwdb_bin, bool 
         mkdir_parents_label(hwdb_bin, 0755);
         err = trie_store(trie, hwdb_bin);
         if (err < 0) {
-                log_error_errno(err, "Failure writing database %s: %m", hwdb_bin);
+                log_error_errno(err, "Failure writing database %s: %m", utf8_escape_for_log(hwdb_bin, &lesc1));
                 goto out;
         }
 

@@ -504,6 +504,7 @@ static struct udev_list_entry *udev_device_add_property_from_string(struct udev_
  * /sys. */
 static int sysfs_resolve(const char *path, char **ret)
 {
+        _cleanup_free_ char *lesc1 = NULL, *lesc2 = NULL;
         _cleanup_free_ char *resolved = NULL, *real_sys = NULL;
         const char *p;
         char *t;
@@ -525,7 +526,7 @@ static int sysfs_resolve(const char *path, char **ret)
         }
 
         if (path_equal(resolved, "/sys")) {
-                log_debug("%s resolves to /sys itself", path);
+                log_debug("%s resolves to /sys itself", utf8_escape_for_log(path, &lesc1));
                 return -ENODEV;
         }
 
@@ -535,7 +536,8 @@ static int sysfs_resolve(const char *path, char **ret)
 
         p = path_equal(real_sys, "/sys") ? NULL : path_startswith(resolved, real_sys);
         if (isempty(p)) {
-                log_debug("%s resolves to %s, which is outside of /sys", path, resolved);
+                log_debug("%s resolves to %s, which is outside of /sys",
+                          utf8_escape_for_log(path, &lesc1), utf8_escape_for_log(resolved, &lesc2));
                 return -ENODEV;
         }
 
@@ -552,6 +554,7 @@ static int sysfs_resolve(const char *path, char **ret)
  * $SYSTEMD_DEVICE_VERIFY_SYSFS when it is not set, is false, e.g. for tests with a directory as /sys. */
 static int sysfs_verify(const char *path)
 {
+        _cleanup_free_ char *lesc1 = NULL;
         const char *name = "UDEV_DEVICE_VERIFY_SYSFS", *e;
         struct statfs sfs;
         int r;
@@ -570,9 +573,10 @@ static int sysfs_verify(const char *path)
         }
 
         if (statfs(path, &sfs) < 0)
-                return log_debug_errno(errno, "failed to check if syspath \"%s\" is backed by sysfs: %m", path);
+                return log_debug_errno(errno, "failed to check if syspath \"%s\" is backed by sysfs: %m",
+                                       utf8_escape_for_log(path, &lesc1));
         if (!F_TYPE_EQUAL(sfs.f_type, SYSFS_MAGIC)) {
-                log_debug("the syspath \"%s\" is outside of sysfs, refusing.", path);
+                log_debug("the syspath \"%s\" is outside of sysfs, refusing.", utf8_escape_for_log(path, &lesc1));
                 return -ENODEV;
         }
 
@@ -855,9 +859,8 @@ static int udev_device_add_property_from_string_parse(struct udev_device *udev_d
                 if (log_get_max_level() >= LOG_DEBUG) {
                         _cleanup_free_ char *escaped = utf8_escape_non_printable(property);
 
-                        log_debug("%s%sNot a key-value pair: '%s'",
-                                  udev_device->sysname ?: "", udev_device->sysname ? ": " : "",
-                                  escaped ?: "(null)");
+                        log_device_debug(udev_device, "Not a key-value pair: '%s'",
+                                         escaped ?: "(null)");
                 }
                 return -EINVAL;
         }
@@ -937,9 +940,8 @@ static int udev_device_add_property_from_string_parse(struct udev_device *udev_d
                         if (log_get_max_level() >= LOG_DEBUG) {
                                 _cleanup_free_ char *escaped = utf8_escape_non_printable(property);
 
-                                log_debug("%s%sInvalid property '%s', ignoring",
-                                          udev_device->sysname ?: "", udev_device->sysname ? ": " : "",
-                                          escaped ?: "(null)");
+                                log_device_debug(udev_device, "Invalid property '%s', ignoring",
+                                                 escaped ?: "(null)");
                         }
                         return 0;
                 }
@@ -956,9 +958,8 @@ static int udev_device_add_property_from_string_parse(struct udev_device *udev_d
         if (r < 0 && log_get_max_level() >= LOG_DEBUG) {
                 _cleanup_free_ char *escaped = utf8_escape_non_printable(property);
 
-                log_debug_errno(r, "%s%sFailed to set '%s': %m",
-                                udev_device->sysname ?: "", udev_device->sysname ? ": " : "",
-                                escaped ?: "(null)");
+                log_device_debug_errno(udev_device, r, "Failed to set '%s': %m",
+                                       escaped ?: "(null)");
         }
 
         return r;
@@ -1020,6 +1021,7 @@ _public_ const char *udev_device_get_property_value(struct udev_device *udev_dev
 
 int udev_device_read_db(struct udev_device *udev_device)
 {
+        _cleanup_free_ char *lesc1 = NULL, *lesc2 = NULL;
         char filename[UTIL_PATH_SIZE];
         const char *id;
         FILE *f;
@@ -1040,7 +1042,7 @@ int udev_device_read_db(struct udev_device *udev_device)
         if (f == NULL) {
                 if (errno == ENOENT)
                         return -ENOENT;
-                return log_debug_errno(errno, "failed to read db file %s: %m", filename);
+                return log_debug_errno(errno, "failed to read db file %s: %m", utf8_escape_for_log(filename, &lesc1));
         }
 
         udev_device->db_loaded = true;
@@ -1063,12 +1065,12 @@ int udev_device_read_db(struct udev_device *udev_device)
                 if (r == -ENOBUFS) {
                         /* Ignore the line as a whole, its remainder must not be parsed as a line of
                          * its own. */
-                        log_debug("overlong line in db file %s, ignoring", filename);
+                        log_debug("overlong line in db file %s, ignoring", utf8_escape_for_log(filename, &lesc1));
                         (void) read_line(f, SIZE_MAX, NULL);
                         continue;
                 }
                 if (r < 0) {
-                        log_debug_errno(r, "failed to read db file %s: %m", filename);
+                        log_debug_errno(r, "failed to read db file %s: %m", utf8_escape_for_log(filename, &lesc1));
                         break;
                 }
                 if (r == 0)
@@ -1105,7 +1107,8 @@ int udev_device_read_db(struct udev_device *udev_device)
                         break;
                 case 'V':
                         if (safe_atou(val, &udev_device->database_version) < 0)
-                                log_debug("invalid database version '%s' in db file %s, ignoring", val, filename);
+                                log_debug("invalid database version '%s' in db file %s, ignoring",
+                                          utf8_escape_for_log(val, &lesc1), utf8_escape_for_log(filename, &lesc2));
                         break;
                 }
         }
@@ -1387,6 +1390,7 @@ static struct udev_device *device_new_from_resolved_syspath(struct udev *udev, c
  **/
 _public_ struct udev_device *udev_device_new_from_syspath(struct udev *udev, const char *syspath)
 {
+        _cleanup_free_ char *lesc1 = NULL;
         _cleanup_free_ char *path = NULL;
         int r;
 
@@ -1402,7 +1406,7 @@ _public_ struct udev_device *udev_device_new_from_syspath(struct udev *udev, con
 
         /* path is below /sys, e.g. not /sysfoo; like systemd, /sys itself is refused below with ENODEV */
         if (!path_startswith(syspath, "/sys/")) {
-                log_debug("not in sys :%s", syspath);
+                log_debug("not in sys :%s", utf8_escape_for_log(syspath, &lesc1));
                 errno = EINVAL;
                 return NULL;
         }
@@ -1413,7 +1417,7 @@ _public_ struct udev_device *udev_device_new_from_syspath(struct udev *udev, con
         if (r == -ENOENT)
                 r = -ENODEV;
         if (r < 0) {
-                log_debug_errno(r, "failed to resolve %s: %m", syspath);
+                log_debug_errno(r, "failed to resolve %s: %m", utf8_escape_for_log(syspath, &lesc1));
                 errno = -r;
                 return NULL;
         }
@@ -1693,6 +1697,7 @@ static int device_new_from_path_join(struct udev *udev, struct udev_device **dev
                                      const char *subsystem, const char *driver_subsystem, const char *sysname,
                                      const char *a, const char *b, const char *c, const char *d)
 {
+        _cleanup_free_ char *lesc1 = NULL, *lesc2 = NULL, *lesc3 = NULL, *lesc4 = NULL;
         _cleanup_free_ char *p = NULL, *new_driver_subsystem = NULL;
         struct udev_device *new_device;
         int r;
@@ -1730,8 +1735,9 @@ static int device_new_from_path_join(struct udev *udev, struct udev_device **dev
         if (!streq(udev_device_get_devpath(*device), udev_device_get_devpath(new_device)))
                 r = log_debug_errno(ETOOMANYREFS,
                                     "found multiple devices for subsystem=%s and sysname=%s, refusing: %s, %s",
-                                    strna(subsystem), sysname, udev_device_get_devpath(*device),
-                                    udev_device_get_devpath(new_device));
+                                    utf8_escape_for_log(strna(subsystem), &lesc1), utf8_escape_for_log(sysname, &lesc2),
+                                    utf8_escape_for_log(udev_device_get_devpath(*device), &lesc3),
+                                    utf8_escape_for_log(udev_device_get_devpath(new_device), &lesc4));
 finish:
         udev_device_unref(new_device);
         return r;
@@ -2611,6 +2617,7 @@ static bool sysattr_is_uevent(const char *sysattr)
  **/
 _public_ int udev_device_set_sysattr_value(struct udev_device *udev_device, const char *sysattr, char *value)
 {
+        _cleanup_free_ char *lesc1 = NULL;
         _cleanup_free_ char *v = NULL, *path = NULL, *resolved = NULL, *relative = NULL;
         struct stat st;
         ssize_t size;
@@ -2705,7 +2712,8 @@ _public_ int udev_device_set_sysattr_value(struct udev_device *udev_device, cons
         if (udev_list_entry_add(&udev_device->sysattr_value_list, relative, v) == NULL) {
                 /* The value has been written, hence do not fail. But do not leave a cache
                  * entry without a value behind, which would make the attribute look absent. */
-                log_debug("failed to cache sysfs attribute value '%s', ignoring", relative);
+                log_debug("failed to cache sysfs attribute value '%s', ignoring",
+                          utf8_escape_for_log(relative, &lesc1));
                 sysattr_cache_remove(udev_device, relative);
         }
         return 0;
@@ -2753,6 +2761,7 @@ int udev_device_cache_sysattr_value(struct udev_device *udev_device, const char 
 static int sysattr_list_read_dir(struct udev_device *udev_device, const char *subdir,
                                  char ***stack, size_t *n_stack, size_t *n_allocated)
 {
+        _cleanup_free_ char *lesc1 = NULL, *lesc2 = NULL;
         _cleanup_closedir_ DIR *dir = NULL;
         _cleanup_free_ char *path = NULL;
         struct dirent *dent;
@@ -2776,7 +2785,7 @@ static int sysattr_list_read_dir(struct udev_device *udev_device, const char *su
                         return 0; /* a child device, skipping */
                 if (errno != ENOENT) {
                         log_debug_errno(errno, "failed to access %s/uevent, ignoring sub-directory %s: %m",
-                                        path, subdir);
+                                        utf8_escape_for_log(path, &lesc1), utf8_escape_for_log(subdir, &lesc2));
                         return 0;
                 }
         }

@@ -163,6 +163,7 @@ static ssize_t tpm2_read(int fd, void *buf, size_t size) {
  * it does with other devices. A normal response to the probe is 20 bytes long, and is read with the same
  * system calls as by tpm2-tss. */
 static int tpm2_probe(Tpm2Device *d) {
+        _cleanup_free_ char *lesc1 = NULL;
         static const uint8_t cmd[] = {
                 0x80, 0x01,                     /* TPM2_ST_NO_SESSIONS */
                 0x00, 0x00, 0x00, 0x0c,         /* commandSize */
@@ -224,7 +225,8 @@ static int tpm2_probe(Tpm2Device *d) {
         safe_close(d->fd);
         d->fd = tpm2_open(d->path);
         if (d->fd < 0)
-                return log_debug_errno(errno, "Failed to open TPM2 device '%s' again: %m", d->path);
+                return log_debug_errno(errno, "Failed to open TPM2 device '%s' again: %m",
+                                       utf8_escape_for_log(d->path, &lesc1));
 
         return 0;
 }
@@ -843,6 +845,7 @@ static int tpm2_get_vendor_info(Tpm2Device *d, Tpm2VendorInfo *ret) {
 }
 
 static int builtin_tpm2_id(struct udev_device *dev, int argc, char *argv[], enum udev_event_mode mode) {
+        _cleanup_free_ char *lesc1 = NULL;
         _cleanup_(tpm2_device_close) Tpm2Device d = { .fd = -1 };
         _cleanup_free_ char *m = NULL;
         Tpm2VendorInfo info;
@@ -860,11 +863,14 @@ static int builtin_tpm2_id(struct udev_device *dev, int argc, char *argv[], enum
         d.path = dn;
         d.fd = tpm2_open(dn);
         if (d.fd < 0)
-                return log_device_error_errno(dev, errno, "Failed to open device node '%s': %m", dn);
+                return log_device_error_errno(dev, errno, "Failed to open device node '%s': %m",
+                                              utf8_escape_for_log(dn, &lesc1));
 
         r = tpm2_context_new(dev, &d);
         if (errno_is_not_supported(r)) {
-                log_device_debug_errno(dev, r, "Full TPM2 support is not available, skipping identification of TPM2 device '%s'.", dn);
+                log_device_debug_errno(dev, r,
+                                       "Full TPM2 support is not available, skipping identification of TPM2 device '%s'.",
+                                       utf8_escape_for_log(dn, &lesc1));
                 return EXIT_SUCCESS;
         }
         if (r < 0)
