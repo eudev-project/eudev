@@ -154,6 +154,7 @@ size_t udev_event_apply_format(struct udev_event *event,
                                bool *ret_truncated);
 int udev_event_spawn(struct udev_event *event,
                      usec_t timeout_usec,
+                     bool accept_failure,
                      const char *cmd, char **envp,
                      char *result, size_t result_size, bool *ret_truncated);
 int udev_event_execute_rules(struct udev_event *event,

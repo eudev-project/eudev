@@ -1384,15 +1384,18 @@ static int import_program_into_properties(struct udev_event *event, struct udev_
                 return log_oom();
 
         envp = udev_device_get_properties_envp(dev);
-        err = udev_event_spawn(event, timeout_usec, program, envp, result, IMPORT_PROGRAM_SIZE, &truncated);
+        err = udev_event_spawn(event, timeout_usec, /* accept_failure= */ true, program, envp, result,
+                               IMPORT_PROGRAM_SIZE, &truncated);
         if (err != 0) {
-                /* like systemd; the errors of running the program are logged already */
-                if (err > 0) {
-                        _cleanup_free_ char *escaped = log_escape(LOG_DEBUG, program);
+                _cleanup_free_ char *escaped = log_escape(err < 0 ? LOG_WARNING : LOG_DEBUG, program);
 
+                /* like systemd */
+                if (err < 0)
+                        log_event_warning_errno(event, rules, rule, token, err, "Failed to execute \"%s\", ignoring: %m",
+                                                escaped ?: program);
+                else
                         log_event_debug(event, rules, rule, token, "Command \"%s\" returned %d (error), ignoring",
                                         escaped ?: program, err);
-                }
                 return 0;
         }
 
@@ -3708,10 +3711,14 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                         escaped = log_escape(LOG_DEBUG, program);
                         log_event_debug(event, rules, rule, cur, "Running command \"%s\"", escaped ?: program);
 
-                        r = udev_event_spawn(event, timeout_usec, program, envp, result, sizeof(result), NULL);
+                        r = udev_event_spawn(event, timeout_usec, /* accept_failure= */ true, program, envp, result,
+                                             sizeof(result), NULL);
                         if (r != 0) {
-                                /* like systemd; the errors of running the program are logged already */
-                                if (r > 0)
+                                /* like systemd */
+                                if (r < 0)
+                                        log_event_warning_errno(event, rules, rule, cur, r, "Failed to execute \"%s\": %m",
+                                                                escaped ?: program);
+                                else
                                         log_event_debug(event, rules, rule, cur, "Command \"%s\" returned %d (error)",
                                                         escaped ?: program, r);
                                 if (!log_event_result(event, rules, rule, cur, cur->key.op == OP_NOMATCH))

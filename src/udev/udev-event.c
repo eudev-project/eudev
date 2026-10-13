@@ -756,6 +756,8 @@ struct spawn {
         usec_t timeout_warn_usec;
         bool warned;
         bool killed;
+        /* whether a failure of the program is logged at the debug level only, see spawn_wait() */
+        bool accept_failure;
         /* the read ends of the pipes of stdout (0) and stderr (1), or -1 when they are not read (any more);
          * udev_event_spawn() closes them */
         int fd[2];
@@ -962,7 +964,8 @@ static void spawn_read_rest(struct spawn *spawn) {
  * and keeps writing does not block on a full pipe, and not until the end of the output, which a process that the
  * program left behind may keep open. Unlike systemd, which stops reading when the program has exited, the output
  * that is in the pipes then is read too, see spawn_read_rest(). Returns 0 when the program succeeded, its exit code
- * when it failed, -1 when it did not exit normally, and a negative errno when it cannot be waited for. */
+ * when it failed, -EIO when it did not exit by itself, e.g. was killed by a signal, and another negative errno
+ * when it cannot be waited for. */
 static int spawn_wait(struct spawn *spawn) {
         struct udev_event *event = spawn->event;
         const char *cmd = spawn->cmd;
@@ -1003,7 +1006,8 @@ static int spawn_wait(struct spawn *spawn) {
                 if (fdcount < 0) {
                         if (errno == EINTR)
                                 continue;
-                        return log_error_errno(errno, "failed to poll: %m");
+                        /* see udev_event_spawn() for the message */
+                        return -errno;
                 }
                 if (fdcount == 0)
                         /* the warning, the timeout or reading the output again is due, see above */
@@ -1034,22 +1038,23 @@ static int spawn_wait(struct spawn *spawn) {
 
                 spawn_read_rest(spawn);
 
+                /* Like on_spawn_exit() of systemd: the exit code of a program that failed, which is logged
+                 * as a warning, unless the caller accepts the failure, or -EIO when it did not exit by
+                 * itself. */
                 if (WIFEXITED(status)) {
-                        log_debug("'%s' ["PID_FMT"] exit with return code %i", cmd, pid, WEXITSTATUS(status));
-                        /* like systemd, the exit code of a program that failed */
+                        if (WEXITSTATUS(status) == 0)
+                                log_device_debug(event->dev, "Process '%s' succeeded.", cmd);
+                        else
+                                log_device_full(event->dev, spawn->accept_failure ? LOG_DEBUG : LOG_WARNING,
+                                                "Process '%s' failed with exit code %i.", cmd, WEXITSTATUS(status));
                         err = WEXITSTATUS(status);
                 } else if (WIFSIGNALED(status)) {
-                        log_error("'%s' ["PID_FMT"] terminated by signal %i (%s)", cmd, pid, WTERMSIG(status), strsignal(WTERMSIG(status)));
-                        err = -1;
-                } else if (WIFSTOPPED(status)) {
-                        log_error("'%s' ["PID_FMT"] stopped", cmd, pid);
-                        err = -1;
-                } else if (WIFCONTINUED(status)) {
-                        log_error("'%s' ["PID_FMT"] continued", cmd, pid);
-                        err = -1;
+                        log_device_error(event->dev, "Process '%s' terminated by signal %s.",
+                                         cmd, signal_to_string(WTERMSIG(status)));
+                        err = -EIO;
                 } else {
-                        log_error("'%s' ["PID_FMT"] exit with status 0x%04x", cmd, pid, status);
-                        err = -1;
+                        log_device_error(event->dev, "Process '%s' failed due to unknown reason.", cmd);
+                        err = -EIO;
                 }
 
                 return err;
@@ -1165,6 +1170,7 @@ static const char *test_mode_helper(const char *program) {
  * exit normally, e.g. was killed by a signal. */
 int udev_event_spawn(struct udev_event *event,
                      usec_t timeout_usec,
+                     bool accept_failure,
                      const char *cmd, char **envp,
                      char *result, size_t result_size, bool *ret_truncated) {
         int outpipe[2] = {-1, -1};
@@ -1179,6 +1185,7 @@ int udev_event_spawn(struct udev_event *event,
         struct spawn spawn = {
                 .event = event,
                 .cmd = cmd,
+                .accept_failure = accept_failure,
                 .fd = { -1, -1 },
                 .result = result,
                 .result_size = result_size,
@@ -1206,7 +1213,7 @@ int udev_event_spawn(struct udev_event *event,
                 helper = test_mode_helper(argv[0]);
 
         if (event->event_mode == EVENT_UDEVADM_TEST && !helper) {
-                log_debug("Running in test mode, skipping execution of '%s'.", spawn.cmd);
+                log_device_debug(event->dev, "Running in test mode, skipping execution of '%s'.", spawn.cmd);
                 if (result_size > 0)
                         result[0] = '\0';
                 if (ret_truncated)
@@ -1237,10 +1244,9 @@ int udev_event_spawn(struct udev_event *event,
         /* The helpers run in test mode must not change the device either: tell cdrom_id not to
          * lock, unlock or eject the media, which the rules ask for with --lock-media. */
         if (helper && streq(helper, "cdrom_id")) {
-                if (argc + 1 >= UDEV_ARGV_MAX) {
-                        log_error("Too many arguments, not running '%s' in test mode.", spawn.cmd);
-                        return -E2BIG;
-                }
+                if (argc + 1 >= UDEV_ARGV_MAX)
+                        return log_device_error_errno(event->dev, E2BIG,
+                                                      "Too many arguments, not running '%s' in test mode.", spawn.cmd);
 
                 /* insert --dry-run right after the program name, so that it is not taken for an
                  * argument after "--"; also move the terminating NULL */
@@ -1249,30 +1255,27 @@ int udev_event_spawn(struct udev_event *event,
                 argc++;
         }
 
-        if (isempty(argv[0])) {
-                log_error("Invalid command '%s'", spawn.cmd);
-                return -EINVAL;
-        }
+        if (isempty(argv[0]))
+                return log_device_error_errno(event->dev, EINVAL, "Invalid command '%s'", spawn.cmd);
 
         /* The callers get the environment with udev_device_get_properties_envp(), which fails only when
          * out of memory. Like systemd, fail then, instead of running the program with an empty
          * environment. */
         if (!envp)
-                return log_error_errno(ENOMEM, "%s: Failed to get device properties: %m",
-                                       udev_device_get_sysname(event->dev) ?: "n/a");
+                return log_device_error_errno(event->dev, ENOMEM, "Failed to get device properties");
 
         /* pipes from child to parent; like systemd, the program gets blocking write ends, see spawn_exec() */
         if (result != NULL || log_get_max_level() >= LOG_INFO) {
                 if (pipe2(outpipe, O_NONBLOCK|O_CLOEXEC) != 0) {
-                        err = -errno;
-                        log_error_errno(errno, "pipe failed: %m");
+                        err = log_device_error_errno(event->dev, errno, "Failed to create pipe for command '%s': %m",
+                                                     spawn.cmd);
                         goto out;
                 }
         }
         if (log_get_max_level() >= LOG_INFO) {
                 if (pipe2(errpipe, O_NONBLOCK|O_CLOEXEC) != 0) {
-                        err = -errno;
-                        log_error_errno(errno, "pipe failed: %m");
+                        err = log_device_error_errno(event->dev, errno, "Failed to create pipe for command '%s': %m",
+                                                     spawn.cmd);
                         goto out;
                 }
         }
@@ -1340,8 +1343,8 @@ int udev_event_spawn(struct udev_event *event,
                 /* like systemd, for every failure */
                 _exit(EXIT_FAILURE);
         case -1:
-                log_error_errno(errno, "fork of '%s' failed: %m", spawn.cmd);
-                err = -1;
+                err = log_device_error_errno(event->dev, errno, "Failed to fork() to execute command '%s': %m",
+                                             spawn.cmd);
                 goto out;
         default:
                 /* parent closed child's ends of pipes */
@@ -1359,6 +1362,9 @@ int udev_event_spawn(struct udev_event *event,
                 spawn.fd[1] = errpipe[READ_END];
                 spawn.log_output = errpipe[READ_END] >= 0;
                 err = spawn_wait(&spawn);
+                if (err < 0)
+                        log_device_error_errno(event->dev, err, "Failed to wait for spawned command '%s': %m",
+                                               spawn.cmd);
 
                 /* return the child's stdout string */
                 if (result != NULL)
@@ -2208,6 +2214,7 @@ int udev_event_execute_rules(struct udev_event *event,
 
 void udev_event_execute_run(struct udev_event *event, usec_t timeout_usec) {
         struct udev_list_entry *list_entry;
+        int r;
 
         udev_list_entry_foreach(list_entry, udev_list_get_entry(&event->run_list)) {
                 const char *command = udev_list_entry_get_name(list_entry);
@@ -2241,7 +2248,18 @@ void udev_event_execute_run(struct udev_event *event, usec_t timeout_usec) {
                         }
 
                         envp = udev_device_get_properties_envp(event->dev);
-                        udev_event_spawn(event, timeout_usec, command, envp, NULL, 0, NULL);
+                        /* like systemd, which logs the failure of the program in udev_event_spawn() too */
+                        r = udev_event_spawn(event, timeout_usec, /* accept_failure= */ false, command, envp, NULL, 0, NULL);
+                        if (r != 0) {
+                                _cleanup_free_ char *escaped = log_escape(LOG_WARNING, command);
+
+                                if (r < 0)
+                                        log_device_warning_errno(event->dev, r, "Failed to execute '%s', ignoring: %m",
+                                                                 escaped ?: command);
+                                else
+                                        log_device_debug(event->dev, "Command \"%s\" returned %d (error), ignoring.",
+                                                         escaped ?: command, r);
+                        }
                 }
         }
 }
