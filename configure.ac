@@ -539,7 +539,6 @@ AC_CONFIG_FILES([Makefile
 	hwdb.d/Makefile
 	man/Makefile
 	rule_generator/Makefile
-	rule_generator/write_net_rules
 	rules/Makefile
 	src/Makefile
 	src/ata_id/Makefile

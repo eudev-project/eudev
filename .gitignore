@@ -22,6 +22,7 @@ build-aux/
 *.pc
 
 rule_generator/write_net_rules
+rule_generator/write_net_rules.tmp
 
 rules/64-btrfs.rules
 
