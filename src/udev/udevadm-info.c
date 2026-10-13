@@ -828,11 +828,14 @@ static void cleanup_dirs_after_db_cleanup(DIR *dir, DIR *datadir) {
  * file of a devlink when it is done with it, so they are only left behind when a worker was killed
  * while it held one. A lock file that is held right now is kept. Removing one while holding it
  * exclusively is safe: a worker waiting for it notices that it was removed after getting the lock,
- * and creates a new one, see make_lock_file().
+ * and creates a new one, see make_lock_file(). Like the other directories, only "." and ".." are
+ * skipped: the lock file of a devlink whose name starts with a dot, e.g. /dev/.foo, is ".foo".
  */
 static void cleanup_lock_dir(DIR *dir) {
         struct dirent *dent;
         int dfd;
+
+        assert(dir);
 
         dfd = dirfd(dir);
         if (dfd < 0)
@@ -841,7 +844,7 @@ static void cleanup_lock_dir(DIR *dir) {
         for (dent = readdir(dir); dent != NULL; dent = readdir(dir)) {
                 _cleanup_close_ int fd = -1;
 
-                if (dent->d_name[0] == '.')
+                if (streq(dent->d_name, ".") || streq(dent->d_name, ".."))
                         continue;
 
                 fd = openat(dfd, dent->d_name, O_RDONLY|O_CLOEXEC|O_NOFOLLOW|O_NOCTTY|O_NONBLOCK);
