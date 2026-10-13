@@ -118,7 +118,7 @@ or
 .RS 4
 The
 /sys/
-path of the device to query, e\&.g\&.
+path of the device to query, e\&.g\&.\&
 [/sys/]/class/block/sda\&. This option is an alternative to the positional argument with a
 /sys/
 prefix\&.
@@ -129,7 +129,7 @@ is equivalent to
 .PP
 \fB\-n\fR, \fB\-\-name=\fR\fB\fIFILE\fR\fR
 .RS 4
-The name of the device node or a symlink to query, e\&.g\&.
+The name of the device node or a symlink to query, e\&.g\&.\&
 [/dev/]/sda\&. This option is an alternative to the positional argument with a
 /dev/
 prefix\&.
@@ -208,7 +208,7 @@ When used with
 \fB\-\-attr\-match=\fR\fB\fIFILE\fR\fR\fB[=\fIVALUE\fR]\fR, \fB\-\-attr\-nomatch=\fR\fB\fIFILE\fR\fR\fB[=\fIVALUE\fR]\fR
 .RS 4
 When used with
-\fB\-\-export\-db\fR, only show devices matching or not matching the given attribute respectively\&. The attribute may be a path relative to the device, e\&.g\&.
+\fB\-\-export\-db\fR, only show devices matching or not matching the given attribute respectively\&. The attribute may be a path relative to the device, e\&.g\&.\&
 queue/rotational
 or
 \&.\&./size, unlike in systemd\&.
@@ -279,8 +279,8 @@ Print help text\&.
 Do not pipe output into a pager\&.
 .RE
 .PP
-In addition optional positional arguments can be used to specify one or more devices\&. Each one may be a device node, e\&.g\&.
-/dev/sda, a sys path, e\&.g\&.
+In addition optional positional arguments can be used to specify one or more devices\&. Each one may be a device node, e\&.g\&.\&
+/dev/sda, a sys path, e\&.g\&.\&
 /sys/class/block/sda, or a symlink to either, also relative to the current directory, or a device ID, as shown in the
 J:
 field of the output (such as
@@ -547,7 +547,7 @@ Do not trigger events for devices which belong to a matching subsystem\&. This o
 .PP
 \fB\-a\fR, \fB\-\-attr\-match=\fR\fB\fIATTRIBUTE\fR\fR\fB=\fR\fB\fIVALUE\fR\fR
 .RS 4
-Trigger events for devices with a matching sysfs attribute\&. If a value is specified along with the attribute name, the content of the attribute is matched against the given value using shell style pattern matching\&. If no value is specified, the existence of the sysfs attribute is checked\&. The attribute may be a path relative to the device, e\&.g\&.
+Trigger events for devices with a matching sysfs attribute\&. If a value is specified along with the attribute name, the content of the attribute is matched against the given value using shell style pattern matching\&. If no value is specified, the existence of the sysfs attribute is checked\&. The attribute may be a path relative to the device, e\&.g\&.\&
 queue/rotational
 or
 \&.\&./size, unlike in systemd\&. This option can be specified multiple times\&.
@@ -555,7 +555,7 @@ or
 .PP
 \fB\-A\fR, \fB\-\-attr\-nomatch=\fR\fB\fIATTRIBUTE\fR\fR\fB=\fR\fB\fIVALUE\fR\fR
 .RS 4
-Do not trigger events for devices with a matching sysfs attribute\&. If a value is specified along with the attribute name, the content of the attribute is matched against the given value using shell style pattern matching\&. If no value is specified, the existence of the sysfs attribute is checked\&. The attribute may be a path relative to the device, e\&.g\&.
+Do not trigger events for devices with a matching sysfs attribute\&. If a value is specified along with the attribute name, the content of the attribute is matched against the given value using shell style pattern matching\&. If no value is specified, the existence of the sysfs attribute is checked\&. The attribute may be a path relative to the device, e\&.g\&.\&
 queue/rotational
 or
 \&.\&./size, unlike in systemd\&. This option can be specified multiple times\&.
@@ -581,7 +581,7 @@ Trigger events for devices with a matching sys device path\&. This option can be
 Trigger events for the device with the given device node name and for all its children\&. A name that does not start with
 /dev/
 is looked up below
-/dev/, e\&.g\&.
+/dev/, e\&.g\&.\&
 sda; the device specifications of the positional arguments are accepted as well\&. When this option is specified more than once, then each matching result is ORed, that is, all specified devices and their children are triggered\&.
 .RE
 .PP
@@ -590,7 +590,7 @@ sda; the device specifications of the positional arguments are accepted as well\
 Trigger events for the given device and all its children\&. A path that does not start with
 /sys
 is looked up below
-/sys, e\&.g\&.
+/sys, e\&.g\&.\&
 class/block/sda; the device specifications of the positional arguments are accepted as well\&. When this option is specified more than once, then each matching result is ORed, that is, each specified device and all its children are triggered\&.
 .RE
 .PP
@@ -611,7 +611,7 @@ Typically, it is essential that applications which intend to use such a match, m
 .sp
 WARNING:
 \fB\-\-initialized\-nomatch\fR
-can potentially save a significant amount of time compared to re\-triggering all devices in the system and e\&.g\&. can be used to optimize boot time\&. However, this is not safe to be used in a boot sequence in general\&. Especially, when udev rules for a device depend on its parent devices (e\&.g\&.
+can potentially save a significant amount of time compared to re\-triggering all devices in the system and e\&.g\&. can be used to optimize boot time\&. However, this is not safe to be used in a boot sequence in general\&. Especially, when udev rules for a device depend on its parent devices (e\&.g\&.\&
 ATTRS
 or
 IMPORT{parent}
@@ -633,7 +633,7 @@ Apart from triggering events, also waits for those events to finish\&. Note that
 waits for all events to finish\&. This option only waits for events triggered by the same command to finish\&. The events are recognized by their UUIDs, see
 \fB\-\-uuid\fR\&. As kernels before Linux 4\&.13 do not support them, on a kernel that reports an older version
 \fBudevadm\fR
-finds out with the first event whether the kernel passes the UUID on (see above), which may take a second or two, and triggers the events without UUIDs then, and waits for an event of each triggered device instead, as for an event that was triggered without a UUID before it was known\&. Devices without a subsystem, e\&.g\&.
+finds out with the first event whether the kernel passes the UUID on (see above), which may take a second or two, and triggers the events without UUIDs then, and waits for an event of each triggered device instead, as for an event that was triggered without a UUID before it was known\&. Devices without a subsystem, e\&.g\&.\&
 /sys/devices/platform
 with
 \fB\-\-include\-parents\fR, and hidden block devices, whose
@@ -694,14 +694,14 @@ Print help text\&.
 .RE
 .PP
 In addition optional positional arguments can be used to specify devices, as for
-\fBudevadm info\fR: a device node, e\&.g\&.
-/dev/sda, a sys path, e\&.g\&.
+\fBudevadm info\fR: a device node, e\&.g\&.\&
+/dev/sda, a sys path, e\&.g\&.\&
 /sys/class/block/sda, or a symlink to either, also relative to the current directory, or a device ID, as shown in the
 J:
 field of
 \fBudevadm info\fR\&. Like with
 \fB\-\-parent\-match=\fR, each of these devices is triggered together with all its children, the devices below it in
-/sys/devices, e\&.g\&.
+/sys/devices, e\&.g\&.\&
 /dev/sda
 also triggers the partitions of the disk, and
 /sys/class/sound/card0
@@ -712,7 +712,7 @@ Watches the udev event queue, and exits if all current events are handled\&.
 .PP
 \fB\-t\fR, \fB\-\-timeout=\fR\fB\fISEC\fR\fR
 .RS 4
-Maximum number of seconds to wait for the event queue to become empty\&. Takes a value in seconds, or in the usual supported time units, e\&.g\&.
+Maximum number of seconds to wait for the event queue to become empty\&. Takes a value in seconds, or in the usual supported time units, e\&.g\&.\&
 500ms
 or
 1min, or
@@ -837,7 +837,7 @@ will be cleared\&.
 \fB\-t\fR, \fB\-\-timeout=\fR\fB\fISECONDS\fR\fR
 .RS 4
 The maximum number of seconds to wait for a reply from udevd, i\&.e\&. until it handled all the commands, or each command with an older
-\fBudevd\fR\&. Takes a value in seconds, or in the usual supported time units, e\&.g\&.
+\fBudevd\fR\&. Takes a value in seconds, or in the usual supported time units, e\&.g\&.\&
 500ms
 or
 1min, which is rounded up to whole seconds, or
@@ -873,7 +873,7 @@ Also print the properties of the event\&.
 .PP
 \fB\-s\fR, \fB\-\-subsystem\-match=\fR\fB\fIstring[/string]\fR\fR
 .RS 4
-Filter kernel uevents and udev events by subsystem[/devtype]\&. Only events with a matching subsystem value will pass\&. When this option is specified more than once, then each matching result is ORed, that is, all devices in the specified subsystems are monitored, also with several device types of the same subsystem, e\&.g\&.
+Filter kernel uevents and udev events by subsystem[/devtype]\&. Only events with a matching subsystem value will pass\&. When this option is specified more than once, then each matching result is ORed, that is, all devices in the specified subsystems are monitored, also with several device types of the same subsystem, e\&.g\&.\&
 \-s block/disk \-s block/partition\&.
 .RE
 .PP
@@ -960,16 +960,16 @@ Simulate a udev event run for the given device, and print debug output\&.
 The device may be given as its path in
 /sys, with or without the
 /sys
-prefix, e\&.g\&.
+prefix, e\&.g\&.\&
 /sys/class/net/eth0
 or
 /class/net/eth0, also a directory of a driver like
 /sys/bus/pci/drivers/e1000e, or as a device node or a symlink to it in
-/dev, e\&.g\&.
+/dev, e\&.g\&.\&
 /dev/sda, or as its device ID, as shown in the
 J:
 field of
-\fBudevadm info\fR, e\&.g\&.
+\fBudevadm info\fR, e\&.g\&.\&
 b8:0\&. The same applies to
 \fBudevadm test\-builtin\fR\&.
 .PP
@@ -1106,7 +1106,7 @@ Print help text\&.
 .SS "udevadm verify [\fIoptions\fR] [\fIfile\fR...]"
 Verify syntactic, semantic, and stylistic correctness of udev rules files\&.
 .PP
-Positional arguments can be used to specify one or more files to check\&. Each argument must be an absolute path to a udev rules file or a directory that contains rules files, or a file name of udev rules file (e\&.g\&.
+Positional arguments can be used to specify one or more files to check\&. Each argument must be an absolute path to a udev rules file or a directory that contains rules files, or a file name of udev rules file (e\&.g\&.\&
 50\-udev\-default\&.rules)\&. If a file name is specified, the file will be searched in the
 rules\&.d
 directories that are processed by
@@ -1175,7 +1175,7 @@ Print help text\&.
 .SS "udevadm cat [\fIoptions\fR] [\fIfile\fR...]"
 Show udev rules files or udev\&.conf\&.
 .PP
-Positional arguments can be used to specify one or more files to show\&. Each argument must be an absolute path to a udev rules file or a directory that contains rules files, or a file name of udev rules file (e\&.g\&.
+Positional arguments can be used to specify one or more files to show\&. Each argument must be an absolute path to a udev rules file or a directory that contains rules files, or a file name of udev rules file (e\&.g\&.\&
 50\-udev\-default\&.rules)\&. If a file name is specified, the file will be searched in the
 rules\&.d
 directories that are processed by
@@ -1225,7 +1225,7 @@ Wait for devices or device symlinks being created and initialized by
 \fBudevd\fR\&. Each device path must start with
 /dev/
 or
-/sys/, e\&.g\&.
+/sys/, e\&.g\&.\&
 /dev/sda,
 /dev/disk/by\-path/pci\-0000:3c:00\&.0\-nvme\-1\-part1,
 /sys/devices/pci0000:00/0000:00:1f\&.6/net/eth0, or
@@ -1316,7 +1316,7 @@ If a path to a device node is specified, identical to
 .PP
 \fB\-\-timeout=\fR\fB\fISECS\fR\fR, \fB\-t \fR\fB\fISECS\fR\fR
 .RS 4
-Specifies how long to wait at most until all locks can be taken\&. Takes a value in seconds, or in the usual supported time units, e\&.g\&.
+Specifies how long to wait at most until all locks can be taken\&. Takes a value in seconds, or in the usual supported time units, e\&.g\&.\&
 500ms
 or
 1min 30s\&. If specified as zero the lock is attempted and if not successful the invocation will immediately fail\&. If passed as
@@ -1348,7 +1348,7 @@ When
 has no controlling terminal, e\&.g\&. when it is run by
 \fBudevd\fR
 or by an init script, it reads the log settings of the kernel command line first, like systemd before version 248, see
-\fBudevd\fR(8): e\&.g\&.
+\fBudevd\fR(8): e\&.g\&.\&
 \fIsystemd\&.log_level=\fR
 like
 \fI$SYSTEMD_LOG_LEVEL\fR, and
@@ -1378,7 +1378,7 @@ for more information\&. Each value may optionally be prefixed with one of
 \fBsyslog\fR
 or
 \fBkmsg\fR
-followed by a colon to set the maximum log level for that specific log target (e\&.g\&.
+followed by a colon to set the maximum log level for that specific log target (e\&.g\&.\&
 \fBSYSTEMD_LOG_LEVEL=debug,console:info\fR
 specifies to log at debug level except when logging to the console which should be at info level)\&. Note that the global maximum log level takes priority over any per target maximum log levels\&. It overrides
 \fIudev_log=\fR
@@ -1428,13 +1428,13 @@ below\&.
 .PP
 \fI$UDEV_LOG_LOCATION\fR, \fI$SYSTEMD_LOG_LOCATION\fR
 .RS 4
-A boolean\&. If true, messages written to the tty are prefixed with a filename and line number in the source code where the message originates\&. The filename is relative to the top of the source tree, e\&.g\&.
+A boolean\&. If true, messages written to the tty are prefixed with a filename and line number in the source code where the message originates\&. The filename is relative to the top of the source tree, e\&.g\&.\&
 src/udev/udevadm\&.c, like in systemd\&.
 .RE
 .PP
 \fI$UDEV_LOG_TIME\fR, \fI$SYSTEMD_LOG_TIME\fR
 .RS 4
-A boolean\&. If true, messages written to the tty are prefixed with the local time, e\&.g\&.
+A boolean\&. If true, messages written to the tty are prefixed with the local time, e\&.g\&.\&
 Mon 2026\-10\-05 12:34:56 EEST, like in systemd\&.
 .RE
 .PP
@@ -1691,7 +1691,7 @@ Takes a boolean\&. Like systemd,
 \fBudevd\fR
 and all programs that use libudev only take a device, e\&.g\&. given by its path below
 /sys, when it is on sysfs, and refuse e\&.g\&. paths below
-/sys/fs/cgroup\&. When this variable is false, e\&.g\&.
+/sys/fs/cgroup\&. When this variable is false, e\&.g\&.\&
 0, this check is not done, e\&.g\&. for tests with a directory or a tmpfs as
 /sys\&. For compatibility with systemd,
 \fI$SYSTEMD_DEVICE_VERIFY_SYSFS\fR

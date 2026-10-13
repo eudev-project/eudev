@@ -159,7 +159,7 @@ The string can be prefixed with a lowercase i (i"string") to mark that the strin
 foo,
 FOO,
 FoO
-and so on\&. The prefix can be used only for match (==) or unmatch (!=) rules, e\&.g\&.
+and so on\&. The prefix can be used only for match (==) or unmatch (!=) rules, e\&.g\&.\&
 \fIATTR{foo}==i"abcd"\fR\&.
 .PP
 Please note that
@@ -426,7 +426,7 @@ SYNTH_ARG_TimestampRealtime=,
 SYNTH_ARG_TimestampMonotonic=
 and
 SYNTH_ARG_TimestampBoottime=
-(with Linux 4\&.13 or newer; note the mixed\-case names), which can be matched here, e\&.g\&.
+(with Linux 4\&.13 or newer; note the mixed\-case names), which can be matched here, e\&.g\&.\&
 ENV{SYNTH_ARG_Comm}=="udevadm"\&. Like the other properties that come with the event from the kernel, they are not stored in the udev database\&. See
 \fBudevadm\fR(8)
 for details\&.
@@ -440,7 +440,7 @@ Match against one of device tags\&. It can be used once a TAG key has been set i
 .PP
 \fITEST{\fR\fI\fIoctal mode mask\fR\fR\fI}\fR
 .RS 4
-Test the existence of a file\&. An octal mode mask can be specified if needed; then the file must also have at least one of the bits of the mask set in its mode, e\&.g\&.
+Test the existence of a file\&. An octal mode mask can be specified if needed; then the file must also have at least one of the bits of the mask set in its mode, e\&.g\&.\&
 TEST{0111}
 is true for a file that anyone may execute\&. A mode mask that is zero, or that is not an octal number of at most
 7777, is an error, and the rule line is ignored\&.
@@ -524,7 +524,7 @@ or
 0b
 prefix or a
 +
-sign, e\&.g\&.
+sign, e\&.g\&.\&
 0x10
 or
 +5, and is not
@@ -558,7 +558,7 @@ The name is taken relative to
 /dev/, and may also be given as an absolute path below
 /dev/\&. It is normalized: redundant slashes,
 \&.
-components and trailing slashes are removed, e\&.g\&.
+components and trailing slashes are removed, e\&.g\&.\&
 disk//by\-foo/\&./bar/
 results in
 /dev/disk/by\-foo/bar\&. A name with a
@@ -617,7 +617,7 @@ A number, and a name without substitutions, unless
 is started with
 \fB\-\-resolve\-names=late\fR
 or
-\fBnever\fR, is resolved when the rules are read\&. If the user or group does not exist, an error is logged, and only this key is ignored: the rest of the rule line, e\&.g\&.
+\fBnever\fR, is resolved when the rules are read\&. If the user or group does not exist, an error is logged, and only this key is ignored: the rest of the rule line, e\&.g\&.\&
 \fIMODE\fR
 or
 \fISYMLINK\fR, still applies, also with
@@ -754,7 +754,7 @@ As
 \fIprogram\fR, but use one of the built\-in programs rather than an external one\&.
 .RE
 .sp
-The program name or the name of a builtin, and its arguments are separated by any whitespace\&. Single and double quotes, also in the middle of an argument, group characters including whitespace and are removed, e\&.g\&.
+The program name or the name of a builtin, and its arguments are separated by any whitespace\&. Single and double quotes, also in the middle of an argument, group characters including whitespace and are removed, e\&.g\&.\&
 a"b c"d
 is the single argument
 ab cd; a missing closing quote is accepted\&. Backslashes have no special meaning\&. This applies to
@@ -803,7 +803,7 @@ program, but use one of the built\-in programs rather than an external one\&.
 .PP
 file
 .RS 4
-Import a text file specified as the assigned value, the content of which must be in environment key format\&. A line may be up to 1 MiB long; a longer line stops the import, and the key is false, while the properties imported before it are kept\&. Like in systemd, a character device is read too, e\&.g\&.
+Import a text file specified as the assigned value, the content of which must be in environment key format\&. A line may be up to 1 MiB long; a longer line stops the import, and the key is false, while the properties imported before it are kept\&. Like in systemd, a character device is read too, e\&.g\&.\&
 /dev/null
 is imported as empty\&. Unlike systemd, which waits for a writer and for data, the file is read without waiting: a FIFO or a socket is not read, and a file without data, e\&.g\&. a terminal, fails to be read; the key is false then\&.
 .RE
@@ -812,7 +812,7 @@ db
 .RS 4
 Import a single property specified as the assigned value from the current device database\&. Besides the properties stored there by an earlier event, this finds the properties of the current event, such as
 \fIPRODUCT\fR
-of a USB device, even when the database has no entry for the device yet; when both have the property, the value of the database is imported\&. A property that cannot be set, e\&.g\&.
+of a USB device, even when the database has no entry for the device yet; when both have the property, the value of the database is imported\&. A property that cannot be set, e\&.g\&.\&
 \fIDEVNAME\fR
 or
 \fIACTION\fR, is not imported, see below\&.
@@ -824,7 +824,7 @@ Import a single property from the kernel command line\&. For simple flags the va
 1\&. Options starting with
 rd\&.
 are only imported in an initrd, see
-\fBudevd\fR(8); the prefix is part of the key, i\&.e\&.
+\fBudevd\fR(8); the prefix is part of the key, i\&.e\&.\&
 IMPORT{cmdline}="foo"
 does not import
 rd\&.foo\&. For testing, the kernel command line can be replaced with the
@@ -865,7 +865,7 @@ db
 and
 cmdline
 with such a name are false; for them, a warning is logged when the rules are read, and by
-\fBudevadm verify\fR, but the rule is kept, so that e\&.g\&.
+\fBudevadm verify\fR, but the rule is kept, so that e\&.g\&.\&
 IMPORT{db}!="DEVNAME"
 is true\&. The
 hwdb
@@ -892,7 +892,7 @@ are not run; the event is still sent to the event listeners\&.
 .PP
 \fIOPTIONS\fR
 .RS 4
-Rule and device options\&. Several options may be given in one value, separated by commas, e\&.g\&.
+Rule and device options\&. Several options may be given in one value, separated by commas, e\&.g\&.\&
 OPTIONS+="watch,link_priority=10"; each one must be exactly one of the options below\&. An unknown option is ignored with a warning, and the rest of the rule is applied\&. An invalid value of
 \fBlink_priority=\fR
 or
@@ -935,7 +935,7 @@ that is a number, or a name without substitutions when names are resolved early,
 \fIMODE\fR
 without substitutions, and the
 \fITAG\fR
-values; also the value 0, e\&.g\&.
+values; also the value 0, e\&.g\&.\&
 OWNER="root"\&.
 .RE
 .PP
@@ -1195,7 +1195,7 @@ bli
 module set it), or, without that variable, a loop device whose backing file name is
 rootdisk
 or
-rootdisk\&.raw\&. The root partition is the partition with the root partition type of the native architecture (e\&.g\&.
+rootdisk\&.raw\&. The root partition is the partition with the root partition type of the native architecture (e\&.g\&.\&
 4f68bce3\-e8cd\-4db1\-96e7\-fbcaf984b709
 on x86\-64) that has the newest version in its label; partitions with the
 no\-auto
@@ -1318,7 +1318,7 @@ _\&.
 .PP
 \fIID_TPM2_MODALIAS=\fR
 .RS 4
-A string that describes the TPM for hwdb lookups\&. It lists the family indicator (fi), level (lv), revision (rv), year (sy) and day of year (sd) of the specification, the manufacturer (mf), the vendor string (vs), the vendor TPM type in hexadecimal (ty) and the firmware version (fw), each after its two letter code and followed by a colon, e\&.g\&.
+A string that describes the TPM for hwdb lookups\&. It lists the family indicator (fi), level (lv), revision (rv), year (sy) and day of year (sd) of the specification, the manufacturer (mf), the vendor string (vs), the vendor TPM type in hexadecimal (ty) and the firmware version (fw), each after its two letter code and followed by a colon, e\&.g\&.\&
 fi2\&.0:\:lv0:\:rv1\&.16:\:sy2019:\:sd346:\:mfSTM:\:vsST33HTPHAHD8:\:ty1:\:fw73\&.4\&.65536:\&.
 60\-tpm2\-id\&.rules
 looks up
@@ -1392,7 +1392,7 @@ requests
 \fIOPTIONS+="net_altnames"\fR, so that these names, except the one the interface is renamed to, are also assigned as alternative names of the interface, also the ones longer than 15 characters, like systemd does by default\&. That is independent of
 \fInet\&.ifnames=\fR, unless eudev is built with
 \fB\-\-with\-net\-ifnames\-default=no\fR: then it is only done with
-\fInet\&.ifnames=1\fR, like the renaming\&. It is also done for interfaces that are not renamed, and with the rule generator\&. The alternative names are shown by e\&.g\&.
+\fInet\&.ifnames=1\fR, like the renaming\&. It is also done for interfaces that are not renamed, and with the rule generator\&. The alternative names are shown by e\&.g\&.\&
 \fBip link show\fR, and can be used instead of the interface name by
 \fBip\fR
 and other tools\&. This can be disabled with
@@ -1448,7 +1448,7 @@ The location of the device: the PCI bus, slot and function numbers; the bus ID o
 .RS 4
 The permanent MAC address of the device\&. As in systemd since version 250, it is also set for an address of all zeros, except in the
 eudev
-scheme, but such a name, e\&.g\&.
+scheme, but such a name, e\&.g\&.\&
 enx000000000000, is not unique, and
 80\-net\-name\-slot\&.rules
 never renames an interface to it\&.
@@ -1523,7 +1523,7 @@ generates, i\&.e\&. the
 \fIID_NET_NAME_*\fR
 properties\&. Which one of them an interface is renamed to is decided by
 80\-net\-name\-slot\&.rules
-as described above, the same way with all schemes, e\&.g\&.
+as described above, the same way with all schemes, e\&.g\&.\&
 \fIID_NET_NAME_FROM_DATABASE\fR
 is preferred, and interfaces named by userspace or predictably by the kernel are not renamed, also with the
 eudev
@@ -1682,7 +1682,7 @@ With the systemd naming schemes, the sysfs attributes used for a name can be res
 \fIID_NET_NAME_ALLOW=0\fR
 disallows all attributes that are not explicitly allowed, and
 \fIID_NET_NAME_ALLOW_\fR\fIATTRIBUTE\fR\fI=\fR
-allows (1) or disallows (0) a specific attribute, e\&.g\&.
+allows (1) or disallows (0) a specific attribute, e\&.g\&.\&
 \fIID_NET_NAME_ALLOW_PHYS_PORT_NAME=0\fR\&. For network interfaces, such properties are usually set in the hwdb, where
 75\-net\-description\&.rules
 looks them up with the key

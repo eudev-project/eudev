@@ -79,6 +79,16 @@
   </xsl:choose>
 </xsl:template>
 
+<!-- troff takes a period at the end of an input line for the end of a sentence, and puts two spaces after
+     it. The stylesheet ends a line before markup, so that "e.g." and "i.e." end one whenever markup follows
+     them, and render with two spaces, e.g. "a time span with a unit, e.g.  500ms". After the other
+     substitutions, put \& after their last period where they end a line, which troff then does not take
+     for the end of a sentence. -->
+<xsl:param name="man.string.subst.map.local.post">
+  <substitution oldstring="e\&amp;.g\&amp;.&#10;" newstring="e\&amp;.g\&amp;.\&amp;&#10;"/>
+  <substitution oldstring="i\&amp;.e\&amp;.&#10;" newstring="i\&amp;.e\&amp;.\&amp;&#10;"/>
+</xsl:param>
+
 <!-- The stylesheet writes a page with ".so man<section>/<page>" for every further name of a page, e.g.
      udev.conf.d(5) of udev.conf(5), which works only below a man<section> directory, and which mandoc calls
      fragile. Write none: man/Makefile.am installs the further names as symbolic links instead. -->

@@ -94,7 +94,7 @@ in
 .RS 4
 Delay the execution of
 \fIRUN\fR
-instructions by the given number of seconds, or by a time span with a unit, e\&.g\&.
+instructions by the given number of seconds, or by a time span with a unit, e\&.g\&.\&
 500ms\&. This option might be useful when debugging system crashes during coldplug caused by loading non\-working kernel modules\&. A delay that is not shorter than the event timeout is ignored\&. It takes precedence over
 \fIexec_delay=\fR
 in
@@ -103,7 +103,7 @@ in
 .PP
 \fB\-t\fR, \fB\-\-event\-timeout=\fR
 .RS 4
-Set the number of seconds to wait for events to finish, or a time span with a unit, e\&.g\&.
+Set the number of seconds to wait for events to finish, or a time span with a unit, e\&.g\&.\&
 5min\&. After this time the event will be terminated\&. The default is 180 seconds, which is also used when 0 or less than a millisecond is given\&. It takes precedence over
 \fIevent_timeout=\fR
 in
@@ -122,7 +122,7 @@ sends the timeout signal to the worker\&. This extra time can be set with the
 environment variable of
 \fBudevd\fR, or
 \fI$SYSTEMD_UDEV_EXTRA_TIMEOUT_SEC\fR
-when that is not set, to a time span of up to 5 hours, e\&.g\&.
+when that is not set, to a time span of up to 5 hours, e\&.g\&.\&
 30s\&.
 .RE
 .PP
@@ -148,7 +148,7 @@ and
 \fBSIGWINCH\fR\&. A worker that has not finished its event 5 seconds after the signal, e\&.g\&. as it blocks
 \fBSIGTERM\fR
 while it processes an event, is killed with
-\fBSIGKILL\fR; after a signal whose default action dumps core, e\&.g\&.
+\fBSIGKILL\fR; after a signal whose default action dumps core, e\&.g\&.\&
 \fBSIGABRT\fR, 90 seconds, so that the core dump is not cut off\&.
 .RE
 .PP
@@ -204,7 +204,7 @@ exists, and one of the files that such initrd generators put into the initrd exi
 \fI$SYSTEMD_IN_INITRD\fR
 environment variable, set to a boolean value\&.
 .PP
-In the names of the parameters, "\-" and "_" are the same, e\&.g\&.
+In the names of the parameters, "\-" and "_" are the same, e\&.g\&.\&
 \fIudev\&.children\-max=\fR
 is the same as
 \fIudev\&.children_max=\fR\&. Like systemd,
@@ -250,14 +250,14 @@ for the default\&.
 .RS 4
 Delay the execution of
 \fIRUN\fR
-instructions by the given number of seconds, or by a time span with a unit, e\&.g\&.
+instructions by the given number of seconds, or by a time span with a unit, e\&.g\&.\&
 500ms\&. This option might be useful when debugging system crashes during coldplug caused by loading non\-working kernel modules\&. It takes precedence over
 \fB\-\-exec\-delay=\fR, unless it is 0\&.
 .RE
 .PP
 \fIudev\&.event_timeout=\fR, \fIrd\&.udev\&.event_timeout=\fR
 .RS 4
-Wait for events to finish up to the given number of seconds, or a time span with a unit, e\&.g\&.
+Wait for events to finish up to the given number of seconds, or a time span with a unit, e\&.g\&.\&
 5min\&. This option might be useful if events are terminated due to kernel drivers taking too long to initialize\&. It takes precedence over
 \fB\-\-event\-timeout=\fR, unless it is 0\&.
 .RE
@@ -348,7 +348,7 @@ and
 \fIdebug\fR
 without a value is the same as
 \fIsystemd\&.log_level=debug\fR\&. Like systemd before version 248, every program of eudev that has no controlling terminal reads them:
-\fBudevd\fR, the programs that it runs, e\&.g\&.
+\fBudevd\fR, the programs that it runs, e\&.g\&.\&
 \fBudevadm\fR
 or helpers like
 \fBscsi_id\fR, and the commands run without a terminal, e\&.g\&. by init scripts; a command run from a terminal ignores them\&.
@@ -415,9 +415,9 @@ is used the same way when
 is not set\&.
 .SH "ENVIRONMENT"
 Each of the following settings is read from
-\fI$UDEV_LOG_\fR\fI\fINAME\fR\fR, e\&.g\&.
+\fI$UDEV_LOG_\fR\fI\fINAME\fR\fR, e\&.g\&.\&
 \fI$UDEV_LOG_LEVEL\fR, and, like in systemd, from
-\fI$SYSTEMD_LOG_\fR\fI\fINAME\fR\fR, e\&.g\&.
+\fI$SYSTEMD_LOG_\fR\fI\fINAME\fR\fR, e\&.g\&.\&
 \fI$SYSTEMD_LOG_LEVEL\fR, when the former is not set\&.
 \fBudevadm\fR
 reads them too, see
@@ -445,7 +445,7 @@ for more information\&. Each value may optionally be prefixed with one of
 \fBsyslog\fR
 or
 \fBkmsg\fR
-followed by a colon to set the maximum log level for that specific log target (e\&.g\&.
+followed by a colon to set the maximum log level for that specific log target (e\&.g\&.\&
 \fBSYSTEMD_LOG_LEVEL=debug,console:info\fR
 specifies to log at debug level except when logging to the console which should be at info level)\&. Note that the global maximum log level takes priority over any per target maximum log levels\&. Like in systemd, it takes precedence over
 \fIsystemd\&.log_level=\fR
@@ -504,13 +504,13 @@ are used like by
 .PP
 \fI$UDEV_LOG_LOCATION\fR, \fI$SYSTEMD_LOG_LOCATION\fR
 .RS 4
-A boolean\&. If true, messages written to the tty are prefixed with a filename and line number in the source code where the message originates\&. The filename is relative to the top of the source tree, e\&.g\&.
+A boolean\&. If true, messages written to the tty are prefixed with a filename and line number in the source code where the message originates\&. The filename is relative to the top of the source tree, e\&.g\&.\&
 src/udev/udevd\&.c, like in systemd\&.
 .RE
 .PP
 \fI$UDEV_LOG_TIME\fR, \fI$SYSTEMD_LOG_TIME\fR
 .RS 4
-A boolean\&. If true, messages written to the tty are prefixed with the local time, e\&.g\&.
+A boolean\&. If true, messages written to the tty are prefixed with the local time, e\&.g\&.\&
 Mon 2026\-10\-05 12:34:56 EEST, like in systemd\&.
 .RE
 .PP
