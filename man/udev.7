@@ -703,6 +703,10 @@ CURRENT_TAGS,
 USEC_INITIALIZED,
 UDEV_DATABASE_VERSION, and names starting with
 SYNTH_ARG_\&. A rule line assigning one of them is invalid, and is ignored as a whole\&.
+\fIIMPORT\fR
+and the
+hwdb
+built\-in command do not set them either, see below\&.
 .RE
 .PP
 \fITAG\fR
@@ -809,9 +813,11 @@ is imported as empty\&. Unlike systemd, which waits for a writer and for data, t
 db
 .RS 4
 Import a single property specified as the assigned value from the current device database\&. Besides the properties stored there by an earlier event, this finds the properties of the current event, such as
+\fIPRODUCT\fR
+of a USB device, even when the database has no entry for the device yet; when both have the property, the value of the database is imported\&. A property that cannot be set, e\&.g\&.
 \fIDEVNAME\fR
 or
-\fIACTION\fR, even when the database has no entry for the device yet; when both have the property, the value of the database is imported\&.
+\fIACTION\fR, is not imported, see below\&.
 .RE
 .PP
 cmdline
@@ -831,13 +837,41 @@ environment variable, see
 .PP
 parent
 .RS 4
-Import the stored keys from the parent device by reading the database entry of the parent device\&. The value assigned to
+Import the properties of the parent device, both the ones of its uevent file and the ones stored in its database entry\&. The value assigned to
 \fBIMPORT{parent}\fR
-is used as a filter of key names to import (with the same shell glob pattern matching used for comparisons)\&. The import is successful when at least one property was imported\&.
+is used as a filter of key names to import (with the same shell glob pattern matching used for comparisons)\&. The properties that cannot be set, e\&.g\&. the parent\*(Aqs
+\fIDEVPATH\fR
+or
+\fISUBSYSTEM\fR, are not imported, see below\&. The import is successful when at least one property was imported\&.
 .RE
 .sp
 This can only be used for very short\-running foreground tasks\&. For details see
 \fBRUN\fR\&.
+.sp
+The properties that cannot be assigned with
+\fIENV{\fR\fI\fIkey\fR\fR\fI}\fR
+(see above), i\&.e\&. the ones that describe the device and the event, like
+\fIDEVPATH\fR,
+\fISUBSYSTEM\fR,
+\fIACTION\fR,
+\fISEQNUM\fR,
+\fISYNTH_UUID\fR,
+\fIDEVNAME\fR,
+\fIMAJOR\fR
+and
+\fIMINOR\fR, are not imported either: such a line of the output of
+program
+or of a
+file, and such a property of the parent device, are skipped, and
+db
+and
+cmdline
+with such a name are false; for them, a warning is logged when the rules are read, and by
+\fBudevadm verify\fR, but the rule is kept, so that e\&.g\&.
+IMPORT{db}!="DEVNAME"
+is true\&. The
+hwdb
+built\-in command skips them in the entries of the hardware database\&. Otherwise the event that udev sends to the event listeners would look like an event of another device, or one with another action, and the database would keep the values\&.
 .sp
 Note that multiple
 \fIIMPORT{}\fR

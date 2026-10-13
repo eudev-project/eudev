@@ -651,7 +651,8 @@
             <literal>CURRENT_TAGS</literal>, <literal>USEC_INITIALIZED</literal>,
             <literal>UDEV_DATABASE_VERSION</literal>, and names starting with
             <literal>SYNTH_ARG_</literal>. A rule line assigning one of them is invalid, and is
-            ignored as a whole.</para>
+            ignored as a whole. <varname>IMPORT</varname> and the <literal>hwdb</literal> built-in
+            command do not set them either, see below.</para>
           </listitem>
         </varlistentry>
 
@@ -781,9 +782,11 @@
                   <para>Import a single property specified as the assigned value from the
                   current device database. Besides the properties stored there by an earlier
                   event, this finds the properties of the current event, such as
-                  <varname>DEVNAME</varname> or <varname>ACTION</varname>, even when the
-                  database has no entry for the device yet; when both have the property, the
-                  value of the database is imported.</para>
+                  <varname>PRODUCT</varname> of a USB device, even when the database has no
+                  entry for the device yet; when both have the property, the value of the
+                  database is imported. A property that cannot be set, e.g.
+                  <varname>DEVNAME</varname> or <varname>ACTION</varname>, is not imported, see
+                  below.</para>
                 </listitem>
               </varlistentry>
               <varlistentry>
@@ -803,17 +806,36 @@
               <varlistentry>
                 <term><literal>parent</literal></term>
                 <listitem>
-                  <para>Import the stored keys from the parent device by reading
-                  the database entry of the parent device. The value assigned to
+                  <para>Import the properties of the parent device, both the ones of its
+                  uevent file and the ones stored in its database entry. The value assigned to
                   <option>IMPORT{parent}</option> is used as a filter of key names
                   to import (with the same shell glob pattern matching used for
-                  comparisons). The import is successful when at least one property was
+                  comparisons). The properties that cannot be set, e.g. the parent's
+                  <varname>DEVPATH</varname> or <varname>SUBSYSTEM</varname>, are not
+                  imported, see below. The import is successful when at least one property was
                   imported.</para>
                 </listitem>
               </varlistentry>
             </variablelist>
             <para>This can only be used for very short-running foreground tasks. For details
             see <option>RUN</option>.</para>
+
+            <para>The properties that cannot be assigned with
+            <varname>ENV{<replaceable>key</replaceable>}</varname> (see above), i.e. the ones
+            that describe the device and the event, like <varname>DEVPATH</varname>,
+            <varname>SUBSYSTEM</varname>, <varname>ACTION</varname>, <varname>SEQNUM</varname>,
+            <varname>SYNTH_UUID</varname>, <varname>DEVNAME</varname>,
+            <varname>MAJOR</varname> and <varname>MINOR</varname>, are not imported either:
+            such a line of the output of <literal>program</literal> or of a
+            <literal>file</literal>, and such a property of the parent device, are skipped,
+            and <literal>db</literal> and <literal>cmdline</literal> with such a name are
+            false; for them, a warning is logged when the rules are read, and by
+            <command>udevadm verify</command>, but the rule is kept, so that e.g.
+            <literal>IMPORT{db}!="DEVNAME"</literal> is true. The <literal>hwdb</literal>
+            built-in command skips them in the entries of
+            the hardware database. Otherwise the event that udev sends to the event listeners
+            would look like an event of another device, or one with another action, and the
+            database would keep the values.</para>
 
             <para>Note that multiple <varname>IMPORT{}</varname> keys may be specified in one rule, and
             <literal>=</literal>, <literal>:=</literal>, and <literal>+=</literal> have the same effect as

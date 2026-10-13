@@ -1631,17 +1631,22 @@ EOF
                 devpath         => "/devices/pci0000:00/0000:00:1f.2/host0/target0:0:0/0:0:0:0/block/sda/sda1",
                 exp_name        => "found",
                 not_exp_name    => "bad",
+                option          => "clean",
                 rules           => <<EOF
+KERNEL=="sda1", PROGRAM="/bin/sh -c 'mkdir -p /run/udev/data && printf \\"E:PARENT_PROP=1\\\\n\\" >/run/udev/data/b8:0'"
 KERNEL=="sda1", IMPORT{parent}="NO_SUCH_PROPERTY*", SYMLINK+="bad"
 KERNEL=="sda1", IMPORT{parent}!="NO_SUCH_PROPERTY*", ENV{P1}="1"
-KERNEL=="sda1", IMPORT{parent}="MAJOR", ENV{P2}="1"
-KERNEL=="sda1", IMPORT{parent}!="MAJOR", SYMLINK+="bad"
+KERNEL=="sda1", IMPORT{parent}="PARENT_PROP", ENV{P2}="1"
+KERNEL=="sda1", IMPORT{parent}!="PARENT_PROP", SYMLINK+="bad"
+KERNEL=="sda1", IMPORT{parent}="MAJOR", SYMLINK+="bad"
+KERNEL=="sda1", IMPORT{parent}!="MAJOR", ENV{P6}="1"
 KERNEL=="sda1", IMPORT{program}!="/bin/sh -c 'echo FOO=1'", SYMLINK+="bad"
 KERNEL=="sda1", IMPORT{program}!="/bin/false", ENV{P3}="1"
 KERNEL=="sda1", IMPORT{builtin}!="path_id", SYMLINK+="bad"
 KERNEL=="sda1", IMPORT{file}!="/nonexistent", ENV{P4}="1"
 KERNEL=="sda1", IMPORT{cmdline}!="no_such_kernel_option_x", ENV{P5}="1"
-KERNEL=="sda1", ENV{P1}=="1", ENV{P2}=="1", ENV{P3}=="1", ENV{P4}=="1", ENV{P5}=="1", ENV{FOO}=="1", SYMLINK+="found"
+KERNEL=="sda1", ENV{P1}=="1", ENV{P2}=="1", ENV{P3}=="1", ENV{P4}=="1", ENV{P5}=="1", ENV{P6}=="1", \\
+        ENV{PARENT_PROP}=="1", ENV{FOO}=="1", SYMLINK+="found"
 EOF
         },
         {

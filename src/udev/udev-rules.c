@@ -1194,12 +1194,36 @@ static bool value_is_plain(const char *value) {
         return value[0] != '[' && !strchr(value, '%') && !strchr(value, '$');
 }
 
-/* Adds a property imported by the rule to the device of the event. Failures are logged. Only -ENOMEM is
- * fatal, like in systemd it stops the processing of the rules for the event, see
+/* Whether an IMPORT{} of the rule may set the property key. Like the ENV{} assignments, which are refused
+ * when the rules are read, the properties that describe the device and the event are not imported, see
+ * device_property_can_set(); such a property is skipped with a debug message. Unlike systemd a446e8ff2c,
+ * which imports them, so that e.g. an imported DEVPATH, ACTION or SEQNUM makes the event that udevd sends to
+ * the listeners look like an event of another device, or with another action or seqnum, and the value is
+ * stored in the database, where IMPORT{db}="SYNTH_UUID" keeps the UUID of the first event for all the later
+ * ones, so that udevadm trigger --settle waits for its own UUID forever. */
+static bool import_property_can_set(struct udev_event *event, struct udev_rules *rules, struct token *rule,
+                                    struct token *token, const char *key) {
+        _cleanup_free_ char *escaped = NULL;
+
+        if (device_property_can_set(key))
+                return true;
+
+        /* a name with the prefix SYNTH_ARG_ may have anything after it */
+        escaped = log_escape(LOG_DEBUG, key);
+        log_event_debug(event, rules, rule, token, "Property \"%s\" cannot be set, ignoring.", escaped ?: key);
+        return false;
+}
+
+/* Adds a property imported by the rule to the device of the event, unless import_property_can_set() refuses
+ * it. Returns 1 when it was added, 0 when it was refused, and a negative error when adding it failed, which
+ * is logged. Only -ENOMEM is fatal, like in systemd it stops the processing of the rules for the event, see
  * udev_rules_apply_to_event(). */
 static int import_property(struct udev_event *event, struct udev_rules *rules, struct token *rule,
                            struct token *token, const char *key, const char *val) {
         int r;
+
+        if (!import_property_can_set(event, rules, rule, token, key))
+                return 0;
 
         r = udev_device_add_property(event->dev, key, val);
         if (r == -ENOMEM)
@@ -1209,12 +1233,14 @@ static int import_property(struct udev_event *event, struct udev_rules *rules, s
 
                 log_event_warning_errno(event, rules, rule, token, r, "Failed to import property \"%s=%s\", ignoring: %m",
                                         k ?: key, v ?: "");
-        } else if (event->trace) {
+                return r;
+        }
+        if (event->trace) {
                 _cleanup_free_ char *k = trace_escape(event, key), *v = trace_escape(event, val ?: "");
 
                 log_event_trace(event, rules, rule, token, "Imported property \"%s=%s\".", k ?: key, v ?: val ?: "");
         }
-        return r;
+        return 1;
 }
 
 /* Logs an invalid line of IMPORT{file} or IMPORT{program} like systemd: at debug level, "Failed to parse key and
@@ -1455,10 +1481,15 @@ static int import_parent_into_properties(struct udev_event *event, struct udev_r
                 if (fnmatch(filter, key, 0) != 0)
                         continue;
 
+                /* The properties that cannot be set are skipped silently: every parent has some of them, e.g.
+                 * DEVPATH and SUBSYSTEM, which IMPORT{parent}="*" would otherwise log each time. */
+                if (!device_property_can_set(key))
+                        continue;
+
                 r = import_property(event, rules, rule, token, key, val);
                 if (r == -ENOMEM)
                         return r;
-                if (r >= 0)
+                if (r > 0)
                         n++;
         }
 
@@ -2237,31 +2268,7 @@ static int add_rule(struct udev_rules *rules, char *line,
                                 if (rule_add_key(&rule_tmp, TK_M_ENV, op, value, attr) != 0)
                                         goto invalid;
                         } else {
-                                static const char *blacklist[] = {
-                                        /* basic properties set by kernel, only in netlink event */
-                                        "ACTION", "SEQNUM", "SYNTH_UUID",
-                                        /* basic properties set by kernel, both in netlink event and uevent file */
-                                        "DEVPATH", "DEVPATH_OLD", "SUBSYSTEM", "DEVTYPE", "DRIVER", "MODALIAS",
-                                        /* device node */
-                                        "DEVNAME", "DEVMODE", "DEVUID", "DEVGID", "MAJOR", "MINOR",
-                                        /* block device */
-                                        "DISKSEQ", "PARTN",
-                                        /* network interface (INTERFACE_OLD is set by udevd) */
-                                        "IFINDEX", "INTERFACE", "INTERFACE_OLD",
-                                        /* basic properties set by udevd */
-                                        "DEVLINKS", "TAGS", "CURRENT_TAGS", "USEC_INITIALIZED", "UDEV_DATABASE_VERSION",
-                                };
-                                unsigned int i;
-
-                                for (i = 0; i < ELEMENTSOF(blacklist); i++) {
-                                        if (!streq(attr, blacklist[i]))
-                                                continue;
-                                        log_rule_error("Invalid ENV attribute. '%s' cannot be set.", attr);
-                                        goto invalid;
-                                }
-                                /* Similar to SYNTH_UUID, but set based on KEY=VALUE arguments passed by userspace.
-                                 * See kernel's f36776fafbaa0094390dd4e7e3e29805e0b82730 (v4.13) */
-                                if (startswith(attr, "SYNTH_ARG_")) {
+                                if (!device_property_can_set(attr)) {
                                         log_rule_error("Invalid ENV attribute. '%s' cannot be set.", attr);
                                         goto invalid;
                                 }
@@ -2341,10 +2348,18 @@ static int add_rule(struct udev_rules *rules, char *line,
                                 }
                         } else if (streq(attr, "file")) {
                                 rule_add_key(&rule_tmp, TK_M_IMPORT_FILE, op, value, NULL);
-                        } else if (streq(attr, "db")) {
-                                rule_add_key(&rule_tmp, TK_M_IMPORT_DB, op, value, NULL);
-                        } else if (streq(attr, "cmdline")) {
-                                rule_add_key(&rule_tmp, TK_M_IMPORT_CMDLINE, op, value, NULL);
+                        } else if (streq(attr, "db") || streq(attr, "cmdline")) {
+                                /* Their key names a property as it is, which is never imported when it cannot
+                                 * be set, see import_property_can_set(). Unlike an ENV{} assignment of it, the
+                                 * line stays: the key is false, so that e.g. IMPORT{db}!="DEVNAME" is true. */
+                                if (!device_property_can_set(value)) {
+                                        _cleanup_free_ char *escaped = log_escape(LOG_WARNING, value);
+
+                                        log_rule_warning("IMPORT{%s} property '%s' cannot be set, it is never imported.",
+                                                         attr, escaped ?: value);
+                                }
+                                rule_add_key(&rule_tmp, streq(attr, "db") ? TK_M_IMPORT_DB : TK_M_IMPORT_CMDLINE,
+                                             op, value, NULL);
                         } else if (streq(attr, "parent")) {
                                 rule_add_key(&rule_tmp, TK_M_IMPORT_PARENT, op, value, NULL);
                         } else {
@@ -3826,9 +3841,12 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                 }
                 case TK_M_IMPORT_DB: {
                         const char *key = rules_str(rules, cur->key.value_off);
-                        const char *value;
+                        const char *value = NULL;
 
-                        value = udev_device_get_property_value(event->dev_db, key);
+                        /* A property that cannot be set is not looked up, and the key is false, also when the
+                         * event or the database has it, e.g. DEVNAME or ACTION. */
+                        if (import_property_can_set(event, rules, rule, cur, key))
+                                value = udev_device_get_property_value(event->dev_db, key);
                         if (value != NULL &&
                             import_property(event, rules, rule, cur, key, value) == -ENOMEM)
                                 return -ENOMEM;
@@ -3842,6 +3860,13 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                         const char *key;
 
                         key = rules_str(rules, cur->key.value_off);
+
+                        /* A property that cannot be set is not looked up, and the key is false. */
+                        if (!import_property_can_set(event, rules, rule, cur, key)) {
+                                if (!log_event_result(event, rules, rule, cur, cur->key.op == OP_NOMATCH))
+                                        goto nomatch;
+                                break;
+                        }
 
                         /* Like systemd, an error stops the processing of the rules for the event. */
                         r = proc_cmdline_get_key(key, &value);

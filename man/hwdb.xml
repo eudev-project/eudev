@@ -22,7 +22,10 @@
   <refsect1><title>Description</title>
     <para>The hardware database is a key-value store for associating modalias-like keys to
     udev-property-like values. It is used primarily by udev to add the relevant properties
-    to matching devices, but it can also be queried directly.</para>
+    to matching devices, but it can also be queried directly. udev does not add the
+    properties that describe the device and the event, e.g. <varname>DEVPATH</varname> or
+    <varname>DEVNAME</varname>, which its rules cannot set either, see
+    <citerefentry><refentrytitle>udev</refentrytitle><manvolnum>7</manvolnum></citerefentry>.</para>
   </refsect1>
 
   <refsect1><title>Hardware Database Files</title>

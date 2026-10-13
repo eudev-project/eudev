@@ -135,6 +135,16 @@ int udev_builtin_add_property(struct udev_device *dev, enum udev_event_mode mode
 
         assert(key);
 
+        /* hwdb entries may carry any key. Like the imports of the rules, skip the properties that describe the
+         * device and the event, which ENV{} cannot set either, see device_property_can_set(). Unlike systemd
+         * a446e8ff2c, which sets them. */
+        if (!device_property_can_set(key)) {
+                _cleanup_free_ char *k = log_escape(LOG_DEBUG, key);
+
+                log_device_debug(dev, "Property '%s' cannot be set, ignoring.", k ?: key);
+                return 0;
+        }
+
         if (isempty(val))
                 val = NULL;
 

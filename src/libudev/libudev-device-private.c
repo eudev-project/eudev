@@ -514,6 +514,29 @@ int device_get_sysattr_u64(struct udev_device *device, const char *sysattr, uint
         return v > 0;
 }
 
+/* Like device_property_can_set() of systemd, the same names: ENV{} assignments of them are refused when the
+ * rules are read, and the imports and the builtins skip them, see udev-rules.c and udev_builtin_add_property(). */
+bool device_property_can_set(const char *property)
+{
+        return property &&
+                !STR_IN_SET(property,
+                            /* basic properties set by kernel, only in netlink event */
+                            "ACTION", "SEQNUM", "SYNTH_UUID",
+                            /* basic properties set by kernel, both in netlink event and uevent file */
+                            "DEVPATH", "DEVPATH_OLD", "SUBSYSTEM", "DEVTYPE", "DRIVER", "MODALIAS",
+                            /* device node */
+                            "DEVNAME", "DEVMODE", "DEVUID", "DEVGID", "MAJOR", "MINOR",
+                            /* block device */
+                            "DISKSEQ", "PARTN",
+                            /* network interface (INTERFACE_OLD is set by udevd) */
+                            "IFINDEX", "INTERFACE", "INTERFACE_OLD",
+                            /* basic properties set by udevd */
+                            "DEVLINKS", "TAGS", "CURRENT_TAGS", "USEC_INITIALIZED", "UDEV_DATABASE_VERSION") &&
+                /* Similar to SYNTH_UUID, but set based on KEY=VALUE arguments passed by userspace.
+                 * See kernel's f36776fafbaa0094390dd4e7e3e29805e0b82730 (v4.13) */
+                !startswith(property, "SYNTH_ARG_");
+}
+
 /* Triggers a synthetic uevent of the device with the syspath by writing the action, e.g. "change", to its
  * uevent attribute, with the UUID, unless it is NULL, and then the arguments joined by
  * trigger_args_join(), unless they are NULL. */

@@ -129,6 +129,9 @@ static inline int device_get_sysattr_unsigned(struct udev_device *device, const 
 int device_get_sysattr_u16_full(struct udev_device *device, const char *sysattr, unsigned base, uint16_t *ret);
 int device_get_sysattr_bool(struct udev_device *device, const char *sysattr);
 int device_get_sysattr_u64(struct udev_device *device, const char *sysattr, uint64_t *ret);
+/* Like device_property_can_set() of systemd: false for the properties that describe the device and the event,
+ * which the rules cannot set */
+bool device_property_can_set(const char *property) _pure_;
 bool syspath_sends_uevents(const char *syspath);
 uint64_t uevent_seqnum(void);
 bool uevent_seqnum_unchanged(uint64_t before, uint64_t after);
