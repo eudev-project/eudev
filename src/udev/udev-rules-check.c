@@ -204,8 +204,9 @@ void udev_rules_check_file_begin(struct udev_rules_check *c, const char *filenam
 
         check_lines_clear(c);
         c->issues = 0;
+        /* escaped like the name of the file in the messages of the parser, see parse_file() */
         free(c->filename);
-        c->filename = strdup(filename);
+        c->filename = utf8_escape_non_printable(filename);
         if (!c->filename)
                 log_oom();
 }
@@ -272,16 +273,21 @@ void udev_rules_check_delimiters(struct udev_rules_check *c, const char *pos) {
         }
 }
 
+/* The values and attributes in the messages are escaped like the values in the messages about applying the
+ * rules, see log_escape(); the position of the invalid character counts the bytes of the value as it is. */
 static void check_value_format(struct udev_rules_check *c, const char *key, const char *value, bool nonempty) {
+        _cleanup_free_ char *escaped = NULL;
         size_t offset;
         const char *hint;
 
         if (nonempty && isempty(value))
                 log_line_error_fail(c, "Invalid value \"%s\" for %s (char %zu: %s), ignoring.",
                                     value, key, (size_t) 0, "empty value");
-        else if (udev_check_format(value, &offset, &hint) < 0)
+        else if (udev_check_format(value, &offset, &hint) < 0) {
+                escaped = log_escape(LOG_ERR, value);
                 log_line_error_fail(c, "Invalid value \"%s\" for %s (char %zu: %s), ignoring.",
-                                    value, key, offset + 1, hint);
+                                    escaped ?: value, key, offset + 1, hint);
+        }
 }
 
 /* A missing or empty attribute is reported by the parser. */
@@ -289,9 +295,12 @@ static void check_attr_format(struct udev_rules_check *c, const char *key, const
         size_t offset;
         const char *hint;
 
-        if (udev_check_format(attr, &offset, &hint) < 0)
+        if (udev_check_format(attr, &offset, &hint) < 0) {
+                _cleanup_free_ char *escaped = log_escape(LOG_ERR, attr);
+
                 log_line_error_fail(c, "Invalid attribute \"%s\" for %s (char %zu: %s), ignoring.",
-                                    attr, key, offset + 1, hint);
+                                    escaped ?: attr, key, offset + 1, hint);
+        }
 }
 
 static SubstType get_substitution_type(const char *str) {
@@ -900,8 +909,11 @@ void udev_rules_check_file_end(struct udev_rules_check *c) {
 
                 c->line_nr = line->line_nr;
 
-                if (line->label && !line->referenced)
-                        log_line_notice(c, "style: LABEL=\"%s\" is unused.", line->label);
+                if (line->label && !line->referenced) {
+                        _cleanup_free_ char *escaped = log_escape(LOG_NOTICE, line->label);
+
+                        log_line_notice(c, "style: LABEL=\"%s\" is unused.", escaped ?: line->label);
+                }
 
                 check_conflicts_duplicates(c, line);
         }

@@ -159,7 +159,7 @@ static int blkid_partition_get_type_id128(blkid_partition p, id128_t *ret) {
 static int find_gpt_root(struct udev_device *dev, blkid_probe pr, const char *loop_backing_fname, enum udev_event_mode mode) {
 
 #ifdef GPT_ROOT_NATIVE
-        _cleanup_free_ char *root_label = NULL;
+        _cleanup_free_ char *root_label = NULL, *escaped_devnode = NULL;
         id128_t esp_or_xbootldr = ID128_NULL, root_id = ID128_NULL;
         bool need_esp_or_xbootldr, found_esp_or_xbootldr = false;
         dev_t root_devno = 0;
@@ -183,19 +183,27 @@ static int find_gpt_root(struct udev_device *dev, blkid_probe pr, const char *lo
         if (!devnode)
                 return log_device_debug_errno(dev, ENODEV, "Failed to get device node: %m");
 
+        /* in the messages escaped like the values in the messages of the rules */
+        escaped_devnode = log_escape(LOG_DEBUG, devnode);
+
         r = block_device_is_whole_disk(dev);
         if (r < 0)
-                return log_device_debug_errno(dev, r, "Unable to determine if device '%s' is a whole-block device: %m", devnode);
+                return log_device_debug_errno(dev, r, "Unable to determine if device '%s' is a whole-block device: %m",
+                                              escaped_devnode ?: devnode);
         if (r == 0) {
-                log_device_debug(dev, "Invoked on device '%s' which is not a whole-disk block device, ignoring.", devnode);
+                log_device_debug(dev, "Invoked on device '%s' which is not a whole-disk block device, ignoring.",
+                                 escaped_devnode ?: devnode);
                 return 0;
         }
 
         r = blockdev_partscan_enabled(dev);
         if (r < 0)
-                return log_device_debug_errno(dev, r, "Failed to determine if block device '%s' supports partitions: %m", devnode);
+                return log_device_debug_errno(dev, r,
+                                              "Failed to determine if block device '%s' supports partitions: %m",
+                                              escaped_devnode ?: devnode);
         if (r == 0) {
-                log_device_debug(dev, "Invoked on block device '%s' that lacks partition scanning, ignoring.", devnode);
+                log_device_debug(dev, "Invoked on block device '%s' that lacks partition scanning, ignoring.",
+                                 escaped_devnode ?: devnode);
                 return 0;
         }
 
@@ -569,7 +577,7 @@ static int builtin_blkid(struct udev_device *dev, int argc, char *argv[], enum u
         int i;
         int err = 0;
         int r;
-        _cleanup_free_ char *backing_fname = NULL;
+        _cleanup_free_ char *backing_fname = NULL, *escaped_devnode = NULL;
         ino_t backing_inode = 0;
         dev_t backing_devno = 0;
 
@@ -640,12 +648,16 @@ static int builtin_blkid(struct udev_device *dev, int argc, char *argv[], enum u
         if (!devnode)
                 return log_device_debug_errno(dev, ENOENT, "Failed to get device name: %m");
 
+        /* in the messages escaped like the values in the messages of the rules */
+        escaped_devnode = log_escape(LOG_DEBUG, devnode);
+
         fd = open(devnode, O_RDONLY|O_CLOEXEC|O_NONBLOCK|O_NOCTTY);
         if (fd < 0) {
-                bool ignore = IN_SET(errno, ENODEV, ENXIO, ENOENT, ENOMEDIUM);
+                int error = errno;
+                bool ignore = IN_SET(error, ENODEV, ENXIO, ENOENT, ENOMEDIUM);
 
-                r = log_device_debug_errno(dev, errno, "Failed to open block device %s%s: %m",
-                                           devnode, ignore ? ", ignoring" : "");
+                r = log_device_debug_errno(dev, error, "Failed to open block device %s%s: %m",
+                                           escaped_devnode ?: devnode, ignore ? ", ignoring" : "");
                 return ignore ? EXIT_SUCCESS : r;
         }
 
@@ -687,7 +699,8 @@ static int builtin_blkid(struct udev_device *dev, int argc, char *argv[], enum u
         if (err < 0)
                 return log_device_debug_errno(dev, errno_or_else(ENOMEM), "Failed to set device to blkid prober: %m");
 
-        log_device_debug(dev, "Probe %s with %sraid and offset=%"PRIi64, devnode, noraid ? "no" : "", offset);
+        log_device_debug(dev, "Probe %s with %sraid and offset=%"PRIi64,
+                         escaped_devnode ?: devnode, noraid ? "no" : "", offset);
 
         err = probe_superblocks(pr);
         if (err < 0)

@@ -71,24 +71,27 @@ static int load_module(const char *module) {
 
         kmod_list_foreach(l, list) {
                 struct kmod_module *mod = kmod_module_get_module(l);
+                /* the name of the module, which may be the name as given, escaped like it */
+                _cleanup_free_ char *escaped_name = log_escape(LOG_DEBUG, kmod_module_get_name(mod));
+                const char *name = escaped_name ?: kmod_module_get_name(mod);
                 int err;
 
                 switch (kmod_module_get_initstate(mod)) {
 
                 case KMOD_MODULE_BUILTIN:
-                        log_debug("Module '%s' is built in", kmod_module_get_name(mod));
+                        log_debug("Module '%s' is built in", name);
                         break;
 
                 case KMOD_MODULE_LIVE:
-                        log_debug("Module '%s' is already loaded", kmod_module_get_name(mod));
+                        log_debug("Module '%s' is already loaded", name);
                         break;
 
                 default:
                         err = kmod_module_probe_insert_module(mod, KMOD_PROBE_APPLY_BLACKLIST, NULL, NULL, NULL, NULL);
                         if (err == 0)
-                                log_debug("Inserted module '%s'", kmod_module_get_name(mod));
+                                log_debug("Inserted module '%s'", name);
                         else if (err == KMOD_PROBE_APPLY_BLACKLIST)
-                                log_debug("Module '%s' is deny-listed (by kmod)", kmod_module_get_name(mod));
+                                log_debug("Module '%s' is deny-listed (by kmod)", name);
                         else {
                                 if (err == -EPERM) {
                                         if (!denylist_parsed) {
@@ -102,9 +105,9 @@ static int load_module(const char *module) {
                                 }
 
                                 if (err == -EPERM && strv_contains(cmdline_denylist, kmod_module_get_name(mod)))
-                                        log_debug("Module '%s' is deny-listed (by kernel)", kmod_module_get_name(mod));
+                                        log_debug("Module '%s' is deny-listed (by kernel)", name);
                                 else {
-                                        log_debug_errno(err, "Failed to insert module '%s': %m", kmod_module_get_name(mod));
+                                        log_debug_errno(err, "Failed to insert module '%s': %m", name);
                                         if (!IN_SET(err, -ENODEV, -ENOENT))
                                                 r = err;
                                 }
@@ -119,8 +122,26 @@ static int load_module(const char *module) {
         return r;
 }
 
+/* The messages of libkmod, which may contain e.g. the module alias given to "kmod load", escaped like the values
+ * in the messages of the rules, without the line break they end with. */
 _printf_(6,0) static void udev_kmod_log(void *data __attribute__((unused)), int priority, const char *file, int line, const char *fn, const char *format, va_list args) {
-        log_internalv(priority, 0, file, line, fn, format, args);
+        _cleanup_free_ char *message = NULL, *escaped = NULL;
+        size_t len;
+
+        if (log_get_max_level() < LOG_PRI(priority))
+                return;
+
+        if (vasprintf(&message, format, args) < 0) {
+                log_oom();
+                return;
+        }
+
+        len = strlen(message);
+        while (len > 0 && message[len - 1] == '\n')
+                message[--len] = '\0';
+
+        escaped = utf8_escape_non_printable(message);
+        log_internal(priority, 0, file, line, fn, "%s", escaped ?: message);
 }
 
 static int builtin_kmod(struct udev_device *dev, int argc, char *argv[], enum udev_event_mode mode) {

@@ -158,8 +158,13 @@ int udev_builtin_add_property(struct udev_device *dev, enum udev_event_mode mode
         }
 
         if (mode == EVENT_UDEVADM_TEST_BUILTIN) {
+                /* The value escaped like the values of the dump of udevadm test, see udev-dump.c: a valid
+                 * value may still contain e.g. C1 control characters. The name of a valid property has only
+                 * letters, digits, '_' and '.'. */
+                _cleanup_free_ char *v = val ? utf8_escape_non_printable(val) : NULL;
+
                 if (val)
-                        printf("%s=%s\n", key, val);
+                        printf("%s=%s\n", key, v ?: val);
                 else
                         printf("%s (removed)\n", key);
         }

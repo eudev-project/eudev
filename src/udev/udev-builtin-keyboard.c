@@ -143,7 +143,11 @@ static void map_keycode(struct udev_device *dev, int fd, int scancode, const cha
                 /* check if it's a numeric code already */
                 r = safe_atou(keycode, &keycode_num);
                 if (r < 0) {
-                        log_device_error_errno(dev, r, "Failed to parse key identifier '%s': %m", keycode);
+                        /* the value of the property, e.g. of a hwdb entry, escaped like the values in the
+                         * messages of the rules */
+                        _cleanup_free_ char *escaped = log_escape(LOG_ERR, keycode);
+
+                        log_device_error_errno(dev, r, "Failed to parse key identifier '%s': %m", escaped ?: keycode);
                         return;
                 }
         }
@@ -195,7 +199,11 @@ static void override_abs(struct udev_device *dev, int fd, unsigned evcode, const
         next = parse_token(next, &absinfo.fuzz);
         next = parse_token(next, &absinfo.flat);
         if (!next) {
-                log_device_error(dev, "Failed to parse EV_ABS override '%s'", value);
+                /* the value of the property, e.g. of a hwdb entry, escaped like the values in the messages of
+                 * the rules */
+                _cleanup_free_ char *escaped = log_escape(LOG_ERR, value);
+
+                log_device_error(dev, "Failed to parse EV_ABS override '%s'", escaped ?: value);
                 return;
         }
 
@@ -221,7 +229,11 @@ static void set_trackpoint_sensitivity(struct udev_device *dev, const char *valu
 
         r = safe_atoi(value, &val_i);
         if (r < 0) {
-                log_device_error_errno(dev, r, "Failed to parse POINTINGSTICK_SENSITIVITY '%s': %m", value);
+                /* the value of the property, e.g. of a hwdb entry, escaped like the values in the messages of
+                 * the rules */
+                _cleanup_free_ char *escaped = log_escape(LOG_ERR, value);
+
+                log_device_error_errno(dev, r, "Failed to parse POINTINGSTICK_SENSITIVITY '%s': %m", escaped ?: value);
                 return;
         } else if (val_i < 0 || val_i > 255) {
                 log_device_error(dev, "POINTINGSTICK_SENSITIVITY %d outside range [0..255]", val_i);

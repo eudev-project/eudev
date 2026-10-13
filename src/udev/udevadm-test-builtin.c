@@ -106,23 +106,31 @@ static int adm_builtin(struct udev *udev, int argc, char *argv[]) {
 
         udev_builtin_init(udev);
 
+        /* the arguments in the messages escaped like the values in the messages of the rules */
         cmd = udev_builtin_lookup(command);
         if (cmd >= UDEV_BUILTIN_MAX) {
-                log_error("Unknown command '%s'", command);
+                _cleanup_free_ char *escaped = log_escape(LOG_ERR, command);
+
+                log_error("Unknown command '%s'", escaped ?: command);
                 rc = EXIT_FAILURE;
                 goto out;
         }
 
         dev = find_device_with_action(udev, syspath, action);
         if (dev == NULL) {
-                log_error_errno(errno > 0 ? errno : ENODEV, "Failed to open device '%s': %m", syspath);
+                int error = errno > 0 ? errno : ENODEV;
+                _cleanup_free_ char *escaped = log_escape(LOG_ERR, syspath);
+
+                log_error_errno(error, "Failed to open device '%s': %m", escaped ?: syspath);
                 rc = EXIT_FAILURE;
                 goto out;
         }
 
         r = udev_builtin_run(dev, cmd, command, EVENT_UDEVADM_TEST_BUILTIN);
         if (r < 0) {
-                log_debug_errno(r, "Builtin command '%s' fails: %m", command);
+                _cleanup_free_ char *escaped = log_escape(LOG_DEBUG, command);
+
+                log_debug_errno(r, "Builtin command '%s' fails: %m", escaped ?: command);
                 rc = EXIT_FAILURE;
         }
 out:

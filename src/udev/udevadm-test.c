@@ -180,7 +180,11 @@ static int adm_test(struct udev *udev, int argc, char *argv[]) {
 
         dev = find_device_with_action(udev, syspath, action);
         if (dev == NULL) {
-                log_error_errno(errno > 0 ? errno : ENODEV, "Failed to open device '%s': %m", syspath);
+                int error = errno > 0 ? errno : ENODEV;
+                /* the argument escaped like the values in the messages of the rules */
+                _cleanup_free_ char *escaped = log_escape(LOG_ERR, syspath);
+
+                log_error_errno(error, "Failed to open device '%s': %m", escaped ?: syspath);
                 rc = EXIT_FAILURE;
                 goto out;
         }

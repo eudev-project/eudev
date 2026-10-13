@@ -36,6 +36,7 @@
 #include "hashmap.h"
 #include "set.h"
 #include "conf-files.h"
+#include "utf8.h"
 
 ConfFile *conf_file_free(ConfFile *c) {
         if (!c)
@@ -85,7 +86,15 @@ static const char *skip_root(const char *root, const char *path) {
         return p > path && p[-1] == '/' ? p - 1 : p;
 }
 
+/* For the messages: path escaped like the values in the messages of udev, with utf8_escape_non_printable(), as
+ * the name of a file may contain e.g. control characters, if a message at the level is logged; NULL otherwise,
+ * and without memory, where the message shows path as it is: "escaped ?: path". */
+static char *conf_files_escape(int level, const char *path) {
+        return path && log_get_max_level() >= LOG_PRI(level) ? utf8_escape_non_printable(path) : NULL;
+}
+
 static int conf_file_mask(Set *masked, const char *name, const char *original_path, const char *what) {
+        _cleanup_free_ char *escaped = NULL;
         int r;
 
         /* the files with this name in the later directories are masked too */
@@ -95,7 +104,8 @@ static int conf_file_mask(Set *masked, const char *name, const char *original_pa
                         return r;
         }
 
-        log_debug("File '%s' is a mask (%s).", original_path, what);
+        escaped = conf_files_escape(LOG_DEBUG, original_path);
+        log_debug("File '%s' is a mask (%s).", escaped ?: original_path, what);
         return -ERFKILL;
 }
 
@@ -108,7 +118,7 @@ static int conf_file_mask(Set *masked, const char *name, const char *original_pa
 static int conf_file_chase_and_verify(const char *root, const char *original_path, const char *path,
                                       const char *name, Set *masked, ConfFilesFlags flags,
                                       char **ret_resolved) {
-        _cleanup_free_ char *resolved = NULL;
+        _cleanup_free_ char *resolved = NULL, *escaped = NULL;
         int log_level = conf_files_log_level(flags);
         struct stat st;
         int r;
@@ -118,8 +128,10 @@ static int conf_file_chase_and_verify(const char *root, const char *original_pat
                 return r;
         if (r == -ENOENT && FLAGS_SET(flags, CONF_FILES_QUIET_MISSING))
                 return r;
-        if (r < 0)
-                return log_full_errno(log_level, r, "Failed to chase '%s': %m", original_path);
+        if (r < 0) {
+                escaped = conf_files_escape(log_level, original_path);
+                return log_full_errno(log_level, r, "Failed to chase '%s': %m", escaped ?: original_path);
+        }
         if (r == 0) {
                 if (FLAGS_SET(flags, CONF_FILES_FILTER_MASKED_BY_SYMLINK) &&
                     path_equal(skip_root(root, resolved), "/dev/null"))
@@ -128,12 +140,18 @@ static int conf_file_chase_and_verify(const char *root, const char *original_pat
                 if (conf_files_need_stat(flags)) {
                         if (FLAGS_SET(flags, CONF_FILES_QUIET_MISSING))
                                 return -ENOENT;
-                        return log_full_errno(log_level, ENOENT, "Failed to chase '%s': %m", original_path);
+                        escaped = conf_files_escape(log_level, original_path);
+                        return log_full_errno(log_level, ENOENT, "Failed to chase '%s': %m", escaped ?: original_path);
                 }
         } else if (conf_files_need_stat(flags)) {
-                if (stat(resolved, &st) < 0)
-                        return errno == ENOMEM ? -ENOMEM :
-                                log_full_errno(log_level, errno, "Failed to stat '%s': %m", original_path);
+                if (stat(resolved, &st) < 0) {
+                        int error = errno;
+
+                        if (error == ENOMEM)
+                                return -ENOMEM;
+                        escaped = conf_files_escape(log_level, original_path);
+                        return log_full_errno(log_level, error, "Failed to stat '%s': %m", escaped ?: original_path);
+                }
 
                 if (FLAGS_SET(flags, CONF_FILES_FILTER_MASKED_BY_SYMLINK) &&
                     S_ISCHR(st.st_mode) && st.st_rdev == makedev(1, 3))
@@ -144,13 +162,14 @@ static int conf_file_chase_and_verify(const char *root, const char *original_pat
                         return conf_file_mask(masked, name, original_path, "an empty file");
 
                 if (FLAGS_SET(flags, CONF_FILES_REGULAR) && !S_ISREG(st.st_mode)) {
+                        escaped = conf_files_escape(LOG_DEBUG, original_path);
                         if (S_ISDIR(st.st_mode))
                                 return log_debug_errno(EISDIR, "File '%s' is not a regular file: %m",
-                                                       original_path);
+                                                       escaped ?: original_path);
 
                         /* Unlike systemd, without the text of EBADFD, "File descriptor in bad state",
                          * which says nothing about e.g. a FIFO. */
-                        log_debug("File '%s' is not a regular file, ignoring.", original_path);
+                        log_debug("File '%s' is not a regular file, ignoring.", escaped ?: original_path);
                         return -EBADFD;
                 }
         }
@@ -205,8 +224,11 @@ int conf_file_new(const char *path, const char *root, ConfFilesFlags flags, Conf
         r = path_extract_filename(path, &filename);
         if (r == -ENOMEM)
                 return log_oom();
-        if (r < 0)
-                return log_full_errno(log_level, r, "Failed to extract filename from '%s': %m", path);
+        if (r < 0) {
+                _cleanup_free_ char *escaped = conf_files_escape(log_level, path);
+
+                return log_full_errno(log_level, r, "Failed to extract filename from '%s': %m", escaped ?: path);
+        }
 
         p = strdup(path);
         original_path = prefix_root(root, path);
@@ -225,9 +247,10 @@ int conf_file_new(const char *path, const char *root, ConfFilesFlags flags, Conf
         if (r == -ENOENT && FLAGS_SET(flags, CONF_FILES_QUIET_MISSING))
                 return r;
         if (r < 0) {
-                _cleanup_free_ char *d = prefix_root(root, isempty(dirpath) ? "/" : dirpath);
+                _cleanup_free_ char *d = prefix_root(root, isempty(dirpath) ? "/" : dirpath), *escaped = NULL;
 
-                return log_full_errno(log_level, r, "Failed to chase '%s': %m", d ? path_simplify(d) : dirpath);
+                escaped = conf_files_escape(log_level, d ? path_simplify(d) : dirpath);
+                return log_full_errno(log_level, r, "Failed to chase '%s': %m", escaped ?: d ?: dirpath);
         }
 
         result = strjoin(resolved_dirpath, "/", filename, NULL);
@@ -271,9 +294,13 @@ static int files_add(Hashmap *h, Set *masked, DIR *dir, const char *root, const 
                 errno = 0;
                 de = readdir(dir);
                 if (!de) {
-                        if (errno != 0)
-                                return log_full_errno(log_level, errno, "Failed to read directory '%s': %m",
-                                                      original_dirpath);
+                        if (errno != 0) {
+                                int error = errno;
+                                _cleanup_free_ char *escaped = conf_files_escape(log_level, original_dirpath);
+
+                                return log_full_errno(log_level, error, "Failed to read directory '%s': %m",
+                                                      escaped ?: original_dirpath);
+                        }
                         break;
                 }
 
@@ -294,12 +321,16 @@ static int files_add(Hashmap *h, Set *masked, DIR *dir, const char *root, const 
                  * mask masks them, and a file that is neither listed nor a mask, e.g. one that is not a
                  * regular file, does not hide them. */
                 if (hashmap_contains(h, de->d_name)) {
-                        log_debug("Skipping overridden file '%s'.", original_path);
+                        _cleanup_free_ char *escaped = conf_files_escape(LOG_DEBUG, original_path);
+
+                        log_debug("Skipping overridden file '%s'.", escaped ?: original_path);
                         continue;
                 }
 
                 if (masked && set_contains(masked, de->d_name)) {
-                        log_debug("File '%s' is masked by previous entry.", original_path);
+                        _cleanup_free_ char *escaped = conf_files_escape(LOG_DEBUG, original_path);
+
+                        log_debug("File '%s' is masked by previous entry.", escaped ?: original_path);
                         continue;
                 }
 
@@ -410,8 +441,10 @@ static int conf_files_list_impl(const char *suffix, const char *root, ConfFilesF
                 if (r == -ENOENT)
                         continue;
                 if (r < 0) {
+                        _cleanup_free_ char *escaped = conf_files_escape(log_level, original_dirpath);
+
                         log_full_errno(log_level, r, "Failed to chase and open directory '%s'%s: %m",
-                                       original_dirpath, fail ? "" : ", ignoring");
+                                       escaped ?: original_dirpath, fail ? "" : ", ignoring");
                         if (dir_error == 0)
                                 dir_error = r;
                         continue;

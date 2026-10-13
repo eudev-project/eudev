@@ -47,16 +47,21 @@ static int builtin_btrfs(struct udev_device *dev, int argc, char *argv[], enum u
                 return log_device_error_errno(dev, ENOENT, "Failed to get device node: %m");
 
         if (argc == 3 && !streq(argv[2], node)) {
-                /* the argument, which may come from a substitution, escaped like the values in the
-                 * messages of the rules */
-                _cleanup_free_ char *escaped = log_escape(LOG_DEBUG, argv[2]);
+                /* the argument, which may come from a substitution, and the device node escaped like the
+                 * values in the messages of the rules */
+                _cleanup_free_ char *escaped = log_escape(LOG_DEBUG, argv[2]),
+                                    *escaped_node = log_escape(LOG_DEBUG, node);
 
                 return log_device_debug_errno(dev, EINVAL, "Device node '%s' is not owned by the device, it must be '%s'.",
-                                              escaped ?: argv[2], node);
+                                              escaped ?: argv[2], escaped_node ?: node);
         }
 
-        if (strlen(node) >= sizeof(args.name))
-                return log_device_debug_errno(dev, EINVAL, "Device name too long for BTRFS_IOC_DEVICES_READY call: %s", node);
+        if (strlen(node) >= sizeof(args.name)) {
+                _cleanup_free_ char *escaped_node = log_escape(LOG_DEBUG, node);
+
+                return log_device_debug_errno(dev, EINVAL, "Device name too long for BTRFS_IOC_DEVICES_READY call: %s",
+                                              escaped_node ?: node);
+        }
 
         if (mode != EVENT_UDEV_WORKER) {
                 log_device_debug(dev, "Running in test mode, skipping execution of 'btrfs' builtin command.");

@@ -116,16 +116,23 @@ int util_resolve_subsys_kernel(struct udev *udev, const char *string, char *resu
 
         /* result may be string, which resolve_subsys_kernel() does not use any more */
         strscpyl_full(result, maxsize, &truncated, udev_device_get_syspath(dev), attr ? "/" : NULL, attr, NULL);
-        if (truncated) {
-                log_debug("path '[%s/%s]%s' is too long, refusing.", strna(udev_device_get_subsystem(dev)),
-                          udev_device_get_sysname(dev), attr ?: "");
-                udev_device_unref(dev);
-                return -ENAMETOOLONG;
+
+        /* the attribute, which may come from a substitution of a rule, and the path escaped like the values
+         * in the messages of the rules of udev */
+        if (log_get_max_level() >= LOG_DEBUG) {
+                _cleanup_free_ char *escaped_attr = utf8_escape_non_printable(attr ?: ""), *escaped = NULL;
+
+                if (truncated)
+                        log_debug("path '[%s/%s]%s' is too long, refusing.", strna(udev_device_get_subsystem(dev)),
+                                  udev_device_get_sysname(dev), escaped_attr ?: attr ?: "");
+                else {
+                        escaped = utf8_escape_non_printable(result);
+                        log_debug("path '[%s/%s]%s' is '%s'", strna(udev_device_get_subsystem(dev)),
+                                  udev_device_get_sysname(dev), escaped_attr ?: attr ?: "", escaped ?: result);
+                }
         }
-        log_debug("path '[%s/%s]%s' is '%s'", strna(udev_device_get_subsystem(dev)), udev_device_get_sysname(dev),
-                  attr ?: "", result);
         udev_device_unref(dev);
-        return 0;
+        return truncated ? -ENAMETOOLONG : 0;
 }
 
 /* handle "[<SUBSYSTEM>/<KERNEL>]<attribute>" format: the whole value of the attribute, which may be longer than
@@ -157,7 +164,14 @@ int util_resolve_subsys_kernel_value(struct udev *udev, const char *string, char
         if (!v)
                 return -ENOMEM;
 
-        log_debug("value '%s' is '%s'", string, v);
+        /* the attribute, which may come from a substitution of a rule, and its value escaped like the values in
+         * the messages of the rules of udev */
+        if (log_get_max_level() >= LOG_DEBUG) {
+                _cleanup_free_ char *escaped_string = utf8_escape_non_printable(string),
+                        *escaped = utf8_escape_non_printable(v);
+
+                log_debug("value '%s' is '%s'", escaped_string ?: string, escaped ?: v);
+        }
         *ret_value = v;
         return 0;
 }

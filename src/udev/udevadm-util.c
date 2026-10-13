@@ -264,12 +264,22 @@ static char *rules_file_name(const char *root, const char *path) {
         return path_simplify(name);
 }
 
+/* The names of the rules files in the messages of udevadm verify are escaped like in the messages about their
+ * rules, see parse_file(). */
 static int log_chase_error(int r, const char *name) {
+        _cleanup_free_ char *escaped = log_escape(LOG_ERR, name);
+
         /* systemd logs the text of EBADFD, "File descriptor in bad state", for e.g. a FIFO */
         if (r == -EBADFD)
-                return log_error_errno(r, "Failed to chase '%s': not a regular file", name);
+                return log_error_errno(r, "Failed to chase '%s': not a regular file", escaped ?: name);
 
-        return log_error_errno(r, "Failed to chase '%s': %m", name);
+        return log_error_errno(r, "Failed to chase '%s': %m", escaped ?: name);
+}
+
+static void log_masked(const char *name) {
+        _cleanup_free_ char *escaped = log_escape(LOG_WARNING, name);
+
+        log_warning("File '%s' is a mask, ignoring.", escaped ?: name);
 }
 
 static int search_rules_file_in_dirs(const char *s, const char *root, char ***names, char ***paths) {
@@ -311,7 +321,7 @@ static int search_rules_file_in_dirs(const char *s, const char *root, char ***na
                  * directory. */
                 r = conf_file_new(p, root, CONF_FILES_REGULAR | CONF_FILES_FILTER_MASKED, &c);
                 if (r == -ERFKILL) {
-                        log_warning("File '%s' is a mask, ignoring.", name);
+                        log_masked(name);
                         return 1; /* Found masked file. */
                 }
                 if (r == -ENOENT)
@@ -348,7 +358,7 @@ static int search_rules_file(const char *s, const char *root, char ***names, cha
 
         r = conf_file_new(s, root, CONF_FILES_REGULAR | CONF_FILES_FILTER_MASKED, &c);
         if (r == -ERFKILL) {
-                log_warning("File '%s' is a mask, ignoring.", name);
+                log_masked(name);
                 return 0; /* Found masked file. */
         }
         if (r >= 0) {
@@ -367,8 +377,11 @@ static int search_rules_file(const char *s, const char *root, char ***names, cha
 
         r = conf_files_list_strv_full(".rules", root, CONF_FILES_REGULAR | CONF_FILES_WARN,
                                       (const char * const *) STRV_MAKE(dir), &files, &n_files);
-        if (r < 0)
-                return log_error_errno(r, "Failed to enumerate rules files in '%s': %m", name);
+        if (r < 0) {
+                _cleanup_free_ char *escaped = log_escape(LOG_ERR, name);
+
+                return log_error_errno(r, "Failed to enumerate rules files in '%s': %m", escaped ?: name);
+        }
 
         for (i = 0; i < n_files; i++) {
                 r = add_rules_file(names, paths, files[i]);
@@ -415,7 +428,9 @@ int search_rules_files(char * const *args, const char *root, char ***ret_names, 
                         return log_oom();
 
                 if (!isempty(root_prefix(root)) && strv_isempty(names)) {
-                        log_error("No rules files found in '%s'.", root);
+                        _cleanup_free_ char *escaped = log_escape(LOG_ERR, root);
+
+                        log_error("No rules files found in '%s'.", escaped ?: root);
                         return -ENOENT;
                 }
         } else

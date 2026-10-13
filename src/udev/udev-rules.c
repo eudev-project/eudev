@@ -855,10 +855,13 @@ static void dump_token(struct udev_rules *rules, struct token *token) {
 
         switch (token->type) {
         case TK_RULE:
+                /* the label escaped like the values in the other messages; the name of the file is escaped
+                 * already, see parse_file() */
+                s = log_escape(LOG_DEBUG, rules_str(rules, token->rule.label_off));
                 log_debug("* RULE %s:%u, token: %u, count: %u, label: '%s'",
                           rules_str(rules, token->rule.filename_off), token->rule.filename_line,
                           (unsigned) (token - rules->tokens), token->rule.token_count,
-                          rules_str(rules, token->rule.label_off));
+                          s ?: rules_str(rules, token->rule.label_off));
                 break;
         case TK_END:
                 log_debug("* END");
@@ -1136,6 +1139,7 @@ static const char *strerror_user_group(int error, bool group, char *buf, size_t 
  * -ESRCH for one that does not exist, and -EINVAL for an invalid value; the caller drops the key then. Other
  * errors, e.g. -ENOMEM, make the caller drop the rule line. */
 static int rule_resolve_user_or_group(struct udev_rules *rules, const char *name, bool group, uid_t *ret) {
+        _cleanup_free_ char *escaped = NULL;
         struct uid_gid **cache = group ? &rules->gids : &rules->uids;
         unsigned int *cur = group ? &rules->gids_cur : &rules->uids_cur;
         unsigned int *max = group ? &rules->gids_max : &rules->uids_max;
@@ -1150,14 +1154,20 @@ static int rule_resolve_user_or_group(struct udev_rules *rules, const char *name
                         return 0;
                 }
 
+        /* the name in the messages escaped like the values in the messages about applying the rules */
         r = resolve_user_or_group(name, group, &id);
-        if (r < 0)
+        if (r < 0) {
+                escaped = log_escape(LOG_ERR, name);
                 return log_rule_error_errno(r, "Failed to resolve %s '%s', ignoring: %s",
-                                            group ? "group" : "user", name, STRERROR_USER_GROUP(r, group));
-        if (group && !gid_is_system(id))
-                log_rule_warning_no_issue(NON_SYSTEM_ACCOUNT_WARNING("Group", "group"), name);
-        else if (!group && !uid_is_system(id))
-                log_rule_warning_no_issue(NON_SYSTEM_ACCOUNT_WARNING("User", "user"), name);
+                                            group ? "group" : "user", escaped ?: name, STRERROR_USER_GROUP(r, group));
+        }
+        if (group ? !gid_is_system(id) : !uid_is_system(id)) {
+                escaped = log_escape(LOG_WARNING, name);
+                if (group)
+                        log_rule_warning_no_issue(NON_SYSTEM_ACCOUNT_WARNING("Group", "group"), escaped ?: name);
+                else
+                        log_rule_warning_no_issue(NON_SYSTEM_ACCOUNT_WARNING("User", "user"), escaped ?: name);
+        }
 
         /* grow buffer if needed */
         if (*cur + 1 >= *max) {
@@ -1179,8 +1189,12 @@ static int rule_resolve_user_or_group(struct udev_rules *rules, const char *name
         r = rules_add_string(rules, name, &(*cache)[*cur].name_off);
         if (r == -ENOMEM)
                 return log_oom();
-        if (r < 0)
-                return log_rule_error_errno(r, "Failed to remember %s '%s': %m", group ? "group" : "user", name);
+        if (r < 0) {
+                free(escaped);
+                escaped = log_escape(LOG_ERR, name);
+                return log_rule_error_errno(r, "Failed to remember %s '%s': %m", group ? "group" : "user",
+                                            escaped ?: name);
+        }
 
         (*cache)[*cur].uid = id;
         (*cur)++;
@@ -2032,7 +2046,10 @@ static int parse_options(struct rule_tmp *rule_tmp, enum operation_type op, cons
 
                                 r = safe_atoi(arg, &prio);
                                 if (r < 0) {
-                                        log_rule_error_errno(r, "Failed to parse link priority '%s': %m", arg);
+                                        _cleanup_free_ char *escaped = log_escape(LOG_ERR, arg);
+
+                                        log_rule_error_errno(r, "Failed to parse link priority '%s': %m",
+                                                             escaped ?: arg);
                                         return -EINVAL;
                                 }
                                 rule_add_key(rule_tmp, TK_A_DEVLINK_PRIO, op, word, &prio);
@@ -2046,7 +2063,10 @@ static int parse_options(struct rule_tmp *rule_tmp, enum operation_type op, cons
                                 else {
                                         level = log_level_from_string(arg);
                                         if (level < 0) {
-                                                log_rule_error_errno(EINVAL, "Failed to parse log level '%s': %m", arg);
+                                                _cleanup_free_ char *escaped = log_escape(LOG_ERR, arg);
+
+                                                log_rule_error_errno(EINVAL, "Failed to parse log level '%s': %m",
+                                                                     escaped ?: arg);
                                                 return -EINVAL;
                                         }
                                 }
@@ -2104,7 +2124,10 @@ static int add_rule(struct udev_rules *rules, char *line,
                         udev_rules_check_token(checking, key, attr, check_op(op), value, is_case_insensitive);
 
                 if (is_case_insensitive && op > OP_MATCH_MAX) {
-                        log_rule_error("Invalid prefix 'i' for '%s'. The 'i' prefix can be specified only for '==' or '!=' operator.", key);
+                        _cleanup_free_ char *escaped = log_escape(LOG_ERR, key);
+
+                        log_rule_error("Invalid prefix 'i' for '%s'. The 'i' prefix can be specified only for '==' or '!=' operator.",
+                                       escaped ?: key);
                         goto invalid;
                 }
                 rule_tmp.case_insensitive = is_case_insensitive;
@@ -2269,7 +2292,10 @@ static int add_rule(struct udev_rules *rules, char *line,
                                         goto invalid;
                         } else {
                                 if (!device_property_can_set(attr)) {
-                                        log_rule_error("Invalid ENV attribute. '%s' cannot be set.", attr);
+                                        /* a name with the prefix SYNTH_ARG_ may have anything after it */
+                                        _cleanup_free_ char *escaped = log_escape(LOG_ERR, attr);
+
+                                        log_rule_error("Invalid ENV attribute. '%s' cannot be set.", escaped ?: attr);
                                         goto invalid;
                                 }
                                 if (rule_add_key(&rule_tmp, TK_A_ENV, op, value, attr) != 0)
@@ -2326,7 +2352,10 @@ static int add_rule(struct udev_rules *rules, char *line,
 
                                         cmd = udev_builtin_lookup(value);
                                         if (cmd < UDEV_BUILTIN_MAX) {
-                                                log_rule_debug("Found builtin command '%s' for IMPORT, replacing attribute.", value);
+                                                _cleanup_free_ char *escaped = log_escape(LOG_DEBUG, value);
+
+                                                log_rule_debug("Found builtin command '%s' for IMPORT, replacing attribute.",
+                                                               escaped ?: value);
                                                 rule_add_key(&rule_tmp, TK_M_IMPORT_BUILTIN, op, value, &cmd);
                                                 continue;
                                         }
@@ -2343,7 +2372,9 @@ static int add_rule(struct udev_rules *rules, char *line,
                                 else if (check_systemd_only_builtin("IMPORT{builtin}", value))
                                         goto ignore;
                                 else {
-                                        log_rule_error("Unknown builtin command: %s", value);
+                                        _cleanup_free_ char *escaped = log_escape(LOG_ERR, value);
+
+                                        log_rule_error("Unknown builtin command: %s", escaped ?: value);
                                         goto invalid;
                                 }
                         } else if (streq(attr, "file")) {
@@ -2385,7 +2416,9 @@ static int add_rule(struct udev_rules *rules, char *line,
                         if (!isempty(attr)) {
                                 r = parse_mode(attr, &mode);
                                 if (r < 0) {
-                                        log_rule_error_errno(r, "Failed to parse mode '%s': %m", attr);
+                                        _cleanup_free_ char *escaped = log_escape(LOG_ERR, attr);
+
+                                        log_rule_error_errno(r, "Failed to parse mode '%s': %m", escaped ?: attr);
                                         goto invalid;
                                 }
                                 if (mode == 0) {
@@ -2416,7 +2449,9 @@ static int add_rule(struct udev_rules *rules, char *line,
                                 else if (check_systemd_only_builtin("RUN{builtin}", value))
                                         goto ignore;
                                 else {
-                                        log_rule_error("Unknown builtin command '%s', ignoring.", value);
+                                        _cleanup_free_ char *escaped = log_escape(LOG_ERR, value);
+
+                                        log_rule_error("Unknown builtin command '%s', ignoring.", escaped ?: value);
                                         goto invalid;
                                 }
                         } else if (streq(attr, "program")) {
@@ -2441,9 +2476,13 @@ static int add_rule(struct udev_rules *rules, char *line,
                                 goto invalid;
                         }
                         /* like systemd, the last LABEL counts */
-                        if (rule_tmp.has_label)
+                        if (rule_tmp.has_label) {
+                                const char *label = rules_str(rules, rule_tmp.rule.rule.label_off);
+                                _cleanup_free_ char *escaped = log_escape(LOG_WARNING, label);
+
                                 log_rule_warning("Contains multiple LABEL keys, ignoring LABEL=\"%s\".",
-                                                 rules_str(rules, rule_tmp.rule.rule.label_off));
+                                                 escaped ?: label);
+                        }
                         rule_tmp.has_label = true;
                         r = rules_add_string(rules, value, &rule_tmp.rule.rule.label_off);
                         if (r == -ENOMEM) {
@@ -2464,7 +2503,10 @@ static int add_rule(struct udev_rules *rules, char *line,
                         }
                         /* like systemd, only the first GOTO counts */
                         if (rule_tmp.has_goto) {
-                                log_rule_warning("Contains multiple GOTO keys, ignoring GOTO=\"%s\".", value);
+                                _cleanup_free_ char *escaped = log_escape(LOG_WARNING, value);
+
+                                log_rule_warning("Contains multiple GOTO keys, ignoring GOTO=\"%s\".",
+                                                 escaped ?: value);
                                 continue;
                         }
                         rule_tmp.has_goto = true;
@@ -2531,10 +2573,14 @@ static int add_rule(struct udev_rules *rules, char *line,
                         } else if (rules->resolve_names >= 0)
                                 rule_add_key(&rule_tmp, group ? TK_A_GROUP : TK_A_OWNER, op, value, NULL);
                         else {
+                                _cleanup_free_ char *escaped = log_escape(LOG_DEBUG, value);
+
                                 if (group)
-                                        log_rule_debug("Resolving group name is disabled, ignoring GROUP=\"%s\".", value);
+                                        log_rule_debug("Resolving group name is disabled, ignoring GROUP=\"%s\".",
+                                                       escaped ?: value);
                                 else
-                                        log_rule_debug("User name resolution is disabled, ignoring OWNER=\"%s\".", value);
+                                        log_rule_debug("User name resolution is disabled, ignoring OWNER=\"%s\".",
+                                                       escaped ?: value);
                                 continue;
                         }
                         continue;
@@ -2557,7 +2603,9 @@ static int add_rule(struct udev_rules *rules, char *line,
                         if (r >= 0)
                                 rule_add_key(&rule_tmp, TK_A_MODE_ID, op, value, &mode);
                         else if (value_is_plain(value)) {
-                                log_rule_error_errno(r, "Failed to parse mode \"%s\", ignoring: %m", value);
+                                _cleanup_free_ char *escaped = log_escape(LOG_ERR, value);
+
+                                log_rule_error_errno(r, "Failed to parse mode \"%s\", ignoring: %m", escaped ?: value);
                                 continue;
                         } else
                                 rule_add_key(&rule_tmp, TK_A_MODE, op, value, NULL);
@@ -2595,7 +2643,11 @@ static int add_rule(struct udev_rules *rules, char *line,
                         goto ignore;
                 }
 
-                log_rule_error("Invalid key '%s'.", key);
+                {
+                        _cleanup_free_ char *escaped = log_escape(LOG_ERR, key);
+
+                        log_rule_error("Invalid key '%s'.", escaped ?: key);
+                }
                 goto invalid;
         }
 
@@ -2653,12 +2705,23 @@ static int rules_stats_put(struct udev_rules *rules, const char *path, const str
         return 0;
 }
 
+/* Frees the escaped name of the rules file that parse_file() reads, which the messages about its rules show
+ * meanwhile, and forgets it there, also when parse_file() returns early. */
+static void parse_filename_freep(char **p) {
+        parse_filename = NULL;
+        parse_line_nr = 0;
+        free(*p);
+}
+
 /* Reads the rules file path. Like systemd's udev_rules_parse_file(), which reads the file it found and
  * uses its original path in the messages and as the file name of its rules, the messages and rules use
- * filename, e.g. the name of a symlink as given to udevadm verify. */
+ * filename, e.g. the name of a symlink as given to udevadm verify. Unlike systemd, it is escaped like the
+ * values in the messages, as the name may contain e.g. control characters; the rules keep the escaped name,
+ * which only their messages show. */
 static int parse_file(struct udev_rules *rules, const char *path, const char *filename) {
         _cleanup_fclose_ FILE *f = NULL;
-        _cleanup_free_ char *continuation = NULL;
+        _cleanup_free_ char *continuation = NULL, *escaped_path = NULL;
+        _cleanup_(parse_filename_freep) char *escaped_filename = NULL;
         unsigned int first_token;
         unsigned int filename_off = 0;  /* avoid false maybe-uninitialized warning */
         unsigned line_nr = 0, first_line_nr = 0, too_long_line_nr = 0;
@@ -2678,6 +2741,12 @@ static int parse_file(struct udev_rules *rules, const char *path, const char *fi
         if (fstat(fileno(f), &st) < 0)
                 return -errno;
 
+        /* Without the name, no rule of the file can be added, see below. */
+        escaped_filename = utf8_escape_non_printable(filename);
+        if (!escaped_filename)
+                return log_oom();
+        filename = escaped_filename;
+
         if (null_or_empty(&st)) {
                 log_debug("Skipping empty file: %s", filename);
                 return 0;
@@ -2688,8 +2757,10 @@ static int parse_file(struct udev_rules *rules, const char *path, const char *fi
          * Unlike systemd, which then skips the file, its rules are still read when this fails; the rules are
          * loaded again at the next check then. */
         r = rules_stats_put(rules, path, &st);
-        if (r < 0)
-                log_warning_errno(r, "Failed to save stat for %s, ignoring: %m", path);
+        if (r < 0) {
+                escaped_path = log_escape(LOG_WARNING, path);
+                log_warning_errno(r, "Failed to save stat for %s, ignoring: %m", escaped_path ?: path);
+        }
 
         /* Without the name, no rule of the file can be added. Like systemd, which skips the file when out of
          * memory, see udev_rules_new(). */
@@ -2819,10 +2890,12 @@ static int parse_file(struct udev_rules *rules, const char *path, const char *fi
                         }
                         if (rules->tokens[i].key.rule_goto == 0) {
                                 struct token *rt = &rules->tokens[rule_idx];
+                                _cleanup_free_ char *escaped = NULL;
 
                                 /* like systemd, the rule has no GOTO then */
                                 rt->rule.has_goto = false;
-                                log_rule_error("GOTO=\"%s\" has no matching label, ignoring.", label);
+                                escaped = log_escape(LOG_ERR, label);
+                                log_rule_error("GOTO=\"%s\" has no matching label, ignoring.", escaped ?: label);
                                 /* like rule_resolve_goto() of systemd, which drops such a line; here, it is
                                  * skipped, see udev_rules_apply_to_event(); udevadm verify reports it its
                                  * own way */
@@ -2834,9 +2907,6 @@ static int parse_file(struct udev_rules *rules, const char *path, const char *fi
                         }
                 }
         }
-
-        parse_filename = NULL;
-        parse_line_nr = 0;
 
         if (checking)
                 udev_rules_check_file_end(checking);
@@ -2945,8 +3015,11 @@ struct udev_rules *udev_rules_new_full(struct udev *udev, int resolve_names, cha
 
         STRV_FOREACH(f, files) {
                 r = parse_file(rules, *f, *f);
-                if (r < 0)
-                        log_debug_errno(r, "Failed to read rules file %s, ignoring: %m", *f);
+                if (r < 0) {
+                        _cleanup_free_ char *escaped = log_escape(LOG_DEBUG, *f);
+
+                        log_debug_errno(r, "Failed to read rules file %s, ignoring: %m", escaped ?: *f);
+                }
         }
 
         strv_free(files);
@@ -3639,8 +3712,13 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                                         goto nomatch;
                                 }
                         }
-                        trace_line(event, rules, rule, "Parent device \"%s\" passed all parent conditions.",
-                                   udev_device_get_syspath(event->dev_parent));
+                        if (event->trace) {
+                                const char *syspath = udev_device_get_syspath(event->dev_parent);
+                                _cleanup_free_ char *escaped = trace_escape(event, syspath);
+
+                                trace_line(event, rules, rule, "Parent device \"%s\" passed all parent conditions.",
+                                           escaped ?: syspath);
+                        }
                         /* move behind our sequence of parent match keys */
                         cur = next;
                         continue;
@@ -3980,10 +4058,14 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
 
                         if (level == LOG_DEBUG && !event->log_level_was_debug) {
                                 /* The log level becomes LOG_DEBUG at first time. Let's log basic information. */
-                                if (event->event_mode == EVENT_UDEV_WORKER)
+                                if (event->event_mode == EVENT_UDEV_WORKER) {
+                                        const char *action = udev_device_get_action(event->dev);
+                                        _cleanup_free_ char *escaped = log_escape(LOG_DEBUG, action);
+
                                         log_debug("%s: The log level is changed to 'debug' while processing device (SEQNUM=%llu, ACTION=%s)",
                                                   udev_device_get_sysname(event->dev), udev_device_get_seqnum(event->dev),
-                                                  udev_device_get_action(event->dev) ?: "n/a");
+                                                  escaped ?: action ?: "n/a");
+                                }
                                 event->log_level_was_debug = true;
                         }
                         log_event_done(event, rules, rule, cur);

@@ -85,22 +85,28 @@ static int parse_argv(int argc, char *argv[]) {
 }
 
 static int verify_rules_file(struct udev *udev, struct udev_rules_check *check, const char *name, const char *path) {
+        /* the name escaped like in the messages about the rules of the file, see parse_file() */
+        _cleanup_free_ char *escaped = NULL;
         unsigned issues, mask;
         int r;
 
         r = udev_rules_check_file(udev, check, name, path);
-        if (r < 0)
-                return log_error_errno(r, "Failed to parse rules file %s: %m", name);
+        if (r < 0) {
+                escaped = log_escape(LOG_ERR, name);
+                return log_error_errno(r, "Failed to parse rules file %s: %m", escaped ?: name);
+        }
 
         issues = udev_rules_check_get_issues(check);
         mask = (1U << LOG_ERR) | (1U << LOG_WARNING);
         if (issues & mask) {
-                log_error("%s: udev rules check failed.", name);
+                escaped = log_escape(LOG_ERR, name);
+                log_error("%s: udev rules check failed.", escaped ?: name);
                 return -EINVAL;
         }
 
         if (arg_style && (issues & (1U << LOG_NOTICE))) {
-                log_warning("%s: udev rules have style issues.", name);
+                escaped = log_escape(LOG_WARNING, name);
+                log_warning("%s: udev rules have style issues.", escaped ?: name);
                 return -EINVAL;
         }
 
