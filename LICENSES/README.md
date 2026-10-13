@@ -28,7 +28,7 @@ The license notices of the files name these two licenses:
    - the udev helper programs: src/ata_id/, src/cdrom_id/, src/collect/,
      src/dmi_memory_id/, src/mtd_probe/, src/scsi_id/ (see below for
      scsi.h) and src/v4l_id/
-   - rule_generator/rule_generator.functions and
+   - rule_generator/rule_generator.functions.in and
      rule_generator/write_net_rules.in
    - test/test-collect.c, which includes src/collect/collect.c, and
      test/test-scsi_id.c, which includes src/scsi_id/scsi_id.c
