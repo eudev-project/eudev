@@ -26,6 +26,7 @@
 #include <time.h>
 #include <net/if.h>
 #include <sys/ioctl.h>
+#include <sys/stat.h>
 #include <sys/prctl.h>
 #include <poll.h>
 #include <sys/wait.h>
@@ -668,6 +669,79 @@ static int spawn_exec(char *const argv[], char **envp, int fd_stdout, int fd_std
         return -errno;
 }
 
+/* Like open_and_check_executable() of systemd: opens the file name with O_PATH, as an executable may not be
+ * readable, and checks that it is a regular file that may be executed. Returns the descriptor, or a negative
+ * errno, e.g. -ENOENT for a missing file, -EISDIR for a directory and -EACCES for a file that may not be
+ * executed. */
+static int open_and_check_executable(const char *name) {
+        _cleanup_close_ int fd = -1;
+        struct stat st;
+
+        fd = open(name, O_PATH|O_CLOEXEC);
+        if (fd < 0)
+                return -errno;
+
+        /* like fd_verify_regular() */
+        if (fstat(fd, &st) < 0)
+                return -errno;
+        if (S_ISDIR(st.st_mode))
+                return -EISDIR;
+        if (S_ISLNK(st.st_mode))
+                return -ELOOP;
+        if (!S_ISREG(st.st_mode))
+                return -EBADFD;
+
+        /* like access_fd(), with the fallback of earlier versions of systemd for kernels without
+         * faccessat2(), on which faccessat() refuses AT_EMPTY_PATH */
+        if (faccessat(fd, "", X_OK, AT_EMPTY_PATH) < 0) {
+                if (!IN_SET(errno, ENOSYS, EINVAL))
+                        return -errno;
+                if (access(name, X_OK) < 0)
+                        return -errno;
+        }
+
+        return TAKE_FD(fd);
+}
+
+/* Like pin_callout_binary() of systemd: opens the program to run with open_and_check_executable(), so that a
+ * missing or unusable program is found before the fork. Like there, $<NAME>_PATH, i.e. the file name of the
+ * program in upper case with "-" replaced by "_" and "_PATH" appended, e.g. $SCSI_ID_PATH for scsi_id, may name
+ * another file to run instead. Unlike systemd, which also looks in its build directory when it runs from there,
+ * the path is used as it is: it is absolute, see udev_event_spawn(). Returns the descriptor, with the path of
+ * the file in ret_path, or a negative errno. */
+static int pin_callout_binary(const char *path, char **ret_path) {
+        _cleanup_free_ char *s = NULL;
+        const char *e;
+        char *c;
+        int fd;
+
+        s = strjoin(eudev_basename(path), "_PATH", NULL);
+        if (!s)
+                return -ENOMEM;
+        /* like ascii_strupper() and string_replace_char() */
+        for (c = s; *c != '\0'; c++)
+                if (*c >= 'a' && *c <= 'z')
+                        *c = *c - 'a' + 'A';
+                else if (*c == '-')
+                        *c = '_';
+
+        e = secure_getenv(s);
+        if (!e)
+                e = path;
+
+        fd = open_and_check_executable(e);
+        if (fd < 0)
+                return fd;
+
+        *ret_path = strdup(e);
+        if (!*ret_path) {
+                safe_close(fd);
+                return -ENOMEM;
+        }
+
+        return fd;
+}
+
 /* Like Spawn of systemd: a program that udev_event_spawn() runs, its output, and its timeouts, which, like in
  * systemd, are counted from the start of the program: it times out when the event times out, and the warning is
  * due after a third of that time. */
@@ -1097,7 +1171,8 @@ int udev_event_spawn(struct udev_event *event,
         int errpipe[2] = {-1, -1};
         pid_t pid, parent_pid;
         sigset_t ss, saved_ss;
-        _cleanup_free_ char *arg = NULL, *escaped = NULL;
+        _cleanup_free_ char *arg = NULL, *escaped = NULL, *found = NULL;
+        _cleanup_close_ int fd_executable = -1;
         char *argv[UDEV_ARGV_MAX];
         char program[UTIL_PATH_SIZE];
         const char *helper = NULL;
@@ -1214,8 +1289,26 @@ int udev_event_spawn(struct udev_event *event,
                 argv[0] = program;
         }
 
+        /* Like systemd, find a missing or unusable program before the fork, see pin_callout_binary(). */
+        fd_executable = pin_callout_binary(argv[0], &found);
+        if (fd_executable < 0) {
+                _cleanup_free_ char *escaped_program = log_escape(LOG_ERR, argv[0]);
+
+                err = log_device_error_errno(event->dev, fd_executable,
+                                             "Failed to find and pin callout binary \"%s\": %m",
+                                             escaped_program ?: argv[0]);
+                goto out;
+        }
+
+        {
+                _cleanup_free_ char *escaped_found = log_escape(LOG_DEBUG, found);
+
+                log_device_debug(event->dev, "Found callout binary: \"%s\".", escaped_found ?: found);
+        }
+        argv[0] = found;
+
         /* like systemd, in the worker */
-        log_debug("starting '%s'", spawn.cmd);
+        log_device_debug(event->dev, "Starting '%s'", spawn.cmd);
 
         /* Like FORK_RESET_SIGNALS and FORK_DEATHSIG_SIGTERM of systemd: block all signals for the fork, so that
          * the child starts with them blocked until it has reset them, and no signal is lost, see spawn_exec();
