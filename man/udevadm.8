@@ -207,7 +207,10 @@ When used with
 \fB\-\-attr\-match=\fR\fB\fIFILE\fR\fR\fB[=\fIVALUE\fR]\fR, \fB\-\-attr\-nomatch=\fR\fB\fIFILE\fR\fR\fB[=\fIVALUE\fR]\fR
 .RS 4
 When used with
-\fB\-\-export\-db\fR, only show devices matching or not matching the given attribute respectively\&.
+\fB\-\-export\-db\fR, only show devices matching or not matching the given attribute respectively\&. The attribute may be a path relative to the device, e\&.g\&.
+queue/rotational
+or
+\&.\&./size, unlike in systemd\&.
 .RE
 .PP
 \fB\-\-property\-match=\fR\fB\fIKEY\fR\fR\fB=\fR\fB\fIVALUE\fR\fR

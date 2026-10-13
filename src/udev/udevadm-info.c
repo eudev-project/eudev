@@ -27,6 +27,7 @@
 #include <fnmatch.h>
 #include <getopt.h>
 #include <inttypes.h>
+#include <limits.h>
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -473,9 +474,32 @@ static void export_matches_done(ExportMatches *m) {
         strv_free(m->tag_match);
 }
 
+/* Whether the name of an attribute of --attr-match= and --attr-nomatch= is valid: a file name, or a path
+ * relative to the device, like the attribute names of the rules, e.g. queue/rotational or ../size: not
+ * absolute, no empty component (so no leading, trailing or repeated "/"), no ".", none longer than
+ * NAME_MAX. ".." is fine, as libudev reads an attribute only when its path stays in /sys. Unlike
+ * systemd, which checks it with filename_is_valid(), such paths are accepted, as udevadm trigger always
+ * did. */
+static bool attribute_name_is_valid(const char *s) {
+        if (isempty(s) || strlen(s) >= PATH_MAX)
+                return false;
+
+        for (;;) {
+                size_t n = strcspn(s, "/");
+
+                if (n == 0 || n > NAME_MAX || (n == 1 && s[0] == '.'))
+                        return false;
+                if (s[n] == '\0')
+                        return true;
+                s += n + 1;
+        }
+}
+
 /* Like systemd's parse_key_value_argument(): splits KEY=VALUE, the value is NULL without "=" unless
- * it is required. */
-static int parse_key_value_argument(const char *str, bool require_value, char **ret_key, char **ret_value) {
+ * it is required. The key is the name of an attribute, see attribute_name_is_valid(), or else of a
+ * property, which must be a valid file name. */
+static int parse_key_value_argument(const char *str, bool require_value, bool attribute,
+                                    char **ret_key, char **ret_value) {
         _cleanup_free_ char *lesc1 = NULL;
         _cleanup_free_ char *k = NULL, *v = NULL;
         const char *eq;
@@ -500,7 +524,7 @@ static int parse_key_value_argument(const char *str, bool require_value, char **
                         return log_oom();
         }
 
-        if (!filename_is_valid(k)) {
+        if (attribute ? !attribute_name_is_valid(k) : !filename_is_valid(k)) {
                 log_error("%s is not a valid key name", utf8_escape_for_log(k, &lesc1));
                 return -EINVAL;
         }
@@ -567,7 +591,7 @@ static int setup_matches(struct udev *udev, struct udev_enumerate *e, const Expo
         STRV_FOREACH(a, m->attr_match) {
                 _cleanup_free_ char *k = NULL, *v = NULL;
 
-                r = parse_key_value_argument(*a, /* require_value= */ false, &k, &v);
+                r = parse_key_value_argument(*a, /* require_value= */ false, /* attribute= */ true, &k, &v);
                 if (r < 0)
                         return r;
 
@@ -580,7 +604,7 @@ static int setup_matches(struct udev *udev, struct udev_enumerate *e, const Expo
         STRV_FOREACH(a, m->attr_nomatch) {
                 _cleanup_free_ char *k = NULL, *v = NULL;
 
-                r = parse_key_value_argument(*a, /* require_value= */ false, &k, &v);
+                r = parse_key_value_argument(*a, /* require_value= */ false, /* attribute= */ true, &k, &v);
                 if (r < 0)
                         return r;
 
@@ -594,7 +618,7 @@ static int setup_matches(struct udev *udev, struct udev_enumerate *e, const Expo
                 _cleanup_free_ char *k = NULL, *v = NULL;
 
                 /* Only checked here, the devices are filtered in match_property_required(). */
-                r = parse_key_value_argument(*a, /* require_value= */ true, &k, &v);
+                r = parse_key_value_argument(*a, /* require_value= */ true, /* attribute= */ false, &k, &v);
                 if (r < 0)
                         return r;
         }

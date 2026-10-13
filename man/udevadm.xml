@@ -258,7 +258,8 @@
           <term><option>--attr-nomatch=<replaceable>FILE</replaceable><optional>=<replaceable>VALUE</replaceable></optional></option></term>
           <listitem>
             <para>When used with <option>--export-db</option>, only show devices matching or not matching the
-            given attribute respectively.</para>
+            given attribute respectively. The attribute may be a path relative to the device, e.g.
+            <literal>queue/rotational</literal> or <literal>../size</literal>, unlike in systemd.</para>
           </listitem>
         </varlistentry>
         <varlistentry>
