@@ -454,6 +454,119 @@ int stdio_disable_nonblock(void) {
         return ret;
 }
 
+/* Like fd_cloexec() of systemd: sets or clears FD_CLOEXEC of fd. Returns 0, or a negative errno on failure. */
+int fd_cloexec(int fd, bool cloexec) {
+        int flags, nflags;
+
+        assert(fd >= 0);
+
+        flags = fcntl(fd, F_GETFD, 0);
+        if (flags < 0)
+                return -errno;
+
+        nflags = cloexec ? flags | FD_CLOEXEC : flags & ~FD_CLOEXEC;
+        if (nflags == flags)
+                return 0;
+
+        if (fcntl(fd, F_SETFD, nflags) < 0)
+                return -errno;
+
+        return 0;
+}
+
+/* Like safe_close_above_stdio() of systemd: closes fd, unless it is stdin, stdout or stderr. */
+static void safe_close_above_stdio(int fd) {
+        if (fd > STDERR_FILENO)
+                safe_close(fd);
+}
+
+/* Like rearrange_stdio() of systemd: sets up stdin, stdout and stderr with the three descriptors, e.g. in a child
+ * process before it runs a program. A negative descriptor means /dev/null, which is opened once, read-only for
+ * stdin alone, write-only for stdout and stderr alone, and for reading and writing when stdin and stdout or
+ * stderr need it. A descriptor that is already in its place stays there, and one that is in another of the three
+ * places, e.g. the write end of a pipe for stdout that is stdin, as stdin was closed when the pipe was created, is
+ * moved to its place without being overwritten first. FD_CLOEXEC is turned off for all three. The passed descriptors above stderr are closed, also on failure. On
+ * failure, e.g. when /dev/null cannot be opened, stdin, stdout and stderr may be half set up. Returns 0, or a
+ * negative errno on failure. */
+int rearrange_stdio(int original_input_fd, int original_output_fd, int original_error_fd) {
+        int fd[3] = { original_input_fd, original_output_fd, original_error_fd };
+        int copy_fd[3] = { -1, -1, -1 };
+        int null_fd = -1, i, r;
+        bool null_readable, null_writable;
+
+        null_readable = original_input_fd < 0;
+        null_writable = original_output_fd < 0 || original_error_fd < 0;
+
+        /* first, open /dev/null once, if needed, with O_CLOEXEC, which dup2() turns off for the copies below */
+        if (null_readable || null_writable) {
+                null_fd = open("/dev/null", (null_readable && null_writable ? O_RDWR :
+                                             null_readable ? O_RDONLY : O_WRONLY) | O_CLOEXEC);
+                if (null_fd < 0) {
+                        r = -errno;
+                        goto finish;
+                }
+
+                /* move it out of the range of stdin, stdout and stderr */
+                if (null_fd <= STDERR_FILENO) {
+                        int copy;
+
+                        copy = fcntl(null_fd, F_DUPFD_CLOEXEC, 3);
+                        if (copy < 0) {
+                                r = -errno;
+                                goto finish;
+                        }
+
+                        safe_close(null_fd);
+                        null_fd = copy;
+                }
+        }
+
+        /* the descriptors to install, with the ones that are in another place of the three moved out of there */
+        for (i = 0; i < 3; i++)
+                if (fd[i] < 0)
+                        fd[i] = null_fd;
+                else if (fd[i] != i && fd[i] <= STDERR_FILENO) {
+                        copy_fd[i] = fcntl(fd[i], F_DUPFD_CLOEXEC, 3);
+                        if (copy_fd[i] < 0) {
+                                r = -errno;
+                                goto finish;
+                        }
+
+                        fd[i] = copy_fd[i];
+                }
+
+        /* now all are above stderr, or in their place already; move them there */
+        for (i = 0; i < 3; i++)
+                if (fd[i] == i) {
+                        r = fd_cloexec(i, false);
+                        if (r < 0)
+                                goto finish;
+                } else {
+                        assert(fd[i] > STDERR_FILENO);
+
+                        /* turns off FD_CLOEXEC of the new descriptor */
+                        if (dup2(fd[i], i) < 0) {
+                                r = -errno;
+                                goto finish;
+                        }
+                }
+
+        r = 0;
+
+finish:
+        /* close the passed descriptors above stderr, each once */
+        safe_close_above_stdio(original_input_fd);
+        if (original_output_fd != original_input_fd)
+                safe_close_above_stdio(original_output_fd);
+        if (original_error_fd != original_input_fd && original_error_fd != original_output_fd)
+                safe_close_above_stdio(original_error_fd);
+
+        close_many(copy_fd, 3);
+        safe_close_above_stdio(null_fd);
+
+        return r;
+}
+
 bool streq_ptr(const char *a, const char *b) {
 
         /* Like streq(), but tries to make sense of NULL pointers */

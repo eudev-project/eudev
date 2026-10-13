@@ -597,29 +597,17 @@ size_t udev_event_apply_format(struct udev_event *event,
 static int spawn_exec(struct udev_event *event __attribute__((unused)),
                       const char *cmd, char *const argv[], char **envp,
                       int fd_stdout, int fd_stderr) {
-        _cleanup_close_ int fd = -1;
         int r;
 
-        /* discard child output or connect to pipe */
-        fd = open("/dev/null", O_RDWR);
-        if (fd >= 0) {
-                dup2(fd, STDIN_FILENO);
-                if (fd_stdout < 0)
-                        dup2(fd, STDOUT_FILENO);
-                if (fd_stderr < 0)
-                        dup2(fd, STDERR_FILENO);
-        } else
-                log_error_errno(errno, "open /dev/null failed: %m");
-
-        /* connect pipes to std{out,err} */
-        if (fd_stdout >= 0) {
-                dup2(fd_stdout, STDOUT_FILENO);
-                safe_close(fd_stdout);
-        }
-        if (fd_stderr >= 0) {
-                dup2(fd_stderr, STDERR_FILENO);
-                safe_close(fd_stderr);
-        }
+        /* Like FORK_REARRANGE_STDIO of systemd: stdin from /dev/null, stdout and stderr to the pipes, or to
+         * /dev/null without them, with no other descriptor of /dev/null left open, also when a write end is
+         * stdin, stdout or stderr already, as they were closed when the pipes were created, e.g. in a udevadm
+         * test started with them closed. Like the child of systemd, do not run the program when that fails,
+         * e.g. as /dev/null cannot be opened: it would get the stdio of the worker, and turning O_NONBLOCK off
+         * below would change it for the worker too. */
+        r = rearrange_stdio(-1, fd_stdout, fd_stderr);
+        if (r < 0)
+                return log_error_errno(r, "Failed to rearrange stdio fds: %m");
 
         /* Like FORK_REARRANGE_STDIO of systemd: pipe2() set O_NONBLOCK, meant for the read ends of the worker,
          * also for the write ends, so turn it off for the program, whose writes would otherwise fail with
