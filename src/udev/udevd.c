@@ -140,10 +140,14 @@ static UDEV_LIST(event_list);
 Hashmap *workers;
 /* the processes that re-read the partition table of a disk, see synthesize_change() */
 static Set *synthesize_change_children;
-/* the UUIDs of the synthetic change events that udevd triggered and did not receive yet, and when to stop
- * waiting for them, see synthesize_change_one() */
-static Set *synthesized_events;
-static usec_t synthesized_events_clear_usec;
+/* a synthetic change event that udevd triggered and did not receive yet, see synthesize_change_one() */
+struct synthesized_event {
+        char uuid[ID128_UUID_STRING_MAX];
+        /* when udevd stops waiting for it */
+        usec_t clear_usec;
+};
+/* the synthesized events by their UUIDs, the oldest first */
+static OrderedHashmap *synthesized_events;
 /* the caller arguments of the uevents udevd triggers, see device_build_default_trigger_args() */
 static char **device_trigger_args;
 /* when udevd gives up waiting for the workers on exit, 30 seconds after the exit started, and when it kills the
@@ -593,8 +597,7 @@ static void worker_spawn(struct event *event) {
                 workers_free();
                 set_free(synthesize_change_children);
                 synthesize_change_children = NULL;
-                set_free_free(synthesized_events);
-                synthesized_events = NULL;
+                synthesized_events = ordered_hashmap_free_free(synthesized_events);
                 device_trigger_args = strv_free(device_trigger_args);
                 event_queue_cleanup(udev, EVENT_UNDEF);
                 udev_monitor_unref(monitor);
@@ -1400,7 +1403,7 @@ static void event_queue_update(void) {
         /* keep /run/udev/queue also while child processes are re-reading partition tables, which trigger
          * events, and until udevd received the change events it triggered itself */
         if (!udev_list_node_is_empty(&event_list) || !set_isempty(synthesize_change_children) ||
-            !set_isempty(synthesized_events)) {
+            !ordered_hashmap_isempty(synthesized_events)) {
                 r = touch("/run/udev/queue");
                 if (r < 0)
                         log_warning_errno(r, "could not touch /run/udev/queue: %m");
@@ -1849,30 +1852,34 @@ static void handle_ctrl_msg(struct udev_ctrl *uctrl) {
         }
 }
 
+/* Like on_synthesized_events_clear() of systemd, with the message for each UUID, but only for the events whose
+ * minute has passed, see synthesize_change_one(). */
 static void synthesized_events_clear(void) {
-        for (;;) {
-                _cleanup_free_ char *uuid = set_steal_first(synthesized_events);
-                if (!uuid)
-                        return;
+        usec_t now_usec = now(CLOCK_MONOTONIC);
+        struct synthesized_event *e;
 
-                log_warning("Could not receive synthesized event with UUID %s, ignoring.", uuid);
+        while ((e = ordered_hashmap_first(synthesized_events)) && e->clear_usec <= now_usec) {
+                log_warning("Could not receive synthesized event with UUID %s, ignoring.", e->uuid);
+                free(ordered_hashmap_steal_first(synthesized_events));
         }
 }
 
-/* Returns the time in milliseconds until udevd stops waiting for the synthetic change events it triggered, 0
- * if that is due now, or -1 if it does not wait for any. */
+/* Returns the time in milliseconds until udevd stops waiting for the oldest synthetic change event it
+ * triggered, 0 if that is due now, or -1 if it does not wait for any. */
 static int synthesized_events_timeout(void) {
+        struct synthesized_event *e;
         usec_t now_usec, t;
 
-        if (set_isempty(synthesized_events))
+        e = ordered_hashmap_first(synthesized_events);
+        if (!e)
                 return -1;
 
         now_usec = now(CLOCK_MONOTONIC);
-        if (synthesized_events_clear_usec <= now_usec)
+        if (e->clear_usec <= now_usec)
                 return 0;
 
-        /* round up, the events are due when the timeout expires */
-        t = (synthesized_events_clear_usec - now_usec + USEC_PER_MSEC - 1) / USEC_PER_MSEC;
+        /* round up, the event is due when the timeout expires */
+        t = (e->clear_usec - now_usec + USEC_PER_MSEC - 1) / USEC_PER_MSEC;
         return t > INT_MAX ? INT_MAX : (int) t;
 }
 
@@ -1882,7 +1889,7 @@ static void synthesized_event_received(struct udev_device *dev) {
         const char *s;
         id128_t id;
 
-        if (set_isempty(synthesized_events))
+        if (ordered_hashmap_isempty(synthesized_events))
                 return;
 
         /* SYNTH_UUID=0 is set whenever a device is triggered by userspace without specifying a UUID */
@@ -1890,15 +1897,15 @@ static void synthesized_event_received(struct udev_device *dev) {
         if (!s || id128_from_string(s, &id) < 0)
                 return;
 
-        free(set_remove(synthesized_events, id128_to_uuid_string(id, uuid)));
+        free(ordered_hashmap_remove(synthesized_events, id128_to_uuid_string(id, uuid)));
 }
 
 /* Like synthesize_change_one() of systemd: triggers a change event of the device, and remembers its UUID, so
  * that /run/udev/queue is kept until udevd received the event, unless the kernel sent none. */
 static int synthesize_change_one(struct udev_device *dev) {
         char uuid[ID128_UUID_STRING_MAX];
+        struct synthesized_event *e;
         uint64_t seqnum;
-        char *copy;
         int r;
 
         log_debug("device %s closed, synthesising 'change' on %s",
@@ -1927,31 +1934,34 @@ static int synthesize_change_one(struct udev_device *dev) {
                 return 0;
         }
 
-        /* Avoid /run/udev/queue file being removed by event_queue_update(). */
-        copy = strdup(uuid);
-        if (!copy)
+        /* Avoid /run/udev/queue file being removed by event_queue_update(). Unlike systemd, which restarts
+         * the timer of one minute for all remembered UUIDs with every synthesized event, so that a UUID whose
+         * event never comes is kept for as long as other watched devices are closed after writing at least
+         * once a minute, every UUID is forgotten one minute after it was remembered, see
+         * synthesized_events_clear(). */
+        e = new(struct synthesized_event, 1);
+        if (!e)
                 return log_oom_debug();
+        strcpy(e->uuid, uuid);
+        e->clear_usec = usec_add(now(CLOCK_MONOTONIC), USEC_PER_MINUTE);
 
         /* Let's not wait for too many events, to make not udevd consume huge amount of memory.
          * Typically (but unfortunately, not always), the kernel provides events in the order we triggered.
          * Hence, remembering the newest UUID should be mostly enough. */
-        while (set_size(synthesized_events) >= 1024) {
-                _cleanup_free_ char *old = set_steal_first(synthesized_events);
+        while (ordered_hashmap_size(synthesized_events) >= 1024) {
+                _cleanup_free_ struct synthesized_event *old = ordered_hashmap_steal_first(synthesized_events);
 
-                log_debug("Too many synthesized events are waiting, forgetting synthesized event with UUID %s.", old);
+                log_debug("Too many synthesized events are waiting, forgetting synthesized event with UUID %s.", old->uuid);
         }
 
-        r = set_ensure_allocated(&synthesized_events, &string_hash_ops);
+        r = ordered_hashmap_ensure_allocated(&synthesized_events, &string_hash_ops);
+        if (r >= 0)
+                r = ordered_hashmap_put(synthesized_events, e->uuid, e);
         if (r < 0) {
-                free(copy);
+                free(e);
                 return log_oom_debug();
         }
 
-        r = set_consume(synthesized_events, copy);
-        if (r < 0)
-                return log_oom_debug();
-
-        synthesized_events_clear_usec = usec_add(now(CLOCK_MONOTONIC), USEC_PER_MINUTE);
         return 0;
 }
 
@@ -2860,11 +2870,14 @@ int main(int argc, char *argv[]) {
                 if (!udev_exit) {
                         int synthesized_timeout;
 
-                        /* stop waiting for the change events udevd triggered, after a minute without them */
+                        /* stop waiting for the change events udevd triggered a minute ago, and wake up when
+                         * that is due for the next one */
                         synthesized_timeout = synthesized_events_timeout();
-                        if (synthesized_timeout == 0)
+                        if (synthesized_timeout == 0) {
                                 synthesized_events_clear();
-                        else if (synthesized_timeout > 0 && (timeout < 0 || synthesized_timeout < timeout))
+                                synthesized_timeout = synthesized_events_timeout();
+                        }
+                        if (synthesized_timeout >= 0 && (timeout < 0 || synthesized_timeout < timeout))
                                 timeout = synthesized_timeout;
                 }
 
@@ -2994,7 +3007,7 @@ exit:
                 close(fd_ep);
         workers_free();
         set_free(synthesize_change_children);
-        set_free_free(synthesized_events);
+        ordered_hashmap_free_free(synthesized_events);
         strv_free(device_trigger_args);
         event_queue_cleanup(udev, EVENT_UNDEF);
         udev_rules_unref(rules);
