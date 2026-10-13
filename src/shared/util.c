@@ -3249,7 +3249,9 @@ bool filename_is_valid(const char *p) {
         if (streq(p, ".."))
                 return false;
 
-        if (strlen(p) > FILENAME_MAX)
+        /* Like systemd: NAME_MAX, the longest name of a directory entry, not FILENAME_MAX of stdio.h, which is the
+         * longest path, 4096 with glibc. */
+        if (strlen(p) > NAME_MAX)
                 return false;
 
         return true;
