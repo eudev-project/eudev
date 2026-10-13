@@ -113,6 +113,8 @@ ssize_t udev_device_get_properties_monitor_buf(struct udev_device *udev_device, 
 const char *udev_device_get_devpath_old(struct udev_device *udev_device);
 const char *udev_device_get_id_filename(struct udev_device *udev_device);
 void udev_device_set_is_initialized(struct udev_device *udev_device);
+/* whether a tag of TAG+= or of a database entry is valid: ASCII letters, digits, '-' and '_', not empty */
+bool udev_tag_is_valid(const char *tag) _pure_;
 int udev_device_add_tag(struct udev_device *udev_device, const char *tag, bool both);
 struct udev_list_entry *udev_device_get_current_tags_list_entry_raw(struct udev_device *udev_device);
 void udev_device_remove_tag(struct udev_device *udev_device, const char *tag);

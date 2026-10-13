@@ -587,8 +587,10 @@ static void trigger_matches_done(TriggerMatches *m) {
 
 /* Checks the matches before the check for a chroot, so that an invalid one fails in a chroot too, with the
  * message of setup_matches(), which adds them: the attribute and property names, see
- * parse_key_value_argument(). libudev checks none of the other matches. */
+ * parse_key_value_argument(), and the tags, which udev_enumerate_add_match_tag() refuses. libudev checks
+ * none of the other matches. */
 static int check_matches(const TriggerMatches *m) {
+        _cleanup_free_ char *lesc1 = NULL;
         char **a;
         int r;
 
@@ -617,6 +619,11 @@ static int check_matches(const TriggerMatches *m) {
                 if (r < 0)
                         return r;
         }
+
+        STRV_FOREACH(a, m->tag_match)
+                if (!udev_tag_is_valid(*a) || !filename_is_valid(*a))
+                        return log_error_errno(EINVAL, "Failed to add tag match '%s': %m",
+                                               utf8_escape_for_log(*a, &lesc1));
 
         return 0;
 }

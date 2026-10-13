@@ -489,9 +489,9 @@ _public_ int udev_enumerate_add_match_property(struct udev_enumerate *udev_enume
  * @udev_enumerate: context
  * @tag: filter for a tag of the device to include in the list
  *
- * Match only devices with a certain tag.
+ * Match only devices with a certain tag. A tag consists of ASCII letters, digits, "-" and "_".
  *
- * Returns: 0 on success, otherwise a negative error value.
+ * Returns: 0 on success, otherwise a negative error value, -EINVAL for an invalid tag.
  */
 _public_ int udev_enumerate_add_match_tag(struct udev_enumerate *udev_enumerate, const char *tag)
 {
@@ -499,6 +499,11 @@ _public_ int udev_enumerate_add_match_tag(struct udev_enumerate *udev_enumerate,
                 return -EINVAL;
         if (tag == NULL)
                 return 0;
+        /* The tag names the directory below /run/udev/tags/ whose entries are the devices with the tag, see
+         * scan_devices_tags(): devices only carry valid tags, see udev_tag_is_valid(), anything else, e.g. "",
+         * "." or "../data", would read another directory; also not longer than a file name. */
+        if (!udev_tag_is_valid(tag) || !filename_is_valid(tag))
+                return -EINVAL;
         if (udev_list_entry_add(&udev_enumerate->tags_match_list, tag, NULL) == NULL)
                 return -ENOMEM;
         return 0;

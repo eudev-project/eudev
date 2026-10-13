@@ -3147,8 +3147,9 @@ void udev_device_set_is_initialized(struct udev_device *udev_device)
 }
 
 /* All tags are managed under /run/udev/tags, and the directories there are
- * named with tags. Hence, each tag must be a valid filename. */
-static bool is_valid_tag(const char *tag)
+ * named with tags. Hence, each tag must be a valid filename. Like is_valid_tag() of systemd: ASCII letters,
+ * digits, '-' and '_', and not empty. */
+bool udev_tag_is_valid(const char *tag)
 {
         return tag[0] != '\0' &&
                 tag[strspn(tag, "abcdefghijklmnopqrstuvwxyz"
@@ -3162,7 +3163,7 @@ int udev_device_add_tag(struct udev_device *udev_device, const char *tag, bool b
         struct udev_list_entry *e;
         bool added;
 
-        if (!is_valid_tag(tag))
+        if (!udev_tag_is_valid(tag))
                 return -EINVAL;
 
         /* Definitely add to the "all" list of tags (i.e. the sticky list) */
@@ -3188,7 +3189,7 @@ void udev_device_remove_tag(struct udev_device *udev_device, const char *tag)
 {
         struct udev_list_entry *e;
 
-        if (!is_valid_tag(tag))
+        if (!udev_tag_is_valid(tag))
                 return;
         e = udev_list_get_entry(&udev_device->current_tags_list);
         e = udev_list_entry_get_by_name(e, tag);
