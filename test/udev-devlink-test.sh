@@ -4,14 +4,15 @@
 # Tests the handling of device node symlinks claimed by several devices ("devlink stacks"),
 # with events processed concurrently, as by the workers of udevd.
 #
-# The test runs as an unprivileged user: it re-executes itself in a new user and mount namespace,
-# where tmpfs is mounted on /dev, /sys, /run/udev and the directories with udev rules and
+# The test runs as an unprivileged user or as root: it re-executes itself in a new user and mount
+# namespace, where tmpfs is mounted on /dev, /sys, /run/udev and the directories with udev rules and
 # configuration. A fake sysfs describes up to 7 character devices of the subsystem "fake", whose
 # device numbers are the ones of host device nodes (null, zero, full, random, urandom, tty, ptmx).
 # mknod() is not permitted in a user namespace, so their device nodes /dev/fakeN are bind mounts of
 # the host device nodes. These bind mounts, and the one on /dev/null, are read-only: the event
 # processors update the timestamps of a device node on every event, which the host's nodes used
-# here, writable for everyone, would otherwise allow, and the host's nodes must stay as they are.
+# here, writable for everyone, would otherwise allow, and, as root, they would also apply the
+# default SELinux or SMACK label; the host's nodes must stay as they are.
 # All fake devices claim the symlink /dev/test/a with a priority set by the rules. Each event is
 # processed by test-udev-devlink, several of them at once where concurrency is tested. Some
 # scenarios also check the handling of the device node itself, the parsing of link_priority= and
@@ -26,8 +27,6 @@
 #   DL_ITER, DL_ROUNDS number of iterations of the race scenarios and rounds of the churn scenario
 #   DL_DEBUG           let the event processor log at debug level (to the log in DL_KEEP_LOG)
 #   DL_KEEP_LOG        copy the log of the event processors to this file
-#   DL_ALLOW_ROOT      run even as root (skipped otherwise); as an unprivileged user, the event
-#                      processors cannot change the host's device nodes
 # Arguments: the scenarios to run, default: all.
 #
 # Exit status: 0 on success, 1 if a check failed, 77 if the test cannot run here.
@@ -35,12 +34,6 @@
 set -u
 
 if [ -z "${DL_IN_NS:-}" ]; then
-        # The device nodes are bind mounts of the host's device nodes, and handling them as root, e.g.
-        # applying the default SELinux or SMACK label, would change the host's device nodes.
-        if [ "$(id -u)" = 0 ] && [ -z "${DL_ALLOW_ROOT:-}" ]; then
-                echo "running as root would touch the host's device nodes, skipping (DL_ALLOW_ROOT=1 runs it anyway)"
-                exit 77
-        fi
         DRIVER=$(realpath "${TEST_UDEV_DEVLINK:-./test-udev-devlink}" 2>/dev/null)
         if [ ! -x "$DRIVER" ]; then
                 echo "test-udev-devlink not found, skipping"
