@@ -105,6 +105,7 @@ static int adm_test(struct udev *udev, int argc, char *argv[]) {
                                 exit(EXIT_SUCCESS);
                         break;
                 case 'D': {
+                        _cleanup_free_ char *escaped = NULL;
                         char *p;
 
                         p = path_make_absolute_cwd(optarg);
@@ -112,8 +113,23 @@ static int adm_test(struct udev *udev, int argc, char *argv[]) {
                                 log_oom();
                                 exit(EXIT_FAILURE);
                         }
+                        path_simplify(p);
 
-                        if (strv_consume(&extra_rules_dir, path_simplify(p)) < 0) {
+                        /* The rules files are only looked up in existing directories, so say so instead of
+                         * silently testing without the rules the caller wanted, e.g. for a typo or a rules file
+                         * given instead of its directory. */
+                        r = is_dir(p, /* follow= */ true);
+                        if (r <= 0) {
+                                escaped = utf8_escape_non_printable(p);
+                                if (r < 0)
+                                        log_error_errno(r, "Failed to access '%s': %m", escaped ?: p);
+                                else
+                                        log_error_errno(ENOTDIR, "'%s' is not a directory.", escaped ?: p);
+                                free(p);
+                                exit(EXIT_FAILURE);
+                        }
+
+                        if (strv_consume(&extra_rules_dir, p) < 0) {
                                 log_oom();
                                 exit(EXIT_FAILURE);
                         }
