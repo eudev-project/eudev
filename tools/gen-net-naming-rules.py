@@ -32,7 +32,7 @@ IMPORT{cmdline}="net.ifnames"
 ENV{net.ifnames}=="0", GOTO="%(end)s"
 ''',
     'no': '''\
-# eudev was configured with --with-net-ifnames-default=no: only with net.ifnames=1
+# eudev was built with --with-net-ifnames-default=no: only with net.ifnames=1
 IMPORT{cmdline}="net.ifnames"
 ENV{net.ifnames}!="1", GOTO="%(end)s"
 ''',
