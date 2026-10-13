@@ -337,7 +337,10 @@
           When eudev is built with <option>--with-net-ifnames-default=no</option>,
           it is disabled by default; specifying 1 enables it, and also the
           alternative names of network interfaces, which are then only assigned
-          with 1 (see
+          with 1. When eudev is built with <option>--enable-rule-generator</option>,
+          <filename>80-net-name-slot.rules</filename>, which renames the
+          interfaces, is not installed: the rule generator replaces it, and the
+          names it gives do not depend on <varname>net.ifnames=</varname> (see
           <citerefentry><refentrytitle>udev</refentrytitle><manvolnum>7</manvolnum></citerefentry>).</para>
         </listitem>
       </varlistentry>

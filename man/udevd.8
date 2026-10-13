@@ -284,7 +284,11 @@ for details\&.
 \fInet\&.ifnames=\fR
 .RS 4
 Network interfaces are renamed to give them predictable names when possible\&. It is enabled by default; specifying 0 disables it\&. When eudev is built with
-\fB\-\-with\-net\-ifnames\-default=no\fR, it is disabled by default; specifying 1 enables it, and also the alternative names of network interfaces, which are then only assigned with 1 (see
+\fB\-\-with\-net\-ifnames\-default=no\fR, it is disabled by default; specifying 1 enables it, and also the alternative names of network interfaces, which are then only assigned with 1\&. When eudev is built with
+\fB\-\-enable\-rule\-generator\fR,
+80\-net\-name\-slot\&.rules, which renames the interfaces, is not installed: the rule generator replaces it, and the names it gives do not depend on
+\fInet\&.ifnames=\fR
+(see
 \fBudev\fR(7))\&.
 .RE
 .PP

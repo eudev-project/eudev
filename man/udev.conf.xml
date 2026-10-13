@@ -79,7 +79,8 @@
       found in <filename>/etc/udev</filename>, <filename>/run/udev</filename>,
       <filename>/usr/local/lib/udev</filename>
       and <filename>/usr/lib/udev</filename> (or <filename>/lib/udev</filename>,
-      depending on the build, and both when built with --enable-split-usr), in
+      depending on the build, and both when built with
+      <option>--enable-split-usr</option>), in
       this order. The drop-ins, the files
       with the extension <filename>.conf</filename> in the
       <filename>udev.conf.d</filename> subdirectories of these directories, are
