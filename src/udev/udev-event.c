@@ -592,11 +592,41 @@ size_t udev_event_apply_format(struct udev_event *event,
         return size;
 }
 
-/* Runs the program in the child, with argv and envp; cmd is the command for the messages. */
-static int spawn_exec(struct udev_event *event __attribute__((unused)),
-                      const char *cmd, char *const argv[], char **envp,
-                      int fd_stdout, int fd_stderr) {
+/* Like the child of systemd's pidref_safe_fork_full() with the flags of its udev_event_spawn(): sets up the child of
+ * the worker and runs the program with argv and envp. parent_pid is the PID of the worker. Returns only when that
+ * fails, with a message for a failed step of the setup, but, like systemd, none for a failed execve(); the caller
+ * exits with EXIT_FAILURE then. */
+static int spawn_exec(char *const argv[], char **envp, int fd_stdout, int fd_stderr, pid_t parent_pid) {
+        pid_t ppid;
         int r;
+
+        /* Like FORK_DEATHSIG_SIGTERM of systemd: the program gets SIGTERM when the worker exits, and is not run
+         * when that cannot be set up. */
+        if (prctl(PR_SET_PDEATHSIG, SIGTERM) < 0)
+                return log_error_errno(errno, "Failed to set death signal: %m");
+
+        /* Like FORK_RESET_SIGNALS of systemd: the program starts with the default action for every signal and
+         * an empty signal mask, whatever udevd inherited. Otherwise, a signal that whoever started udevd
+         * ignored stays ignored across exec, e.g. SIGINT for a background job of a shell (the worker resets
+         * only the timeout signal), and the signal mask that udevd started with was restored. Resetting the
+         * mask also unblocks the signals that udev_event_spawn() blocked for the fork. */
+        r = reset_all_signal_handlers();
+        if (r < 0)
+                return log_error_errno(r, "Failed to reset signal handlers: %m");
+
+        r = reset_signal_mask();
+        if (r < 0)
+                return log_error_errno(r, "Failed to reset signal mask: %m");
+
+        /* Like systemd: if the worker exited before PR_SET_PDEATHSIG was set, no signal comes, and the parent is
+         * another process now, so raise the signal ourselves. A parent PID of 0 means that the worker is in
+         * another PID namespace. */
+        ppid = getppid();
+        if (ppid != 0 && ppid != parent_pid) {
+                log_debug("Parent died early, raising %s.", signal_to_string(SIGTERM));
+                (void) raise(SIGTERM);
+                return -ESRCH;
+        }
 
         /* Like FORK_REARRANGE_STDIO of systemd: stdin from /dev/null, stdout and stderr to the pipes, or to
          * /dev/null without them, with no other descriptor of /dev/null left open, also when a write end is
@@ -613,25 +643,10 @@ static int spawn_exec(struct udev_event *event __attribute__((unused)),
          * EAGAIN when it writes more than the pipe holds, faster than the worker reads it. */
         (void) stdio_disable_nonblock();
 
-        /* terminate child in case parent goes away */
-        prctl(PR_SET_PDEATHSIG, SIGTERM);
-
-        /* Like FORK_RESET_SIGNALS of systemd: the program starts with the default action for every signal and
-         * an empty signal mask, whatever udevd inherited. Otherwise, a signal that whoever started udevd
-         * ignored stays ignored across exec, e.g. SIGINT for a background job of a shell (the worker resets
-         * only the timeout signal), and the signal mask that udevd started with was restored. */
-        r = reset_all_signal_handlers();
-        if (r < 0)
-                return log_error_errno(r, "Failed to reset signal handlers: %m");
-
-        r = reset_signal_mask();
-        if (r < 0)
-                return log_error_errno(r, "Failed to reset signal mask: %m");
-
         /* Like FORK_CLOSE_ALL_FDS of systemd: the program gets stdin, stdout and stderr, and no other descriptor,
          * also none that the worker has without O_CLOEXEC, e.g. one that udevd inherited from whoever started
-         * it, or one that a library opened. Close the log first, as its descriptors are closed too, and, like
-         * udevadm lock, open it again only when the program cannot be run. */
+         * it, or one that a library opened. Close the log first, as its descriptors are closed too, and open it
+         * again only when that fails. */
         log_close();
         r = close_all_fds();
         if (r < 0) {
@@ -641,16 +656,8 @@ static int spawn_exec(struct udev_event *event __attribute__((unused)),
 
         execve(argv[0], argv, envp);
 
-        /* exec failed */
-        r = -errno;
-        log_open();
-        {
-                _cleanup_free_ char *escaped = log_escape(LOG_ERR, argv[0]);
-
-                log_error_errno(r, "failed to execute '%s' '%s': %m", escaped ?: argv[0], cmd);
-        }
-
-        return r;
+        /* like systemd, without a message */
+        return -errno;
 }
 
 /* Like Spawn of systemd: a program that udev_event_spawn() runs, its output, and its timeouts, which, like in
@@ -1080,7 +1087,8 @@ int udev_event_spawn(struct udev_event *event,
                      char *result, size_t result_size, bool *ret_truncated) {
         int outpipe[2] = {-1, -1};
         int errpipe[2] = {-1, -1};
-        pid_t pid;
+        pid_t pid, parent_pid;
+        sigset_t ss, saved_ss;
         _cleanup_free_ char *arg = NULL, *escaped = NULL;
         char *argv[UDEV_ARGV_MAX];
         char program[UTIL_PATH_SIZE];
@@ -1198,7 +1206,22 @@ int udev_event_spawn(struct udev_event *event,
                 argv[0] = program;
         }
 
+        /* like systemd, in the worker */
+        log_debug("starting '%s'", spawn.cmd);
+
+        /* Like FORK_RESET_SIGNALS and FORK_DEATHSIG_SIGTERM of systemd: block all signals for the fork, so that
+         * the child starts with them blocked until it has reset them, and no signal is lost, see spawn_exec();
+         * the worker restores its signal mask right after the fork. */
+        assert_se(sigfillset(&ss) >= 0);
+        if (sigprocmask(SIG_BLOCK, &ss, &saved_ss) < 0) {
+                err = log_error_errno(errno, "Failed to block signal mask: %m");
+                goto out;
+        }
+
+        parent_pid = getpid();
         pid = fork();
+        if (pid != 0)
+                (void) sigprocmask(SIG_SETMASK, &saved_ss, NULL);
         switch(pid) {
         case 0:
                 /* child closes parent's ends of pipes */
@@ -1211,12 +1234,10 @@ int udev_event_spawn(struct udev_event *event,
                         errpipe[READ_END] = -1;
                 }
 
-                log_debug("starting '%s'", spawn.cmd);
+                (void) spawn_exec(argv, envp, outpipe[WRITE_END], errpipe[WRITE_END], parent_pid);
 
-                spawn_exec(event, spawn.cmd, argv, envp,
-                           outpipe[WRITE_END], errpipe[WRITE_END]);
-
-                _exit(2 );
+                /* like systemd, for every failure */
+                _exit(EXIT_FAILURE);
         case -1:
                 log_error_errno(errno, "fork of '%s' failed: %m", spawn.cmd);
                 err = -1;
