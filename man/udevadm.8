@@ -195,7 +195,8 @@ Cleanup the udev database\&.
 .RS 4
 Wait for device to be initialized\&. If argument
 \fISECS\fR
-is not specified, the default is to wait forever\&.
+is not specified, the default is to wait forever\&. With
+0, it does not wait at all, as without this option, like in systemd\&.
 .RE
 .PP
 \fB\-\-subsystem\-match=\fR\fB\fISUBSYSTEM\fR\fR, \fB\-\-subsystem\-nomatch=\fR\fB\fISUBSYSTEM\fR\fR

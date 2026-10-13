@@ -242,7 +242,8 @@
           <term><option>--wait-for-initialization<optional>=SECS</optional></option></term>
           <listitem>
             <para>Wait for device to be initialized. If argument <replaceable>SECS</replaceable>
-            is not specified, the default is to wait forever.</para>
+            is not specified, the default is to wait forever. With <literal>0</literal>, it does
+            not wait at all, as without this option, like in systemd.</para>
           </listitem>
         </varlistentry>
         <varlistentry>

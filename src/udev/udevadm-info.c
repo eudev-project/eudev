@@ -577,6 +577,49 @@ static int setup_matches(struct udev *udev, struct udev_enumerate *e, const Expo
         return 0;
 }
 
+/* Without --export-db, which uses them, the match options are ignored, and systemd does not check them.
+ * Unlike systemd, check them the same way as setup_matches() does with it: the names of the attributes
+ * and the properties, and the tags like udev_enumerate_add_match_tag(). */
+static int check_matches(const ExportMatches *m) {
+        _cleanup_free_ char *lesc1 = NULL;
+        char **a;
+        int r;
+
+        assert(m);
+
+        STRV_FOREACH(a, m->attr_match) {
+                _cleanup_free_ char *k = NULL, *v = NULL;
+
+                r = parse_key_value_argument(*a, /* require_value= */ false, /* attribute= */ true, &k, &v);
+                if (r < 0)
+                        return r;
+        }
+
+        STRV_FOREACH(a, m->attr_nomatch) {
+                _cleanup_free_ char *k = NULL, *v = NULL;
+
+                r = parse_key_value_argument(*a, /* require_value= */ false, /* attribute= */ true, &k, &v);
+                if (r < 0)
+                        return r;
+        }
+
+        STRV_FOREACH(a, m->property_match) {
+                _cleanup_free_ char *k = NULL, *v = NULL;
+
+                r = parse_key_value_argument(*a, /* require_value= */ true, /* attribute= */ false, &k, &v);
+                if (r < 0)
+                        return r;
+        }
+
+        STRV_FOREACH(a, m->tag_match)
+                if (!udev_tag_is_valid(*a) || !filename_is_valid(*a)) {
+                        log_error("'%s' is not a valid tag name", utf8_escape_for_log(*a, &lesc1));
+                        return -EINVAL;
+                }
+
+        return 0;
+}
+
 /* Like the required property matches of systemd's device enumerator: the device must have a property
  * for each property name pattern, with a value that matches one of the value patterns given for that
  * name. The libudev enumerator accepts a device with any matching property instead. */
@@ -1458,6 +1501,10 @@ static int uinfo(struct udev *udev, int argc, char *argv[]) {
                 log_error("-x/--export or -P/--export-prefix cannot be used with --value");
                 return 1;
         }
+
+        /* With --export-db, setup_matches() checks the match options, like in systemd. */
+        if (action != ACTION_EXPORT && check_matches(&matches) < 0)
+                return 1;
 
         log_command_call(&udevadm_info);
 
