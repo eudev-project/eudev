@@ -89,6 +89,20 @@
   <substitution oldstring="i\&amp;.e\&amp;.&#10;" newstring="i\&amp;.e\&amp;.\&amp;&#10;"/>
 </xsl:param>
 
+<!-- The same for code-like inline elements whose text ends with a period, a question mark or an exclamation
+     mark, e.g. the path component <literal>..</literal>, the prefix <literal>rd.</literal> or the glob
+     <literal>?</literal>: followed by more text, they end an input line, and troff would take that character,
+     which is part of them, for the end of a sentence. Put \& after them; a period after them that does end a
+     sentence still does. -->
+<xsl:template match="*[self::literal or self::varname or self::filename or self::option or self::constant or
+                       self::command or self::replaceable or self::code or self::envar or self::systemitem or
+                       self::uri or self::userinput or self::computeroutput or self::parameter or
+                       self::function or self::type or self::property]
+                      [contains('.?!', substring(., string-length(.)))][string-length(.) &gt; 0]">
+  <xsl:apply-imports/>
+  <xsl:text>\&amp;</xsl:text>
+</xsl:template>
+
 <!-- The stylesheet writes a page with ".so man<section>/<page>" for every further name of a page, e.g.
      udev.conf.d(5) of udev.conf(5), which works only below a man<section> directory, and which mandoc calls
      fragile. Write none: man/Makefile.am installs the further names as symbolic links instead. -->

@@ -375,7 +375,7 @@ Match the driver name of the event device\&. Only set this key for devices which
 .RS 4
 Match sysfs attribute values of the event device\&. Trailing whitespace in the attribute values is ignored unless the specified match value itself contains trailing whitespace\&.
 Match a kernel parameter value\&. Like in systemd, the whitespace around the value is removed, and a kernel parameter that does not exist has an empty value\&. Like in systemd, a kernel parameter that cannot be read, or whose name contains
-\&.\&., stops the processing of the rules for the event; unlike systemd, which waits for it, this includes one that is not a regular file, e\&.g\&. a FIFO\&.
+\&.\&.\&, stops the processing of the rules for the event; unlike systemd, which waits for it, this includes one that is not a regular file, e\&.g\&. a FIFO\&.
 .RE
 .PP
 \fIKERNELS\fR
@@ -472,7 +472,7 @@ Most of the fields support shell glob pattern matching and alternate patterns\&.
 Matches zero or more characters\&.
 .RE
 .PP
-?
+?\&
 .RS 4
 Matches any single character\&.
 .RE
@@ -491,7 +491,7 @@ character\&. For example, to match on the range of all digits, the pattern
 could be used\&. If the first character following the
 [
 is a
-!, any characters not enclosed are matched\&.
+!\&, any characters not enclosed are matched\&.
 .RE
 .PP
 |
@@ -528,8 +528,8 @@ sign, e\&.g\&.\&
 0x10
 or
 +5, and is not
-\&.,
-\&.\&.,
+\&.\&,
+\&.\&.\&,
 all
 or
 default\&. With the naming schemes
@@ -557,12 +557,12 @@ character\&.
 The name is taken relative to
 /dev/, and may also be given as an absolute path below
 /dev/\&. It is normalized: redundant slashes,
-\&.
+\&.\&
 components and trailing slashes are removed, e\&.g\&.\&
 disk//by\-foo/\&./bar/
 results in
 /dev/disk/by\-foo/bar\&. A name with a
-\&.\&.
+\&.\&.\&
 component or with a component longer than 255 bytes, a name with control characters, which are only kept with
 \fIOPTIONS+="string_escape=none"\fR, an absolute path outside of
 /dev/, and a name that refers to
@@ -653,14 +653,14 @@ The value that should be written to a sysfs attribute of the event device\&. Unl
 \fISYSCTL{\fR\fI\fIkernel parameter\fR\fR\fI}\fR
 .RS 4
 The value that should be written to kernel parameter\&. Like in systemd, a kernel parameter whose name contains
-\&.\&.
+\&.\&.\&
 is not written\&. Unlike systemd, which waits for a reader, only a regular file is written, without waiting, e\&.g\&. not a FIFO; the assignment fails otherwise\&.
 .RE
 .PP
 \fIENV{\fR\fI\fIkey\fR\fR\fI}\fR
 .RS 4
 Set a device property value\&. Property names with a leading
-\&.
+\&.\&
 are not stored in the database\&. Like all other properties, they are passed in the environment of the programs run by
 \fIRUN\fR,
 \fIPROGRAM\fR
@@ -670,7 +670,7 @@ and
 A property name may only contain ASCII letters, digits,
 _
 and
-\&., and a value must be valid UTF\-8 without control characters, like newlines or tabs\&. Other properties are refused: an assignment or an
+\&.\&, and a value must be valid UTF\-8 without control characters, like newlines or tabs\&. Other properties are refused: an assignment or an
 \fIIMPORT\fR
 logs a warning and the rest of the rule is still applied, and invalid properties set by built\-in commands or received with the kernel event are ignored\&. Assigning an empty value, also as the result of substitutions, removes the property\&.
 .sp
@@ -822,7 +822,7 @@ cmdline
 .RS 4
 Import a single property from the kernel command line\&. For simple flags the value of the property is set to
 1\&. Options starting with
-rd\&.
+rd\&.\&
 are only imported in an initrd, see
 \fBudevd\fR(8); the prefix is part of the key, i\&.e\&.\&
 IMPORT{cmdline}="foo"
