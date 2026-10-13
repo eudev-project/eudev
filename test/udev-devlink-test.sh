@@ -9,10 +9,13 @@
 # configuration. A fake sysfs describes up to 7 character devices of the subsystem "fake", whose
 # device numbers are the ones of host device nodes (null, zero, full, random, urandom, tty, ptmx).
 # mknod() is not permitted in a user namespace, so their device nodes /dev/fakeN are bind mounts of
-# the host device nodes. All fake devices claim the symlink /dev/test/a with a priority set by the
-# rules. Each event is processed by test-udev-devlink, several of them at once where concurrency is
-# tested. Some scenarios also check the handling of the device node itself, the parsing of
-# link_priority= and "udevadm info --cleanup-db".
+# the host device nodes. These bind mounts, and the one on /dev/null, are read-only: the event
+# processors update the timestamps of a device node on every event, which the host's nodes used
+# here, writable for everyone, would otherwise allow, and the host's nodes must stay as they are.
+# All fake devices claim the symlink /dev/test/a with a priority set by the rules. Each event is
+# processed by test-udev-devlink, several of them at once where concurrency is tested. Some
+# scenarios also check the handling of the device node itself, the parsing of link_priority= and
+# "udevadm info --cleanup-db".
 #
 # Environment:
 #   TEST_UDEV_DEVLINK  the event processor (default: ./test-udev-devlink)
@@ -24,7 +27,7 @@
 #   DL_DEBUG           let the event processor log at debug level (to the log in DL_KEEP_LOG)
 #   DL_KEEP_LOG        copy the log of the event processors to this file
 #   DL_ALLOW_ROOT      run even as root (skipped otherwise); as an unprivileged user, the event
-#                      processors cannot change the host's device nodes, except for their timestamps
+#                      processors cannot change the host's device nodes
 # Arguments: the scenarios to run, default: all.
 #
 # Exit status: 0 on success, 1 if a check failed, 77 if the test cannot run here.
@@ -69,12 +72,46 @@ for n in "${NODES[@]}"; do
         fi
 done
 
+# mount_opts PATH -- the options of the topmost mount on PATH, from /proc/self/mountinfo, which
+# escapes space, tab, newline and backslash in the mount point
+mount_opts() {
+        local m=${1//\\/\\134}
+        m=${m// /\\040}; m=${m//$'\t'/\\011}; m=${m//$'\n'/\\012}
+        M=$m awk '$5 == ENVIRON["M"] { o = $6 } END { print o }' /proc/self/mountinfo
+}
+
+# make_ro PATH -- make the mount on PATH read-only, and check that it is
+make_ro() {
+        mount -o remount,bind,ro "$1" 2>/dev/null
+        case $(mount_opts "$1") in
+                ro|ro,*) return 0 ;;
+        esac
+        return 1
+}
+
+# bind_node NAME PATH -- bind mount the host's device node /dev/NAME on PATH, read-only, so that
+# nothing here can change it, not even its timestamps
+bind_node() {
+        if touch "$2" && mount --bind "$HOSTDEV/$1" "$2"; then
+                make_ro "$2" && return 0
+                umount "$2"
+        fi
+        echo "cannot bind mount the host's /dev/$1 read-only on $2"
+        return 1
+}
+
 W=$(mktemp -d "${TMPDIR:-/tmp}/udev-devlink-test.XXXXXX") || exit 1
 HOSTDEV=$W/hostdev
 mkdir "$HOSTDEV" || exit 1
 mount --rbind /dev "$HOSTDEV" || exit 77
+# only the device nodes of the host are used, and only read-only; the mounts below /dev, e.g.
+# /dev/pts, are not used, and stay as they are
+if ! make_ro "$HOSTDEV"; then
+        echo "cannot make the bind mount of /dev read-only, skipping"
+        exit 77
+fi
 mount -t tmpfs -o mode=0755 tmpfs /dev || exit 77
-touch /dev/null && mount --bind "$HOSTDEV/null" /dev/null || exit 77
+bind_node null /dev/null || exit 77
 mount -t tmpfs -o mode=0755 tmpfs /sys || exit 77
 mkdir -p /run/udev 2>/dev/null
 mount -t tmpfs -o mode=0755 tmpfs /run/udev || exit 77
@@ -120,8 +157,7 @@ write_rules() {
 node_add() {
         [ -e /sys/dev/char/${NUMS[$1]} ] || ln -s ../../devices/virtual/fake/fake$1 /sys/dev/char/${NUMS[$1]}
         [ -e /dev/fake$1 ] && return
-        touch /dev/fake$1
-        mount --bind "$HOSTDEV/${NODES[$1]}" /dev/fake$1
+        bind_node "${NODES[$1]}" /dev/fake$1 || exit 1
 }
 
 # only the device node disappears, the device is still there
@@ -503,7 +539,7 @@ scenario_node_perms() {
         echo "== node_perms: devlinks are created also when the device node cannot be handled as asked"
         reset_state
         PRIO=(0 0)
-        # changing the owner of a host device node fails with EPERM here
+        # changing the owner of a host device node fails here: EROFS, as it is mounted read-only
         EXTRA_LINKS='KERNEL=="fake0", OWNER="0", SYMLINK+="t6/perm"'
         write_rules
         node_add 0
@@ -513,8 +549,7 @@ scenario_node_perms() {
         EXTRA_LINKS='KERNEL=="fake1", SYMLINK+="t6/other"'
         write_rules
         ln -s ../../devices/virtual/fake/fake1 /sys/dev/char/${NUMS[1]}
-        touch /dev/fake1
-        mount --bind "$HOSTDEV/null" /dev/fake1
+        bind_node null /dev/fake1 || exit 1
         run_seq "$DRIVER" add:1
         check_exists /dev/t6/other "the device node has another device number"
 }
