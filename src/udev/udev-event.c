@@ -601,6 +601,18 @@ static int spawn_exec(char *const argv[], char **envp, int fd_stdout, int fd_std
         pid_t ppid;
         int r;
 
+        /* Like the child of systemd, named after its first argument: "(spawn)" until the program runs. Unlike
+         * systemd, there is no block_dlopen() here: eudev itself never calls dlopen(), and the child calls no
+         * library function that may load a module (libkmod may, for compressed kernel modules, but only in the
+         * worker; the child looks up no users or groups through NSS). */
+        static char spawn_name[] = "(spawn)";
+        r = rename_process(spawn_name);
+        if (r < 0)
+                log_warning_errno(r, "Failed to rename process, ignoring: %m");
+        /* like for the workers, see worker_spawn(): the complete name also for the tag of the messages below,
+         * which rename_process() cuts to the length of argv[0] of udevd or udevadm, e.g. "(spaw" for "udevd" */
+        program_invocation_name = program_invocation_short_name = spawn_name;
+
         /* Like FORK_DEATHSIG_SIGTERM of systemd: the program gets SIGTERM when the worker exits, and is not run
          * when that cannot be set up. */
         if (prctl(PR_SET_PDEATHSIG, SIGTERM) < 0)
@@ -661,6 +673,14 @@ static int spawn_exec(char *const argv[], char **envp, int fd_stdout, int fd_std
         if (r < 0) {
                 log_open();
                 return log_error_errno(r, "Failed to lower RLIMIT_NOFILE's soft limit to 1K: %m");
+        }
+
+        /* Like systemd, without FORK_KEEP_NOTIFY_SOCKET; here only for parity, as the program gets the
+         * properties of the device as its environment, not the one of the worker. */
+        if (unsetenv("NOTIFY_SOCKET") < 0) {
+                r = -errno;
+                log_open();
+                return log_error_errno(r, "Failed to unset $NOTIFY_SOCKET: %m");
         }
 
         execve(argv[0], argv, envp);

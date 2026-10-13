@@ -379,6 +379,8 @@ bool nulstr_contains(const char*nulstr, const char *needle);
 char *strjoin(const char *x, ...) _sentinel_;
 
 bool is_main_thread(void);
+void save_argc_argv(int argc, char **argv);
+int rename_process(const char *name);
 
 #define NULSTR_FOREACH(i, l)                                    \
         for ((i) = (l); (i) && *(i); (i) = strchr((i), 0)+1)

@@ -27,6 +27,8 @@
 #include <syslog.h>
 #include <sched.h>
 #include <sys/resource.h>
+#include <sys/syscall.h>
+#include <linux/capability.h>
 #include <sys/select.h>
 #include <linux/sched.h>
 #include <sys/types.h>
@@ -2738,6 +2740,173 @@ bool is_main_thread(void) {
                 cached = getpid() == gettid() ? 1 : -1;
 
         return cached > 0;
+}
+
+/* Like save_argc_argv() of systemd: remembers the arguments of main(), see rename_process(). */
+void save_argc_argv(int argc, char **argv) {
+        /* protect against CVE-2021-4034 style attacks */
+        assert_se(argc > 0);
+        assert_se(argv);
+        assert_se(argv[0]);
+
+        saved_argc = argc;
+        saved_argv = argv;
+}
+
+/* Like have_effective_cap() of systemd: whether the capability is in the effective set, or a negative errno. */
+static int have_effective_cap(int value) {
+        struct __user_cap_header_struct h = {
+                .version = _LINUX_CAPABILITY_VERSION_3,
+                .pid = 0,
+        };
+        struct __user_cap_data_struct d[_LINUX_CAPABILITY_U32S_3] = {};
+
+        if (syscall(SYS_capget, &h, d) < 0)
+                return -errno;
+
+        return !!(d[value / 32].effective & (1U << (value % 32)));
+}
+
+/* Like update_argv() of systemd: makes /proc/self/cmdline show exactly name, with a copy of it in a new mapping,
+ * which needs CAP_SYS_RESOURCE. */
+static int update_argv(const char name[], size_t l) {
+        static int can_do = -1;
+        static size_t mm_size = 0;
+        static char *mm = NULL;
+        int r;
+
+        if (can_do == 0)
+                return 0;
+        can_do = false; /* set to true only if the whole process works */
+
+        /* PR_SET_MM_ARG_{START,END} needs CAP_SYS_RESOURCE, so do not mmap() without it */
+        r = have_effective_cap(CAP_SYS_RESOURCE);
+        if (r < 0)
+                return log_debug_errno(r, "Failed to check if we have enough privileges: %m");
+        if (r == 0)
+                return log_debug_errno(EPERM, "Skipping PR_SET_MM, as we don't have privileges.");
+
+        if (mm_size < l+1) {
+                size_t nn_size;
+                char *nn;
+
+                nn_size = PAGE_ALIGN(l+1);
+                if (nn_size >= SIZE_MAX)
+                        return log_debug_errno(EINVAL, "The requested argument is too long.");
+
+                nn = mmap(NULL, nn_size, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
+                if (nn == MAP_FAILED)
+                        return log_debug_errno(errno, "mmap() failed: %m");
+
+                strncpy(nn, name, nn_size);
+
+                /* now tell the kernel about the new memory */
+                r = prctl(PR_SET_MM, PR_SET_MM_ARG_START, (unsigned long) nn, 0, 0) < 0 ? -errno : 0;
+                if (IN_SET(r, -EPERM, -EACCES))
+                        return log_debug_errno(r, "PR_SET_MM_ARG_START failed: %m");
+                if (r < 0) {
+                        /* Like systemd: the existing end address may be below the new start address, which the
+                         * kernel refuses, so move the end first, which briefly makes the area huge. */
+                        log_debug_errno(r, "PR_SET_MM_ARG_START failed, attempting PR_SET_MM_ARG_END hack: %m");
+
+                        r = prctl(PR_SET_MM, PR_SET_MM_ARG_END, (unsigned long) nn + l + 1, 0, 0) < 0 ? -errno : 0;
+                        if (r < 0) {
+                                log_debug_errno(r, "PR_SET_MM_ARG_END hack failed, proceeding without: %m");
+                                (void) munmap(nn, nn_size);
+                                return r;
+                        }
+
+                        r = prctl(PR_SET_MM, PR_SET_MM_ARG_START, (unsigned long) nn, 0, 0) < 0 ? -errno : 0;
+                        if (r < 0)
+                                return log_debug_errno(r, "PR_SET_MM_ARG_START still failed, proceeding without: %m");
+                } else {
+                        /* also the end; if that fails, there is no way back, so accept it */
+                        r = prctl(PR_SET_MM, PR_SET_MM_ARG_END, (unsigned long) nn + l + 1, 0, 0) < 0 ? -errno : 0;
+                        if (r < 0)
+                                log_debug_errno(r, "PR_SET_MM_ARG_END failed, proceeding without: %m");
+                }
+
+                if (mm)
+                        (void) munmap(mm, mm_size);
+
+                mm = nn;
+                mm_size = nn_size;
+        } else {
+                strncpy(mm, name, mm_size);
+
+                /* update the end pointer, whatever fails */
+                r = prctl(PR_SET_MM, PR_SET_MM_ARG_END, (unsigned long) mm + l + 1, 0, 0) < 0 ? -errno : 0;
+                if (r < 0)
+                        log_debug_errno(r, "PR_SET_MM_ARG_END failed, proceeding without: %m");
+        }
+
+        can_do = true;
+        return 0;
+}
+
+/* Like rename_process() of systemd, a poor man's setproctitle(): sets the comm field of the process (at most 15
+ * characters), argv[0] as the C library knows it (program_invocation_name), /proc/self/cmdline (with
+ * CAP_SYS_RESOURCE, see update_argv()) and the saved arguments of main(), see save_argc_argv(), to name, e.g. in
+ * a child process. Returns > 0 if it was set, 0 if it was truncated, or a negative errno. */
+int rename_process(const char *name) {
+        bool truncated = false;
+        size_t l;
+
+        if (isempty(name))
+                return -EINVAL;
+
+        /* the cached things are not locked, and PR_SET_NAME names only the calling thread */
+        if (!is_main_thread())
+                return -EPERM;
+
+        l = strlen(name);
+
+        /* first, the comm field; the one of the main thread is the one of the process */
+        if (prctl(PR_SET_NAME, (unsigned long) name, 0, 0, 0) < 0)
+                log_debug_errno(errno, "PR_SET_NAME failed: %m");
+        if (l >= 16)
+                truncated = true;
+
+        /* second, the name of the C library */
+        if (program_invocation_name) {
+                size_t k;
+                char *p;
+
+                k = strlen(program_invocation_name);
+                strncpy(program_invocation_name, name, k);
+                if (l > k)
+                        truncated = true;
+
+                /* also the short name */
+                p = strrchr(program_invocation_name, '/');
+                program_invocation_short_name = p ? p + 1 : program_invocation_name;
+        }
+
+        /* third, the argv[] that the kernel shows */
+        (void) update_argv(name, l);
+
+        /* fourth, the saved arguments, in case they are looked at */
+        if (saved_argc > 0) {
+                int i;
+
+                if (saved_argv[0]) {
+                        size_t k;
+
+                        k = strlen(saved_argv[0]);
+                        strncpy(saved_argv[0], name, k);
+                        if (l > k)
+                                truncated = true;
+                }
+
+                for (i = 1; i < saved_argc; i++) {
+                        if (!saved_argv[i])
+                                break;
+
+                        memzero(saved_argv[i], strlen(saved_argv[i]));
+                }
+        }
+
+        return !truncated;
 }
 
 static const char *const ioprio_class_table[] = {

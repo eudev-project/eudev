@@ -279,7 +279,7 @@ out:
         return err;
 }
 
-int main(int argc __attribute__((unused)), char *argv[]) {
+int main(int argc, char *argv[]) {
         _cleanup_udev_unref_ struct udev *udev = NULL;
         _cleanup_udev_event_unref_ struct udev_event *event = NULL;
         _cleanup_udev_device_unref_ struct udev_device *dev = NULL;
@@ -292,6 +292,7 @@ int main(int argc __attribute__((unused)), char *argv[]) {
 
         /* like udevd and udevadm, see stdio_open_missing(); test-udev runs programs too */
         stdio_open_missing();
+        save_argc_argv(argc, argv);
 
         err = fake_filesystems();
         if (err < 0)

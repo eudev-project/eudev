@@ -2462,6 +2462,9 @@ int main(int argc, char *argv[]) {
          */
         stdio_open_missing();
 
+        /* like systemd, for rename_process() in the child that runs a program */
+        save_argc_argv(argc, argv);
+
         arg_debug = argv_has_debug(argc, argv);
 
         /* Like log_setup() of systemd-udevd, the auto target, which logs to the kernel log, and the log

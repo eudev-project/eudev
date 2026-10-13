@@ -142,6 +142,9 @@ int main(int argc, char *argv[]) {
          * runs, into which the messages to standard error would go then. */
         stdio_open_missing();
 
+        /* like systemd, for rename_process() in the child that runs a program of udevadm test */
+        save_argc_argv(argc, argv);
+
         log_parse_environment();
         log_open();
         mac_selinux_init("/dev");
