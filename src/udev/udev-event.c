@@ -629,10 +629,22 @@ static int spawn_exec(struct udev_event *event __attribute__((unused)),
         if (r < 0)
                 return log_error_errno(r, "Failed to reset signal mask: %m");
 
+        /* Like FORK_CLOSE_ALL_FDS of systemd: the program gets stdin, stdout and stderr, and no other descriptor,
+         * also none that the worker has without O_CLOEXEC, e.g. one that udevd inherited from whoever started
+         * it, or one that a library opened. Close the log first, as its descriptors are closed too, and, like
+         * udevadm lock, open it again only when the program cannot be run. */
+        log_close();
+        r = close_all_fds();
+        if (r < 0) {
+                log_open();
+                return log_error_errno(r, "Failed to close all file descriptors: %m");
+        }
+
         execve(argv[0], argv, envp);
 
         /* exec failed */
         r = -errno;
+        log_open();
         {
                 _cleanup_free_ char *escaped = log_escape(LOG_ERR, argv[0]);
 
