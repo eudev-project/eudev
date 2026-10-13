@@ -55,6 +55,7 @@ static void help(void) {
 }
 
 static int adm_settle(struct udev *udev, int argc, char *argv[]) {
+        _cleanup_free_ char *lesc1 = NULL;
         static const struct option options[] = {
                 { "help",           no_argument,       NULL, 'h' },
                 { "version",        no_argument,       NULL, 'V' },
@@ -82,7 +83,8 @@ static int adm_settle(struct udev *udev, int argc, char *argv[]) {
                          * and "infinity" waits without a limit. */
                         r = parse_sec(optarg, &timeout_usec);
                         if (r < 0) {
-                                log_error_errno(r, "Failed to parse timeout value '%s': %m", optarg);
+                                log_error_errno(r, "Failed to parse timeout value '%s': %m",
+                                                utf8_escape_for_log(optarg, &lesc1));
                                 return EXIT_FAILURE;
                         }
                         break;
@@ -90,7 +92,7 @@ static int adm_settle(struct udev *udev, int argc, char *argv[]) {
 
                 case 'E':
                         if (!path_is_valid(optarg)) {
-                                log_error("Invalid path: %s", optarg);
+                                log_error("Invalid path: %s", utf8_escape_for_log(optarg, &lesc1));
                                 return EXIT_FAILURE;
                         }
 

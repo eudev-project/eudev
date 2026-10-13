@@ -69,6 +69,7 @@ static void print_device(struct udev_device *device, const char *source, int pro
 /* Like the filters of setup_monitor() of systemd, with its messages; a failure ends udevadm monitor. */
 static int apply_filters(struct udev_monitor *monitor, struct udev_list *subsystem_match_list,
                          struct udev_list *tag_match_list) {
+        _cleanup_free_ char *lesc1 = NULL, *lesc2 = NULL;
         struct udev_list_entry *entry;
         int r;
 
@@ -79,7 +80,8 @@ static int apply_filters(struct udev_monitor *monitor, struct udev_list *subsyst
                 r = udev_monitor_filter_add_match_subsystem_devtype(monitor, subsys, devtype);
                 if (r < 0)
                         return log_error_errno(r, "Failed to apply subsystem filter '%s%s%s': %m",
-                                               subsys, devtype ? "/" : "", devtype ?: "");
+                                               utf8_escape_for_log(subsys, &lesc1), devtype ? "/" : "",
+                                               utf8_escape_for_log(devtype ?: "", &lesc2));
         }
 
         udev_list_entry_foreach(entry, udev_list_get_entry(tag_match_list)) {
@@ -87,7 +89,8 @@ static int apply_filters(struct udev_monitor *monitor, struct udev_list *subsyst
 
                 r = udev_monitor_filter_add_match_tag(monitor, tag);
                 if (r < 0)
-                        return log_error_errno(r, "Failed to apply tag filter '%s': %m", tag);
+                        return log_error_errno(r, "Failed to apply tag filter '%s': %m",
+                                               utf8_escape_for_log(tag, &lesc1));
         }
 
         return 0;

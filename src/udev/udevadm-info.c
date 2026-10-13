@@ -476,6 +476,7 @@ static void export_matches_done(ExportMatches *m) {
 /* Like systemd's parse_key_value_argument(): splits KEY=VALUE, the value is NULL without "=" unless
  * it is required. */
 static int parse_key_value_argument(const char *str, bool require_value, char **ret_key, char **ret_value) {
+        _cleanup_free_ char *lesc1 = NULL;
         _cleanup_free_ char *k = NULL, *v = NULL;
         const char *eq;
 
@@ -485,7 +486,7 @@ static int parse_key_value_argument(const char *str, bool require_value, char **
 
         eq = strchr(str, '=');
         if (!eq && require_value) {
-                log_error("Missing '=' in key/value pair %s.", str);
+                log_error("Missing '=' in key/value pair %s.", utf8_escape_for_log(str, &lesc1));
                 return -EINVAL;
         }
 
@@ -500,7 +501,7 @@ static int parse_key_value_argument(const char *str, bool require_value, char **
         }
 
         if (!filename_is_valid(k)) {
-                log_error("%s is not a valid key name", k);
+                log_error("%s is not a valid key name", utf8_escape_for_log(k, &lesc1));
                 return -EINVAL;
         }
 
@@ -511,6 +512,7 @@ static int parse_key_value_argument(const char *str, bool require_value, char **
 }
 
 static int add_match_parent(struct udev *udev, char ***parents, const char *s, const char *prefix) {
+        _cleanup_free_ char *lesc1 = NULL;
         _cleanup_udev_device_unref_ struct udev_device *dev = NULL;
 
         assert(parents);
@@ -518,7 +520,8 @@ static int add_match_parent(struct udev *udev, char ***parents, const char *s, c
 
         dev = find_device(udev, s, prefix);
         if (!dev)
-                return log_error_errno(errno > 0 ? errno : ENODEV, "Failed to open the device '%s': %m", s);
+                return log_error_errno(errno > 0 ? errno : ENODEV, "Failed to open the device '%s': %m",
+                                       utf8_escape_for_log(s, &lesc1));
 
         if (strv_extend(parents, udev_device_get_syspath(dev)) < 0)
                 return log_oom();
@@ -527,6 +530,7 @@ static int add_match_parent(struct udev *udev, char ***parents, const char *s, c
 }
 
 static int setup_matches(struct udev *udev, struct udev_enumerate *e, const ExportMatches *m, char ***parents) {
+        _cleanup_free_ char *lesc1 = NULL, *lesc2 = NULL;
         char **a;
         int r;
 
@@ -549,13 +553,15 @@ static int setup_matches(struct udev *udev, struct udev_enumerate *e, const Expo
         STRV_FOREACH(a, m->subsystem_match) {
                 r = udev_enumerate_add_match_subsystem(e, *a);
                 if (r < 0)
-                        return log_error_errno(r, "Failed to add subsystem match '%s': %m", *a);
+                        return log_error_errno(r, "Failed to add subsystem match '%s': %m",
+                                               utf8_escape_for_log(*a, &lesc1));
         }
 
         STRV_FOREACH(a, m->subsystem_nomatch) {
                 r = udev_enumerate_add_nomatch_subsystem(e, *a);
                 if (r < 0)
-                        return log_error_errno(r, "Failed to add negative subsystem match '%s': %m", *a);
+                        return log_error_errno(r, "Failed to add negative subsystem match '%s': %m",
+                                               utf8_escape_for_log(*a, &lesc1));
         }
 
         STRV_FOREACH(a, m->attr_match) {
@@ -567,7 +573,8 @@ static int setup_matches(struct udev *udev, struct udev_enumerate *e, const Expo
 
                 r = udev_enumerate_add_match_sysattr(e, k, v);
                 if (r < 0)
-                        return log_error_errno(r, "Failed to add sysattr match '%s=%s': %m", k, strna(v));
+                        return log_error_errno(r, "Failed to add sysattr match '%s=%s': %m",
+                                               utf8_escape_for_log(k, &lesc1), utf8_escape_for_log(strna(v), &lesc2));
         }
 
         STRV_FOREACH(a, m->attr_nomatch) {
@@ -579,7 +586,8 @@ static int setup_matches(struct udev *udev, struct udev_enumerate *e, const Expo
 
                 r = udev_enumerate_add_nomatch_sysattr(e, k, v);
                 if (r < 0)
-                        return log_error_errno(r, "Failed to add negative sysattr match '%s=%s': %m", k, strna(v));
+                        return log_error_errno(r, "Failed to add negative sysattr match '%s=%s': %m",
+                                               utf8_escape_for_log(k, &lesc1), utf8_escape_for_log(strna(v), &lesc2));
         }
 
         STRV_FOREACH(a, m->property_match) {
@@ -594,13 +602,14 @@ static int setup_matches(struct udev *udev, struct udev_enumerate *e, const Expo
         STRV_FOREACH(a, m->tag_match) {
                 r = udev_enumerate_add_match_tag(e, *a);
                 if (r < 0)
-                        return log_error_errno(r, "Failed to add tag match '%s': %m", *a);
+                        return log_error_errno(r, "Failed to add tag match '%s': %m", utf8_escape_for_log(*a, &lesc1));
         }
 
         STRV_FOREACH(a, m->sysname_match) {
                 r = udev_enumerate_add_match_sysname(e, *a);
                 if (r < 0)
-                        return log_error_errno(r, "Failed to add sysname match '%s': %m", *a);
+                        return log_error_errno(r, "Failed to add sysname match '%s': %m",
+                                               utf8_escape_for_log(*a, &lesc1));
         }
 
         return 0;
@@ -654,6 +663,7 @@ static bool match_property_required(struct udev_device *device, char **property_
 }
 
 static int export_devices(struct udev *udev, const ExportMatches *m) {
+        _cleanup_free_ char *lesc1 = NULL;
         _cleanup_udev_enumerate_unref_ struct udev_enumerate *e = NULL;
         _cleanup_strv_free_ char **parents = NULL;
         struct udev_list_entry *list_entry;
@@ -682,7 +692,8 @@ static int export_devices(struct udev *udev, const ExportMatches *m) {
 
                         r = udev_enumerate_add_match_parent(e, parent);
                         if (r < 0)
-                                return log_error_errno(r, "Failed to add parent match '%s': %m", *p);
+                                return log_error_errno(r, "Failed to add parent match '%s': %m",
+                                                       utf8_escape_for_log(*p, &lesc1));
 
                         r = udev_enumerate_scan_devices(e);
                         if (r < 0)
@@ -716,6 +727,7 @@ static int export_devices(struct udev *udev, const ExportMatches *m) {
 }
 
 static void cleanup_dir(DIR *dir, mode_t mask, int depth) {
+        _cleanup_free_ char *lesc1 = NULL;
         struct dirent *dent;
         int dfd;
 
@@ -742,7 +754,8 @@ static void cleanup_dir(DIR *dir, mode_t mask, int depth) {
 
                         subdir = xopendirat(dfd, dent->d_name, O_NOFOLLOW);
                         if (!subdir)
-                                log_debug_errno(errno, "Failed to open subdirectory '%s', ignoring: %m", dent->d_name);
+                                log_debug_errno(errno, "Failed to open subdirectory '%s', ignoring: %m",
+                                                utf8_escape_for_log(dent->d_name, &lesc1));
                         else
                                 cleanup_dir(subdir, mask, depth-1);
 
@@ -794,6 +807,7 @@ static bool cleanup_dir_after_db_cleanup(DIR *dir, DIR *datadir) {
 }
 
 static void cleanup_dirs_after_db_cleanup(DIR *dir, DIR *datadir) {
+        _cleanup_free_ char *lesc1 = NULL;
         struct dirent *dent;
         int dfd;
 
@@ -815,7 +829,8 @@ static void cleanup_dirs_after_db_cleanup(DIR *dir, DIR *datadir) {
 
                         subdir = xopendirat(dfd, dent->d_name, O_NOFOLLOW);
                         if (!subdir)
-                                log_debug_errno(errno, "Failed to open subdirectory '%s', ignoring: %m", dent->d_name);
+                                log_debug_errno(errno, "Failed to open subdirectory '%s', ignoring: %m",
+                                                utf8_escape_for_log(dent->d_name, &lesc1));
                         else if (cleanup_dir_after_db_cleanup(subdir, datadir))
                                 (void) unlinkat(dfd, dent->d_name, AT_REMOVEDIR);
                 } else
@@ -832,6 +847,7 @@ static void cleanup_dirs_after_db_cleanup(DIR *dir, DIR *datadir) {
  * skipped: the lock file of a devlink whose name starts with a dot, e.g. /dev/.foo, is ".foo".
  */
 static void cleanup_lock_dir(DIR *dir) {
+        _cleanup_free_ char *lesc1 = NULL;
         struct dirent *dent;
         int dfd;
 
@@ -852,7 +868,8 @@ static void cleanup_lock_dir(DIR *dir) {
                         continue;
 
                 if (flock(fd, LOCK_EX|LOCK_NB) < 0) {
-                        log_debug_errno(errno, "Lock file '%s' is in use, keeping it: %m", dent->d_name);
+                        log_debug_errno(errno, "Lock file '%s' is in use, keeping it: %m",
+                                        utf8_escape_for_log(dent->d_name, &lesc1));
                         continue;
                 }
 
@@ -958,6 +975,7 @@ static int draw_tree(
                 struct udev_device *const array[], size_t n,
                 const char *prefix,
                 unsigned level) {
+        _cleanup_free_ char *lesc1 = NULL;
 
         const char *parent_path;
         size_t i = 0;
@@ -971,7 +989,7 @@ static int draw_tree(
         parent_path = parent ? udev_device_get_devpath(parent) : NULL;
 
         if (level > TREE_DEPTH_MAX) {
-                log_warning("Eliding tree below '%s', too deep.", parent_path ?: "n/a");
+                log_warning("Eliding tree below '%s', too deep.", utf8_escape_for_log(parent_path ?: "n/a", &lesc1));
                 return 0;
         }
 
@@ -1225,6 +1243,7 @@ static int query_device(enum query_type query, struct udev_device *device,
 }
 
 static int uinfo(struct udev *udev, int argc, char *argv[]) {
+        _cleanup_free_ char *lesc1 = NULL;
         _cleanup_strv_free_ char **devices = NULL;
         _cleanup_strv_free_ char **properties = NULL;
         _cleanup_(export_matches_done) ExportMatches matches = {
@@ -1360,7 +1379,7 @@ static int uinfo(struct udev *udev, int argc, char *argv[]) {
                         else if (streq(optarg, "all"))
                                 query = QUERY_ALL;
                         else {
-                                log_error("Unknown query type '%s'", optarg);
+                                log_error("Unknown query type '%s'", utf8_escape_for_log(optarg, &lesc1));
                                 return 1;
                         }
                         break;
@@ -1430,7 +1449,8 @@ static int uinfo(struct udev *udev, int argc, char *argv[]) {
                                 &matches.parent_match;
 
                         if (c == ARG_PROPERTY_MATCH && !strchr(optarg, '=')) {
-                                log_error("Expected <PROPERTY>=<value> instead of '%s'", optarg);
+                                log_error("Expected <PROPERTY>=<value> instead of '%s'",
+                                          utf8_escape_for_log(optarg, &lesc1));
                                 return 1;
                         }
 
@@ -1521,9 +1541,11 @@ static int uinfo(struct udev *udev, int argc, char *argv[]) {
                          * later, as for every error, see pager_open(). Unlike systemd, without "or a unit
                          * name", as eudev has none. */
                         if (error == EINVAL)
-                                log_error_errno(error, "Bad argument \"%s\", expected an absolute path in /dev/ or /sys/, or device ID: %m", *p);
+                                log_error_errno(error,
+                                                "Bad argument \"%s\", expected an absolute path in /dev/ or /sys/, or device ID: %m",
+                                                utf8_escape_for_log(*p, &lesc1));
                         else
-                                log_error_errno(error, "Unknown device \"%s\": %m", *p);
+                                log_error_errno(error, "Unknown device \"%s\": %m", utf8_escape_for_log(*p, &lesc1));
                         ret = 1;
                         continue;
                 }

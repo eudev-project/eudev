@@ -85,6 +85,7 @@ static int parse_argv(int argc, char *argv[]) {
 
 /* Like cat_file() of systemd's pretty-print.c, for files without sections. */
 static int cat_file(const char *name, const char *path, bool *newline) {
+        _cleanup_free_ char *lesc1 = NULL;
         _cleanup_fclose_ FILE *f = NULL;
         _cleanup_free_ char *line = NULL, *urlified = NULL;
         size_t size = 0;
@@ -97,7 +98,7 @@ static int cat_file(const char *name, const char *path, bool *newline) {
 
         r = terminal_urlify_path(path, NULL, &urlified);
         if (r < 0)
-                return log_error_errno(r, "Failed to urlify path \"%s\": %m", path);
+                return log_error_errno(r, "Failed to urlify path \"%s\": %m", utf8_escape_for_log(path, &lesc1));
 
         printf("%s# %s%s%s%s\n",
                ansi_highlight_blue(),
@@ -108,7 +109,7 @@ static int cat_file(const char *name, const char *path, bool *newline) {
 
         f = fopen(path, "re");
         if (!f)
-                return log_error_errno(errno, "Failed to open \"%s\": %m", path);
+                return log_error_errno(errno, "Failed to open \"%s\": %m", utf8_escape_for_log(path, &lesc1));
 
         while ((n = getline(&line, &size, f)) >= 0) {
                 const char *l;
@@ -148,7 +149,7 @@ static int cat_file(const char *name, const char *path, bool *newline) {
         }
 
         if (ferror(f))
-                return log_error_errno(EIO, "Failed to read \"%s\": %m", path);
+                return log_error_errno(EIO, "Failed to read \"%s\": %m", utf8_escape_for_log(path, &lesc1));
 
         return 0;
 }

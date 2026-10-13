@@ -67,6 +67,7 @@ static int check_device(struct udev *udev, const char *path) {
 }
 
 static bool check(struct udev *udev) {
+        _cleanup_free_ char *lesc1 = NULL;
         char **p;
         int r;
 
@@ -78,7 +79,7 @@ static bool check(struct udev *udev) {
                 if (r <= 0) {
                         if (r < 0)
                                 log_warning_errno(r, "Failed to check if device \"%s\" is %s, assuming not %s: %m",
-                                                  *p,
+                                                  utf8_escape_for_log(*p, &lesc1),
                                                   wait_until_table[arg_wait_until],
                                                   wait_until_table[arg_wait_until]);
                         return false;
@@ -181,6 +182,7 @@ static void help(void) {
 }
 
 static int parse_argv(int argc, char *argv[]) {
+        _cleanup_free_ char *lesc1 = NULL;
         enum {
                 ARG_INITIALIZED = 0x100,
                 ARG_REMOVED,
@@ -204,13 +206,15 @@ static int parse_argv(int argc, char *argv[]) {
                 case 't':
                         r = parse_sec(optarg, &arg_timeout_usec);
                         if (r < 0)
-                                return log_error_errno(r, "Failed to parse -t/--timeout= parameter: %s", optarg);
+                                return log_error_errno(r, "Failed to parse -t/--timeout= parameter: %s",
+                                                       utf8_escape_for_log(optarg, &lesc1));
                         break;
 
                 case ARG_INITIALIZED:
                         r = parse_boolean(optarg);
                         if (r < 0)
-                                return log_error_errno(r, "Failed to parse --initialized= parameter: %s", optarg);
+                                return log_error_errno(r, "Failed to parse --initialized= parameter: %s",
+                                                       utf8_escape_for_log(optarg, &lesc1));
                         arg_wait_until = r ? WAIT_UNTIL_INITIALIZED : WAIT_UNTIL_ADDED;
                         break;
 
@@ -268,6 +272,7 @@ static bool path_has_dot_dot(const char *p) {
 }
 
 static int wait_main(struct udev *udev) {
+        _cleanup_free_ char *lesc1 = NULL;
         _cleanup_udev_monitor_unref_ struct udev_monitor *udev_monitor = NULL, *kernel_monitor = NULL;
         _cleanup_close_ int inotify_fd = -1;
         usec_t deadline = USEC_INFINITY, next_periodic = USEC_INFINITY;
@@ -283,7 +288,8 @@ static int wait_main(struct udev *udev) {
                 }
 
                 if (!path_startswith(*p, "/dev/") && !path_startswith(*p, "/sys/")) {
-                        log_error("Specified path \"%s\" does not start with \"/dev/\" or \"/sys/\".", *p);
+                        log_error("Specified path \"%s\" does not start with \"/dev/\" or \"/sys/\".",
+                                  utf8_escape_for_log(*p, &lesc1));
                         return -EINVAL;
                 }
         }

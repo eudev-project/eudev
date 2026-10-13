@@ -1507,6 +1507,7 @@ static void manager_adjust_config(void) {
  * worker, 10 seconds, or the value of $UDEV_EXTRA_TIMEOUT_SEC, or $SYSTEMD_UDEV_EXTRA_TIMEOUT_SEC when that is
  * not set, up to 5 hours. */
 static usec_t extra_timeout_usec(void) {
+        _cleanup_free_ char *lesc1 = NULL;
         static usec_t saved = 10 * USEC_PER_SEC;
         static bool parsed = false;
         const char *name = "UDEV_EXTRA_TIMEOUT_SEC", *e;
@@ -1528,9 +1529,9 @@ static usec_t extra_timeout_usec(void) {
 
         r = parse_sec(e, &timeout);
         if (r < 0)
-                log_debug_errno(r, "Failed to parse $%s=%s, ignoring: %m", name, e);
+                log_debug_errno(r, "Failed to parse $%s=%s, ignoring: %m", name, utf8_escape_for_log(e, &lesc1));
         else if (timeout > 5 * USEC_PER_HOUR) /* Add an arbitrary upper bound */
-                log_debug("Parsed $%s=%s is too large, ignoring.", name, e);
+                log_debug("Parsed $%s=%s is too large, ignoring.", name, utf8_escape_for_log(e, &lesc1));
         else
                 saved = timeout;
 
@@ -1730,6 +1731,7 @@ static void manager_set_default_children_max(void) {
 
 /* handle one udevd message from userspace */
 static void handle_ctrl_msg_one(struct udev_ctrl_connection *ctrl_conn, struct udev_ctrl_msg *ctrl_msg) {
+        _cleanup_free_ char *lesc1 = NULL, *lesc2 = NULL;
         const char *str;
         int i;
 
@@ -1772,14 +1774,16 @@ static void handle_ctrl_msg_one(struct udev_ctrl_connection *ctrl_conn, struct u
                                 val[0] = '\0';
                                 val = &val[1];
                                 if (val[0] == '\0') {
-                                        log_debug("udevd message (ENV) received, unset '%s'", key);
+                                        log_debug("udevd message (ENV) received, unset '%s'",
+                                                  utf8_escape_for_log(key, &lesc1));
                                         udev_list_entry_add(&properties_list, key, NULL);
                                 } else {
-                                        log_debug("udevd message (ENV) received, set '%s=%s'", key, val);
+                                        log_debug("udevd message (ENV) received, set '%s=%s'",
+                                                  utf8_escape_for_log(key, &lesc1), utf8_escape_for_log(val, &lesc2));
                                         udev_list_entry_add(&properties_list, key, val);
                                 }
                         } else {
-                                log_error("wrong key format '%s'", key);
+                                log_error("wrong key format '%s'", utf8_escape_for_log(key, &lesc1));
                         }
                         free(key);
                 }
@@ -2396,6 +2400,7 @@ static bool argv_has_debug(int argc, char *argv[]) {
 }
 
 static int parse_argv(int argc, char *argv[]) {
+        _cleanup_free_ char *lesc1 = NULL;
         int c;
         unsigned fd_ready_u;
 
@@ -2429,25 +2434,30 @@ static int parse_argv(int argc, char *argv[]) {
                 case 'c':
                         r = safe_atou(optarg, &config_by_command.children_max);
                         if (r < 0)
-                                log_warning_errno(r, "Failed to parse --children-max= value '%s', ignoring: %m", optarg);
+                                log_warning_errno(r, "Failed to parse --children-max= value '%s', ignoring: %m",
+                                                  utf8_escape_for_log(optarg, &lesc1));
                         break;
                 case 'e':
                         r = parse_sec(optarg, &config_by_command.exec_delay_usec);
                         if (r < 0)
-                                log_warning_errno(r, "Failed to parse --exec-delay= value '%s', ignoring: %m", optarg);
+                                log_warning_errno(r, "Failed to parse --exec-delay= value '%s', ignoring: %m",
+                                                  utf8_escape_for_log(optarg, &lesc1));
                         break;
                 case 't':
                         r = parse_sec(optarg, &config_by_command.timeout_usec);
                         if (r < 0)
-                                log_warning_errno(r, "Failed to parse --event-timeout= value '%s', ignoring: %m", optarg);
+                                log_warning_errno(r, "Failed to parse --event-timeout= value '%s', ignoring: %m",
+                                                  utf8_escape_for_log(optarg, &lesc1));
                         break;
                 case ARG_TIMEOUT_SIGNAL:
                         r = signal_from_string(optarg);
                         if (r <= 0)
-                                log_warning_errno(r, "Failed to parse --timeout-signal= value '%s', ignoring: %m", optarg);
+                                log_warning_errno(r, "Failed to parse --timeout-signal= value '%s', ignoring: %m",
+                                                  utf8_escape_for_log(optarg, &lesc1));
                         else if (!signal_terminates(r))
                                 /* e.g. SIGCHLD, with which the timeout would not stop anything */
-                                log_warning("--timeout-signal=%s cannot terminate a process, ignoring.", optarg);
+                                log_warning("--timeout-signal=%s cannot terminate a process, ignoring.",
+                                            utf8_escape_for_log(optarg, &lesc1));
                         else
                                 config_by_command.timeout_signal = r;
                         break;
@@ -2458,7 +2468,8 @@ static int parse_argv(int argc, char *argv[]) {
                         /* like systemd, warn and keep the setting of udev.conf, or the default */
                         r = udev_parse_resolve_names(optarg, &config_by_command.resolve_names);
                         if (r < 0)
-                                log_warning("Invalid --resolve-names= value '%s', ignoring.", optarg);
+                                log_warning("Invalid --resolve-names= value '%s', ignoring.",
+                                            utf8_escape_for_log(optarg, &lesc1));
                         break;
                 case 'r':
                         /* eudev only; the message is like the ones of systemd for the other options */
@@ -2466,7 +2477,8 @@ static int parse_argv(int argc, char *argv[]) {
                         if (r >= 0 && fd_ready_u > INT_MAX)
                                 r = -ERANGE;
                         if (r < 0)
-                                log_warning_errno(r, "Failed to parse --ready-notify= value '%s', ignoring: %m", optarg);
+                                log_warning_errno(r, "Failed to parse --ready-notify= value '%s', ignoring: %m",
+                                                  utf8_escape_for_log(optarg, &lesc1));
                         else
                                 fd_ready = fd_ready_u;
                         break;

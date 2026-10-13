@@ -110,6 +110,7 @@ int device_is_processed(struct udev_device *dev) {
  * until it has an entry in the udev database, without ID_PROCESSING=1. Returns a new reference
  * to a device object with the current state of the device. */
 int device_wait_for_initialization(struct udev_device *device, usec_t timeout_usec, struct udev_device **ret) {
+        _cleanup_free_ char *lesc1 = NULL;
         _cleanup_udev_monitor_unref_ struct udev_monitor *monitor = NULL;
         _cleanup_udev_device_unref_ struct udev_device *again = NULL;
         struct udev *udev = udev_device_get_udev(device);
@@ -135,7 +136,8 @@ int device_wait_for_initialization(struct udev_device *device, usec_t timeout_us
         if (subsystem) {
                 r = udev_monitor_filter_add_match_subsystem_devtype(monitor, subsystem, NULL);
                 if (r < 0)
-                        return log_error_errno(r, "Failed to add %s subsystem match to monitor: %m", subsystem);
+                        return log_error_errno(r, "Failed to add %s subsystem match to monitor: %m",
+                                               utf8_escape_for_log(subsystem, &lesc1));
         }
 
         r = udev_monitor_enable_receiving(monitor);
@@ -447,11 +449,12 @@ int search_rules_files(char * const *args, const char *root, char ***ret_names, 
 }
 
 int parse_json_argument(const char *s, JsonFormatFlags *ret) {
+        _cleanup_free_ char *lesc1 = NULL;
         int r;
 
         r = json_parse_format(s, ret);
         if (r == -EINVAL)
-                log_error("Unknown argument to --json= switch: %s", s);
+                log_error("Unknown argument to --json= switch: %s", utf8_escape_for_log(s, &lesc1));
 
         return r;
 }
@@ -481,6 +484,7 @@ int device_action_from_string(const char *s) {
 }
 
 int parse_device_action(const char *str, const char **ret) {
+        _cleanup_free_ char *lesc1 = NULL;
         int a;
 
         assert(str);
@@ -496,7 +500,7 @@ int parse_device_action(const char *str, const char **ret) {
 
         a = device_action_from_string(str);
         if (a < 0) {
-                log_error("Invalid action '%s'.", str);
+                log_error("Invalid action '%s'.", utf8_escape_for_log(str, &lesc1));
                 return a;
         }
 

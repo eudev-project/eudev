@@ -268,12 +268,14 @@ static int include_parents(struct udev *udev, char ***list) {
 /* Like add_device_match() of systemd: the device s, also below prefix, is a parent device whose devices are
  * triggered, see scan_devices(). */
 static int add_device_match(struct udev *udev, const char *s, const char *prefix, char ***parents) {
+        _cleanup_free_ char *lesc1 = NULL;
         _cleanup_udev_device_unref_ struct udev_device *dev = NULL;
 
         errno = 0;
         dev = find_device(udev, s, prefix);
         if (!dev)
-                return log_error_errno(errno_or_else(ENODEV), "Failed to open the device '%s': %m", s);
+                return log_error_errno(errno_or_else(ENODEV), "Failed to open the device '%s': %m",
+                                       utf8_escape_for_log(s, &lesc1));
 
         if (strv_extend(parents, udev_device_get_syspath(dev)) < 0)
                 return log_oom();
@@ -363,6 +365,7 @@ static int build_list(struct udev *udev, struct udev_enumerate *udev_enumerate,
 }
 
 static int exec_list(struct udev *udev, char **list, const char *action, Set *settle_set) {
+        _cleanup_free_ char *lesc1 = NULL, *lesc2 = NULL;
         _cleanup_strv_free_ char **args = NULL;
         char **entry;
         bool warned_uuid = false;
@@ -444,7 +447,8 @@ static int exec_list(struct udev *udev, char **list, const char *action, Set *se
                                 r == -ENODEV ? LOG_WARNING : LOG_ERR;
 
                         log_full_errno(level, r, "%s: Failed to write '%s' to '%s'%s: %m",
-                                       eudev_basename(syspath), action, filename, ignore ? ", ignoring" : "");
+                                       utf8_escape_for_log(eudev_basename(syspath), &lesc1), action,
+                                       utf8_escape_for_log(filename, &lesc2), ignore ? ", ignoring" : "");
 
                         if (r == -EROFS)
                                 return r;
@@ -453,12 +457,13 @@ static int exec_list(struct udev *udev, char **list, const char *action, Set *se
                         continue;
                 }
 
-                log_debug("%s: Triggered device with action '%s'.", eudev_basename(syspath), action);
+                log_debug("%s: Triggered device with action '%s'.",
+                          utf8_escape_for_log(eudev_basename(syspath), &lesc1), action);
 
                 if (!sends) {
                         if (settle_set)
                                 log_debug("%s: The device has no subsystem or is a hidden block device, the kernel sends no uevent for it, not waiting for it.",
-                                          eudev_basename(syspath));
+                                          utf8_escape_for_log(eudev_basename(syspath), &lesc1));
                         continue;
                 }
 
@@ -472,7 +477,7 @@ static int exec_list(struct udev *udev, char **list, const char *action, Set *se
                  * so this never skips a wait that would end. */
                 if (seqnum != UINT64_MAX && uevent_seqnum_unchanged(seqnum, uevent_seqnum())) {
                         log_debug("%s: The kernel sent no uevent for the device, not %s.",
-                                  eudev_basename(syspath),
+                                  utf8_escape_for_log(eudev_basename(syspath), &lesc1),
                                   settle_set && arg_uuid ? "printing its UUID or waiting for it" :
                                   settle_set ? "waiting for it" : "printing its UUID");
                         continue;
@@ -484,7 +489,7 @@ static int exec_list(struct udev *udev, char **list, const char *action, Set *se
                                  * uevent_trigger_fitting(), or the uevents of the probe did not tell
                                  * whether the kernel supports UUIDs, e.g. as the socket lost them */
                                 log_warning("%s: Could not trigger the uevent with a UUID, triggered it without one.",
-                                            eudev_basename(syspath));
+                                            utf8_escape_for_log(eudev_basename(syspath), &lesc1));
                         else if (!warned_uuid) {
                                 log_warning("The kernel does not support UUIDs of synthetic uevents (its synthetic uevents carry no SYNTH_UUID=, as before Linux 4.13), triggering uevents without them.");
                                 warned_uuid = true;
@@ -607,6 +612,7 @@ static void help(void) {
 }
 
 static int adm_trigger(struct udev *udev, int argc, char *argv[]) {
+        _cleanup_free_ char *lesc1 = NULL;
         enum {
                 ARG_NAME = 0x100,
                 ARG_PING,
@@ -689,7 +695,7 @@ static int adm_trigger(struct udev *udev, int argc, char *argv[]) {
                         else if (streq(optarg, "all"))
                                 device_type = TYPE_ALL;
                         else {
-                                log_error("unknown type --type=%s", optarg);
+                                log_error("unknown type --type=%s", utf8_escape_for_log(optarg, &lesc1));
                                 return 2;
                         }
                         break;
@@ -751,7 +757,8 @@ static int adm_trigger(struct udev *udev, int argc, char *argv[]) {
                 case ARG_PRIORITIZED_SUBSYSTEM:
                         r = strv_split_and_extend(&prioritized_subsystems, optarg, ",", true);
                         if (r < 0) {
-                                log_error_errno(r, "Failed to parse prioritized subsystem '%s': %m", optarg);
+                                log_error_errno(r, "Failed to parse prioritized subsystem '%s': %m",
+                                                utf8_escape_for_log(optarg, &lesc1));
                                 return 1;
                         }
                         break;
@@ -761,7 +768,8 @@ static int adm_trigger(struct udev *udev, int argc, char *argv[]) {
                         if (optarg) {
                                 r = parse_sec(optarg, &ping_timeout_usec);
                                 if (r < 0) {
-                                        log_error_errno(r, "Failed to parse timeout value '%s': %m", optarg);
+                                        log_error_errno(r, "Failed to parse timeout value '%s': %m",
+                                                        utf8_escape_for_log(optarg, &lesc1));
                                         return 1;
                                 }
                         }

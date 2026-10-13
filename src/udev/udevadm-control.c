@@ -179,6 +179,7 @@ one_by_one:
 }
 
 static int adm_control(struct udev *udev, int argc, char *argv[]) {
+        _cleanup_free_ char *lesc1 = NULL;
         _cleanup_udev_ctrl_unref_ struct udev_ctrl *uctrl = NULL;
         _cleanup_strv_free_ char **arg_env = NULL;
         bool arg_exit = false, arg_revert = false, arg_reload = false, arg_ping = false;
@@ -225,7 +226,8 @@ static int adm_control(struct udev *udev, int argc, char *argv[]) {
                         if (arg_log_level < 0) {
                                 /* systemd's log_level_from_string() fails with EINVAL also for numbers
                                  * that are too large */
-                                log_error_errno(EINVAL, "Failed to parse log level '%s': %m", optarg);
+                                log_error_errno(EINVAL, "Failed to parse log level '%s': %m",
+                                                utf8_escape_for_log(optarg, &lesc1));
                                 return 1;
                         }
                         break;
@@ -240,7 +242,7 @@ static int adm_control(struct udev *udev, int argc, char *argv[]) {
                         break;
                 case 'p':
                         if (strchr(optarg, '=') == NULL) {
-                                log_error("expect <KEY>=<value> instead of '%s'", optarg);
+                                log_error("expect <KEY>=<value> instead of '%s'", utf8_escape_for_log(optarg, &lesc1));
                                 return 1;
                         }
                         r = strv_extend(&arg_env, optarg);
@@ -255,11 +257,13 @@ static int adm_control(struct udev *udev, int argc, char *argv[]) {
                         /* Like systemd, 0 asks udevd to use its default, computed from the system resources. */
                         r = safe_atou(optarg, &i);
                         if (r < 0) {
-                                log_error_errno(r, "Failed to parse maximum number of children '%s': %m", optarg);
+                                log_error_errno(r, "Failed to parse maximum number of children '%s': %m",
+                                                utf8_escape_for_log(optarg, &lesc1));
                                 return 1;
                         }
                         if (i > INT_MAX) {
-                                log_error("Maximum number of children is too large: %s", optarg);
+                                log_error("Maximum number of children is too large: %s",
+                                          utf8_escape_for_log(optarg, &lesc1));
                                 return 1;
                         }
                         arg_max_children = i;
@@ -271,7 +275,8 @@ static int adm_control(struct udev *udev, int argc, char *argv[]) {
                 case ARG_TRACE:
                         r = parse_boolean(optarg);
                         if (r < 0) {
-                                log_error_errno(r, "Failed to parse boolean argument to '--trace=': %s", optarg);
+                                log_error_errno(r, "Failed to parse boolean argument to '--trace=': %s",
+                                                utf8_escape_for_log(optarg, &lesc1));
                                 return 1;
                         }
                         arg_trace = r;
@@ -287,7 +292,8 @@ static int adm_control(struct udev *udev, int argc, char *argv[]) {
                          * the default. */
                         r = parse_sec(optarg, &timeout_usec);
                         if (r < 0) {
-                                log_error_errno(r, "Failed to parse timeout value '%s': %m", optarg);
+                                log_error_errno(r, "Failed to parse timeout value '%s': %m",
+                                                utf8_escape_for_log(optarg, &lesc1));
                                 return 1;
                         }
                         if (timeout_usec == 0)

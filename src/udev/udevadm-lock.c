@@ -49,6 +49,7 @@ static void help(void) {
 }
 
 static int parse_argv(int argc, char *argv[]) {
+        _cleanup_free_ char *lesc1 = NULL;
 
         static const struct option options[] = {
                 { "help",    no_argument,       NULL, 'h'      },
@@ -87,7 +88,8 @@ static int parse_argv(int argc, char *argv[]) {
 
                         s = path_make_absolute_cwd(optarg);
                         if (!s)
-                                return log_error_errno(ENOMEM, "Failed to make path '%s' absolute: %m", optarg);
+                                return log_error_errno(ENOMEM, "Failed to make path '%s' absolute: %m",
+                                                       utf8_escape_for_log(optarg, &lesc1));
 
                         path_kill_slashes(s);
 
@@ -101,7 +103,8 @@ static int parse_argv(int argc, char *argv[]) {
                 case 't':
                         r = parse_sec(optarg, &arg_timeout_usec);
                         if (r < 0)
-                                return log_error_errno(r, "Failed to parse --timeout= parameter: %s", optarg);
+                                return log_error_errno(r, "Failed to parse --timeout= parameter: %s",
+                                                       utf8_escape_for_log(optarg, &lesc1));
                         break;
 
                 case 'p':
@@ -210,13 +213,15 @@ static int find_devno(
                 size_t *n_devnos,
                 const char *device,
                 bool backing) {
+        _cleanup_free_ char *lesc1 = NULL;
 
         dev_t devt = 0, *p;
         int r;
 
         r = path_get_whole_disk(device, backing, &devt);
         if (r < 0)
-                return log_error_errno(r, "Failed to find whole block device for '%s': %m", device);
+                return log_error_errno(r, "Failed to find whole block device for '%s': %m",
+                                       utf8_escape_for_log(device, &lesc1));
 
         if (*n_devnos > 0 && bsearch(&devt, *devnos, *n_devnos, sizeof(dev_t), devt_compare_func)) {
                 log_debug("Device %u:%u already listed for locking, ignoring.", major(devt), minor(devt));
@@ -292,6 +297,7 @@ static int lock_device(
                 const char *path,
                 dev_t devno,
                 usec_t deadline) {
+        _cleanup_free_ char *lesc1 = NULL;
 
         _cleanup_close_ int fd = -1;
         struct stat st;
@@ -300,25 +306,28 @@ static int lock_device(
         /* We open in O_WRONLY mode here, to trigger a rescan in udev once we are done */
         fd = open(path, O_WRONLY|O_CLOEXEC|O_NONBLOCK|O_NOCTTY);
         if (fd < 0)
-                return log_error_errno(errno, "Failed to open '%s': %m", path);
+                return log_error_errno(errno, "Failed to open '%s': %m", utf8_escape_for_log(path, &lesc1));
 
         if (fstat(fd, &st) < 0)
-                return log_error_errno(errno, "Failed to stat '%s': %m", path);
+                return log_error_errno(errno, "Failed to stat '%s': %m", utf8_escape_for_log(path, &lesc1));
 
         /* Extra safety: check that the device still refers to what we think it refers to */
         if (!S_ISBLK(st.st_mode) || st.st_rdev != devno)
                 return log_error_errno(ENXIO, "Path '%s' no longer refers to specified block device %u:%u.",
-                                       path, major(devno), minor(devno));
+                                       utf8_escape_for_log(path, &lesc1), major(devno), minor(devno));
 
         if (flock(fd, LOCK_EX|LOCK_NB) < 0) {
                 if (errno != EAGAIN)
-                        return log_error_errno(errno, "Failed to lock device '%s': %m", path);
+                        return log_error_errno(errno, "Failed to lock device '%s': %m",
+                                               utf8_escape_for_log(path, &lesc1));
 
                 if (deadline == 0)
-                        return log_error_errno(EBUSY, "Device '%s' is currently locked.", path);
+                        return log_error_errno(EBUSY, "Device '%s' is currently locked.",
+                                               utf8_escape_for_log(path, &lesc1));
 
                 if (deadline == USEC_INFINITY)  {
-                        log_info("Device '%s' is currently locked, waiting%s", path, glyph(GLYPH_ELLIPSIS));
+                        log_info("Device '%s' is currently locked, waiting%s",
+                                 utf8_escape_for_log(path, &lesc1), glyph(GLYPH_ELLIPSIS));
 
                         r = flock(fd, LOCK_EX) < 0 ? -errno : 0;
                 } else {
@@ -327,7 +336,7 @@ static int lock_device(
                         usec_t left = deadline > n ? deadline - n : 0;
 
                         log_info("Device '%s' is currently locked, waiting %s%s",
-                                 path, format_timespan(buf, sizeof(buf), left, 0),
+                                 utf8_escape_for_log(path, &lesc1), format_timespan(buf, sizeof(buf), left, 0),
                                  glyph(GLYPH_ELLIPSIS));
 
                         r = flock_with_timeout(fd, left);
@@ -335,10 +344,11 @@ static int lock_device(
                                 return log_error_errno(r, "Timeout reached.");
                 }
                 if (r < 0)
-                        return log_error_errno(r, "Failed to lock device '%s': %m", path);
+                        return log_error_errno(r, "Failed to lock device '%s': %m", utf8_escape_for_log(path, &lesc1));
         }
 
-        log_debug("Successfully locked %s (%u:%u)%s", path, major(devno), minor(devno), glyph(GLYPH_ELLIPSIS));
+        log_debug("Successfully locked %s (%u:%u)%s",
+                  utf8_escape_for_log(path, &lesc1), major(devno), minor(devno), glyph(GLYPH_ELLIPSIS));
 
         r = fd;
         fd = -1;
@@ -367,6 +377,7 @@ static int devname_from_devnum(struct udev *udev, dev_t devnum, char **ret) {
 }
 
 static int run_command(void) {
+        _cleanup_free_ char *lesc1 = NULL;
         struct sigaction sa = {
                 .sa_handler = SIG_IGN,
         };
@@ -403,7 +414,7 @@ static int run_command(void) {
 
                 execvp(arg_cmdline[0], arg_cmdline);
                 log_open();
-                log_error_errno(errno, "Failed to execute %s: %m", arg_cmdline[0]);
+                log_error_errno(errno, "Failed to execute %s: %m", utf8_escape_for_log(arg_cmdline[0], &lesc1));
                 _exit(EXIT_FAILURE);
         }
 
@@ -411,13 +422,14 @@ static int run_command(void) {
                 if (waitpid(pid, &status, 0) >= 0)
                         break;
                 if (errno != EINTR)
-                        return log_error_errno(errno, "Failed to wait for %s: %m", arg_cmdline[0]);
+                        return log_error_errno(errno, "Failed to wait for %s: %m",
+                                               utf8_escape_for_log(arg_cmdline[0], &lesc1));
         }
 
         if (WIFEXITED(status))
                 return WEXITSTATUS(status);
 
-        log_debug("%s terminated by signal %s.", arg_cmdline[0],
+        log_debug("%s terminated by signal %s.", utf8_escape_for_log(arg_cmdline[0], &lesc1),
                   WIFSIGNALED(status) ? strsignal(WTERMSIG(status)) : "unknown");
         return -EPROTO;
 }
