@@ -37,19 +37,19 @@ static void print_help(void) {
 
         printf("%s control COMMAND\n\n"
                "Control the udev daemon.\n\n"
-               "  -h --help                Show this help\n"
-               "  -V --version             Show package version\n"
-               "  -e --exit                Instruct the daemon to cleanup and exit\n"
-               "  -l --log-level=LEVEL     Set the udev log level for the daemon\n"
-               "  -s --stop-exec-queue     Do not execute events, queue only\n"
-               "  -S --start-exec-queue    Execute events, flush queue\n"
-               "  -R --reload              Reload rules and databases\n"
-               "  -p --property=KEY=VALUE  Set a global property for all events\n"
-               "  -m --children-max=N      Maximum number of children\n"
-               "     --ping                Wait for udev to respond to a ping message\n"
-               "     --trace=BOOL          Enable/disable trace logging\n"
-               "     --revert              Revert previously set configurations\n"
-               "  -t --timeout=SECONDS     Maximum time to block for a reply\n"
+               "  -h --help                  Show this help\n"
+               "  -V --version               Show package version\n"
+               "  -e --exit                  Instruct the daemon to cleanup and exit\n"
+               "  -l --log-level=LEVEL|help  Set the udev log level for the daemon\n"
+               "  -s --stop-exec-queue       Do not execute events, queue only\n"
+               "  -S --start-exec-queue      Execute events, flush queue\n"
+               "  -R --reload                Reload rules and databases\n"
+               "  -p --property=KEY=VALUE    Set a global property for all events\n"
+               "  -m --children-max=N        Maximum number of children\n"
+               "     --ping                  Wait for udev to respond to a ping message\n"
+               "     --trace=BOOL            Enable/disable trace logging\n"
+               "     --revert                Revert previously set configurations\n"
+               "  -t --timeout=SECONDS       Maximum time to block for a reply\n"
                , program_invocation_short_name);
         print_man_page_link();
 }
@@ -222,6 +222,21 @@ static int adm_control(struct udev *udev, int argc, char *argv[]) {
                         arg_exit = true;
                         break;
                 case 'l':
+                        /* like --action=help of trigger and test */
+                        if (streq(optarg, "help")) {
+                                int i;
+
+                                for (i = LOG_EMERG; i <= LOG_DEBUG; i++) {
+                                        _cleanup_free_ char *s = NULL;
+
+                                        if (log_level_to_string_alloc(i, &s) < 0) {
+                                                log_oom();
+                                                return 1;
+                                        }
+                                        puts(s);
+                                }
+                                return 0;
+                        }
                         arg_log_level = util_log_priority(optarg);
                         if (arg_log_level < 0) {
                                 /* systemd's log_level_from_string() fails with EINVAL also for numbers
