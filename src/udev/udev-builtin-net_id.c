@@ -1064,7 +1064,7 @@ static int names_pci(struct udev_device *dev, const char *prefix, enum udev_even
 }
 
 static int get_usb_specifier(struct udev_device *dev, char **ret) {
-        _cleanup_free_ char *ports = NULL;
+        _cleanup_free_ char *ports = NULL, *escaped_sysname = NULL;
         char *config, *interf, *buf, *t;
         const char *sysname, *s;
 
@@ -1076,7 +1076,8 @@ static int get_usb_specifier(struct udev_device *dev, char **ret) {
         /* get USB port number chain, configuration, interface */
         s = strchr(sysname, '-');
         if (!s)
-                return log_device_debug_errno(dev, EINVAL, "sysname \"%s\" does not have '-' in the expected place.", sysname);
+                return log_device_debug_errno(dev, EINVAL, "sysname \"%s\" does not have '-' in the expected place.",
+                                              utf8_escape_for_log(sysname, &escaped_sysname));
 
         ports = strdup(s + 1);
         if (!ports)
@@ -1084,13 +1085,15 @@ static int get_usb_specifier(struct udev_device *dev, char **ret) {
 
         t = strchr(ports, ':');
         if (!t)
-                return log_device_debug_errno(dev, EINVAL, "sysname \"%s\" does not have ':' in the expected place.", sysname);
+                return log_device_debug_errno(dev, EINVAL, "sysname \"%s\" does not have ':' in the expected place.",
+                                              utf8_escape_for_log(sysname, &escaped_sysname));
 
         *t = '\0';
         config = t + 1;
         t = strchr(config, '.');
         if (!t)
-                return log_device_debug_errno(dev, EINVAL, "sysname \"%s\" does not have '.' in the expected place.", sysname);
+                return log_device_debug_errno(dev, EINVAL, "sysname \"%s\" does not have '.' in the expected place.",
+                                              utf8_escape_for_log(sysname, &escaped_sysname));
 
         *t = '\0';
         interf = t + 1;

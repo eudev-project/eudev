@@ -726,8 +726,7 @@ static void worker_spawn(struct event *event) {
                                  * IMPORT{}, or the database cannot be written, RUN is not run and the
                                  * inotify watch is not restored, but the (partially processed) event is
                                  * still sent to the listeners. */
-                                log_warning_errno(r, "%s: Failed to process device, ignoring: %m",
-                                                  udev_device_get_sysname(dev));
+                                log_device_warning_errno(dev, r, "Failed to process device, ignoring: %m");
                         else {
                                 udev_event_execute_run(udev_event,
                                                        arg_event_timeout_usec);
@@ -750,13 +749,13 @@ static void worker_spawn(struct event *event) {
                                 if (!streq_ptr(udev_device_get_action(dev), "remove")) {
                                         r = udev_device_add_property(dev, "ID_PROCESSING", NULL);
                                         if (r < 0)
-                                                log_warning_errno(r, "%s: Failed to remove 'ID_PROCESSING' property: %m",
-                                                                  udev_device_get_sysname(dev));
+                                                log_device_warning_errno(dev, r,
+                                                                         "Failed to remove 'ID_PROCESSING' property: %m");
                                         else {
                                                 r = udev_device_update_db(dev);
                                                 if (r < 0)
-                                                        log_warning_errno(r, "%s: Failed to update database under " UDEV_ROOT_RUN "/udev/data/: %m",
-                                                                          udev_device_get_sysname(dev));
+                                                        log_device_warning_errno(dev, r,
+                                                                                 "Failed to update database under " UDEV_ROOT_RUN "/udev/data/: %m");
                                         }
                                         if (r < 0)
                                                 udev_event_restore_db(udev_event);

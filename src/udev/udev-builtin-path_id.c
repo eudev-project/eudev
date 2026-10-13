@@ -443,6 +443,7 @@ out:
  * get it. The block devices are sorted by their path, so a disk comes before its partitions, whose events
  * then wait for the one of the disk, from which they take ID_PATH_ATA_COMPAT. */
 static void trigger_other_ata_compat_owners(struct udev_device *dev, enum udev_event_mode mode) {
+        _cleanup_free_ char *lesc1 = NULL;
         _cleanup_udev_enumerate_unref_ struct udev_enumerate *e = NULL;
         _cleanup_strv_free_ char **args = NULL;
         struct udev_device *scsidev, *targetdev, *hostdev;
@@ -498,7 +499,7 @@ static void trigger_other_ata_compat_owners(struct udev_device *dev, enum udev_e
 
                 if (mode != EVENT_UDEV_WORKER) {
                         log_device_debug(dev, "Running in test mode, skipping 'change' uevent for %s, which may have the old ATA link of the port.",
-                                         udev_device_get_sysname(d));
+                                         utf8_escape_for_log(udev_device_get_sysname(d), &lesc1));
                         continue;
                 }
 
@@ -512,11 +513,11 @@ static void trigger_other_ata_compat_owners(struct udev_device *dev, enum udev_e
                 }
 
                 log_device_debug(dev, "Triggering 'change' uevent for %s, which may have the old ATA link of the port.",
-                                 udev_device_get_sysname(d));
+                                 utf8_escape_for_log(udev_device_get_sysname(d), &lesc1));
                 r = device_trigger_with_timestamp(d, "change", args, /* ret_uuid= */ NULL);
                 if (r < 0)
                         log_device_debug_errno(dev, r, "Failed to trigger 'change' uevent for %s, ignoring: %m",
-                                               udev_device_get_sysname(d));
+                                               utf8_escape_for_log(udev_device_get_sysname(d), &lesc1));
         }
 }
 
@@ -532,6 +533,7 @@ static void trigger_other_ata_compat_owners(struct udev_device *dev, enum udev_e
  * the disk. The targets are counted like scsi_host_has_one_target() does, without the removed one, in case its
  * directory is still there (or in test mode). */
 static void trigger_lone_ata_compat_device(struct udev_device *dev, enum udev_event_mode mode) {
+        _cleanup_free_ char *lesc1 = NULL;
         _cleanup_udev_enumerate_unref_ struct udev_enumerate *e = NULL;
         _cleanup_udev_device_unref_ struct udev_device *atadev = NULL, *targetdev = NULL;
         _cleanup_closedir_ DIR *dir = NULL;
@@ -614,7 +616,7 @@ static void trigger_lone_ata_compat_device(struct udev_device *dev, enum udev_ev
 
                 if (mode != EVENT_UDEV_WORKER) {
                         log_device_debug(dev, "Running in test mode, skipping 'change' uevent for %s, which may get the old ATA link of the port.",
-                                         udev_device_get_sysname(d));
+                                         utf8_escape_for_log(udev_device_get_sysname(d), &lesc1));
                         continue;
                 }
 
@@ -628,11 +630,11 @@ static void trigger_lone_ata_compat_device(struct udev_device *dev, enum udev_ev
                 }
 
                 log_device_debug(dev, "Triggering 'change' uevent for %s, which may get the old ATA link of the port.",
-                                 udev_device_get_sysname(d));
+                                 utf8_escape_for_log(udev_device_get_sysname(d), &lesc1));
                 r = device_trigger_with_timestamp(d, "change", args, /* ret_uuid= */ NULL);
                 if (r < 0)
                         log_device_debug_errno(dev, r, "Failed to trigger 'change' uevent for %s, ignoring: %m",
-                                               udev_device_get_sysname(d));
+                                               utf8_escape_for_log(udev_device_get_sysname(d), &lesc1));
         }
 }
 

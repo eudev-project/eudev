@@ -27,8 +27,38 @@
 #include "conf-files.h"
 #include "macro.h"
 #include "util.h"
+#include "log.h"
+#include "utf8.h"
 #include "mkdir.h"
 #include "strxcpyx.h"
+
+/* Like log_device_*() of systemd: the message is prefixed with the sysname of the device and ": ", e.g.
+ * "sda: ", or with nothing if there is no device or it has no sysname. Like there, the error is evaluated
+ * before the sysname is looked up, which may change errno. Unlike there, the sysname is escaped like the values
+ * in the messages, see utf8_escape_for_log(), as the name of e.g. a network interface may contain any byte but
+ * '/', ':' and whitespace; only when the message is logged, and copied only when it has something to escape. */
+#define log_device_full_errno(device, level, error, format, ...)                                        \
+        ({                                                                                              \
+                int _err = (error), _lvl = (level);                                                     \
+                struct udev_device *_dev = (device);                                                    \
+                _cleanup_free_ char *_esc = NULL;                                                       \
+                const char *_sys = _dev && log_get_max_level() >= LOG_PRI(_lvl) ?                       \
+                        utf8_escape_for_log(udev_device_get_sysname(_dev), &_esc) : NULL;               \
+                log_full_errno(_lvl, _err, "%s%s" format, _sys ?: "", _sys ? ": " : "", ##__VA_ARGS__); \
+        })
+#define log_device_full(device, level, ...) log_device_full_errno(device, level, 0, __VA_ARGS__)
+
+#define log_device_debug(device, ...)   log_device_full(device, LOG_DEBUG, __VA_ARGS__)
+#define log_device_info(device, ...)    log_device_full(device, LOG_INFO, __VA_ARGS__)
+#define log_device_notice(device, ...)  log_device_full(device, LOG_NOTICE, __VA_ARGS__)
+#define log_device_warning(device, ...) log_device_full(device, LOG_WARNING, __VA_ARGS__)
+#define log_device_error(device, ...)   log_device_full(device, LOG_ERR, __VA_ARGS__)
+
+#define log_device_debug_errno(device, error, ...)   log_device_full_errno(device, LOG_DEBUG, error, __VA_ARGS__)
+#define log_device_info_errno(device, error, ...)    log_device_full_errno(device, LOG_INFO, error, __VA_ARGS__)
+#define log_device_notice_errno(device, error, ...)  log_device_full_errno(device, LOG_NOTICE, error, __VA_ARGS__)
+#define log_device_warning_errno(device, error, ...) log_device_full_errno(device, LOG_WARNING, error, __VA_ARGS__)
+#define log_device_error_errno(device, error, ...)   log_device_full_errno(device, LOG_ERR, error, __VA_ARGS__)
 
 #define READ_END  0
 #define WRITE_END 1

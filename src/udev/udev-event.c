@@ -388,8 +388,7 @@ static ssize_t udev_event_subst_format(struct udev_event *event, enum subst_type
                                         break;
                         }
                         if (i != index) {
-                                log_debug("%s: requested part of result string not found",
-                                          udev_device_get_sysname(dev) ?: "n/a");
+                                log_device_debug(dev, "requested part of result string not found");
                                 goto null_terminate;
                         }
 
@@ -549,8 +548,7 @@ size_t udev_event_apply_format(struct udev_event *event,
                 if (r < 0) {
                         _cleanup_free_ char *escaped = log_escape(LOG_WARNING, src);
 
-                        log_warning_errno(r, "%s: Invalid format string, ignoring: %s",
-                                          udev_device_get_sysname(event->dev) ?: "n/a", escaped ?: src);
+                        log_device_warning_errno(event->dev, r, "Invalid format string, ignoring: %s", escaped ?: src);
                         break;
                 } else if (r == 0) {
                         if (size < 2) {
@@ -565,10 +563,9 @@ size_t udev_event_apply_format(struct udev_event *event,
 
                 subst_len = udev_event_subst_format(event, type, attr, dest, size, &t, global_props);
                 if (subst_len < 0) {
-                        log_warning_errno(subst_len,
-                                          "%s: Failed to substitute variable '$%s' or apply format '%%%c', ignoring: %m",
-                                          udev_device_get_sysname(event->dev) ?: "n/a",
-                                          format_type_to_string(type), format_type_to_char(type));
+                        log_device_warning_errno(event->dev, subst_len,
+                                                 "Failed to substitute variable '$%s' or apply format '%%%c', ignoring: %m",
+                                                 format_type_to_string(type), format_type_to_char(type));
                         break;
                 }
 
@@ -1472,6 +1469,8 @@ static void netif_restore_altname(struct udev_event *event, const char *name) {
  * set *taken_down, so that the caller brings it up again afterwards. An interface that is up when udev first
  * tries to rename it is left alone, like systemd does. */
 static int netif_rename_temporary(int sk, struct ifreq *ifr, bool *taken_down) {
+        /* the names in the messages, see rename_netif_dev_fromname_toname() */
+        _cleanup_free_ char *e1 = NULL, *e2 = NULL;
         struct ifreq ifr_up;
 
         if (ioctl(sk, SIOCSIFNAME, ifr) >= 0)
@@ -1482,19 +1481,21 @@ static int netif_rename_temporary(int sk, struct ifreq *ifr, bool *taken_down) {
         memzero(&ifr_up, sizeof(struct ifreq));
         strscpy(ifr_up.ifr_name, IFNAMSIZ, ifr->ifr_name);
         if (ioctl(sk, SIOCGIFFLAGS, &ifr_up) < 0)
-                return log_debug_errno(errno, "could not get the flags of network interface %s: %m", ifr->ifr_name);
+                return log_debug_errno(errno, "could not get the flags of network interface %s: %m",
+                                       utf8_escape_for_log(ifr->ifr_name, &e1));
         if (!(ifr_up.ifr_flags & IFF_UP))
                 return -EBUSY;
 
         ifr_up.ifr_flags &= ~IFF_UP;
         if (ioctl(sk, SIOCSIFFLAGS, &ifr_up) < 0)
                 return log_warning_errno(errno, "could not take network interface %s down to rename it to %s: %m",
-                                         ifr->ifr_name, ifr->ifr_newname);
+                                         utf8_escape_for_log(ifr->ifr_name, &e1),
+                                         utf8_escape_for_log(ifr->ifr_newname, &e2));
 
         /* once, it may be brought up again while it waits */
         if (!*taken_down)
                 log_info("Network interface %s was brought up while it had the temporary name, taking it down to rename it to %s.",
-                         ifr->ifr_name, ifr->ifr_newname);
+                         utf8_escape_for_log(ifr->ifr_name, &e1), utf8_escape_for_log(ifr->ifr_newname, &e2));
         *taken_down = true;
 
         if (ioctl(sk, SIOCSIFNAME, ifr) < 0)
@@ -1505,20 +1506,23 @@ static int netif_rename_temporary(int sk, struct ifreq *ifr, bool *taken_down) {
 
 /* Brings the interface up again, after netif_rename_temporary() took it down. */
 static void netif_bring_up(int sk, const char *name) {
+        _cleanup_free_ char *e = NULL;
         struct ifreq ifr_up;
 
         memzero(&ifr_up, sizeof(struct ifreq));
         strscpy(ifr_up.ifr_name, IFNAMSIZ, name);
         if (ioctl(sk, SIOCGIFFLAGS, &ifr_up) < 0) {
-                log_warning_errno(errno, "could not get the flags of network interface %s to bring it up again: %m", name);
+                log_warning_errno(errno, "could not get the flags of network interface %s to bring it up again: %m",
+                                  utf8_escape_for_log(name, &e));
                 return;
         }
 
         ifr_up.ifr_flags |= IFF_UP;
         if (ioctl(sk, SIOCSIFFLAGS, &ifr_up) < 0)
-                log_warning_errno(errno, "could not bring network interface %s up again: %m", name);
+                log_warning_errno(errno, "could not bring network interface %s up again: %m",
+                                  utf8_escape_for_log(name, &e));
         else
-                log_info("Brought network interface %s up again.", name);
+                log_info("Brought network interface %s up again.", utf8_escape_for_log(name, &e));
 }
 #endif
 
@@ -1533,7 +1537,10 @@ static void netif_bring_up(int sk, const char *name) {
  * name is taken, for the caller to log, e.g. for the temporary name of netif_tmp_name(). */
 static int rename_netif_dev_fromname_toname(struct udev_event *event, const char *oldname, const char *name,
                                             usec_t wait_until, bool quiet_eexist, char ret_name[IFNAMSIZ]) {
-        _cleanup_free_ char *escaped = NULL;
+        /* The names in the messages are escaped like the values in the messages: the old name, given by the kernel,
+         * may contain any byte but '/', ':' and whitespace, and so the temporary name of the rule generator; the new
+         * name is checked below. Unlike systemd. */
+        _cleanup_free_ char *escaped = NULL, *e1 = NULL, *e2 = NULL;
         int r;
         int sk;
         int altname_dropped;
@@ -1541,7 +1548,8 @@ static int rename_netif_dev_fromname_toname(struct udev_event *event, const char
 
         /* the requested name, e.g. of NAME=, before it is checked */
         escaped = log_escape(LOG_ERR, name);
-        log_debug("changing net interface name from '%s' to '%s'\n", oldname, escaped ?: name);
+        log_debug("changing net interface name from '%s' to '%s'\n",
+                  utf8_escape_for_log(oldname, &e1), escaped ?: name);
 
         if (ret_name && ret_name != oldname)
                 strscpy(ret_name, IFNAMSIZ, oldname);
@@ -1551,9 +1559,9 @@ static int rename_netif_dev_fromname_toname(struct udev_event *event, const char
         if (!ifname_valid(name)) {
                 if (strlen(name) >= IFNAMSIZ)
                         return log_error_errno(EINVAL, "Error changing net interface name %s to %s, the name is longer than %i characters: %m",
-                                               oldname, escaped ?: name, IFNAMSIZ - 1);
+                                               utf8_escape_for_log(oldname, &e1), escaped ?: name, IFNAMSIZ - 1);
                 return log_error_errno(EINVAL, "Error changing net interface name %s to %s, the name is not a valid interface name: %m",
-                                       oldname, escaped ?: name);
+                                       utf8_escape_for_log(oldname, &e1), escaped ?: name);
         }
 
         sk = socket(PF_INET, SOCK_DGRAM, 0);
@@ -1563,7 +1571,8 @@ static int rename_netif_dev_fromname_toname(struct udev_event *event, const char
         altname_dropped = netif_drop_altname(event, name);
         if (altname_dropped < 0) {
                 close(sk);
-                return log_error_errno(altname_dropped, "Error changing net interface name %s to %s: %m\n", oldname, name);
+                return log_error_errno(altname_dropped, "Error changing net interface name %s to %s: %m\n",
+                                       utf8_escape_for_log(oldname, &e1), name);
         }
 
         memzero(&ifr, sizeof(struct ifreq));
@@ -1578,14 +1587,15 @@ static int rename_netif_dev_fromname_toname(struct udev_event *event, const char
         bool taken_down = false;
 
         if (r == 0) {
-                log_info("renamed network interface %s to %s\n", ifr.ifr_name, ifr.ifr_newname);
+                log_info("renamed network interface %s to %s\n",
+                         utf8_escape_for_log(ifr.ifr_name, &e1), ifr.ifr_newname);
                 goto out;
         }
         /* keep trying if the destination interface name already exists */
         if (r != -EEXIST || wait_until == 0)
                 goto out;
         log_debug("collision on rename of network interface %s to %s , retrying until timeout\n",
-                ifr.ifr_name, ifr.ifr_newname);
+                utf8_escape_for_log(ifr.ifr_name, &e1), ifr.ifr_newname);
 
         /* there has been a collision so rename my name to a temporal name, letting other one to rename to my name, freeying its name...
          * The temporary name is "rename_<oldname>", or, when that does not fit, "rename<ifindex>", like the one
@@ -1597,10 +1607,12 @@ static int rename_netif_dev_fromname_toname(struct udev_event *event, const char
         if (ioctl(sk, SIOCSIFNAME, &ifr_tmp) < 0) {
                 r = -errno;
                 log_debug_errno(r, "could not temporarily rename network interface %s to %s: %m",
-                                ifr_tmp.ifr_name, ifr_tmp.ifr_newname);
+                                utf8_escape_for_log(ifr_tmp.ifr_name, &e1),
+                                utf8_escape_for_log(ifr_tmp.ifr_newname, &e2));
                 goto out;
         }
-        log_info("Temporarily renamed network interface %s to %s\n", ifr_tmp.ifr_name, ifr_tmp.ifr_newname);
+        log_info("Temporarily renamed network interface %s to %s\n", utf8_escape_for_log(ifr_tmp.ifr_name, &e1),
+                 utf8_escape_for_log(ifr_tmp.ifr_newname, &e2));
 
         /* we have changed our name so in subsequent tries i should rename my temporal name to the wanted one */
         strscpy(ifr.ifr_name, IFNAMSIZ, ifr_tmp.ifr_newname);
@@ -1614,7 +1626,8 @@ static int rename_netif_dev_fromname_toname(struct udev_event *event, const char
 
                 r = netif_rename_temporary(sk, &ifr, &taken_down);
                 if (r == 0) {
-                        log_info("renamed network interface %s to %s\n", ifr.ifr_name, ifr.ifr_newname);
+                        log_info("renamed network interface %s to %s\n", utf8_escape_for_log(ifr.ifr_name, &e1),
+                                 ifr.ifr_newname);
                         break;
                 }
                 if (r != -EEXIST)
@@ -1630,9 +1643,12 @@ static int rename_netif_dev_fromname_toname(struct udev_event *event, const char
                 k = netif_rename_temporary(sk, &ifr_tmp, &taken_down);
                 if (k < 0)
                         log_warning_errno(k, "could not rename network interface %s back to %s: %m",
-                                          ifr_tmp.ifr_name, ifr_tmp.ifr_newname);
+                                          utf8_escape_for_log(ifr_tmp.ifr_name, &e1),
+                                          utf8_escape_for_log(ifr_tmp.ifr_newname, &e2));
                 else {
-                        log_info("Renamed network interface %s back to %s\n", ifr_tmp.ifr_name, ifr_tmp.ifr_newname);
+                        log_info("Renamed network interface %s back to %s\n",
+                                 utf8_escape_for_log(ifr_tmp.ifr_name, &e1),
+                                 utf8_escape_for_log(ifr_tmp.ifr_newname, &e2));
                         strscpy(ifr.ifr_name, IFNAMSIZ, oldname);
                 }
         }
@@ -1647,13 +1663,15 @@ out:
 
         if (r == -EBUSY)
                 /* like systemd, this is not an error */
-                log_info("Network interface '%s' is already up, cannot rename to '%s'.", ifr.ifr_name, ifr.ifr_newname);
+                log_info("Network interface '%s' is already up, cannot rename to '%s'.",
+                         utf8_escape_for_log(ifr.ifr_name, &e1), ifr.ifr_newname);
         else if (r == -EEXIST && quiet_eexist) {
                 /* logged by the caller */
         } else if (r < 0)
-                log_error_errno(r, "Error changing net interface name %s to %s: %m\n", ifr.ifr_name, ifr.ifr_newname);
+                log_error_errno(r, "Error changing net interface name %s to %s: %m\n",
+                                utf8_escape_for_log(ifr.ifr_name, &e1), ifr.ifr_newname);
         else
-                log_debug("renamed network interface '%s' to '%s'", oldname, name);
+                log_debug("renamed network interface '%s' to '%s'", utf8_escape_for_log(oldname, &e1), name);
 
         /* ifr.ifr_name is the current name of the interface, unless the renaming succeeded */
         if (ret_name)
@@ -1683,6 +1701,7 @@ static const char *netif_new_name(struct udev_event *event) {
 
 /* After the network interface was renamed, updates the device and the event to the new name. */
 static void netif_update_device(struct udev_device *dev, const char *name) {
+        _cleanup_free_ char *e1 = NULL, *e2 = NULL;
         char oldname[IFNAMSIZ];
         int r;
 
@@ -1692,9 +1711,9 @@ static void netif_update_device(struct udev_device *dev, const char *name) {
         r = udev_device_rename(dev, name);
         if (r < 0)
                 log_warning_errno(r, "renamed interface '%d' from '%s' to '%s', but could not update udev_device: %m",
-                                  udev_device_get_ifindex(dev), oldname, name);
+                                  udev_device_get_ifindex(dev), utf8_escape_for_log(oldname, &e1), name);
         else
-                log_debug("changed devpath to '%s'", udev_device_get_devpath(dev));
+                log_debug("changed devpath to '%s'", utf8_escape_for_log(udev_device_get_devpath(dev), &e2));
 }
 
 #ifdef ENABLE_RULE_GENERATOR
@@ -1851,9 +1870,13 @@ static void event_assign_altnames(struct udev_event *event) {
 
         r = rtnl_append_link_alternative_names(&event->rtnl_fd, udev_device_get_ifindex(dev),
                                                event_get_ifaltnames(event), event->altnames);
-        if (r < 0)
+        if (r < 0) {
+                _cleanup_free_ char *e = NULL;
+
                 log_full_errno(r == -EOPNOTSUPP ? LOG_DEBUG : LOG_WARNING, r,
-                               "Could not assign alternative names to network interface '%s', ignoring: %m", ifname);
+                               "Could not assign alternative names to network interface '%s', ignoring: %m",
+                               utf8_escape_for_log(ifname, &e));
+        }
 }
 
 /* The event failed after the database entry of the device was written again with ID_PROCESSING=1 before
@@ -1873,8 +1896,8 @@ void udev_event_restore_db(struct udev_event *event) {
 
                 r = udev_device_tag_index_restore(event->dev, event->dev_db);
                 if (r < 0)
-                        log_debug_errno(r, "%s: Failed to restore tags under " UDEV_ROOT_RUN "/udev/tags/, ignoring: %m",
-                                        udev_device_get_sysname(event->dev));
+                        log_device_debug_errno(event->dev, r,
+                                               "Failed to restore tags under " UDEV_ROOT_RUN "/udev/tags/, ignoring: %m");
         }
 
         if (!event->dev_db_written)
@@ -1889,8 +1912,8 @@ void udev_event_restore_db(struct udev_event *event) {
 
         r = udev_device_tag_index(event->dev_db, false);
         if (r < 0)
-                log_debug_errno(r, "%s: Failed to remove tags under " UDEV_ROOT_RUN "/udev/tags/, ignoring: %m",
-                                udev_device_get_sysname(event->dev));
+                log_device_debug_errno(event->dev, r,
+                                       "Failed to remove tags under " UDEV_ROOT_RUN "/udev/tags/, ignoring: %m");
 }
 
 /* Applies the rules to the event, and creates or removes the device node and its symlinks, renames a
@@ -1924,12 +1947,12 @@ int udev_event_execute_rules(struct udev_event *event,
                 if (EVENT_MODE_DESTRUCTIVE(event)) {
                         r = udev_device_tag_index(dev, false);
                         if (r < 0)
-                                log_debug_errno(r, "%s: Failed to remove corresponding tag files under " UDEV_ROOT_RUN "/udev/tags/, ignoring: %m",
-                                                udev_device_get_sysname(dev));
+                                log_device_debug_errno(dev, r,
+                                                       "Failed to remove corresponding tag files under " UDEV_ROOT_RUN "/udev/tags/, ignoring: %m");
                         r = udev_device_delete_db(dev);
                         if (r < 0)
-                                log_debug_errno(r, "%s: Failed to delete database under " UDEV_ROOT_RUN "/udev/data/, ignoring: %m",
-                                                udev_device_get_sysname(dev));
+                                log_device_debug_errno(dev, r,
+                                                       "Failed to delete database under " UDEV_ROOT_RUN "/udev/data/, ignoring: %m");
 
                         if (major(udev_device_get_devnum(dev)) != 0)
                                 udev_watch_end(event->udev, dev);
@@ -1939,7 +1962,7 @@ int udev_event_execute_rules(struct udev_event *event,
                                               timeout_usec,
                                               properties_list);
                 if (r < 0)
-                        log_debug_errno(r, "%s: Failed to apply udev rules: %m", udev_device_get_sysname(dev));
+                        log_device_debug_errno(dev, r, "Failed to apply udev rules: %m");
 
                 if (EVENT_MODE_DESTRUCTIVE(event)) {
                         if (major(udev_device_get_devnum(dev)) != 0) {
@@ -1964,8 +1987,7 @@ int udev_event_execute_rules(struct udev_event *event,
                                                       "Failed to clone sd_device object: %m");
 
                 if (copy_all_tags(dev, event->dev_db) < 0)
-                        log_warning("%s: Failed to copy all tags from old database entry, ignoring",
-                                    udev_device_get_sysname(dev));
+                        log_device_warning(dev, "Failed to copy all tags from old database entry, ignoring");
 
                 if (major(udev_device_get_devnum(dev)) == 0 &&
                     streq(udev_device_get_action(dev), "move"))
@@ -1982,16 +2004,15 @@ int udev_event_execute_rules(struct udev_event *event,
 
                         r = udev_device_add_property(event->dev_db, "ID_PROCESSING", "1");
                         if (r < 0) {
-                                log_warning_errno(r, "%s: Failed to add 'ID_PROCESSING' property: %m",
-                                                  udev_device_get_sysname(dev));
+                                log_device_warning_errno(dev, r, "Failed to add 'ID_PROCESSING' property: %m");
                                 event->dev_db = udev_device_unref(event->dev_db);
                                 return r;
                         }
 
                         r = udev_device_update_db(event->dev_db);
                         if (r < 0) {
-                                log_warning_errno(r, "%s: Failed to update database under " UDEV_ROOT_RUN "/udev/data/: %m",
-                                                  udev_device_get_sysname(dev));
+                                log_device_warning_errno(dev, r,
+                                                         "Failed to update database under " UDEV_ROOT_RUN "/udev/data/: %m");
                                 event->dev_db = udev_device_unref(event->dev_db);
                                 return r;
                         }
@@ -2003,7 +2024,7 @@ int udev_event_execute_rules(struct udev_event *event,
                                               timeout_usec,
                                               properties_list);
                 if (r < 0) {
-                        log_debug_errno(r, "%s: Failed to apply udev rules: %m", udev_device_get_sysname(dev));
+                        log_device_debug_errno(dev, r, "Failed to apply udev rules: %m");
                         udev_event_restore_db(event);
                         event->dev_db = udev_device_unref(event->dev_db);
                         return r;
@@ -2017,6 +2038,8 @@ int udev_event_execute_rules(struct udev_event *event,
                 if (!EVENT_MODE_NETIF_DESTRUCTIVE(event) &&
                     udev_device_get_ifindex(dev) > 0 && streq(udev_device_get_action(dev), "add")) {
                         const char *sysname = udev_device_get_sysname(dev);
+                        /* the kernel's name, and the temporary name made of it, escaped in the messages */
+                        _cleanup_free_ char *e1 = NULL, *e2 = NULL;
 #ifdef ENABLE_RULE_GENERATOR
                         char tmpname[IFNAMSIZ];
 
@@ -2025,14 +2048,14 @@ int udev_event_execute_rules(struct udev_event *event,
                                 netif_tmp_name(dev, tmpname);
                                 if (!streq(tmpname, sysname))
                                         log_debug("Running in test mode, skipping temporary rename of network interface '%s' to '%s'.",
-                                                  sysname, tmpname);
+                                                  utf8_escape_for_log(sysname, &e1), utf8_escape_for_log(tmpname, &e2));
                         }
 #endif
                         if (event->name != NULL && !streq(event->name, sysname)) {
                                 _cleanup_free_ char *escaped = log_escape(LOG_DEBUG, event->name);
 
                                 log_debug("Running in test mode, skipping renaming network interface '%s' to '%s'.",
-                                          sysname, escaped ?: event->name);
+                                          utf8_escape_for_log(sysname, &e1), escaped ?: event->name);
                         }
                 }
 
@@ -2064,6 +2087,8 @@ int udev_event_execute_rules(struct udev_event *event,
                                 /* the name of the interface, as renamed so far */
                                 char curname[IFNAMSIZ];
                                 char newifname[IFNAMSIZ];
+                                /* both made of the kernel's name, escaped in the messages */
+                                _cleanup_free_ char *e1 = NULL, *e2 = NULL;
 
                                 strscpy(curname, sizeof(curname), udev_device_get_sysname(dev));
 
@@ -2080,13 +2105,16 @@ int udev_event_execute_rules(struct udev_event *event,
                                                  * the final name, if one was requested, fails too. */
                                                 r = rename_netif_dev_fromname_toname(event, curname, newifname, 0, true, curname);
                                                 if (r == 0)
-                                                        log_debug("renamed netif to '%s' for collision avoidance\n", newifname);
+                                                        log_debug("renamed netif to '%s' for collision avoidance\n",
+                                                                  utf8_escape_for_log(newifname, &e2));
                                                 else if (r == -EEXIST)
                                                         /* not an error, the interface keeps its name */
                                                         log_info("Could not rename network interface %s to %s for collision avoidance, the name is taken.",
-                                                                 curname, newifname);
+                                                                 utf8_escape_for_log(curname, &e1),
+                                                                 utf8_escape_for_log(newifname, &e2));
                                                 else if (r != -EBUSY)
-                                                        log_error("could not rename netif to '%s' for collision avoidance\n", newifname);
+                                                        log_error("could not rename netif to '%s' for collision avoidance\n",
+                                                                  utf8_escape_for_log(newifname, &e2));
                                         }
                                 }
 
@@ -2121,10 +2149,11 @@ int udev_event_execute_rules(struct udev_event *event,
                                 if (r >= 0)
                                         netif_update_device(dev, name);
                                 else if (r != -EBUSY) {
-                                        _cleanup_free_ char *escaped = log_escape(LOG_WARNING, name);
+                                        _cleanup_free_ char *escaped = log_escape(LOG_WARNING, name), *e = NULL;
 
                                         log_warning_errno(r, "could not rename interface '%d' from '%s' to '%s': %m", udev_device_get_ifindex(dev),
-                                                          udev_device_get_sysname(dev), escaped ?: name);
+                                                          utf8_escape_for_log(udev_device_get_sysname(dev), &e),
+                                                          escaped ?: name);
                                 }
                         }
                 }
@@ -2133,9 +2162,11 @@ int udev_event_execute_rules(struct udev_event *event,
                 /* assign alternative names to a new network interface, after renaming it */
                 if (udev_device_get_ifindex(dev) > 0 && streq(udev_device_get_action(dev), "add")) {
                         if (rename_r < 0 && rename_r != -EBUSY) {
+                                _cleanup_free_ char *e = NULL;
+
                                 if (!strv_isempty(event->altnames))
                                         log_debug("Not assigning alternative names, as network interface '%s' could not be renamed.",
-                                                  udev_device_get_sysname(dev));
+                                                  utf8_escape_for_log(udev_device_get_sysname(dev), &e));
                         } else
                                 event_assign_altnames(event);
                 }
@@ -2192,8 +2223,8 @@ int udev_event_execute_rules(struct udev_event *event,
                         event->tags_indexed = true;
                         r = udev_device_tag_index(dev, true);
                         if (r < 0) {
-                                log_debug_errno(r, "%s: Failed to update tags under " UDEV_ROOT_RUN "/udev/tags/: %m",
-                                                udev_device_get_sysname(dev));
+                                log_device_debug_errno(dev, r,
+                                                       "Failed to update tags under " UDEV_ROOT_RUN "/udev/tags/: %m");
                                 udev_event_restore_db(event);
                                 event->dev_db = udev_device_unref(event->dev_db);
                                 return r;
@@ -2206,8 +2237,7 @@ int udev_event_execute_rules(struct udev_event *event,
                 if (udev_device_should_have_db(dev) && udev_list_get_entry(&event->run_list)) {
                         r = udev_device_add_property(dev, "ID_PROCESSING", "1");
                         if (r < 0) {
-                                log_warning_errno(r, "%s: Failed to add 'ID_PROCESSING' property: %m",
-                                                  udev_device_get_sysname(dev));
+                                log_device_warning_errno(dev, r, "Failed to add 'ID_PROCESSING' property: %m");
                                 udev_event_restore_db(event);
                                 event->dev_db = udev_device_unref(event->dev_db);
                                 return r;
@@ -2217,8 +2247,8 @@ int udev_event_execute_rules(struct udev_event *event,
                 if (EVENT_MODE_DESTRUCTIVE(event)) {
                         r = udev_device_update_db(dev);
                         if (r < 0) {
-                                log_debug_errno(r, "%s: Failed to update database under " UDEV_ROOT_RUN "/udev/data/: %m",
-                                                udev_device_get_sysname(dev));
+                                log_device_debug_errno(dev, r,
+                                                       "Failed to update database under " UDEV_ROOT_RUN "/udev/data/: %m");
                                 udev_event_restore_db(event);
                                 event->dev_db = udev_device_unref(event->dev_db);
                                 return r;

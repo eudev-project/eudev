@@ -104,11 +104,16 @@ static unsigned parse_line_nr = 0;
         ({                                                                                        \
                 int _err = (error), _level = (level);                                             \
                 struct token *_token = (tok);                                                     \
-                const char *_sysname = udev_device_get_sysname(event_log_device((event), _token)); \
-                _cleanup_free_ char *_key = NULL;                                                 \
+                const char *_sysname = NULL;                                                      \
+                _cleanup_free_ char *_key = NULL, *_esc = NULL;                                   \
                                                                                                   \
-                if (_token && log_get_max_level() >= LOG_PRI(_level))                             \
-                        _key = token_to_string((rules), _token);                                  \
+                if (log_get_max_level() >= LOG_PRI(_level)) {                                     \
+                        struct udev_device *_ldev = event_log_device((event), _token);            \
+                                                                                                  \
+                        _sysname = utf8_escape_for_log(udev_device_get_sysname(_ldev), &_esc);    \
+                        if (_token)                                                               \
+                                _key = token_to_string((rules), _token);                          \
+                }                                                                                 \
                 log_full_errno(_level, _err, "%s%s%s:%u %s%s" fmt,                                \
                                _sysname ?: "", _sysname ? ": " : "",                              \
                                rules_str(rules, (rule)->rule.filename_off),                       \
@@ -530,7 +535,9 @@ static bool check_systemd_only_builtin(const char *key, const char *cmd) {
 /* Logs the lines of OPTIONS="dump", each with the device name prefixed, so that they can be found in
  * the logs. The lines may be longer than the log buffer. */
 static void log_dump(struct udev_device *dev, const char *buf) {
-        const char *sysname = udev_device_get_sysname(dev) ?: "n/a";
+        /* the device name escaped like in the prefix of the other messages, see log_device_full_errno() */
+        _cleanup_free_ char *escaped = NULL;
+        const char *sysname = utf8_escape_for_log(udev_device_get_sysname(dev), &escaped) ?: "n/a";
         const char *p = buf;
 
         while (*p != '\0') {
@@ -1265,7 +1272,7 @@ static int import_property(struct udev_event *event, struct udev_rules *rules, s
  * the cuts of log.c. Unlike systemd, the line is escaped like the values in the other messages. */
 static void log_event_invalid_import_line(struct udev_event *event, struct udev_rules *rules, struct token *rule,
                                           struct token *token, const char *line) {
-        _cleanup_free_ char *head = NULL, *escaped = NULL, *key = NULL;
+        _cleanup_free_ char *head = NULL, *escaped = NULL, *key = NULL, *escaped_sysname = NULL;
         const char *sysname;
         char message[LINE_MAX];
 
@@ -1277,7 +1284,7 @@ static void log_event_invalid_import_line(struct udev_event *event, struct udev_
         if (head)
                 escaped = utf8_escape_non_printable(head);
         key = token_to_string(rules, token);
-        sysname = udev_device_get_sysname(event_log_device(event, token));
+        sysname = utf8_escape_for_log(udev_device_get_sysname(event_log_device(event, token)), &escaped_sysname);
 
         errno = EINVAL;
         (void) log_format_cut(message, sizeof(message), "%s:%u %s%sFailed to parse key and value from \"%s\", ignoring: %m",
@@ -4062,9 +4069,10 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                                         const char *action = udev_device_get_action(event->dev);
                                         _cleanup_free_ char *escaped = log_escape(LOG_DEBUG, action);
 
-                                        log_debug("%s: The log level is changed to 'debug' while processing device (SEQNUM=%llu, ACTION=%s)",
-                                                  udev_device_get_sysname(event->dev), udev_device_get_seqnum(event->dev),
-                                                  escaped ?: action ?: "n/a");
+                                        log_device_debug(event->dev,
+                                                         "The log level is changed to 'debug' while processing device (SEQNUM=%llu, ACTION=%s)",
+                                                         udev_device_get_seqnum(event->dev),
+                                                         escaped ?: action ?: "n/a");
                                 }
                                 event->log_level_was_debug = true;
                         }

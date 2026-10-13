@@ -430,9 +430,8 @@ static int udev_device_add_property_internal_full(struct udev_device *udev_devic
                 if (log_get_max_level() >= LOG_DEBUG) {
                         _cleanup_free_ char *escaped_key = utf8_escape_non_printable(key ?: ""),
                                 *escaped_value = utf8_escape_non_printable(value ?: "");
-                        log_debug("%s%sRefusing invalid property: %s=%s",
-                                  udev_device->sysname ?: "", udev_device->sysname ? ": " : "",
-                                  escaped_key ?: "(null)", escaped_value ?: "(null)");
+                        log_device_debug(udev_device, "Refusing invalid property: %s=%s",
+                                         escaped_key ?: "(null)", escaped_value ?: "(null)");
                 }
                 return -EINVAL;
         }
@@ -967,6 +966,7 @@ static int udev_device_add_property_from_string_parse(struct udev_device *udev_d
 
 static int udev_device_add_property_from_string_parse_finish(struct udev_device *udev_device)
 {
+        _cleanup_free_ char *lesc1 = NULL, *lesc2 = NULL;
         int r = 0;
 
         if (udev_device->parse_major) {
@@ -975,7 +975,8 @@ static int udev_device_add_property_from_string_parse_finish(struct udev_device 
                 r = parse_devnum(udev_device->parse_major, udev_device->parse_minor, &devnum);
                 if (r < 0)
                         log_debug_errno(r, "Failed to set devnum %s:%s: %m",
-                                        udev_device->parse_major, udev_device->parse_minor ?: "n/a");
+                                        utf8_escape_for_log(udev_device->parse_major, &lesc1),
+                                        utf8_escape_for_log(udev_device->parse_minor ?: "n/a", &lesc2));
                 else if (major(devnum) > 0)
                         udev_device_set_devnum(udev_device, devnum);
         }
@@ -1176,6 +1177,7 @@ static int udev_device_handle_uevent_line(struct udev_device *udev_device, const
 
 static int udev_device_read_uevent_file(struct udev_device *udev_device)
 {
+        _cleanup_free_ char *lesc1 = NULL, *lesc2 = NULL;
         _cleanup_free_ char *filename = NULL, *uevent = NULL;
         size_t size;
         char *p;
@@ -1198,7 +1200,7 @@ static int udev_device_read_uevent_file(struct udev_device *udev_device)
                  * the device may not have the uevent file. */
                 return 0;
         if (r < 0)
-                return log_debug_errno(r, "%s: Failed to read uevent file: %m", udev_device->sysname ?: "n/a");
+                return log_device_debug_errno(udev_device, r, "Failed to read uevent file: %m");
 
         /* Like systemd, split the lines at "\n" and "\r", and skip empty lines. */
         for (p = uevent;;) {
@@ -1220,8 +1222,7 @@ static int udev_device_read_uevent_file(struct udev_device *udev_device)
                         if (log_get_max_level() >= LOG_DEBUG) {
                                 _cleanup_free_ char *escaped = utf8_escape_non_printable(line);
 
-                                log_debug("%s: Invalid uevent line, ignoring: %s",
-                                          udev_device->sysname ?: "n/a", escaped ?: "(null)");
+                                log_device_debug(udev_device, "Invalid uevent line, ignoring: %s", escaped ?: "(null)");
                         }
                         continue;
                 }
@@ -1232,8 +1233,8 @@ static int udev_device_read_uevent_file(struct udev_device *udev_device)
                 if (r < 0 && log_get_max_level() >= LOG_DEBUG) {
                         _cleanup_free_ char *escaped = utf8_escape_non_printable(line);
 
-                        log_debug_errno(r, "%s: Failed to handle uevent entry '%s', ignoring: %m",
-                                        udev_device->sysname ?: "n/a", escaped ?: "(null)");
+                        log_device_debug_errno(udev_device, r, "Failed to handle uevent entry '%s', ignoring: %m",
+                                               escaped ?: "(null)");
                 }
         }
 
@@ -1242,9 +1243,10 @@ static int udev_device_read_uevent_file(struct udev_device *udev_device)
 
                 r = parse_devnum(udev_device->parse_major, udev_device->parse_minor, &devnum);
                 if (r < 0)
-                        log_debug_errno(r, "%s: Failed to set 'MAJOR=%s' and/or 'MINOR=%s' from uevent, ignoring: %m",
-                                        udev_device->sysname ?: "n/a", udev_device->parse_major,
-                                        udev_device->parse_minor ?: "n/a");
+                        log_device_debug_errno(udev_device, r,
+                                               "Failed to set 'MAJOR=%s' and/or 'MINOR=%s' from uevent, ignoring: %m",
+                                               utf8_escape_for_log(udev_device->parse_major, &lesc1),
+                                               utf8_escape_for_log(udev_device->parse_minor ?: "n/a", &lesc2));
                 else if (major(devnum) > 0)
                         udev_device_set_devnum(udev_device, devnum);
         }

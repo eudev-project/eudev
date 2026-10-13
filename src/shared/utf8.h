@@ -44,6 +44,15 @@ static inline char *utf8_escape_non_printable(const char *str) {
         return utf8_escape_non_printable_full(str, false);
 }
 
+/* Whether utf8_escape_non_printable() changes str, i.e. it has control characters or invalid UTF-8. */
+bool utf8_needs_escape(const char *str) _pure_;
+
+/* For the messages: str escaped like utf8_escape_non_printable(). Returns str itself when there is nothing to
+ * escape, which needs no memory, the usual case; otherwise the escaped copy, which is also stored in *buf, for
+ * the caller to free (*buf must be NULL or freeable, it is freed first). Returns str too without memory, and
+ * NULL for NULL. */
+const char *utf8_escape_for_log(const char *str, char **buf);
+
 size_t utf8_encode_unichar(char *out_utf8, uint32_t g);
 char *utf16_to_utf8(const void *s, size_t length);
 

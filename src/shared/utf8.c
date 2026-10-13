@@ -227,6 +227,50 @@ char *utf8_escape_non_printable_full(const char *str, bool escape_quote) {
         return buf;
 }
 
+bool utf8_needs_escape(const char *str) {
+        const char *p;
+
+        assert(str);
+
+        for (p = str; *p; ) {
+                int len, c;
+
+                /* printable ASCII, the usual case */
+                if ((uint8_t) *p >= ' ' && (uint8_t) *p < 0x7f) {
+                        p++;
+                        continue;
+                }
+
+                /* the same checks as utf8_escape_non_printable_full() */
+                len = utf8_encoded_valid_unichar(p);
+                if (len <= 0)
+                        return true;
+                c = utf8_encoded_to_unichar(p);
+                if (c < ' ' || (c >= 0x7f && c <= 0x9f))
+                        return true;
+                p += len;
+        }
+
+        return false;
+}
+
+const char *utf8_escape_for_log(const char *str, char **buf) {
+        char *e;
+
+        assert(buf);
+
+        if (!str || !utf8_needs_escape(str))
+                return str;
+
+        e = utf8_escape_non_printable(str);
+        if (!e)
+                return str;
+
+        free(*buf);
+        *buf = e;
+        return e;
+}
+
 char *ascii_is_valid(const char *str) {
         const char *p;
 

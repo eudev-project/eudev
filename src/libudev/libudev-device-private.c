@@ -179,8 +179,8 @@ static bool db_entry_is_safe(struct udev_device *udev_device, const char *key, c
                 return true;
 
         escaped = utf8_escape_non_printable(name);
-        log_debug("%s: not writing invalid or too long %s: entry '%s' to the db, ignoring",
-                  udev_device_get_sysname(udev_device), key, escaped ?: "");
+        log_device_debug(udev_device, "not writing invalid or too long %s: entry '%s' to the db, ignoring",
+                         key, escaped ?: "");
         return false;
 }
 
@@ -425,6 +425,7 @@ int device_get_sysattr_safe_string(struct udev_device *device, const char *sysat
  * the value is positive, 0 otherwise. */
 int device_get_sysattr_int(struct udev_device *device, const char *sysattr, int *ret)
 {
+        _cleanup_free_ char *lesc1 = NULL;
         const char *value;
         int r, v;
 
@@ -434,8 +435,8 @@ int device_get_sysattr_int(struct udev_device *device, const char *sysattr, int 
 
         r = safe_atoi(value, &v);
         if (r < 0)
-                return log_debug_errno(r, "%s: Failed to parse '%s' attribute: %m",
-                                       udev_device_get_sysname(device), sysattr);
+                return log_device_debug_errno(device, r, "Failed to parse '%s' attribute: %m",
+                                              utf8_escape_for_log(sysattr, &lesc1));
 
         if (ret)
                 *ret = v;
@@ -444,6 +445,7 @@ int device_get_sysattr_int(struct udev_device *device, const char *sysattr, int 
 
 int device_get_sysattr_unsigned_full(struct udev_device *device, const char *sysattr, unsigned base, unsigned *ret)
 {
+        _cleanup_free_ char *lesc1 = NULL;
         const char *value;
         unsigned v;
         int r;
@@ -454,8 +456,8 @@ int device_get_sysattr_unsigned_full(struct udev_device *device, const char *sys
 
         r = safe_atou_full(value, base, &v);
         if (r < 0)
-                return log_debug_errno(r, "%s: Failed to parse '%s' attribute: %m",
-                                       udev_device_get_sysname(device), sysattr);
+                return log_device_debug_errno(device, r, "Failed to parse '%s' attribute: %m",
+                                              utf8_escape_for_log(sysattr, &lesc1));
 
         if (ret)
                 *ret = v;
@@ -464,6 +466,7 @@ int device_get_sysattr_unsigned_full(struct udev_device *device, const char *sys
 
 int device_get_sysattr_u16_full(struct udev_device *device, const char *sysattr, unsigned base, uint16_t *ret)
 {
+        _cleanup_free_ char *lesc1 = NULL;
         const char *value;
         uint16_t v;
         int r;
@@ -474,8 +477,8 @@ int device_get_sysattr_u16_full(struct udev_device *device, const char *sysattr,
 
         r = safe_atou16_full(value, base, &v);
         if (r < 0)
-                return log_debug_errno(r, "%s: Failed to parse '%s' attribute: %m",
-                                       udev_device_get_sysname(device), sysattr);
+                return log_device_debug_errno(device, r, "Failed to parse '%s' attribute: %m",
+                                              utf8_escape_for_log(sysattr, &lesc1));
 
         if (ret)
                 *ret = v;
@@ -496,6 +499,7 @@ int device_get_sysattr_bool(struct udev_device *device, const char *sysattr)
 
 int device_get_sysattr_u64(struct udev_device *device, const char *sysattr, uint64_t *ret)
 {
+        _cleanup_free_ char *lesc1 = NULL;
         const char *value;
         uint64_t v;
         int r;
@@ -506,8 +510,8 @@ int device_get_sysattr_u64(struct udev_device *device, const char *sysattr, uint
 
         r = safe_atou64(value, &v);
         if (r < 0)
-                return log_debug_errno(r, "%s: Failed to parse '%s' attribute: %m",
-                                       udev_device_get_sysname(device), sysattr);
+                return log_device_debug_errno(device, r, "Failed to parse '%s' attribute: %m",
+                                              utf8_escape_for_log(sysattr, &lesc1));
 
         if (ret)
                 *ret = v;

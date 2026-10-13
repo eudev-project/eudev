@@ -50,6 +50,7 @@ static int ethtool_get_driver(const char *ifname, char **ret) {
 }
 
 static int builtin_net_driver_set_driver(struct udev_device *dev, int argc __attribute__((unused)), char *argv[] __attribute__((unused)), enum udev_event_mode mode) {
+        _cleanup_free_ char *lesc1 = NULL;
         _cleanup_free_ char *driver = NULL;
         const char *ifname;
         int r;
@@ -65,7 +66,9 @@ static int builtin_net_driver_set_driver(struct udev_device *dev, int argc __att
         r = ethtool_get_driver(ifname, &driver);
         if (IN_SET(r, -EOPNOTSUPP, -ENOTTY, -ENOSYS, -EAFNOSUPPORT, -EPFNOSUPPORT,
                       -EPROTONOSUPPORT, -ESOCKTNOSUPPORT, -ENOPROTOOPT)) {
-                log_device_debug_errno(dev, r, "Querying driver name via ethtool API is not supported by device '%s', ignoring: %m", ifname);
+                log_device_debug_errno(dev, r,
+                                       "Querying driver name via ethtool API is not supported by device '%s', ignoring: %m",
+                                       utf8_escape_for_log(ifname, &lesc1));
                 return EXIT_SUCCESS;
         }
         if (r == -ENODEV) {
@@ -73,7 +76,8 @@ static int builtin_net_driver_set_driver(struct udev_device *dev, int argc __att
                 return EXIT_SUCCESS;
         }
         if (r < 0)
-                return log_device_warning_errno(dev, r, "Failed to get driver for '%s': %m", ifname);
+                return log_device_warning_errno(dev, r, "Failed to get driver for '%s': %m",
+                                                utf8_escape_for_log(ifname, &lesc1));
 
         return udev_builtin_add_property(dev, mode, "ID_NET_DRIVER", driver);
 }
