@@ -137,6 +137,11 @@ int main(int argc, char *argv[]) {
          * udev_log= of udev.conf. Unlike systemd, which reads udev.conf before log_setup(), so that the debug
          * messages of its parser never show, they are applied before udev_new() reads udev.conf, and then
          * the log level once more, see below. */
+        /* Like udevd: when started with stdin, stdout or stderr closed, a descriptor that is opened later must
+         * not become one of them, e.g. the write end of the pipe for the output of a program that udevadm test
+         * runs, into which the messages to standard error would go then. */
+        stdio_open_missing();
+
         log_parse_environment();
         log_open();
         mac_selinux_init("/dev");

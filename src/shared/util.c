@@ -573,6 +573,32 @@ int stdio_disable_nonblock(void) {
         return ret;
 }
 
+/* Opens /dev/null on each of stdin, stdout and stderr that is closed, like udevd always did at its start, so that
+ * no descriptor that is opened later falls in their range, e.g. the write end of a pipe for the output of a
+ * program, into which the messages to standard error would go then. /dev/null is opened only for one that is
+ * closed: its close after opening it for writing would be reported to an inotify watch on it, e.g. of udevd for a
+ * rule with OPTIONS+="watch". Call it before anything else is opened. */
+void stdio_open_missing(void) {
+        int fd;
+
+        for (fd = STDIN_FILENO; fd <= STDERR_FILENO; fd++) {
+                int null;
+
+                if (fcntl(fd, F_GETFD) >= 0 || errno != EBADF)
+                        continue;
+
+                /* the lowest free descriptor, i.e. fd, as the ones below it are open */
+                null = open("/dev/null", O_RDWR);
+                if (null < 0)
+                        return;
+
+                if (null != fd) {
+                        (void) dup2(null, fd);
+                        safe_close(null);
+                }
+        }
+}
+
 /* Like fd_cloexec() of systemd: sets or clears FD_CLOEXEC of fd. Returns 0, or a negative errno on failure. */
 int fd_cloexec(int fd, bool cloexec) {
         int flags, nflags;

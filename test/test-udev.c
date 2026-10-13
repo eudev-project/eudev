@@ -290,6 +290,9 @@ int main(int argc __attribute__((unused)), char *argv[]) {
         sigset_t mask;
         int err;
 
+        /* like udevd and udevadm, see stdio_open_missing(); test-udev runs programs too */
+        stdio_open_missing();
+
         err = fake_filesystems();
         if (err < 0)
                 return EXIT_FAILURE;

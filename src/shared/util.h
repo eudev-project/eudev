@@ -73,6 +73,7 @@ int close_all_fds(void);
 
 int fd_nonblock(int fd, bool nonblock);
 int stdio_disable_nonblock(void);
+void stdio_open_missing(void);
 int fd_cloexec(int fd, bool cloexec);
 int rearrange_stdio(int original_input_fd, int original_output_fd, int original_error_fd);
 

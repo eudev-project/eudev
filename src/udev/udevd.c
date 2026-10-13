@@ -2458,19 +2458,9 @@ int main(int argc, char *argv[]) {
 
         /*
          * Ensure no file descriptor unwillingly falls in the 0..2 range
-         * Warning: DO NOT OPEN FILES BEFORE THE 3 OPENS BELOW
+         * Warning: DO NOT OPEN FILES BEFORE THIS
          */
-        int fd_stdi = open("/dev/null", O_RDWR);
-        int fd_stdo = open("/dev/null", O_RDWR);
-        int fd_stde = open("/dev/null", O_RDWR);
-
-        /* Close only the ones that are safe to close */
-        if (fd_stdi > STDERR_FILENO)
-                close(fd_stdi);
-        if (fd_stdo > STDERR_FILENO)
-                close(fd_stdo);
-        if (fd_stde > STDERR_FILENO)
-                close(fd_stde);
+        stdio_open_missing();
 
         arg_debug = argv_has_debug(argc, argv);
 
