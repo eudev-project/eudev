@@ -4,7 +4,8 @@ EXTRA_DIST = \
 	64-btrfs.rules.in
 
 CLEANFILES = \
-	64-btrfs.rules
+	64-btrfs.rules \
+	64-btrfs.rules.tmp
 
 dist_udevrules_DATA = \
 	50-udev-default.rules \
@@ -90,7 +91,8 @@ do_subst = $(SED) \
 	-e 's,{{ROOTBINDIR}},$(bindir),g'
 
 64-btrfs.rules: $(srcdir)/64-btrfs.rules.in Makefile
-	$(do_subst) $(srcdir)/64-btrfs.rules.in > 64-btrfs.rules
+	$(AM_V_GEN)$(do_subst) $(srcdir)/64-btrfs.rules.in > 64-btrfs.rules.tmp && \
+		mv -f 64-btrfs.rules.tmp 64-btrfs.rules
 
 install-data-local:
 	$(MKDIR_P) $(DESTDIR)$(udevconfdir)/rules.d
