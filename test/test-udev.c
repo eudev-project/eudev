@@ -30,6 +30,7 @@
 #include <sched.h>
 #include <sys/mount.h>
 #include <sys/signalfd.h>
+#include <sys/statvfs.h>
 #include <sys/syscall.h>
 
 #include "missing.h"
@@ -52,7 +53,9 @@ static inline int unshare (int x) { return syscall(SYS_unshare, x); }
 
 /* The device nodes and symlinks the programs of PROGRAM, IMPORT{program} and RUN may need, e.g.
  * spawned programs get /dev/null as stdin. The device nodes of the host are bind mounted onto empty
- * files in the fake /dev, which also works in a user namespace, where mknod() is not permitted. */
+ * files in the fake /dev, which also works in a user namespace, where mknod() is not permitted. The
+ * bind mounts are read-only, so that nothing that runs here can change the host's nodes, not even their
+ * timestamps, also when the tests run as root. */
 static int fake_dev(const char *dir) {
         static const char *const nodes[] = { "null", "zero", "full", "random", "urandom" };
         static const char *const links[][2] = {
@@ -65,7 +68,9 @@ static int fake_dev(const char *dir) {
         unsigned int i;
 
         for (i = 0; i < ELEMENTSOF(nodes); i++) {
-                int fd;
+                struct statvfs st;
+                unsigned long flags;
+                int fd, r;
 
                 strscpyl(path, sizeof(path), dir, "/", nodes[i], NULL);
                 strscpyl(node, sizeof(node), "/dev/", nodes[i], NULL);
@@ -80,6 +85,27 @@ static int fake_dev(const char *dir) {
                 if (mount(node, path, "none", MS_BIND, NULL) < 0) {
                         fprintf(stderr, "failed to bind mount %s to %s: %m\n", node, path);
                         return -errno;
+                }
+
+                /* A remount sets nosuid, nodev and noexec as given, and in a user namespace, the ones of
+                 * the mount of the host's node may not be cleared: keep them. The kernel keeps the atime
+                 * flags when none is given. */
+                if (statvfs(path, &st) < 0) {
+                        r = -errno;
+                        fprintf(stderr, "failed to get the mount flags of %s: %m\n", path);
+                        return r;
+                }
+                flags = MS_REMOUNT|MS_BIND|MS_RDONLY;
+                if (st.f_flag & ST_NOSUID)
+                        flags |= MS_NOSUID;
+                if (st.f_flag & ST_NODEV)
+                        flags |= MS_NODEV;
+                if (st.f_flag & ST_NOEXEC)
+                        flags |= MS_NOEXEC;
+                if (mount("none", path, "none", flags, NULL) < 0) {
+                        r = -errno;
+                        fprintf(stderr, "failed to make the bind mount of %s on %s read-only: %m\n", node, path);
+                        return r;
                 }
         }
 
