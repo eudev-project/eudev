@@ -1426,18 +1426,21 @@ SUBSYSTEM=="net", OPTIONS="log_level=debug"</programlisting></para>
       <varname>net.ifnames=0</varname>. When eudev is built with
       <option>--with-net-ifnames-default=no</option>, interfaces keep the names
       the kernel gave them unless the kernel command line has
-      <varname>net.ifnames=1</varname>.</para>
+      <varname>net.ifnames=1</varname>. When eudev is built with
+      <option>--enable-rule-generator</option>,
+      <filename>80-net-name-slot.rules</filename> is not installed: the rule
+      generator replaces it, and the names it gives do not depend on
+      <varname>net.ifnames=</varname>.</para>
 
       <para><filename>80-net-altnames.rules</filename> requests
       <varname>OPTIONS+="net_altnames"</varname>, so that these names, except
       the one the interface is renamed to, are also assigned as alternative
       names of the interface, also the ones longer than 15 characters, like
       systemd does by default. That is independent of
-      <varname>net.ifnames=</varname> by default; when eudev is built with
-      <option>--with-net-ifnames-default=no</option>, it is only done with
+      <varname>net.ifnames=</varname>, unless eudev is built with
+      <option>--with-net-ifnames-default=no</option>: then it is only done with
       <varname>net.ifnames=1</varname>, like the renaming. It is also done for
-      interfaces that are not renamed, and with the rule generator, which
-      replaces <filename>80-net-name-slot.rules</filename>.
+      interfaces that are not renamed, and with the rule generator.
       The alternative names are shown by e.g. <command>ip link show</command>,
       and can be used instead of the interface name by <command>ip</command>
       and other tools. This can be disabled with

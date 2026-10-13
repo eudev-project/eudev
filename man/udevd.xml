@@ -414,7 +414,11 @@
     the kernel command line, e.g. options starting with "rd." are ignored outside of an
     initrd:</para>
     <programlisting>UDEV_PROC_CMDLINE="net.naming_scheme=v250" udevadm test-builtin net_id /sys/class/net/eth0
-UDEV_PROC_CMDLINE="net.ifnames=0" udevadm test /sys/class/net/eth0</programlisting>
+UDEV_PROC_CMDLINE="net.ifnames=0" udevadm test /sys/class/net/eth0
+UDEV_PROC_CMDLINE="net.ifnames=1" udevadm test /sys/class/net/eth0</programlisting>
+    <para>The last two commands show what the rules do with the interface when
+    the renaming is disabled and when it is enabled, independent of the default
+    of <varname>net.ifnames=</varname> that eudev is built with.</para>
     <para>For compatibility with systemd, <varname>$SYSTEMD_PROC_CMDLINE</varname>
     is used the same way when <varname>$UDEV_PROC_CMDLINE</varname> is not set.</para>
  </refsect1>
