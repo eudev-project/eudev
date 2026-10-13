@@ -580,8 +580,11 @@
             attribute name, the content of the attribute is matched
             against the given value using shell style pattern
             matching. If no value is specified, the existence of the
-            sysfs attribute is checked. This option can be specified
-            multiple times.</para>
+            sysfs attribute is checked. The attribute may be a path
+            relative to the device, e.g.
+            <literal>queue/rotational</literal> or
+            <literal>../size</literal>, unlike in systemd.
+            This option can be specified multiple times.</para>
           </listitem>
         </varlistentry>
         <varlistentry>
@@ -593,8 +596,11 @@
             attribute name, the content of the attribute is matched
             against the given value using shell style pattern
             matching. If no value is specified, the existence of the
-            sysfs attribute is checked. This option can be specified
-            multiple times.</para>
+            sysfs attribute is checked. The attribute may be a path
+            relative to the device, e.g.
+            <literal>queue/rotational</literal> or
+            <literal>../size</literal>, unlike in systemd.
+            This option can be specified multiple times.</para>
           </listitem>
         </varlistentry>
         <varlistentry>

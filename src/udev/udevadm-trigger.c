@@ -561,17 +561,144 @@ static bool settle_device(Set *settle_set, struct udev_device *dev) {
         return true;
 }
 
-static const char *keyval(const char *str, const char **val, char *buf, size_t size) {
-        char *pos;
+/* The matches of the options, which are checked after the options are parsed, before the check for a
+ * chroot, see check_matches(), and added after the devices are looked up, see setup_matches(). */
+typedef struct TriggerMatches {
+        char **subsystem_match;
+        char **subsystem_nomatch;
+        char **attr_match;
+        char **attr_nomatch;
+        char **property_match;
+        char **tag_match;
+        char **sysname_match;
+} TriggerMatches;
 
-        strscpy(buf, size,str);
-        pos = strchr(buf, '=');
-        if (pos != NULL) {
-                pos[0] = 0;
-                pos++;
+static void trigger_matches_done(TriggerMatches *m) {
+        assert(m);
+
+        strv_free(m->subsystem_match);
+        strv_free(m->subsystem_nomatch);
+        strv_free(m->attr_match);
+        strv_free(m->attr_nomatch);
+        strv_free(m->property_match);
+        strv_free(m->tag_match);
+        strv_free(m->sysname_match);
+}
+
+/* Checks the matches before the check for a chroot, so that an invalid one fails in a chroot too, with the
+ * message of setup_matches(), which adds them: the attribute and property names, see
+ * parse_key_value_argument(). libudev checks none of the other matches. */
+static int check_matches(const TriggerMatches *m) {
+        char **a;
+        int r;
+
+        assert(m);
+
+        STRV_FOREACH(a, m->attr_match) {
+                _cleanup_free_ char *k = NULL, *v = NULL;
+
+                r = parse_key_value_argument(*a, /* require_value= */ false, /* attribute= */ true, &k, &v);
+                if (r < 0)
+                        return r;
         }
-        *val = pos;
-        return buf;
+
+        STRV_FOREACH(a, m->attr_nomatch) {
+                _cleanup_free_ char *k = NULL, *v = NULL;
+
+                r = parse_key_value_argument(*a, /* require_value= */ false, /* attribute= */ true, &k, &v);
+                if (r < 0)
+                        return r;
+        }
+
+        STRV_FOREACH(a, m->property_match) {
+                _cleanup_free_ char *k = NULL, *v = NULL;
+
+                r = parse_key_value_argument(*a, /* require_value= */ true, /* attribute= */ false, &k, &v);
+                if (r < 0)
+                        return r;
+        }
+
+        return 0;
+}
+
+/* Like setup_matches() of systemd, after the options are parsed, and the devices of the arguments, of
+ * --name-match= and of --parent-match= are looked up: KEY=VALUE is parsed like udevadm info does, see
+ * parse_key_value_argument(), and the errors of adding a match are logged. */
+static int setup_matches(struct udev_enumerate *e, const TriggerMatches *m) {
+        _cleanup_free_ char *lesc1 = NULL, *lesc2 = NULL;
+        char **a;
+        int r;
+
+        assert(e);
+        assert(m);
+
+        STRV_FOREACH(a, m->subsystem_match) {
+                r = udev_enumerate_add_match_subsystem(e, *a);
+                if (r < 0)
+                        return log_error_errno(r, "Failed to add subsystem match '%s': %m",
+                                               utf8_escape_for_log(*a, &lesc1));
+        }
+
+        STRV_FOREACH(a, m->subsystem_nomatch) {
+                r = udev_enumerate_add_nomatch_subsystem(e, *a);
+                if (r < 0)
+                        return log_error_errno(r, "Failed to add negative subsystem match '%s': %m",
+                                               utf8_escape_for_log(*a, &lesc1));
+        }
+
+        STRV_FOREACH(a, m->attr_match) {
+                _cleanup_free_ char *k = NULL, *v = NULL;
+
+                r = parse_key_value_argument(*a, /* require_value= */ false, /* attribute= */ true, &k, &v);
+                if (r < 0)
+                        return r;
+
+                r = udev_enumerate_add_match_sysattr(e, k, v);
+                if (r < 0)
+                        return log_error_errno(r, "Failed to add sysattr match '%s=%s': %m",
+                                               utf8_escape_for_log(k, &lesc1), utf8_escape_for_log(strna(v), &lesc2));
+        }
+
+        STRV_FOREACH(a, m->attr_nomatch) {
+                _cleanup_free_ char *k = NULL, *v = NULL;
+
+                r = parse_key_value_argument(*a, /* require_value= */ false, /* attribute= */ true, &k, &v);
+                if (r < 0)
+                        return r;
+
+                r = udev_enumerate_add_nomatch_sysattr(e, k, v);
+                if (r < 0)
+                        return log_error_errno(r, "Failed to add negative sysattr match '%s=%s': %m",
+                                               utf8_escape_for_log(k, &lesc1), utf8_escape_for_log(strna(v), &lesc2));
+        }
+
+        STRV_FOREACH(a, m->property_match) {
+                _cleanup_free_ char *k = NULL, *v = NULL;
+
+                r = parse_key_value_argument(*a, /* require_value= */ true, /* attribute= */ false, &k, &v);
+                if (r < 0)
+                        return r;
+
+                r = udev_enumerate_add_match_property(e, k, v);
+                if (r < 0)
+                        return log_error_errno(r, "Failed to add property match '%s=%s': %m",
+                                               utf8_escape_for_log(k, &lesc1), utf8_escape_for_log(v, &lesc2));
+        }
+
+        STRV_FOREACH(a, m->tag_match) {
+                r = udev_enumerate_add_match_tag(e, *a);
+                if (r < 0)
+                        return log_error_errno(r, "Failed to add tag match '%s': %m", utf8_escape_for_log(*a, &lesc1));
+        }
+
+        STRV_FOREACH(a, m->sysname_match) {
+                r = udev_enumerate_add_match_sysname(e, *a);
+                if (r < 0)
+                        return log_error_errno(r, "Failed to add sysname match '%s': %m",
+                                               utf8_escape_for_log(*a, &lesc1));
+        }
+
+        return 0;
 }
 
 static void help(void) {
@@ -665,6 +792,7 @@ static int adm_trigger(struct udev *udev, int argc, char *argv[]) {
         _cleanup_set_free_free_ Set *settle_set = NULL;
         _cleanup_strv_free_ char **list = NULL, **prioritized_subsystems = NULL, **parents = NULL;
         _cleanup_strv_free_ char **parent_match = NULL, **name_match = NULL;
+        _cleanup_(trigger_matches_done) TriggerMatches matches = {};
         char **m;
         int c, r;
 
@@ -673,10 +801,6 @@ static int adm_trigger(struct udev *udev, int argc, char *argv[]) {
                 return 1;
 
         while ((c = getopt_long_log(argc, argv, "vnqt:c:s:S:a:A:p:g:y:b:whV", options)) >= 0) {
-                const char *key;
-                const char *val;
-                char buf[UTIL_PATH_SIZE];
-
                 switch (c) {
                 case 'v':
                         verbose = 1;
@@ -695,8 +819,9 @@ static int adm_trigger(struct udev *udev, int argc, char *argv[]) {
                         else if (streq(optarg, "all"))
                                 device_type = TYPE_ALL;
                         else {
-                                log_error("unknown type --type=%s", utf8_escape_for_log(optarg, &lesc1));
-                                return 2;
+                                /* like systemd */
+                                log_error("Unknown type --type=%s", utf8_escape_for_log(optarg, &lesc1));
+                                return 1;
                         }
                         break;
                 case 'c':
@@ -707,29 +832,29 @@ static int adm_trigger(struct udev *udev, int argc, char *argv[]) {
                                 return 0;
                         break;
                 case 's':
-                        udev_enumerate_add_match_subsystem(udev_enumerate, optarg);
-                        break;
                 case 'S':
-                        udev_enumerate_add_nomatch_subsystem(udev_enumerate, optarg);
-                        break;
                 case 'a':
-                        key = keyval(optarg, &val, buf, sizeof(buf));
-                        udev_enumerate_add_match_sysattr(udev_enumerate, key, val);
-                        break;
                 case 'A':
-                        key = keyval(optarg, &val, buf, sizeof(buf));
-                        udev_enumerate_add_nomatch_sysattr(udev_enumerate, key, val);
-                        break;
                 case 'p':
-                        key = keyval(optarg, &val, buf, sizeof(buf));
-                        udev_enumerate_add_match_property(udev_enumerate, key, val);
-                        break;
                 case 'g':
-                        udev_enumerate_add_match_tag(udev_enumerate, optarg);
+                case 'y': {
+                        /* checked after the options are parsed, see check_matches(), and added
+                         * after the devices are looked up, see setup_matches() */
+                        char ***l =
+                                c == 's' ? &matches.subsystem_match :
+                                c == 'S' ? &matches.subsystem_nomatch :
+                                c == 'a' ? &matches.attr_match :
+                                c == 'A' ? &matches.attr_nomatch :
+                                c == 'p' ? &matches.property_match :
+                                c == 'g' ? &matches.tag_match :
+                                &matches.sysname_match;
+
+                        if (strv_extend(l, optarg) < 0) {
+                                log_oom();
+                                return 1;
+                        }
                         break;
-                case 'y':
-                        udev_enumerate_add_match_sysname(udev_enumerate, optarg);
-                        break;
+                }
                 case 'b':
                         /* the device is looked up after the check for a chroot */
                         if (strv_extend(&parent_match, optarg) < 0) {
@@ -796,10 +921,14 @@ static int adm_trigger(struct udev *udev, int argc, char *argv[]) {
                 }
         }
 
+        if (check_matches(&matches) < 0)
+                return 1;
+
         log_command_call(&udevadm_trigger);
 
-        /* Unlike systemd, the options are parsed first, so that --help, --version and invalid options
-         * work in a chroot too, and only the action is skipped there. */
+        /* Unlike systemd, which checks for a chroot first, the options, their values and the matches are
+         * checked first, like udevadm control, settle and monitor do, so that --help, --version and invalid
+         * options work in a chroot too, and only a valid request is ignored there. */
         if (running_in_chroot() > 0) {
                 log_info("Running in chroot, ignoring request.");
                 return 0;
@@ -818,6 +947,9 @@ static int adm_trigger(struct udev *udev, int argc, char *argv[]) {
         STRV_FOREACH(m, parent_match)
                 if (add_device_match(udev, *m, "/sys", &parents) < 0)
                         return 1;
+
+        if (setup_matches(udev_enumerate, &matches) < 0)
+                return 1;
 
         if (ping) {
                 _cleanup_udev_ctrl_unref_ struct udev_ctrl *uctrl = NULL;

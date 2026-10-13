@@ -46,6 +46,9 @@ int device_wait_for_initialization(struct udev_device *device, usec_t timeout_us
  * it, and returns NULL for an empty path or "/". */
 int parse_root_argument(const char *s, char **ret);
 
+/* Like systemd's parse_key_value_argument(): KEY=VALUE of --attr-match= and similar options, see udevadm-util.c */
+int parse_key_value_argument(const char *str, bool require_value, bool attribute, char **ret_key, char **ret_value);
+
 /* Like systemd's search_rules_files(): without arguments, all rules files in the rules
  * directories below root, a file overriding the ones with the same name in later directories,
  * except masked files, i.e. empty ones or symlinks to /dev/null. Otherwise, each argument is

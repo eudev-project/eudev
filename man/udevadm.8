@@ -546,12 +546,18 @@ Do not trigger events for devices which belong to a matching subsystem\&. This o
 .PP
 \fB\-a\fR, \fB\-\-attr\-match=\fR\fB\fIATTRIBUTE\fR\fR\fB=\fR\fB\fIVALUE\fR\fR
 .RS 4
-Trigger events for devices with a matching sysfs attribute\&. If a value is specified along with the attribute name, the content of the attribute is matched against the given value using shell style pattern matching\&. If no value is specified, the existence of the sysfs attribute is checked\&. This option can be specified multiple times\&.
+Trigger events for devices with a matching sysfs attribute\&. If a value is specified along with the attribute name, the content of the attribute is matched against the given value using shell style pattern matching\&. If no value is specified, the existence of the sysfs attribute is checked\&. The attribute may be a path relative to the device, e\&.g\&.
+queue/rotational
+or
+\&.\&./size, unlike in systemd\&. This option can be specified multiple times\&.
 .RE
 .PP
 \fB\-A\fR, \fB\-\-attr\-nomatch=\fR\fB\fIATTRIBUTE\fR\fR\fB=\fR\fB\fIVALUE\fR\fR
 .RS 4
-Do not trigger events for devices with a matching sysfs attribute\&. If a value is specified along with the attribute name, the content of the attribute is matched against the given value using shell style pattern matching\&. If no value is specified, the existence of the sysfs attribute is checked\&. This option can be specified multiple times\&.
+Do not trigger events for devices with a matching sysfs attribute\&. If a value is specified along with the attribute name, the content of the attribute is matched against the given value using shell style pattern matching\&. If no value is specified, the existence of the sysfs attribute is checked\&. The attribute may be a path relative to the device, e\&.g\&.
+queue/rotational
+or
+\&.\&./size, unlike in systemd\&. This option can be specified multiple times\&.
 .RE
 .PP
 \fB\-p\fR, \fB\-\-property\-match=\fR\fB\fIPROPERTY\fR\fR\fB=\fR\fB\fIVALUE\fR\fR

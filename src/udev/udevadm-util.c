@@ -395,6 +395,67 @@ static int search_rules_file(const char *s, const char *root, char ***names, cha
         return r < 0 ? log_oom() : 0;
 }
 
+/* Whether the name of an attribute of --attr-match= and --attr-nomatch= is valid: a file name, or a path
+ * relative to the device, like the attribute names of the rules, e.g. queue/rotational or ../size: not
+ * absolute, no empty component (so no leading, trailing or repeated "/"), no ".", none longer than
+ * NAME_MAX. ".." is fine, as libudev reads an attribute only when its path stays in /sys. Unlike
+ * systemd, which checks it with filename_is_valid(), such paths are accepted, as udevadm trigger always
+ * did. */
+static bool attribute_name_is_valid(const char *s) {
+        if (isempty(s) || strlen(s) >= PATH_MAX)
+                return false;
+
+        for (;;) {
+                size_t n = strcspn(s, "/");
+
+                if (n == 0 || n > NAME_MAX || (n == 1 && s[0] == '.'))
+                        return false;
+                if (s[n] == '\0')
+                        return true;
+                s += n + 1;
+        }
+}
+
+/* Like systemd's parse_key_value_argument(): splits KEY=VALUE of --attr-match=, --attr-nomatch= and
+ * --property-match= of udevadm info and trigger, the value is NULL without "=" unless it is required.
+ * The key is the name of an attribute, see attribute_name_is_valid(), or else of a property, which must
+ * be a valid file name. Errors are logged. */
+int parse_key_value_argument(const char *str, bool require_value, bool attribute, char **ret_key, char **ret_value) {
+        _cleanup_free_ char *lesc1 = NULL;
+        _cleanup_free_ char *k = NULL, *v = NULL;
+        const char *eq;
+
+        assert(str);
+        assert(ret_key);
+        assert(ret_value);
+
+        eq = strchr(str, '=');
+        if (!eq && require_value) {
+                log_error("Missing '=' in key/value pair %s.", utf8_escape_for_log(str, &lesc1));
+                return -EINVAL;
+        }
+
+        k = eq ? strndup(str, eq - str) : strdup(str);
+        if (!k)
+                return log_oom();
+
+        if (eq) {
+                v = strdup(eq + 1);
+                if (!v)
+                        return log_oom();
+        }
+
+        if (attribute ? !attribute_name_is_valid(k) : !filename_is_valid(k)) {
+                log_error("%s is not a valid key name", utf8_escape_for_log(k, &lesc1));
+                return -EINVAL;
+        }
+
+        *ret_key = k;
+        *ret_value = v;
+        k = v = NULL;
+        return 0;
+}
+
 int search_rules_files(char * const *args, const char *root, char ***ret_names, char ***ret_paths) {
         _cleanup_strv_free_ char **names = NULL, **paths = NULL;
         char * const *s;
