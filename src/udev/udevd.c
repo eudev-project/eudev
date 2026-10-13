@@ -585,6 +585,18 @@ static void worker_spawn(struct event *event) {
                 sigset_t mask;
                 int r = 0;
 
+                /* Like the workers of systemd, forked with pidref_safe_fork("(udev-worker)", ...), which renames
+                 * them first: "(udev-worker)" in the comm field and the command line, see rename_process(). It
+                 * writes the name over argv[0] of udevd, which may be shorter, e.g. "udevd", so then point the
+                 * names that the log (its tag), the option parser of the builtins and the Comm= of the uevents
+                 * that the worker triggers use at the complete name, as systemd-udevd has them, whose argv[0]
+                 * always holds it. */
+                static char worker_name[] = "(udev-worker)";
+                k = rename_process(worker_name);
+                if (k < 0)
+                        log_debug_errno(k, "Failed to rename process, ignoring: %m");
+                program_invocation_name = program_invocation_short_name = worker_name;
+
                 /* request TERM signal if parent exits, right after the fork, like the workers of systemd, and exit
                  * if it did already; the signal is blocked, and read from the signalfd below */
                 child_set_death_signal(LOG_DEBUG);
