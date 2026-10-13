@@ -4,7 +4,10 @@
 # (C) 2010 Canonical Ltd.
 # Author: Martin Pitt <martin.pitt@ubuntu.com>
 
-[ -n "$builddir" ] || builddir=`dirname $0`/..
+# The rules of the source tree, and the ones that the build generates from a .in file
+# (64-btrfs.rules), which a VPATH build writes only to the build tree; make check passes that in
+# $abs_top_builddir.
+[ -n "$top_srcdir" ] || top_srcdir=`dirname $0`/..
 
 # skip if we don't have python 3; 77 tells automake that the test was skipped
 python=
@@ -20,4 +23,12 @@ if [ -z "$python" ]; then
         exit 77
 fi
 
-"$python" `dirname $0`/rule-syntax-check.py `find $builddir/rules -name '*.rules'`
+rules=`find $top_srcdir/rules -name '*.rules'`
+if [ -n "$abs_top_builddir" ] && [ -d "$abs_top_builddir/rules" ] &&
+   [ "`cd "$abs_top_builddir/rules" && pwd -P`" != "`cd "$top_srcdir/rules" && pwd -P`" ]; then
+        built=`find "$abs_top_builddir/rules" -name '*.rules'`
+        echo "rules of the build tree: "$built
+        rules="$rules $built"
+fi
+
+"$python" `dirname $0`/rule-syntax-check.py $rules

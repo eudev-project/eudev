@@ -90,9 +90,11 @@ test_udev_devlink_LDADD = \
 test_udev_devlink_CPPFLAGS = \
 	$(test_udev_CPPFLAGS)
 
-# The tests use a directory or tmpfs as /sys, which libudev refuses by default.
+# The tests use a directory or tmpfs as /sys, which libudev refuses by default; rules-test.sh also
+# checks the rules that the build generates, in the build tree.
 AM_TESTS_ENVIRONMENT = \
-	UDEV_DEVICE_VERIFY_SYSFS=0; export UDEV_DEVICE_VERIFY_SYSFS;
+	UDEV_DEVICE_VERIFY_SYSFS=0; export UDEV_DEVICE_VERIFY_SYSFS; \
+	abs_top_builddir='$(abs_top_builddir)'; export abs_top_builddir;
 
 TESTS = \
 	test-collect \
