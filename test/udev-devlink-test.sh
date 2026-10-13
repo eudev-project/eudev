@@ -93,8 +93,31 @@ bind_node() {
         return 1
 }
 
+# cleanup -- on every exit: copy the log of the event processors (DL_KEEP_LOG), unmount the bind mount
+# of the host's /dev, the only mount in the work directory, and then remove the work directory, but
+# never while anything is mounted on $HOSTDEV, so that rm cannot get into the host's /dev; the other
+# mounts are in the mount namespace of the test, which ends with it
+cleanup() {
+        if [ -n "${DL_KEEP_LOG:-}" ] && [ -f "$W/driver.log" ]; then
+                cp "$W/driver.log" "$DL_KEEP_LOG"
+        fi
+        if [ -n "$(mount_opts "$HOSTDEV")" ]; then
+                umount -l "$HOSTDEV"
+        fi
+        if [ -n "$(mount_opts "$HOSTDEV")" ]; then
+                echo "$HOSTDEV is still mounted, leaving $W"
+        elif [ -e "$HOSTDEV" ] && ! rmdir "$HOSTDEV"; then
+                echo "$HOSTDEV is not empty, leaving $W"
+        else
+                rm -rf "$W"
+        fi
+}
+
 W=$(mktemp -d "${TMPDIR:-/tmp}/udev-devlink-test.XXXXXX") || exit 1
 HOSTDEV=$W/hostdev
+trap cleanup EXIT
+# a signal ends the test through the EXIT trap as well
+trap 'exit 1' HUP INT TERM
 mkdir "$HOSTDEV" || exit 1
 mount --rbind /dev "$HOSTDEV" || exit 77
 # only the device nodes of the host are used, and only read-only; the mounts below /dev, e.g.
@@ -711,11 +734,4 @@ for s in $SCENARIOS; do
 done
 
 echo "TOTAL FAILURES: $FAILS"
-if [ -n "${DL_KEEP_LOG:-}" ]; then cp "$W/driver.log" "$DL_KEEP_LOG"; fi
-for i in $(seq 0 $((N-1))); do node_del $i; done
-umount /dev/null
-# never recurse into the bind mount of the host's /dev
-if umount -l "$HOSTDEV" && rmdir "$HOSTDEV"; then
-        rm -rf "$W"
-fi
 [ $FAILS -eq 0 ]
