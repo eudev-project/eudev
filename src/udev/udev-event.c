@@ -28,7 +28,6 @@
 #include <sys/ioctl.h>
 #include <sys/prctl.h>
 #include <poll.h>
-#include <sys/epoll.h>
 #include <sys/wait.h>
 #include <sys/socket.h>
 #include <sys/signalfd.h>
@@ -654,9 +653,9 @@ static int spawn_exec(struct udev_event *event __attribute__((unused)),
         return r;
 }
 
-/* Like Spawn of systemd: a program that udev_event_spawn() runs, and its timeouts, which, like in systemd, are
- * counted from the start of the program: it times out when the event times out, and the warning is due after a
- * third of that time. */
+/* Like Spawn of systemd: a program that udev_event_spawn() runs, its output, and its timeouts, which, like in
+ * systemd, are counted from the start of the program: it times out when the event times out, and the warning is
+ * due after a third of that time. */
 struct spawn {
         struct udev_event *event;
         /* the command, escaped for the messages, see log_escape() */
@@ -668,10 +667,29 @@ struct spawn {
         usec_t timeout_warn_usec;
         bool warned;
         bool killed;
+        /* the read ends of the pipes of stdout (0) and stderr (1), or -1 when they are not read (any more);
+         * udev_event_spawn() closes them */
+        int fd[2];
+        /* after a read error, when the output is read again, see spawn_read() */
+        usec_t retry_usec[2];
+        /* the output is logged if stderr is watched, also after the program closed its stderr */
+        bool log_output;
+        /* stdout, if requested */
+        char *result;
+        size_t result_size;
+        size_t result_len;
+        bool truncated;
+        /* for the debug messages of the output: an incomplete UTF-8 sequence at the end of the last chunk of
+         * stdout and of stderr, kept for the next chunk, so that no message ends or starts in the middle of a
+         * character */
+        struct {
+                char bytes[3];
+                size_t len;
+        } partial[2];
 };
 
-/* Returns the timeout in milliseconds for poll() and epoll_wait() for the given time, rounded up, so that the
- * time has passed when they time out, or -1 (no timeout) if it does not fit into their int. */
+/* Returns the timeout in milliseconds for poll() for the given time, rounded up, so that the time has passed
+ * when it times out, or -1 (no timeout) if it does not fit into its int. */
 static int poll_timeout(usec_t usec) {
         usec_t msec = DIV_ROUND_UP(usec, USEC_PER_MSEC);
 
@@ -680,7 +698,7 @@ static int poll_timeout(usec_t usec) {
 
 /* Like the timers of systemd's spawn_wait(): when they are due, warns once that the program is slow, and sends
  * it the timeout signal once, with the messages of systemd's on_spawn_timeout_warning() and on_spawn_timeout().
- * Returns the timeout for poll() and epoll_wait() until the next of them, or -1 if none is pending. */
+ * Returns the timeout for poll() until the next of them, or -1 if none is pending. */
 static int spawn_check_timeouts(struct spawn *spawn) {
         char buf[FORMAT_TIMESPAN_MAX];
         usec_t age_usec;
@@ -734,239 +752,219 @@ static size_t utf8_incomplete_tail(const char *s, size_t n) {
         return 0;
 }
 
-static void spawn_read(struct spawn *spawn,
-                       int fd_stdout, int fd_stderr,
-                       char *result, size_t result_size, bool *ret_truncated) {
-        const char *cmd = spawn->cmd;
-        /* for the debug messages of the output: an incomplete UTF-8 sequence at the end of the last chunk
-         * of stdout and of stderr, kept for the next chunk, so that no message ends or starts in the middle
-         * of a character */
-        struct {
-                char bytes[3];
-                size_t len;
-        } partial[2] = {};
-        _cleanup_close_ int fd_ep = -1;
-        struct epoll_event ep_outpipe = {
-                .events = EPOLLIN,
-                .data.ptr = &fd_stdout,
-        };
-        struct epoll_event ep_errpipe = {
-                .events = EPOLLIN,
-                .data.ptr = &fd_stderr,
-        };
-        size_t result_len = 0;
-        bool truncated = false;
-        /* the output is logged if stderr is watched, also after the program closed its stderr, when
-         * fd_stderr is -1 */
-        bool log_output = fd_stderr >= 0;
-        int r;
+/* Logs the incomplete UTF-8 sequence that the output on stdout (k = 0) or stderr (k = 1) ended with, i.e. invalid
+ * UTF-8, which is escaped, and forgets it. */
+static void spawn_log_partial(struct spawn *spawn, unsigned k) {
+        if (spawn->partial[k].len > 0) {
+                _cleanup_free_ char *escaped = NULL;
+                char tail[sizeof(spawn->partial[0].bytes) + 1];
 
-        /* read from child if requested */
-        if (fd_stdout < 0 && fd_stderr < 0)
-                return;
-
-        fd_ep = epoll_create1(EPOLL_CLOEXEC);
-        if (fd_ep < 0) {
-                log_error_errno(errno, "error creating epoll fd: %m");
-                return;
+                memcpy(tail, spawn->partial[k].bytes, spawn->partial[k].len);
+                tail[spawn->partial[k].len] = '\0';
+                escaped = log_escape(LOG_DEBUG, tail);
+                log_debug("'%s'(%s) '%s'", spawn->cmd, k == 0 ? "out" : "err", escaped ?: tail);
         }
+        spawn->partial[k].len = 0;
+}
 
-        if (fd_stdout >= 0) {
-                r = epoll_ctl(fd_ep, EPOLL_CTL_ADD, fd_stdout, &ep_outpipe);
-                if (r < 0) {
-                        log_error_errno(errno, "fail to add stdout fd to epoll: %m");
-                        return;
+/* Like on_spawn_io() of systemd: reads a chunk of the output of the program on stdout (k = 0) or stderr (k = 1),
+ * stores stdout in the result, if requested, and logs the output. At the end of the output, it is not read any
+ * more. Returns the number of bytes read, 0 at the end of the output or when it is not read (any more), -EAGAIN
+ * when there is nothing to read now, or another negative errno when it cannot be read. */
+static ssize_t spawn_read(struct spawn *spawn, unsigned k) {
+        char buf[4096];
+        size_t kept = spawn->partial[k].len, n;
+        ssize_t count;
+
+        if (spawn->fd[k] < 0)
+                return 0;
+
+        /* the start of the character that the last chunk ended with */
+        memcpy(buf, spawn->partial[k].bytes, kept);
+        count = read(spawn->fd[k], buf + kept, sizeof(buf) - 1 - kept);
+        if (count < 0 && IN_SET(errno, EAGAIN, EINTR))
+                return -EAGAIN;
+        if (count < 0) {
+                int r = -errno;
+
+                /* Like systemd, keep reading the output after an error, so that the program does not block on
+                 * a full pipe if the error goes away. Unlike systemd, which tries again at once, and logs the
+                 * warning every time, as often as the descriptor stays readable, try again only after a
+                 * second, see spawn_wait(), so that an error that persists cannot make a busy loop. */
+                log_warning_errno(r, "Failed to read %s of '%s', ignoring: %m",
+                                  k == 0 ? "stdout" : "stderr", spawn->cmd);
+                spawn->retry_usec[k] = usec_add(now(CLOCK_MONOTONIC), USEC_PER_SEC);
+                return r;
+        }
+        if (count == 0) {
+                spawn_log_partial(spawn, k);
+                spawn->fd[k] = -1;
+                return 0;
+        }
+        n = kept + count;
+        buf[n] = '\0';
+
+        /* store stdout result */
+        if (spawn->result && k == 0) {
+                size_t len = count;
+
+                if (len > spawn->result_size - 1 - spawn->result_len) {
+                        len = spawn->result_size - 1 - spawn->result_len;
+                        if (!spawn->truncated)
+                                log_warning("Truncating stdout of '%s' up to %zu byte.", spawn->cmd, spawn->result_size - 1);
+                        spawn->truncated = true;
                 }
+                memcpy(&spawn->result[spawn->result_len], buf + kept, len);
+                spawn->result_len += len;
         }
 
-        if (fd_stderr >= 0) {
-                r = epoll_ctl(fd_ep, EPOLL_CTL_ADD, fd_stderr, &ep_errpipe);
-                if (r < 0) {
-                        log_error_errno(errno, "fail to add stderr fd to epoll: %m");
-                        return;
-                }
-        }
+        /* log debug output only if we watch stderr */
+        if (spawn->log_output) {
+                char *pos;
+                char *line;
 
-        /* read child output */
-        while (fd_stdout >= 0 || fd_stderr >= 0) {
-                int timeout;
-                int fdcount;
-                struct epoll_event ev[4];
-                int i;
+                spawn->partial[k].len = utf8_incomplete_tail(buf, n);
+                memcpy(spawn->partial[k].bytes, buf + n - spawn->partial[k].len, spawn->partial[k].len);
+                buf[n - spawn->partial[k].len] = '\0';
 
-                /* stop reading at the timeout, when the program was killed, spawn_wait() waits for it */
-                timeout = spawn_check_timeouts(spawn);
-                if (spawn->killed)
-                        return;
+                /* each line escaped like the values in the other messages, see log_escape() */
+                pos = buf;
+                while ((line = strsep(&pos, "\n"))) {
+                        if (pos != NULL || line[0] != '\0') {
+                                _cleanup_free_ char *escaped = log_escape(LOG_DEBUG, line);
 
-                fdcount = epoll_wait(fd_ep, ev, ELEMENTSOF(ev), timeout);
-                if (fdcount < 0) {
-                        if (errno == EINTR)
-                                continue;
-                        log_error_errno(errno, "failed to poll: %m");
-                        return;
-                } else if (fdcount == 0)
-                        /* the warning or the timeout is due, see above */
-                        continue;
-
-                for (i = 0; i < fdcount; i++) {
-                        int *fd = (int *)ev[i].data.ptr;
-                        unsigned k = fd == &fd_stdout ? 0 : 1;
-
-                        if (*fd < 0)
-                                continue;
-
-                        if (ev[i].events & EPOLLIN) {
-                                ssize_t count;
-                                char buf[4096];
-                                size_t kept = partial[k].len, n;
-
-                                /* the start of the character that the last chunk ended with */
-                                memcpy(buf, partial[k].bytes, kept);
-                                count = read(*fd, buf + kept, sizeof(buf) - 1 - kept);
-                                if (count <= 0)
-                                        continue;
-                                n = kept + count;
-                                buf[n] = '\0';
-
-                                /* store stdout result */
-                                if (result != NULL && *fd == fd_stdout) {
-                                        size_t len = count;
-
-                                        if (len > result_size - 1 - result_len) {
-                                                len = result_size - 1 - result_len;
-                                                if (!truncated)
-                                                        log_warning("Truncating stdout of '%s' up to %zu byte.", cmd, result_size - 1);
-                                                truncated = true;
-                                        }
-                                        memcpy(&result[result_len], buf + kept, len);
-                                        result_len += len;
-                                }
-
-                                /* log debug output only if we watch stderr */
-                                if (log_output) {
-                                        char *pos;
-                                        char *line;
-
-                                        partial[k].len = utf8_incomplete_tail(buf, n);
-                                        memcpy(partial[k].bytes, buf + n - partial[k].len, partial[k].len);
-                                        buf[n - partial[k].len] = '\0';
-
-                                        /* each line escaped like the values in the other messages, see
-                                         * log_escape() */
-                                        pos = buf;
-                                        while ((line = strsep(&pos, "\n"))) {
-                                                if (pos != NULL || line[0] != '\0') {
-                                                        _cleanup_free_ char *escaped = log_escape(LOG_DEBUG, line);
-
-                                                        log_debug("'%s'(%s) '%s'", cmd, *fd == fd_stdout ? "out" : "err",
-                                                                  escaped ?: line);
-                                                }
-                                        }
-                                }
-                        } else if (ev[i].events & EPOLLHUP) {
-                                /* the output ended with an incomplete character, i.e. invalid UTF-8, which is
-                                 * escaped */
-                                if (partial[k].len > 0) {
-                                        _cleanup_free_ char *escaped = NULL;
-                                        char tail[sizeof(partial[0].bytes) + 1];
-
-                                        memcpy(tail, partial[k].bytes, partial[k].len);
-                                        tail[partial[k].len] = '\0';
-                                        escaped = log_escape(LOG_DEBUG, tail);
-                                        log_debug("'%s'(%s) '%s'", cmd, *fd == fd_stdout ? "out" : "err", escaped ?: tail);
-                                }
-                                partial[k].len = 0;
-
-                                r = epoll_ctl(fd_ep, EPOLL_CTL_DEL, *fd, NULL);
-                                if (r < 0) {
-                                        log_error_errno(errno, "failed to remove fd from epoll: %m");
-                                        return;
-                                }
-                                *fd = -1;
+                                log_debug("'%s'(%s) '%s'", spawn->cmd, k == 0 ? "out" : "err", escaped ?: line);
                         }
                 }
         }
 
-        /* return the child's stdout string */
-        if (result != NULL)
-                result[result_len] = '\0';
-
-        if (ret_truncated)
-                *ret_truncated = truncated;
+        return count;
 }
 
+/* Reads the output that is in the pipes when the program has exited, but no more, e.g. not what a process that the
+ * program left behind writes later, and logs an incomplete character at the end. */
+static void spawn_read_rest(struct spawn *spawn) {
+        unsigned k;
+
+        for (k = 0; k < 2; k++) {
+                int n = 0;
+
+                if (spawn->fd[k] < 0)
+                        continue;
+
+                if (ioctl(spawn->fd[k], FIONREAD, &n) < 0)
+                        n = 0;
+
+                while (n > 0) {
+                        ssize_t count = spawn_read(spawn, k);
+
+                        if (count <= 0)
+                                break;
+                        n -= (int) count;
+                }
+
+                spawn_log_partial(spawn, k);
+        }
+}
+
+/* Like spawn_wait() of systemd: reads the output of the program, see spawn_read(), warns about the program and sends
+ * it the timeout signal when that is due, see spawn_check_timeouts(), and waits for it to exit. Like in systemd, the
+ * output is read until the program exits, also after the timeout signal, so that a program that survives the signal
+ * and keeps writing does not block on a full pipe, and not until the end of the output, which a process that the
+ * program left behind may keep open. Unlike systemd, which stops reading when the program has exited, the output
+ * that is in the pipes then is read too, see spawn_read_rest(). Returns 0 when the program succeeded, its exit code
+ * when it failed, -1 when it did not exit normally, and a negative errno when it cannot be waited for. */
 static int spawn_wait(struct spawn *spawn) {
         struct udev_event *event = spawn->event;
         const char *cmd = spawn->cmd;
         pid_t pid = spawn->pid;
-        struct pollfd pfd[1];
-        int err = 0;
 
-        pfd[0].events = POLLIN;
-        pfd[0].fd = event->fd_signal;
+        for (;;) {
+                struct pollfd pfd[3] = {
+                        { .fd = event->fd_signal, .events = POLLIN },
+                        /* poll() ignores the negative descriptors of the outputs that are not read */
+                        { .fd = -1, .events = POLLIN },
+                        { .fd = -1, .events = POLLIN },
+                };
+                struct signalfd_siginfo fdsi;
+                int timeout, fdcount, status, err;
+                usec_t now_usec;
+                ssize_t size;
+                unsigned k;
 
-        while (pid > 0) {
-                int timeout;
-                int fdcount;
-
-                /* warn about a slow program once, and send it the timeout signal once, then wait for it to
-                 * exit */
+                /* warn about a slow program once, and send it the timeout signal once */
                 timeout = spawn_check_timeouts(spawn);
 
-                fdcount = poll(pfd, 1, timeout);
+                /* the outputs, except the ones that are to be read again later after a read error */
+                now_usec = now(CLOCK_MONOTONIC);
+                for (k = 0; k < 2; k++) {
+                        if (spawn->fd[k] < 0)
+                                continue;
+                        if (spawn->retry_usec[k] <= now_usec)
+                                pfd[1 + k].fd = spawn->fd[k];
+                        else {
+                                int t = poll_timeout(spawn->retry_usec[k] - now_usec);
+
+                                if (t >= 0 && (timeout < 0 || t < timeout))
+                                        timeout = t;
+                        }
+                }
+
+                fdcount = poll(pfd, ELEMENTSOF(pfd), timeout);
                 if (fdcount < 0) {
                         if (errno == EINTR)
                                 continue;
-                        err = -errno;
-                        log_error_errno(errno, "failed to poll: %m");
-                        goto out;
+                        return log_error_errno(errno, "failed to poll: %m");
                 }
                 if (fdcount == 0)
+                        /* the warning, the timeout or reading the output again is due, see above */
                         continue;
 
-                if (pfd[0].revents & POLLIN) {
-                        struct signalfd_siginfo fdsi;
-                        int status;
-                        ssize_t size;
+                for (k = 0; k < 2; k++)
+                        if (pfd[1 + k].revents != 0)
+                                (void) spawn_read(spawn, k);
 
-                        size = read(event->fd_signal, &fdsi, sizeof(struct signalfd_siginfo));
-                        if (size != sizeof(struct signalfd_siginfo))
-                                continue;
+                if (!(pfd[0].revents & POLLIN))
+                        continue;
 
-                        switch (fdsi.ssi_signo) {
-                        case SIGTERM:
-                                event->sigterm = true;
-                                break;
-                        case SIGCHLD:
-                                /* 0: the program has not exited, the signal was about something else, e.g.
-                                 * sent with kill(), so keep waiting, instead of reading an unset status */
-                                if (waitpid(pid, &status, WNOHANG) <= 0)
-                                        break;
-                                if (WIFEXITED(status)) {
-                                        log_debug("'%s' ["PID_FMT"] exit with return code %i", cmd, pid, WEXITSTATUS(status));
-                                        /* like systemd, the exit code of a program that failed */
-                                        err = WEXITSTATUS(status);
-                                } else if (WIFSIGNALED(status)) {
-                                        log_error("'%s' ["PID_FMT"] terminated by signal %i (%s)", cmd, pid, WTERMSIG(status), strsignal(WTERMSIG(status)));
-                                        err = -1;
-                                } else if (WIFSTOPPED(status)) {
-                                        log_error("'%s' ["PID_FMT"] stopped", cmd, pid);
-                                        err = -1;
-                                } else if (WIFCONTINUED(status)) {
-                                        log_error("'%s' ["PID_FMT"] continued", cmd, pid);
-                                        err = -1;
-                                } else {
-                                        log_error("'%s' ["PID_FMT"] exit with status 0x%04x", cmd, pid, status);
-                                        err = -1;
-                                }
-                                pid = 0;
-                                break;
-                        }
+                size = read(event->fd_signal, &fdsi, sizeof(struct signalfd_siginfo));
+                if (size != sizeof(struct signalfd_siginfo))
+                        continue;
+
+                if (fdsi.ssi_signo == SIGTERM) {
+                        event->sigterm = true;
+                        continue;
                 }
+                if (fdsi.ssi_signo != SIGCHLD)
+                        continue;
+
+                /* 0: the program has not exited, the signal was about something else, e.g. sent with kill(), so
+                 * keep waiting, instead of reading an unset status */
+                if (waitpid(pid, &status, WNOHANG) <= 0)
+                        continue;
+
+                spawn_read_rest(spawn);
+
+                if (WIFEXITED(status)) {
+                        log_debug("'%s' ["PID_FMT"] exit with return code %i", cmd, pid, WEXITSTATUS(status));
+                        /* like systemd, the exit code of a program that failed */
+                        err = WEXITSTATUS(status);
+                } else if (WIFSIGNALED(status)) {
+                        log_error("'%s' ["PID_FMT"] terminated by signal %i (%s)", cmd, pid, WTERMSIG(status), strsignal(WTERMSIG(status)));
+                        err = -1;
+                } else if (WIFSTOPPED(status)) {
+                        log_error("'%s' ["PID_FMT"] stopped", cmd, pid);
+                        err = -1;
+                } else if (WIFCONTINUED(status)) {
+                        log_error("'%s' ["PID_FMT"] continued", cmd, pid);
+                        err = -1;
+                } else {
+                        log_error("'%s' ["PID_FMT"] exit with status 0x%04x", cmd, pid, status);
+                        err = -1;
+                }
+
+                return err;
         }
-out:
-        return err;
 }
 
 /* Splits cmd in place into words, like systemd's strv_split_full() with
@@ -1090,6 +1088,9 @@ int udev_event_spawn(struct udev_event *event,
         struct spawn spawn = {
                 .event = event,
                 .cmd = cmd,
+                .fd = { -1, -1 },
+                .result = result,
+                .result_size = result_size,
         };
         int argc, err = 0;
 
@@ -1232,11 +1233,17 @@ int udev_event_spawn(struct udev_event *event,
                 }
 
                 spawn.pid = pid;
-                spawn_read(&spawn,
-                           outpipe[READ_END], errpipe[READ_END],
-                           result, result_size, ret_truncated);
-
+                spawn.fd[0] = outpipe[READ_END];
+                spawn.fd[1] = errpipe[READ_END];
+                spawn.log_output = errpipe[READ_END] >= 0;
                 err = spawn_wait(&spawn);
+
+                /* return the child's stdout string */
+                if (result != NULL)
+                        result[spawn.result_len] = '\0';
+
+                if (ret_truncated)
+                        *ret_truncated = spawn.truncated;
         }
 
 out:
