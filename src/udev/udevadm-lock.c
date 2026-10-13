@@ -371,7 +371,7 @@ static int run_command(void) {
                 .sa_handler = SIG_IGN,
         };
         pid_t parent = getpid(), pid;
-        int status;
+        int status, r;
 
         /* Ignore SIGINT and allow the forked process to receive it */
         (void) sigaction(SIGINT, &sa, NULL);
@@ -392,6 +392,14 @@ static int run_command(void) {
                  * too, and, like systemd, open it again only when the command cannot be run. */
                 log_close();
                 close_all_fds();
+
+                /* like FORK_RLIMIT_NOFILE_SAFE of systemd */
+                r = rlimit_nofile_safe();
+                if (r < 0) {
+                        log_open();
+                        log_error_errno(r, "Failed to lower RLIMIT_NOFILE's soft limit to 1K: %m");
+                        _exit(EXIT_FAILURE);
+                }
 
                 execvp(arg_cmdline[0], arg_cmdline);
                 log_open();

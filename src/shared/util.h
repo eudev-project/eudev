@@ -61,6 +61,14 @@ uint64_t physical_memory(void);
 
 int cpus_in_affinity_mask(void);
 
+/* like systemd: the default of /proc/sys/fs/nr_open, and the most descriptors close_all_fds() loops over */
+#define NR_OPEN_DEFAULT ((unsigned) (1024 * 1024))
+#define MAX_FD_LOOP_LIMIT (1024 * 1024)
+
+unsigned read_nr_open(void);
+int get_max_fd(void);
+int rlimit_nofile_bump(int limit);
+int rlimit_nofile_safe(void);
 int close_all_fds(void);
 
 int fd_nonblock(int fd, bool nonblock);

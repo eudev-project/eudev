@@ -2558,6 +2558,10 @@ int main(int argc, char *argv[]) {
 
         umask(022);
 
+        /* Like systemd: raise the limit of descriptors to the highest one that the kernel allows; the workers
+         * keep it, the programs that they run get the soft limit of 1024 again, see spawn_exec() */
+        (void) rlimit_nofile_bump(-1);
+
         udev_list_init(udev, &properties_list, true);
 
         r = mkdir(UDEV_ROOT_RUN "/udev", 0755);

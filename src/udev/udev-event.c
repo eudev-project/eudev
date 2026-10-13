@@ -654,6 +654,14 @@ static int spawn_exec(char *const argv[], char **envp, int fd_stdout, int fd_std
                 return log_error_errno(r, "Failed to close all file descriptors: %m");
         }
 
+        /* Like FORK_RLIMIT_NOFILE_SAFE of systemd: udevd raised its limit of descriptors, but the program gets
+         * the soft limit of 1024 (FD_SETSIZE), for programs that still use select(). */
+        r = rlimit_nofile_safe();
+        if (r < 0) {
+                log_open();
+                return log_error_errno(r, "Failed to lower RLIMIT_NOFILE's soft limit to 1K: %m");
+        }
+
         execve(argv[0], argv, envp);
 
         /* like systemd, without a message */

@@ -27,6 +27,7 @@
 #include <syslog.h>
 #include <sched.h>
 #include <sys/resource.h>
+#include <sys/select.h>
 #include <linux/sched.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -373,6 +374,117 @@ int cpus_in_affinity_mask(void) {
         }
 }
 
+/* Like read_nr_open() of systemd: the highest limit of descriptors that the kernel allows, from
+ * /proc/sys/fs/nr_open, or its default if that cannot be read. */
+unsigned read_nr_open(void) {
+        _cleanup_free_ char *nr_open = NULL;
+        int r;
+
+        r = read_one_line_file("/proc/sys/fs/nr_open", &nr_open);
+        if (r < 0)
+                log_debug_errno(r, "Failed to read /proc/sys/fs/nr_open, ignoring: %m");
+        else {
+                unsigned v;
+
+                r = safe_atou(nr_open, &v);
+                if (r < 0)
+                        log_debug_errno(r, "Failed to parse /proc/sys/fs/nr_open value '%s', ignoring: %m", nr_open);
+                else
+                        return v;
+        }
+
+        /* the default of the kernel */
+        return NR_OPEN_DEFAULT;
+}
+
+/* Like get_max_fd() of systemd: the highest possible descriptor, from RLIMIT_NOFILE, but at least
+ * FD_SETSIZE - 1 and at most INT_MAX, or a negative errno. */
+int get_max_fd(void) {
+        struct rlimit rl;
+        rlim_t m;
+
+        if (getrlimit(RLIMIT_NOFILE, &rl) < 0)
+                return -errno;
+
+        m = MAX(rl.rlim_cur, rl.rlim_max);
+        if (m < FD_SETSIZE)
+                return FD_SETSIZE - 1;
+
+        if (m == RLIM_INFINITY || m > INT_MAX)
+                return INT_MAX;
+
+        return (int) (m - 1);
+}
+
+/* Like rlimit_nofile_bump() of systemd, with its setrlimit_closest(): raises the soft and the hard limit of
+ * descriptors to limit, or as close to it as allowed, or, with a negative limit, to the highest limit that the
+ * kernel allows, for processes that need many and do not use select(). Returns 0, or a negative errno. */
+int rlimit_nofile_bump(int limit) {
+        struct rlimit rl, highest, fixed;
+
+        if (limit < 0)
+                limit = read_nr_open();
+
+        if (limit < 3)
+                limit = 3;
+
+        rl = (struct rlimit) {
+                .rlim_cur = limit,
+                .rlim_max = limit,
+        };
+        if (setrlimit(RLIMIT_NOFILE, &rl) >= 0)
+                return 0;
+
+        if (errno != EPERM)
+                return log_debug_errno(errno, "Failed to set RLIMIT_NOFILE: %m");
+
+        /* as close to it as the hard limit allows */
+        if (getrlimit(RLIMIT_NOFILE, &highest) < 0)
+                return log_debug_errno(errno, "Failed to set RLIMIT_NOFILE: %m");
+
+        /* if the hard limit is unbounded anyway, the EPERM had other reasons */
+        if (highest.rlim_max == RLIM_INFINITY)
+                return log_debug_errno(EPERM, "Failed to set RLIMIT_NOFILE: %m");
+
+        fixed = (struct rlimit) {
+                .rlim_cur = MIN(rl.rlim_cur, highest.rlim_max),
+                .rlim_max = MIN(rl.rlim_max, highest.rlim_max),
+        };
+
+        if (fixed.rlim_cur == highest.rlim_cur && fixed.rlim_max == highest.rlim_max)
+                return 0;
+
+        log_debug("Failed at setting rlimit %llu for resource RLIMIT_NOFILE. Will attempt setting value %llu instead.",
+                  (unsigned long long) rl.rlim_max, (unsigned long long) fixed.rlim_max);
+
+        if (setrlimit(RLIMIT_NOFILE, &fixed) < 0)
+                return log_debug_errno(errno, "Failed to set RLIMIT_NOFILE: %m");
+
+        return 0;
+}
+
+/* Like rlimit_nofile_safe() of systemd: lowers the soft limit of descriptors to FD_SETSIZE (1024), e.g. in a
+ * child before it runs a program, which may still use select(). Returns 1 if it was lowered, 0 if it was not
+ * higher, or a negative errno. */
+int rlimit_nofile_safe(void) {
+        struct rlimit rl;
+
+        if (getrlimit(RLIMIT_NOFILE, &rl) < 0)
+                return log_debug_errno(errno, "Failed to query RLIMIT_NOFILE: %m");
+
+        if (rl.rlim_cur <= FD_SETSIZE)
+                return 0;
+
+        /* an inherited hard limit above the one of the kernel would make setrlimit() fail with EPERM */
+        rl.rlim_max = MIN(rl.rlim_max, (rlim_t) read_nr_open());
+        rl.rlim_cur = MIN((rlim_t) FD_SETSIZE, rl.rlim_max);
+        if (setrlimit(RLIMIT_NOFILE, &rl) < 0)
+                return log_debug_errno(errno, "Failed to lower RLIMIT_NOFILE's soft limit to %llu: %m",
+                                       (unsigned long long) rl.rlim_cur);
+
+        return 1;
+}
+
 /* Like close_all_fds() of systemd without exceptions: closes all file descriptors above stderr, e.g. in a
  * child process, like FORK_CLOSE_ALL_FDS. Call log_close() before, as the descriptors of the log are closed
  * too. */
@@ -389,18 +501,25 @@ int close_all_fds(void) {
 
         d = opendir("/proc/self/fd");
         if (!d) {
-                long m;
-                int fd;
+                int max_fd, fd;
 
-                /* Without /proc, close all possible ones. */
-                m = sysconf(_SC_OPEN_MAX);
-                if (m <= 0 || m > INT_MAX)
-                        m = 65536;
+                /* Like close_all_fds_frugal() of systemd: without /proc, close every possible one up to the
+                 * highest that RLIMIT_NOFILE allows, but rather fail than loop over more than a million. */
+                max_fd = get_max_fd();
+                if (max_fd < 0)
+                        return max_fd;
 
-                for (fd = 3; fd < m; fd++)
-                        (void) close(fd);
+                if (max_fd > MAX_FD_LOOP_LIMIT)
+                        return log_debug_errno(EPERM, "Refusing to loop over %d potential fds.", max_fd);
 
-                return 0;
+                for (fd = 3; fd <= max_fd; fd++) {
+                        int k = close_nointr(fd);
+
+                        if (k < 0 && k != -EBADF && r == 0)
+                                r = k;
+                }
+
+                return r;
         }
 
         while ((de = readdir(d))) {
