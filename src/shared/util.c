@@ -2638,6 +2638,9 @@ int fd_wait_for_event(int fd, int event, usec_t t) {
         return pollfd.revents;
 }
 
+/* Like fopen_temporary() of systemd: creates and opens a new file next to path, named ".#<name>XXXXXX",
+ * see tempfn_xxxxxx(). Returns the error of creating the file, or of fdopen(), which closes and removes the
+ * file again. */
 int fopen_temporary(const char *path, FILE **_f, char **_temp_path) {
         FILE *f;
         char *t;
@@ -2651,22 +2654,26 @@ int fopen_temporary(const char *path, FILE **_f, char **_temp_path) {
         if (r < 0)
                 return r;
 
+        /* both return the error as -errno */
 #if HAVE_DECL_MKOSTEMP
         fd = mkostemp_safe(t, O_WRONLY|O_CLOEXEC);
 #else
         fd = mkstemp_safe(t);
-        fcntl(fd, F_SETFD, FD_CLOEXEC);
+        if (fd >= 0)
+                (void) fcntl(fd, F_SETFD, FD_CLOEXEC);
 #endif
         if (fd < 0) {
                 free(t);
-                return -errno;
+                return fd;
         }
 
         f = fdopen(fd, "we");
         if (!f) {
-                unlink(t);
+                r = -errno;
+                safe_close(fd);
+                (void) unlink(t);
                 free(t);
-                return -errno;
+                return r;
         }
 
         *_f = f;
