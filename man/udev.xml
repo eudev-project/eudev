@@ -553,8 +553,8 @@
             database: a number must be a valid user or group ID, in decimal without leading
             zeros, and is looked up as ID, anything else must be a valid name. If the database
             does not have them, the ID 0 and the name <literal>root</literal>, the ID 65534 and
-            the name of the nobody user or group (set with the <option>--with-nobody-user</option>
-            and <option>--with-nobody-group</option> options of configure, by default
+            the name of the nobody user or group (set when eudev is built with
+            <option>--with-nobody-user</option> and <option>--with-nobody-group</option>, by default
             <literal>nobody</literal>; Debian, for example, calls the group
             <literal>nogroup</literal>), unless one of the files
             <filename>/etc/systemd/dont-synthesize-nobody</filename> (like in systemd) and
@@ -562,12 +562,12 @@
             and groups (up to <varname>SYS_UID_MAX</varname> and <varname>SYS_GID_MAX</varname>
             of <filename>/etc/login.defs</filename>, which every process reads once, like systemd
             built with its compat-mutable-uid-boundaries option; for the ones that the file does
-            not set, up to the ones set with the <option>--with-system-uid-max</option> and
-            <option>--with-system-gid-max</option> options of configure, by default
+            not set, up to the ones set when eudev is built with <option>--with-system-uid-max</option>
+            and <option>--with-system-gid-max</option>, by default
             <varname>SYS_UID_MAX</varname> and <varname>SYS_GID_MAX</varname> of
             <filename>/etc/login.defs</filename> of the build system, or 999), and the IDs and names (<literal>foreign-</literal><replaceable>N</replaceable>) of the range of
-            foreign users and groups of systemd (65536 IDs from the one set with the
-            <option>--with-foreign-uid-base</option> option of configure, by default
+            foreign users and groups of systemd (65536 IDs from the one set when eudev is built
+            with <option>--with-foreign-uid-base</option>, by default
             <literal>0x7FFE0000</literal>) are taken as they are. Like systemd, a warning
             is logged for a user or group that is not a system account, as device nodes owned
             by other accounts are deprecated.</para>
@@ -599,7 +599,7 @@
           <listitem>
             <para>Applies the specified Linux Security Module label to the device node.
             The modules are <literal>selinux</literal> and <literal>smack</literal>.
-            SMACK labels are only applied when eudev was built with
+            SMACK labels are only applied when eudev is built with
             <option>--enable-smack</option> and the kernel uses SMACK.</para>
           </listitem>
         </varlistentry>
@@ -1382,7 +1382,7 @@ SUBSYSTEM=="net", OPTIONS="log_level=debug"</programlisting></para>
         </variablelist>
 
         <para>This builtin and <filename>60-tpm2-id.rules</filename> are left out
-        when eudev is configured with <option>--disable-tpm2</option>; a rule line that
+        when eudev is built with <option>--disable-tpm2</option>; a rule line that
         uses the builtin, or runs a program named <command>tpm2_id</command> with
         <varname>PROGRAM</varname> or <varname>RUN</varname>, is then ignored with an error
         message saying so.</para>

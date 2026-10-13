@@ -584,11 +584,10 @@ in a rule line that is evaluated on a remove event does not keep any of them, wh
 The permissions for the device node\&. Every specified value overrides the compiled\-in default value\&.
 .sp
 Users and groups are resolved like systemd does it, with the user and group database: a number must be a valid user or group ID, in decimal without leading zeros, and is looked up as ID, anything else must be a valid name\&. If the database does not have them, the ID 0 and the name
-root, the ID 65534 and the name of the nobody user or group (set with the
+root, the ID 65534 and the name of the nobody user or group (set when eudev is built with
 \fB\-\-with\-nobody\-user\fR
 and
-\fB\-\-with\-nobody\-group\fR
-options of configure, by default
+\fB\-\-with\-nobody\-group\fR, by default
 nobody; Debian, for example, calls the group
 nogroup), unless one of the files
 /etc/systemd/dont\-synthesize\-nobody
@@ -599,19 +598,17 @@ exists, the IDs of system users and groups (up to
 and
 \fISYS_GID_MAX\fR
 of
-/etc/login\&.defs, which every process reads once, like systemd built with its compat\-mutable\-uid\-boundaries option; for the ones that the file does not set, up to the ones set with the
+/etc/login\&.defs, which every process reads once, like systemd built with its compat\-mutable\-uid\-boundaries option; for the ones that the file does not set, up to the ones set when eudev is built with
 \fB\-\-with\-system\-uid\-max\fR
 and
-\fB\-\-with\-system\-gid\-max\fR
-options of configure, by default
+\fB\-\-with\-system\-gid\-max\fR, by default
 \fISYS_UID_MAX\fR
 and
 \fISYS_GID_MAX\fR
 of
 /etc/login\&.defs
-of the build system, or 999), and the IDs and names (foreign\-\fIN\fR) of the range of foreign users and groups of systemd (65536 IDs from the one set with the
-\fB\-\-with\-foreign\-uid\-base\fR
-option of configure, by default
+of the build system, or 999), and the IDs and names (foreign\-\fIN\fR) of the range of foreign users and groups of systemd (65536 IDs from the one set when eudev is built with
+\fB\-\-with\-foreign\-uid\-base\fR, by default
 0x7FFE0000) are taken as they are\&. Like systemd, a warning is logged for a user or group that is not a system account, as device nodes owned by other accounts are deprecated\&.
 .sp
 A number, and a name without substitutions, unless
@@ -642,7 +639,7 @@ must be an octal number of at most
 Applies the specified Linux Security Module label to the device node\&. The modules are
 selinux
 and
-smack\&. SMACK labels are only applied when eudev was built with
+smack\&. SMACK labels are only applied when eudev is built with
 \fB\-\-enable\-smack\fR
 and the kernel uses SMACK\&.
 .RE
@@ -1334,7 +1331,7 @@ on TPMs on which the NV index based PCRs of systemd do not work\&.
 .PP
 This builtin and
 60\-tpm2\-id\&.rules
-are left out when eudev is configured with
+are left out when eudev is built with
 \fB\-\-disable\-tpm2\fR; a rule line that uses the builtin, or runs a program named
 \fBtpm2_id\fR
 with
