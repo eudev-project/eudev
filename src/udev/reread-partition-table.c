@@ -470,7 +470,8 @@ static int remove_partitions(struct udev_device *d, int fd, struct udev_enumerat
 /* sent tells which uevents for the disk and its partitions were triggered, or the kernel sent, also when an error
  * is returned. */
 static int reread_partition_table_full(struct udev_device *dev, int fd, RereadPartitionTableFlags flags,
-                                       char * const *args, struct uevents_sent *sent) {
+                                       char * const *args, void (*locked)(void *userdata), void *userdata,
+                                       struct uevents_sent *sent) {
         _cleanup_free_ char *lesc1 = NULL;
         _cleanup_close_ int lock_fd = -1;
         const char *p;
@@ -505,6 +506,9 @@ static int reread_partition_table_full(struct udev_device *dev, int fd, RereadPa
                         return r;
                 }
         }
+
+        if (locked)
+                locked(userdata);
 
         r = blockdev_partscan_enabled(dev);
         if (r < 0)
@@ -666,7 +670,8 @@ static int reread_partition_table_full(struct udev_device *dev, int fd, RereadPa
 #endif
 }
 
-int reread_partition_table(struct udev_device *dev, RereadPartitionTableFlags flags, char * const *args) {
+int reread_partition_table(struct udev_device *dev, RereadPartitionTableFlags flags, char * const *args,
+                           void (*locked)(void *userdata), void *userdata) {
         _cleanup_strv_free_ char **args_free = NULL;
         _cleanup_close_ int fd = -1;
         struct uevents_sent sent = {};
@@ -686,7 +691,7 @@ int reread_partition_table(struct udev_device *dev, RereadPartitionTableFlags fl
         if (fd < 0)
                 r = log_debug_errno(fd, "Failed to open block device: %m");
         else
-                r = reread_partition_table_full(dev, fd, flags, args, &sent);
+                r = reread_partition_table_full(dev, fd, flags, args, locked, userdata, &sent);
 
         /* eudev: when the partition table could not be re-read or the kernel's partitions could not be
          * updated, e.g. as a partition that is in use cannot be moved, or the disk cannot be opened or

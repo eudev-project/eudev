@@ -45,6 +45,7 @@
 #include <sys/stat.h>
 #include <sys/ioctl.h>
 #include <sys/inotify.h>
+#include <sys/mman.h>
 #include <sys/sysmacros.h>
 
 #include "udev.h"
@@ -86,7 +87,8 @@ static int fd_ep = -1;
 static int fd_inotify = -1;
 static int fd_ready = -1;
 static bool stop_exec_queue;
-/* START_EXEC_QUEUE was received: start the queued events without waiting for the next timeout */
+/* start the queued events without waiting for the next timeout: START_EXEC_QUEUE was received, or the events of
+ * a disk whose partition table was re-read can start, see struct reread */
 static bool start_exec_queue;
 static bool reload;
 static int arg_daemonize = false;
@@ -138,8 +140,29 @@ static int arg_timeout_signal = SIGKILL;
 static bool arg_blockdev_read_only = false;
 static UDEV_LIST(event_list);
 Hashmap *workers;
-/* the processes that re-read the partition table of a disk, see synthesize_change() */
-static Set *synthesize_change_children;
+
+/* A re-read of the partition table of a disk by a child process, see synthesize_change(). A worker takes a
+ * shared BSD lock on the disk while it processes an event of the disk or of one of its partitions, and the
+ * child, which takes an exclusive lock without waiting, gives up re-reading the partition table when it
+ * cannot take it, and triggers 'change' events instead. Unlike systemd, so that the lock of a worker does not
+ * make the child give up, the child is started only when no worker processes an event of the disk or of one
+ * of its partitions, and their events are not started while it is pending or runs. */
+struct reread {
+        struct udev_list_node node;
+        /* the disk */
+        struct udev_device *dev;
+        /* the child, or 0 while the re-read is pending */
+        pid_t pid;
+        /* the time (CLOCK_MONOTONIC) before the child's final check for closes after writing during its read,
+         * which it stores in memory shared with udevd, or 0; NULL when the memory could not be mapped */
+        usec_t *end_usec;
+        /* the latest time right after udevd read the inotify event of a close after writing of the disk while the
+         * child ran, so that the close happened before it, or 0, see synthesize_change() */
+        usec_t close_usec;
+};
+
+/* the pending and running re-reads, at most one per disk */
+static UDEV_LIST(reread_list);
 /* a synthetic change event that udevd triggered and did not receive yet, see synthesize_change_one() */
 struct synthesized_event {
         char uuid[ID128_UUID_STRING_MAX];
@@ -197,6 +220,66 @@ static unsigned n_locked_events;
 
 static inline struct event *node_to_event(struct udev_list_node *node) {
         return container_of(node, struct event, node);
+}
+
+static inline struct reread *node_to_reread(struct udev_list_node *node) {
+        return container_of(node, struct reread, node);
+}
+
+static void reread_free(struct reread *reread) {
+        if (!reread)
+                return;
+
+        udev_list_node_remove(&reread->node);
+        udev_device_unref(reread->dev);
+        if (reread->end_usec)
+                (void) munmap(reread->end_usec, sizeof(usec_t));
+        free(reread);
+}
+
+static void rereads_free(void) {
+        struct udev_list_node *loop, *tmp;
+
+        udev_list_node_foreach_safe(loop, tmp, &reread_list)
+                reread_free(node_to_reread(loop));
+}
+
+/* whether devpath is the one of the disk, or of a device below it, e.g. a partition of the disk */
+static bool devpath_is_disk_or_below(const char *devpath, const char *disk) {
+        size_t n;
+
+        if (!devpath || !disk)
+                return false;
+
+        n = strlen(disk);
+        return strneq(devpath, disk, n) && IN_SET(devpath[n], '\0', '/');
+}
+
+/* whether the event is one of a disk whose partition table is to be re-read or is re-read, or of a partition
+ * of the disk, see struct reread */
+static bool event_waits_for_reread(struct event *event) {
+        struct udev_list_node *loop;
+
+        udev_list_node_foreach(loop, &reread_list)
+                if (devpath_is_disk_or_below(event->devpath, udev_device_get_devpath(node_to_reread(loop)->dev)))
+                        return true;
+
+        return false;
+}
+
+/* whether a worker processes an event of the disk of the re-read or of one of its partitions */
+static bool reread_disk_busy(struct reread *reread) {
+        const char *disk = udev_device_get_devpath(reread->dev);
+        struct udev_list_node *loop;
+
+        udev_list_node_foreach(loop, &event_list) {
+                struct event *event = node_to_event(loop);
+
+                if (event->state == EVENT_RUNNING && devpath_is_disk_or_below(event->devpath, disk))
+                        return true;
+        }
+
+        return false;
 }
 
 static void event_queue_cleanup(struct udev *udev, enum event_state type);
@@ -623,8 +706,7 @@ static void worker_spawn(struct event *event) {
                 event->dev = NULL;
 
                 workers_free();
-                set_free(synthesize_change_children);
-                synthesize_change_children = NULL;
+                rereads_free();
                 synthesized_events = ordered_hashmap_free_free(synthesized_events);
                 device_trigger_args = strv_free(device_trigger_args);
                 event_queue_cleanup(udev, EVENT_UNDEF);
@@ -1174,6 +1256,11 @@ static void event_queue_start(struct udev *udev __attribute__((unused))) {
                 if (event->state != EVENT_QUEUED)
                         continue;
 
+                /* do not start an event of a disk, or of one of its partitions, while the partition table of the disk
+                 * is to be re-read or is re-read, see struct reread */
+                if (event_waits_for_reread(event))
+                        continue;
+
                 /* do not start event if parent or child event is still running */
                 if (is_devpath_busy(event))
                         continue;
@@ -1429,9 +1516,9 @@ static void worker_returned(int fd_worker) {
 static void event_queue_update(void) {
         int r;
 
-        /* keep /run/udev/queue also while child processes are re-reading partition tables, which trigger
-         * events, and until udevd received the change events it triggered itself */
-        if (!udev_list_node_is_empty(&event_list) || !set_isempty(synthesize_change_children) ||
+        /* keep /run/udev/queue also while partition tables are to be re-read or child processes are re-reading
+         * them, which trigger events, and until udevd received the change events it triggered itself */
+        if (!udev_list_node_is_empty(&event_list) || !udev_list_node_is_empty(&reread_list) ||
             !ordered_hashmap_isempty(synthesized_events)) {
                 r = touch("/run/udev/queue");
                 if (r < 0)
@@ -2001,81 +2088,193 @@ static int synthesize_change_one(struct udev_device *dev) {
         return 0;
 }
 
-static int synthesize_change(struct udev_device *dev) {
+/* the child's watch of the disk, see reread_start() */
+struct reread_watch {
+        int fd;
+        const char *devnode;
+        bool locked;
+        bool watched;
+};
+
+static void reread_locked(void *userdata) {
+        struct reread_watch *w = userdata;
+
+        w->locked = true;
+        w->watched = w->fd >= 0 && inotify_add_watch(w->fd, w->devnode, IN_CLOSE_WRITE) >= 0;
+}
+
+/* Forks the child that re-reads the partition table of the disk, see struct reread. */
+static void reread_start(struct reread *reread) {
         _cleanup_free_ char *lesc1 = NULL;
+        struct udev_device *dev = reread->dev;
         pid_t pid, parent_pid;
         int r;
+
+        /* Without the shared memory, every close after writing while the child runs makes the partition table
+         * be re-read once more, see handle_signal(). */
+        if (!reread->end_usec) {
+                void *p = mmap(NULL, sizeof(usec_t), PROT_READ|PROT_WRITE, MAP_SHARED|MAP_ANONYMOUS, -1, 0);
+
+                if (p == MAP_FAILED)
+                        log_debug_errno(errno, "Failed to map memory to share with the process re-reading the partition table of %s, ignoring: %m",
+                                        utf8_escape_for_log(udev_device_get_devnode(dev), &lesc1));
+                else
+                        reread->end_usec = p;
+        }
+        if (reread->end_usec)
+                *reread->end_usec = 0;
+        reread->close_usec = 0;
+
+        parent_pid = getpid();
+        pid = fork();
+        if (pid < 0) {
+                /* Unlike systemd, which then sends no change event at all, re-read the partition table
+                 * synchronously, as before the child was introduced. */
+                log_warning_errno(errno, "Failed to fork process to re-read the partition table of %s, re-reading it synchronously: %m",
+                                  utf8_escape_for_log(udev_device_get_devnode(dev), &lesc1));
+                (void) reread_partition_table(dev, REREADPT_FORCE_UEVENT|REREADPT_BSD_LOCK, device_trigger_args,
+                                              NULL, NULL);
+                reread_free(reread);
+                start_exec_queue = true;
+                return;
+        }
+        if (pid == 0) {
+                /* child */
+                (void) prctl(PR_SET_NAME, "(udev-synth)");
+                child_set_death_signal(LOG_ERR);
+
+                /* Like FORK_RESET_SIGNALS of systemd: every signal at its default action, and none blocked,
+                 * and not the signal mask and the ignored signals that udevd inherited, e.g. an ignored
+                 * SIGTERM, with which the SIGTERM of PR_SET_PDEATHSIG would not stop it. */
+                r = reset_all_signal_handlers();
+                if (r < 0) {
+                        log_error_errno(r, "Failed to reset signal handlers: %m");
+                        _exit(EXIT_FAILURE);
+                }
+
+                r = reset_signal_mask();
+                if (r < 0) {
+                        log_error_errno(r, "Failed to reset signal mask: %m");
+                        _exit(EXIT_FAILURE);
+                }
+
+                /* like systemd, after the signals are reset, so that SIGTERM terminates the child */
+                child_check_parent(parent_pid);
+
+                /* Like FORK_CLOSE_ALL_FDS and FORK_REOPEN_LOG of systemd: close all file descriptors above
+                 * stderr, and open the log again, which is closed first, as its descriptor is closed too. */
+                log_close();
+                (void) close_all_fds();
+                log_open();
+
+                /* Like the workers, do not keep the OOM protection of the main process, which systemd's
+                 * child does. */
+                r = write_string_file("/proc/self/oom_score_adj", "0");
+                if (r < 0)
+                        log_debug_errno(r, "Failed to reset OOM score, ignoring: %m");
+
+                struct reread_watch w = {
+                        .fd = inotify_init1(IN_CLOEXEC|IN_NONBLOCK),
+                        .devnode = udev_device_get_devnode(dev),
+                };
+                union inotify_event_buffer buffer;
+
+                (void) reread_partition_table(dev, REREADPT_FORCE_UEVENT|REREADPT_BSD_LOCK, device_trigger_args,
+                                              reread_locked, &w);
+
+                /* before the check, so that udevd re-reads after a close that it knew of only after this time */
+                if (reread->end_usec)
+                        *reread->end_usec = now(CLOCK_MONOTONIC);
+
+                /* 0 only when the partition table was read and the disk was not closed after writing during the
+                 * read, see handle_signal() */
+                if (!w.locked)
+                        _exit(EXIT_FAILURE); /* not read */
+                if (!w.watched || read(w.fd, &buffer, sizeof(buffer)) > 0)
+                        _exit(3); /* closed after writing during the read, or not known */
+                _exit(EXIT_SUCCESS);
+        }
+
+        reread->pid = pid;
+}
+
+static struct reread *reread_find_by_pid(pid_t pid) {
+        struct udev_list_node *loop;
+
+        udev_list_node_foreach(loop, &reread_list) {
+                struct reread *reread = node_to_reread(loop);
+
+                if (reread->pid == pid)
+                        return reread;
+        }
+
+        return NULL;
+}
+
+/* Starts the pending re-reads of the disks of which no worker processes an event, see struct reread. */
+static void rereads_start(void) {
+        struct udev_list_node *loop, *tmp;
+
+        /* on exit, the pending re-reads are dropped */
+        if (udev_exit)
+                return;
+
+        udev_list_node_foreach_safe(loop, tmp, &reread_list) {
+                struct reread *reread = node_to_reread(loop);
+
+                if (reread->pid == 0 && !reread_disk_busy(reread))
+                        reread_start(reread);
+        }
+}
+
+static int synthesize_change(struct udev_device *dev, usec_t close_usec) {
+        _cleanup_free_ char *lesc1 = NULL;
 
         if (streq_ptr("block", udev_device_get_subsystem(dev)) &&
             streq_ptr("disk", udev_device_get_devtype(dev)) &&
             !startswith(udev_device_get_sysname(dev), "dm-")) {
-                /* Make room for the PID before forking, so that it can be stored; without it, the queue
-                 * file would not be kept while the process runs, so then re-read the partition table
-                 * synchronously, as before. */
-                r = set_ensure_allocated(&synthesize_change_children, NULL);
-                if (r >= 0)
-                        r = set_reserve(synthesize_change_children, 1);
-                if (r < 0) {
-                        log_warning_errno(r, "Failed to allocate memory to remember the process re-reading the partition table of %s, re-reading it synchronously: %m",
+                struct udev_list_node *loop;
+                struct reread *reread;
+
+                /* A pending re-read reads the partition table as it is when it starts; when the child of a
+                 * re-read runs, it may have read the partition table before it was written, so it is re-read
+                 * once more when the child exits, unless the child read it after this close, see
+                 * handle_signal(). */
+                udev_list_node_foreach(loop, &reread_list) {
+                        reread = node_to_reread(loop);
+
+                        if (!streq(udev_device_get_devpath(reread->dev), udev_device_get_devpath(dev)))
+                                continue;
+
+                        if (reread->pid > 0) {
+                                log_debug("process ["PID_FMT"] is re-reading the partition table of %s, re-reading it once more when it exits, unless it read it after this close",
+                                          reread->pid, utf8_escape_for_log(udev_device_get_devnode(dev), &lesc1));
+                                reread->close_usec = MAX(reread->close_usec, close_usec);
+                        } else
+                                log_debug("re-reading the partition table of %s is pending already",
                                           utf8_escape_for_log(udev_device_get_devnode(dev), &lesc1));
-                        (void) reread_partition_table(dev, REREADPT_FORCE_UEVENT|REREADPT_BSD_LOCK, device_trigger_args);
                         return 0;
                 }
 
-                parent_pid = getpid();
-                pid = fork();
-                if (pid < 0) {
-                        /* Unlike systemd, which then sends no change event at all, re-read the partition
-                         * table synchronously, as before the child was introduced. */
-                        log_warning_errno(errno, "Failed to fork process to re-read the partition table of %s, re-reading it synchronously: %m",
+                /* Without the memory to remember the re-read, the queue file would not be kept while its
+                 * child runs, so then re-read the partition table synchronously, as before. */
+                reread = new0(struct reread, 1);
+                if (!reread) {
+                        log_warning_errno(ENOMEM, "Failed to allocate memory to remember the process re-reading the partition table of %s, re-reading it synchronously: %m",
                                           utf8_escape_for_log(udev_device_get_devnode(dev), &lesc1));
-                        (void) reread_partition_table(dev, REREADPT_FORCE_UEVENT|REREADPT_BSD_LOCK, device_trigger_args);
+                        (void) reread_partition_table(dev, REREADPT_FORCE_UEVENT|REREADPT_BSD_LOCK, device_trigger_args,
+                                                      NULL, NULL);
                         return 0;
                 }
-                if (pid == 0) {
-                        /* child */
-                        (void) prctl(PR_SET_NAME, "(udev-synth)");
-                        child_set_death_signal(LOG_ERR);
 
-                        /* Like FORK_RESET_SIGNALS of systemd: every signal at its default action, and none
-                         * blocked, and not the signal mask and the ignored signals that udevd inherited, e.g.
-                         * an ignored SIGTERM, with which the SIGTERM of PR_SET_PDEATHSIG would not stop it. */
-                        r = reset_all_signal_handlers();
-                        if (r < 0) {
-                                log_error_errno(r, "Failed to reset signal handlers: %m");
-                                _exit(EXIT_FAILURE);
-                        }
+                reread->dev = udev_device_ref(dev);
+                udev_list_node_append(&reread->node, &reread_list);
 
-                        r = reset_signal_mask();
-                        if (r < 0) {
-                                log_error_errno(r, "Failed to reset signal mask: %m");
-                                _exit(EXIT_FAILURE);
-                        }
-
-                        /* like systemd, after the signals are reset, so that SIGTERM terminates the child */
-                        child_check_parent(parent_pid);
-
-                        /* Like FORK_CLOSE_ALL_FDS and FORK_REOPEN_LOG of systemd: close all file descriptors
-                         * above stderr, and open the log again, which is closed first, as its descriptor is
-                         * closed too. */
-                        log_close();
-                        (void) close_all_fds();
-                        log_open();
-
-                        /* Like the workers, do not keep the OOM protection of the main process, which
-                         * systemd's child does. */
-                        r = write_string_file("/proc/self/oom_score_adj", "0");
-                        if (r < 0)
-                                log_debug_errno(r, "Failed to reset OOM score, ignoring: %m");
-
-                        (void) reread_partition_table(dev, REREADPT_FORCE_UEVENT|REREADPT_BSD_LOCK, device_trigger_args);
-                        _exit(EXIT_SUCCESS);
-                }
-
-                /* This does not fail, the room was made above. */
-                r = set_put(synthesize_change_children, UINT_TO_PTR(pid));
-                if (r < 0)
-                        log_warning_errno(r, "Failed to remember process ["PID_FMT"], ignoring: %m", pid);
+                if (reread_disk_busy(reread))
+                        log_debug("events of %s or of its partitions are being processed, re-reading its partition table after them",
+                                  utf8_escape_for_log(udev_device_get_devnode(dev), &lesc1));
+                else
+                        reread_start(reread);
 
                 return 0;
         }
@@ -2088,6 +2287,7 @@ static int handle_inotify(struct udev *udev) {
 
         union inotify_event_buffer buffer;
         struct inotify_event *e;
+        usec_t read_usec;
         ssize_t l;
 
         l = read(fd_inotify, &buffer, sizeof(buffer));
@@ -2097,6 +2297,9 @@ static int handle_inotify(struct udev *udev) {
 
                 return log_error_errno(errno, "Failed to read inotify fd: %m");
         }
+
+        /* every close after writing in the buffer happened before this time, see synthesize_change() */
+        read_usec = now(CLOCK_MONOTONIC);
 
         FOREACH_INOTIFY_EVENT(e, buffer, l) {
                 struct udev_device *dev;
@@ -2109,7 +2312,7 @@ static int handle_inotify(struct udev *udev) {
                           e->mask, utf8_escape_for_log(udev_device_get_devnode(dev), &lesc1));
                 if (e->mask & IN_CLOSE_WRITE) {
                         manager_requeue_locked_events_by_device(dev);
-                        synthesize_change(dev);
+                        synthesize_change(dev, read_usec);
                 }
 
                 /* Do not handle IN_IGNORED here. It should be handled by worker in 'remove' uevent;
@@ -2134,13 +2337,43 @@ static void handle_signal(struct udev *udev __attribute__((unused)), int signo) 
                         pid_t pid;
                         int status;
                         struct worker *worker;
+                        struct reread *reread;
 
                         pid = waitpid(-1, &status, WNOHANG);
                         if (pid <= 0)
                                 break;
 
-                        if (set_remove(synthesize_change_children, UINT_TO_PTR(pid))) {
+                        reread = reread_find_by_pid(pid);
+                        if (reread) {
+                                _cleanup_free_ char *lesc1 = NULL;
+                                const char *devnode = udev_device_get_devnode(reread->dev);
+                                usec_t end_usec = reread->end_usec ? *reread->end_usec : 0;
+                                bool again;
+
+                                /* Only after a close that udevd knew of while the child ran, and only when
+                                 * the child did not read the partition table, or did not know whether it
+                                 * was closed during the read, or when udevd knew of it only after the child
+                                 * stopped watching. A close that the child saw, but udevd not yet, makes
+                                 * udevd re-read when it handles it. */
+                                if (WIFEXITED(status) && WEXITSTATUS(status) == EXIT_SUCCESS && end_usec > 0)
+                                        again = reread->close_usec >= end_usec;
+                                else
+                                        again = reread->close_usec > 0;
+
                                 log_debug("process ["PID_FMT"] re-reading the partition table exited", pid);
+                                if (again) {
+                                        log_debug("%s was closed after writing while the partition table was re-read, re-reading it once more",
+                                                  utf8_escape_for_log(devnode, &lesc1));
+                                        reread->pid = 0;
+                                } else {
+                                        if (reread->close_usec > 0)
+                                                log_debug("%s was closed after writing before the partition table was read, not re-reading it again",
+                                                          utf8_escape_for_log(devnode, &lesc1));
+                                        reread_free(reread);
+                                }
+
+                                /* start the events of the disk and of its partitions, which waited for it */
+                                start_exec_queue = true;
                                 continue;
                         }
 
@@ -2178,6 +2411,9 @@ static void handle_signal(struct udev *udev __attribute__((unused)), int signo) 
 
                         worker_free(worker);
                 }
+
+                /* start the re-reads that waited for the events of a dead worker or for a child */
+                rereads_start();
                 break;
         case SIGHUP:
                 reload = true;
@@ -2987,8 +3223,12 @@ int main(int argc, char *argv[]) {
                 }
 
                 /* event has finished */
-                if (is_worker)
+                if (is_worker) {
                         worker_returned(fd_worker);
+
+                        /* start the re-reads that waited for the events of their disks */
+                        rereads_start();
+                }
 
                 if (is_netlink) {
                         struct udev_device *dev;
@@ -3061,7 +3301,7 @@ exit:
         if (fd_ep >= 0)
                 close(fd_ep);
         workers_free();
-        set_free(synthesize_change_children);
+        rereads_free();
         ordered_hashmap_free_free(synthesized_events);
         strv_free(device_trigger_args);
         event_queue_cleanup(udev, EVENT_UNDEF);
