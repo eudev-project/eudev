@@ -174,6 +174,10 @@ int udev_watch_init(struct udev *udev);
 void udev_watch_restore(struct udev *udev);
 void udev_watch_begin(struct udev *udev, struct udev_device *dev);
 void udev_watch_end(struct udev *udev, struct udev_device *dev);
+void udev_watch_suspend(struct udev *udev, struct udev_device *dev);
+void udev_watch_ignored(int wd);
+void udev_watch_overflow(void);
+int udev_watch_check_dir(struct udev *udev);
 struct udev_device *udev_watch_lookup(struct udev *udev, int wd);
 
 /* udev-node.c */

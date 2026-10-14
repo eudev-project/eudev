@@ -2022,9 +2022,10 @@ int udev_event_execute_rules(struct udev_event *event,
 
                 return r < 0 ? r : 0;
         } else {
-                /* disable watch during event processing */
+                /* disable watch during event processing, but keep its symlinks for the main process, see
+                 * udev_watch_suspend() */
                 if (EVENT_MODE_DESTRUCTIVE(event) && major(udev_device_get_devnum(dev)) != 0)
-                        udev_watch_end(event->udev, dev);
+                        udev_watch_suspend(event->udev, dev);
 
                 /* Like systemd, the event stops when the copy cannot be made, e.g. without memory: without it,
                  * the database entry of the device would be lost, and IMPORT{db} would find nothing. */

@@ -819,13 +819,17 @@ static void worker_spawn(struct event *event) {
                                                      arg_event_timeout_usec,
                                                      &properties_list,
                                                      rules);
-                        if (r < 0)
+                        if (r < 0) {
                                 /* Like systemd a446e8ff2c, when the rules fail, e.g. on an error of
                                  * IMPORT{}, or the database cannot be written, RUN is not run and the
                                  * inotify watch is not restored, but the (partially processed) event is
-                                 * still sent to the listeners. */
+                                 * still sent to the listeners. The symlink ID -> wd of the watch, which
+                                 * udev_watch_suspend() kept, is removed, like systemd's main process
+                                 * removes the symlinks with the watch; udevd removes the symlink wd -> ID
+                                 * when it handles IN_IGNORED. */
                                 log_device_warning_errno(dev, r, "Failed to process device, ignoring: %m");
-                        else {
+                                udev_watch_end(udev, dev);
+                        } else {
                                 udev_event_execute_run(udev_event,
                                                        arg_event_timeout_usec);
 
@@ -2304,21 +2308,31 @@ static int handle_inotify(struct udev *udev) {
         FOREACH_INOTIFY_EVENT(e, buffer, l) {
                 struct udev_device *dev;
 
-                dev = udev_watch_lookup(udev, e->wd);
-                if (!dev)
+                /* Events were lost, possibly IN_IGNORED of watch handles whose symlinks udev_watch_suspend()
+                 * kept, see udev_watch_overflow(). */
+                if (e->mask & IN_Q_OVERFLOW) {
+                        udev_watch_overflow();
                         continue;
-
-                log_debug("inotify event: %x for %s",
-                          e->mask, utf8_escape_for_log(udev_device_get_devnode(dev), &lesc1));
-                if (e->mask & IN_CLOSE_WRITE) {
-                        manager_requeue_locked_events_by_device(dev);
-                        synthesize_change(dev, read_usec);
                 }
 
-                /* Do not handle IN_IGNORED here. It should be handled by worker in 'remove' uevent;
-                 * udev_event_execute_rules() -> udev_watch_end(). */
+                /* Only a close after writing is looked up, so that no other event, e.g. of a watch that a
+                 * worker is adding, see udev_watch_begin(), is attributed to a device. */
+                if (e->mask & IN_CLOSE_WRITE) {
+                        dev = udev_watch_lookup(udev, e->wd);
+                        if (dev) {
+                                log_debug("inotify event: %x for %s",
+                                          e->mask, utf8_escape_for_log(udev_device_get_devnode(dev), &lesc1));
+                                manager_requeue_locked_events_by_device(dev);
+                                synthesize_change(dev, read_usec);
+                                udev_device_unref(dev);
+                        }
+                }
 
-                udev_device_unref(dev);
+                /* Removes the symlink of the watch handle that udev_watch_suspend() kept, which the lookup of an
+                 * earlier event of the handle may have needed. Otherwise, IN_IGNORED is handled by the worker of
+                 * the 'remove' event; udev_event_execute_rules() -> udev_watch_end(). */
+                if (e->mask & IN_IGNORED)
+                        udev_watch_ignored(e->wd);
         }
 
         return 0;
@@ -3214,6 +3228,11 @@ int main(int argc, char *argv[]) {
                         else if (ev[i].data.fd == fd_ctrl && ev[i].events & EPOLLIN)
                                 is_ctrl = true;
                 }
+
+                /* create the watch directory again when it was removed or replaced, before the inotify events
+                 * are looked up in it, see udev_watch_check_dir() */
+                if (!udev_exit && udev_watch_check_dir(udev) > 0)
+                        worker_kill(false);
 
                 /* reload requested or HUP signal received */
                 if (reload) {
