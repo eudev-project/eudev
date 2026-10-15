@@ -87,9 +87,6 @@ static int fd_ep = -1;
 static int fd_inotify = -1;
 static int fd_ready = -1;
 static bool stop_exec_queue;
-/* start the queued events without waiting for the next timeout: START_EXEC_QUEUE was received, or the events of
- * a disk whose partition table was re-read can start, see struct reread */
-static bool start_exec_queue;
 static bool reload;
 static int arg_daemonize = false;
 /* -D/--debug, see argv_has_debug() */
@@ -1763,7 +1760,7 @@ static void manager_revert(void) {
 
 /* Like manager_reload() of systemd: kills the idle workers and reloads the rules, when the rules files changed, see
  * udev_rules_should_reload(), and unloads the builtins, when their files changed, e.g. the hardware database; they
- * are loaded again before the next event is started, see main(). Like systemd, when the rules cannot be loaded,
+ * are loaded again before the next event is started, see manager_post(). Like systemd, when the rules cannot be loaded,
  * the previously loaded rules stay in use. Before the queued events are started, this checks every 3 seconds
  * at most whether something changed, like systemd's event_queue_start(). With force, on a reload requested with
  * udevadm control or SIGHUP, it reloads both, unlike systemd, which reloads only what changed then too. */
@@ -1796,6 +1793,30 @@ static void manager_reload(struct udev *udev, bool force) {
                         rules = new_rules;
                 }
         }
+}
+
+/* Like on_post() of systemd, after every event source that the main loop handled, and after a wakeup by a timeout:
+ * reloads the rules and the builtins, when that was requested with udevadm control or SIGHUP, requeues the events
+ * of locked block devices whose delay passed, and starts the queued events, with the rules and the builtins
+ * reloaded first, when they changed. The events of a disk whose partition table is to be re-read or is re-read are
+ * not started, see struct reread. Nothing is done on exit. */
+static void manager_post(struct udev *udev) {
+        if (udev_exit)
+                return;
+
+        if (reload) {
+                reload = false;
+                manager_reload(udev, /* force= */ true);
+        }
+
+        manager_requeue_locked_events();
+
+        if (udev_list_node_is_empty(&event_list) || stop_exec_queue)
+                return;
+
+        manager_reload(udev, /* force= */ false);
+        udev_builtin_init(udev);
+        event_queue_start(udev);
 }
 
 static void manager_set_default_children_max(void) {
@@ -1844,7 +1865,6 @@ static void handle_ctrl_msg_one(struct udev_ctrl_connection *ctrl_conn, struct u
         if (udev_ctrl_get_start_exec_queue(ctrl_msg) > 0) {
                 log_debug("udevd message (START_EXEC_QUEUE) received");
                 stop_exec_queue = false;
-                start_exec_queue = true;
         }
 
         if (udev_ctrl_get_reload(ctrl_msg) > 0) {
@@ -2139,7 +2159,6 @@ static void reread_start(struct reread *reread) {
                 (void) reread_partition_table(dev, REREADPT_FORCE_UEVENT|REREADPT_BSD_LOCK, device_trigger_args,
                                               NULL, NULL);
                 reread_free(reread);
-                start_exec_queue = true;
                 return;
         }
         if (pid == 0) {
@@ -2386,8 +2405,8 @@ static void handle_signal(struct udev *udev __attribute__((unused)), int signo) 
                                         reread_free(reread);
                                 }
 
-                                /* start the events of the disk and of its partitions, which waited for it */
-                                start_exec_queue = true;
+                                /* the events of the disk and of its partitions, which waited for it, are started
+                                 * after the signals were handled, see manager_post() */
                                 continue;
                         }
 
@@ -3163,15 +3182,6 @@ int main(int argc, char *argv[]) {
                                 timeout = requeue_timeout;
                 }
 
-                /* Like systemd, which starts the queued events after every event source it dispatched, start
-                 * them right away when processing was started again, and not only at the next wakeup of the
-                 * main loop, which may be up to 3 seconds away. */
-                if (start_exec_queue) {
-                        start_exec_queue = false;
-                        if (!udev_exit && !udev_list_node_is_empty(&event_list))
-                                timeout = 0;
-                }
-
                 if (!udev_exit) {
                         int synthesized_timeout;
 
@@ -3234,12 +3244,10 @@ int main(int argc, char *argv[]) {
                 if (!udev_exit && udev_watch_check_dir(udev) > 0)
                         worker_kill(false);
 
-                /* reload requested or HUP signal received */
-                if (reload) {
-                        reload = false;
-                        if (!udev_exit)
-                                manager_reload(udev, /* force= */ true);
-                }
+                /* Like systemd, which runs on_post() after every event source it dispatched, the step of
+                 * manager_post() follows each event source handled below, so that the events that it made
+                 * startable start right away, and not only at the next wakeup of the main loop, which may be
+                 * up to 3 seconds away. */
 
                 /* event has finished */
                 if (is_worker) {
@@ -3247,6 +3255,7 @@ int main(int argc, char *argv[]) {
 
                         /* start the re-reads that waited for the events of their disks */
                         rereads_start();
+                        manager_post(udev);
                 }
 
                 if (is_netlink) {
@@ -3261,18 +3270,12 @@ int main(int argc, char *argv[]) {
                                 else
                                         manager_requeue_locked_events_by_device(dev);
                         }
+                        manager_post(udev);
                 }
 
-                /* requeue the events of locked block devices, whose delay passed */
-                if (!udev_exit)
-                        manager_requeue_locked_events();
-
-                /* start new events, with the rules and the builtins reloaded first, when they changed */
-                if (!udev_list_node_is_empty(&event_list) && !udev_exit && !stop_exec_queue) {
-                        manager_reload(udev, /* force= */ false);
-                        udev_builtin_init(udev);
-                        event_queue_start(udev);
-                }
+                /* woken up by a timeout, e.g. the delay of a locked event passed, and no event source */
+                if (!is_worker && !is_netlink && !is_signal && !is_inotify && !is_ctrl)
+                        manager_post(udev);
 
                 if (is_signal) {
                         struct signalfd_siginfo fdsi;
@@ -3281,6 +3284,10 @@ int main(int argc, char *argv[]) {
                         size = read(fd_signal, &fdsi, sizeof(struct signalfd_siginfo));
                         if (size == sizeof(struct signalfd_siginfo))
                                 handle_signal(udev, fdsi.ssi_signo);
+
+                        /* e.g. the events that were blocked by the event of a worker that died, or the events
+                         * of a disk whose partition table was re-read */
+                        manager_post(udev);
                 }
 
                 /* we are shutting down, the events below are not handled anymore */
@@ -3290,6 +3297,9 @@ int main(int argc, char *argv[]) {
                 /* device node watch */
                 if (is_inotify) {
                         handle_inotify(udev);
+
+                        /* e.g. the events that waited for the lock of the device that was closed */
+                        manager_post(udev);
 
                         /*
                          * settle might be waiting on us to determine the queue
@@ -3309,8 +3319,12 @@ int main(int argc, char *argv[]) {
                  * that the ping is send back after the possibly generated
                  * "change" events by the inotify device node watch.
                  */
-                if (is_ctrl)
+                if (is_ctrl) {
                         handle_ctrl_msg(udev_ctrl);
+
+                        /* e.g. after START_EXEC_QUEUE, RELOAD or a higher children_max */
+                        manager_post(udev);
+                }
         }
 
 exit:
