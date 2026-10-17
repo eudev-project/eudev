@@ -1135,6 +1135,37 @@ int udev_build_argv(struct udev *udev __attribute__((unused)), char *cmd, int *r
         return 0;
 }
 
+/* how systemd's udev_event_spawn() splits a command, like udev_build_argv() does */
+#define COMMAND_SPLIT_FLAGS (EXTRACT_UNQUOTE|EXTRACT_RELAX|EXTRACT_RETAIN_ESCAPE)
+
+/* Like udev_build_argv(), keep at most UDEV_ARGV_MAX - 1 words of a command that udev_event_spawn() split, and log
+ * the rest of the command with the message of udev_build_argv(). */
+static void command_limit_words(const char *cmd, char **argv) {
+        _cleanup_free_ char *escaped = NULL;
+        const char *p = cmd;
+        char **w;
+        int i;
+
+        if (strv_length(argv) < UDEV_ARGV_MAX)
+                return;
+
+        /* the rest of the command starts at the first word that is dropped */
+        for (i = 0; i < UDEV_ARGV_MAX - 1 && p; i++) {
+                _cleanup_free_ char *word = NULL;
+
+                (void) extract_first_word(&p, &word, NULL, COMMAND_SPLIT_FLAGS);
+        }
+        if (p) {
+                p += strspn(p, WHITESPACE);
+                escaped = log_escape(LOG_ERR, p);
+                log_error("too many arguments in command, ignoring the rest: '%s'", escaped ?: p);
+        }
+
+        for (w = argv + UDEV_ARGV_MAX - 1; *w; w++)
+                free(*w);
+        argv[UDEV_ARGV_MAX - 1] = NULL;
+}
+
 /* the directories udev_event_spawn() runs a program given without a path from */
 static const char test_mode_helper_dirs[] =
         UDEV_LIBEXEC_DIR "\0"
@@ -1194,11 +1225,11 @@ int udev_event_spawn(struct udev_event *event,
         int errpipe[2] = {-1, -1};
         pid_t pid, parent_pid;
         sigset_t ss, saved_ss;
-        _cleanup_free_ char *arg = NULL, *escaped = NULL, *found = NULL;
+        _cleanup_free_ char *escaped = NULL, *found = NULL;
+        _cleanup_strv_free_ char **argv = NULL;
         _cleanup_close_ int fd_executable = -1;
-        char *argv[UDEV_ARGV_MAX];
         char program[UTIL_PATH_SIZE];
-        const char *helper = NULL;
+        const char *path, *helper = NULL;
         struct spawn spawn = {
                 .event = event,
                 .cmd = cmd,
@@ -1207,7 +1238,7 @@ int udev_event_spawn(struct udev_event *event,
                 .result = result,
                 .result_size = result_size,
         };
-        int argc, err = 0;
+        int r, err = 0;
 
         assert(event);
         assert(cmd);
@@ -1219,12 +1250,13 @@ int udev_event_spawn(struct udev_event *event,
         if (escaped)
                 spawn.cmd = escaped;
 
-        /* The words are written over a copy of the command, on the heap, like the argv of systemd, to keep
-         * the stack small. The commands come from buffers of UTIL_LINE_SIZE, which the copy was before. */
-        arg = strndup(cmd, UTIL_LINE_SIZE - 1);
-        if (!arg)
-                return log_oom();
-        udev_build_argv(event->udev, arg, &argc, argv);
+        /* Like systemd, split the command into a string vector of its own, in the worker before the fork, and
+         * free it there after the fork; a child whose execve() fails exits with the vector still reachable,
+         * through argv in this frame. */
+        r = strv_split_full(&argv, cmd, NULL, COMMAND_SPLIT_FLAGS);
+        if (r < 0)
+                return log_device_error_errno(event->dev, r, "Failed to split command: %m");
+        command_limit_words(cmd, argv);
 
         if (event->event_mode == EVENT_UDEVADM_TEST)
                 helper = test_mode_helper(argv[0]);
@@ -1261,15 +1293,27 @@ int udev_event_spawn(struct udev_event *event,
         /* The helpers run in test mode must not change the device either: tell cdrom_id not to
          * lock, unlock or eject the media, which the rules ask for with --lock-media. */
         if (helper && streq(helper, "cdrom_id")) {
+                _cleanup_free_ char *dry_run = NULL;
+                unsigned argc = strv_length(argv);
+                char **a;
+
+                /* as before, at most UDEV_ARGV_MAX - 1 arguments */
                 if (argc + 1 >= UDEV_ARGV_MAX)
                         return log_device_error_errno(event->dev, E2BIG,
                                                       "Too many arguments, not running '%s' in test mode.", spawn.cmd);
 
+                dry_run = strdup("--dry-run");
+                if (!dry_run)
+                        return log_oom();
+                a = realloc_multiply(argv, sizeof(char *), argc + 2);
+                if (!a)
+                        return log_oom();
+                argv = a;
+
                 /* insert --dry-run right after the program name, so that it is not taken for an
                  * argument after "--"; also move the terminating NULL */
                 memmove(argv + 2, argv + 1, argc * sizeof(char *));
-                argv[1] = (char *) "--dry-run";
-                argc++;
+                argv[1] = TAKE_PTR(dry_run);
         }
 
         if (isempty(argv[0]))
@@ -1298,7 +1342,8 @@ int udev_event_spawn(struct udev_event *event,
         }
 
         /* allow programs in /usr/lib/udev/ to be called without the path */
-        if (argv[0][0] != '/') {
+        path = argv[0];
+        if (path[0] != '/') {
                 strscpyl(program, sizeof(program), UDEV_LIBEXEC_DIR "/", argv[0], NULL);
 #ifdef HAVE_SPLIT_USR
                 if(access(program, X_OK))
@@ -1306,17 +1351,17 @@ int udev_event_spawn(struct udev_event *event,
                 if(access(program, X_OK))
                         strscpyl(program, sizeof(program), "/lib/udev/", argv[0], NULL);
 #endif
-                argv[0] = program;
+                path = program;
         }
 
         /* Like systemd, find a missing or unusable program before the fork, see pin_callout_binary(). */
-        fd_executable = pin_callout_binary(argv[0], &found);
+        fd_executable = pin_callout_binary(path, &found);
         if (fd_executable < 0) {
-                _cleanup_free_ char *escaped_program = log_escape(LOG_ERR, argv[0]);
+                _cleanup_free_ char *escaped_program = log_escape(LOG_ERR, path);
 
                 err = log_device_error_errno(event->dev, fd_executable,
                                              "Failed to find and pin callout binary \"%s\": %m",
-                                             escaped_program ?: argv[0]);
+                                             escaped_program ?: path);
                 goto out;
         }
 
@@ -1325,7 +1370,8 @@ int udev_event_spawn(struct udev_event *event,
 
                 log_device_debug(event->dev, "Found callout binary: \"%s\".", escaped_found ?: found);
         }
-        argv[0] = found;
+        /* like systemd, the program gets the binary as argv[0] */
+        free_and_replace(argv[0], found);
 
         /* like systemd, in the worker */
         log_device_debug(event->dev, "Starting '%s'", spawn.cmd);
