@@ -97,6 +97,20 @@ systemd without a license notice, they are licensed under
 systemd: the test data without an explicit license, the sysfs tree in
 test/sys.tar.xz, is assumed to be non-copyrightable.
 
+rule_generator/75-persistent-net-generator.rules contains lines of the rule
+generator of Debian's udev packaging, which Marco d'Itri wrote, first in the
+etc/udev/debian/ directory of udev (2007-2008), and which Debian's udev and
+systemd packaging and then Devuan's eudev packaging kept: the exclusions of
+User-mode Linux and mac80211 monitor interfaces, the order of the dev_id match,
+the S/390 match without dev_id, the comments of the generated rules, and the
+list of the MAC address prefixes of virtual machines, with the additions of
+Debian and Devuan. Like the rest of the file, they are licensed under
+LGPL-2.1-or-later, as the copyright file of Debian's systemd packaging states
+for its debian/ directory (Files: debian/*, with Marco d'Itri among the
+copyright holders). rule_generator/write_net_rules.in takes its check for an
+existing rule from the write_net_rules of that packaging, whose notice is the
+same as its own.
+
 The data files from which some of the hwdb files are generated (see
 hwdb.d/README) come from public registries and lists: hwdb.d/usb.ids
 (linux-usb.org), hwdb.d/sdio.ids (systemd), hwdb.d/ma-*.txt (the IEEE
