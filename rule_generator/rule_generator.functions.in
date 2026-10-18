@@ -54,7 +54,11 @@ writeable() {
 
 # Create a lock file for the current rules file.
 lock_rules_file() {
-	RUNDIR="@rootrundir@/udev/"
+	RUNDIR="@rootrundir@/udev"
+
+	# udevd makes its run directory when it starts: without it, udevd has not run, so no other instance
+	# of this program can, and no lock is needed, which could not be made there either
+	[ -d "$RUNDIR" ] || return 0
 
 	RULES_LOCK="$RUNDIR/.lock-${RULES_FILE##*/}"
 
@@ -77,7 +81,7 @@ unlock_rules_file() {
 # Choose the real rules file if it is writeable or a temporary file if not.
 # Both files should be checked later when looking for existing rules.
 choose_rules_file() {
-	RUNDIR="@rootrundir@/udev/"
+	RUNDIR="@rootrundir@/udev"
 
 	local tmp_rules_file="$RUNDIR/tmp-rules--${RULES_FILE##*/}"
 	[ -e "$RULES_FILE" -o -e "$tmp_rules_file" ] || PRINT_HEADER=1
