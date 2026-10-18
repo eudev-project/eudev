@@ -1499,8 +1499,11 @@ static int strv_extend_pair(char ***l, const char *key, const char *value)
 /* Like get_arg0_or_comm() of systemd b1df918307: the name of the program, argv[0] without its directory, or
  * the comm of the process if that is empty, with the characters that are not alphanumerical removed, as the
  * kernel only accepts those, e.g. "systemd-udevd" becomes "systemdudevd". Unlike systemd, which reads argv[0]
- * from /proc/self/cmdline, it is program_invocation_short_name, which is the same as eudev does not change its
- * argv. */
+ * from /proc/self/cmdline, it is program_invocation_short_name: argv[0] without its directory, or the new
+ * name of a process that renamed itself with rename_process(), which writes it over argv[0]. The workers of
+ * udevd and the children that run programs, "(udev-worker)" and "(spawn)", point it at their complete name
+ * then, which /proc/self/cmdline may show only cut to the length of the original argv[0], so a worker
+ * triggers uevents with "udevworker", like the workers of systemd. */
 static int get_arg0_or_comm(char **ret)
 {
         _cleanup_free_ char *comm = NULL;
