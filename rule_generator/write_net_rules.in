@@ -36,7 +36,7 @@ RULES_FILE='@udevconfdir@/rules.d/70-persistent-net.rules'
 . @udevlibexecdir@/rule_generator.functions
 
 interface_name_taken() {
-	local value="$(find_all_rules 'NAME=' $INTERFACE)"
+	local value="$(find_all_rules 'NAME=' "$(regex_escape "$INTERFACE")")"
 	if [ "$value" ]; then
 		return 0
 	else
@@ -44,8 +44,9 @@ interface_name_taken() {
 	fi
 }
 
+# the next number for the names that start with $1
 find_next_available() {
-	raw_find_next_available "$(find_all_rules 'NAME=' "$1")"
+	raw_find_next_available "$(find_all_rules 'NAME=' "$(regex_escape "$1")[0-9]*")"
 }
 
 write_rule() {
@@ -67,7 +68,7 @@ write_rule() {
 	printf '\n'
 	[ "$comment" ] && printf '%s\n' "# $comment"
 	printf '%s\n' "SUBSYSTEM==\"net\", ACTION==\"add\"$match, NAME=\"$name\""
-	} >> $RULES_FILE
+	} >> "$RULES_FILE"
 }
 
 if [ -z "$INTERFACE" ]; then
@@ -127,8 +128,8 @@ match="$match, KERNEL==\"$basename*\""
 # basic regular expression that matches it literally.
 rule_re=$(printf '%s\n' "SUBSYSTEM==\"net\", ACTION==\"add\"$match, NAME=\"" | sed -e 's|[\/.*$^[]|\\&|g')
 name=$(sed -n -e "s/^$rule_re\([^\"]*\)\".*/\1/p" \
-	$RO_RULES_FILE \
-	$([ -e $RULES_FILE ] && printf '%s\n' "$RULES_FILE") \
+	"$RO_RULES_FILE" \
+	$([ -e "$RULES_FILE" ] && printf '%s\n' "$RULES_FILE") \
 	2>/dev/null | sed -n '$p')
 if [ "$name" ]; then
 	if [ "$name" != "$INTERFACE" ]; then
@@ -148,7 +149,7 @@ if [ "$INTERFACE_NAME" ]; then
 else
 	# if a rule using the current name already exists, find a new name
 	if interface_name_taken; then
-		INTERFACE="$basename$(find_next_available "$basename[0-9]*")"
+		INTERFACE="$basename$(find_next_available "$basename")"
 		# prevent INTERFACE from being "eth" instead of "eth0"
 		[ "$INTERFACE" = "${INTERFACE%%[ \[\]0-9]*}" ] && INTERFACE=${INTERFACE}0
 		printf '%s\n' "INTERFACE_NEW=$INTERFACE"

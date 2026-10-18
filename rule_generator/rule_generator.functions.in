@@ -30,7 +30,7 @@ sysread() {
 sysreadlink() {
 	local file="$1"
 	[ -e "/sys$DEVPATH/$file" ] || return 0
-	readlink -f /sys$DEVPATH/$file 2> /dev/null || true
+	readlink -f "/sys$DEVPATH/$file" 2> /dev/null || true
 }
 
 # Log a warning: on standard error, which udevd logs at the debug level only, and in the kernel log, where
@@ -44,8 +44,8 @@ log_warning() {
 
 # Return true if a directory is writeable.
 writeable() {
-	if ln -s test-link $1/.is-writeable 2> /dev/null; then
-		rm -f $1/.is-writeable
+	if ln -s test-link "$1/.is-writeable" 2> /dev/null; then
+		rm -f "$1/.is-writeable"
 		return 0
 	else
 		return 1
@@ -59,7 +59,7 @@ lock_rules_file() {
 	RULES_LOCK="$RUNDIR/.lock-${RULES_FILE##*/}"
 
 	retry=30
-	while ! mkdir $RULES_LOCK 2> /dev/null; do
+	while ! mkdir "$RULES_LOCK" 2> /dev/null; do
 		if [ $retry -eq 0 ]; then
 			 log_warning "Cannot lock $RULES_FILE!"
 			 exit 2
@@ -71,7 +71,7 @@ lock_rules_file() {
 
 unlock_rules_file() {
 	[ "$RULES_LOCK" ] || return 0
-	rmdir $RULES_LOCK || true
+	rmdir "$RULES_LOCK" || true
 }
 
 # Choose the real rules file if it is writeable or a temporary file if not.
@@ -82,11 +82,11 @@ choose_rules_file() {
 	local tmp_rules_file="$RUNDIR/tmp-rules--${RULES_FILE##*/}"
 	[ -e "$RULES_FILE" -o -e "$tmp_rules_file" ] || PRINT_HEADER=1
 
-	[ -d "${RULES_FILE%/*}" ] || if writeable ${RULES_FILE%/rules.d/*}; then
+	[ -d "${RULES_FILE%/*}" ] || if writeable "${RULES_FILE%/rules.d/*}"; then
 		mkdir -p "${RULES_FILE%/*}"
 	fi
 
-	if writeable ${RULES_FILE%/*}; then
+	if writeable "${RULES_FILE%/*}"; then
 		RO_RULES_FILE='/dev/null'
 	else
 		RO_RULES_FILE=$RULES_FILE
@@ -100,16 +100,28 @@ raw_find_next_available() {
 
 	local basename=${links%%[ 0-9]*}
 	local max=-1
+	local noglob=
+	case $- in *f*) noglob=1 ;; esac
+	set -f
 	for name in $links; do
-		local num=${name#$basename}
+		local num=${name#"$basename"}
 		[ "$num" ] || num=0
 		[ $num -gt $max ] && max=$num
 	done
+	[ "$noglob" ] || set +f
 
 	local max=$(($max + 1))
 	# "name0" actually is just "name"
 	[ $max -eq 0 ] && return
 	printf '%s\n' "$max"
+}
+
+# Print a string as an extended regular expression that matches it literally, also in a sed s command with "/"
+# as the delimiter, e.g. a name for the pattern of find_all_rules, with only the escapes that POSIX defines: a
+# backslash before the characters that are special in such an expression, ".[\()*+?{|^$", "]" and "}" in a
+# bracket expression, and a backslash before the delimiter.
+regex_escape() {
+	printf '%s\n' "$1" | sed -e 's,[\.[()*+?{|^$],\\&,g' -e 's,],[]],g' -e 's,},[}],g' -e 's,/,\\/,g'
 }
 
 # Find all rules matching a key (with action) and a pattern.
@@ -121,13 +133,16 @@ find_all_rules() {
 	local search='.*[[:space:],]'"$key"'"('"$linkre"')".*'
 	local found
 	found=$(sed -n -r -e 's/^#.*//' -e "${match}s/${search}/\1/p" \
-		$RO_RULES_FILE \
-		$([ -e $RULES_FILE ] && printf '%s\n' "$RULES_FILE") \
+		"$RO_RULES_FILE" \
+		$([ -e "$RULES_FILE" ] && printf '%s\n' "$RULES_FILE") \
 		2>/dev/null) || true
 	# on one line, separated by spaces, like the words that echo printed before, but as they are, without
-	# expanding glob patterns or, as the echo of some shells, e.g. dash, does, backslash sequences
+	# expanding glob patterns or, as the echo of some shells, e.g. dash, does, backslash sequences; the
+	# caller's setting of glob expansion is kept
+	local noglob=
+	case $- in *f*) noglob=1 ;; esac
 	set -f
 	set -- $found
-	set +f
+	[ "$noglob" ] || set +f
 	printf '%s\n' "$*"
 }
