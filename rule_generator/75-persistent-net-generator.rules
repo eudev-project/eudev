@@ -23,6 +23,13 @@ KERNEL!="eth*|ath*|wlan*[0-9]|msh*|ra*|sta*|ctc*|lcs*|hsi*", GOTO="persistent_ne
 # ignore Xen virtual interfaces
 SUBSYSTEMS=="xen", GOTO="persistent_net_generator_end"
 
+# ignore UML virtual interfaces
+DRIVERS=="uml-netdev", GOTO="persistent_net_generator_end"
+
+# ignore the monitor interfaces of mac80211 drivers (ARPHRD_IEEE80211_RADIOTAP), which userspace adds to a
+# wireless device on demand, with the MAC address of the device
+KERNEL=="wlan*", ATTR{type}=="803", GOTO="persistent_net_generator_end"
+
 # read MAC address
 ENV{MATCHADDR}="$attr{address}"
 
