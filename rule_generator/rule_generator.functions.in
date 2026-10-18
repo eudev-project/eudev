@@ -24,7 +24,7 @@ sysread() {
 	[ -e "/sys$DEVPATH/$file" ] || return 0
 	local value
 	read value < "/sys$DEVPATH/$file" || return 0
-	echo "$value"
+	printf '%s\n' "$value"
 }
 
 sysreadlink() {
@@ -61,7 +61,7 @@ lock_rules_file() {
 	retry=30
 	while ! mkdir $RULES_LOCK 2> /dev/null; do
 		if [ $retry -eq 0 ]; then
-			 echo "Cannot lock $RULES_FILE!" >&2
+			 log_warning "Cannot lock $RULES_FILE!"
 			 exit 2
 		fi
 		sleep 1
@@ -109,7 +109,7 @@ raw_find_next_available() {
 	local max=$(($max + 1))
 	# "name0" actually is just "name"
 	[ $max -eq 0 ] && return
-	echo "$max"
+	printf '%s\n' "$max"
 }
 
 # Find all rules matching a key (with action) and a pattern.
@@ -119,8 +119,15 @@ find_all_rules() {
 	local match="$3"
 
 	local search='.*[[:space:],]'"$key"'"('"$linkre"')".*'
-	echo $(sed -n -r -e 's/^#.*//' -e "${match}s/${search}/\1/p" \
+	local found
+	found=$(sed -n -r -e 's/^#.*//' -e "${match}s/${search}/\1/p" \
 		$RO_RULES_FILE \
-		$([ -e $RULES_FILE ] && echo $RULES_FILE) \
-		2>/dev/null)
+		$([ -e $RULES_FILE ] && printf '%s\n' "$RULES_FILE") \
+		2>/dev/null) || true
+	# on one line, separated by spaces, like the words that echo printed before, but as they are, without
+	# expanding glob patterns or, as the echo of some shells, e.g. dash, does, backslash sequences
+	set -f
+	set -- $found
+	set +f
+	printf '%s\n' "$*"
 }
