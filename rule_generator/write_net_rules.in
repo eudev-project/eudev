@@ -110,6 +110,25 @@ fi
 basename=${INTERFACE%%[0-9]*}
 match="$match, KERNEL==\"$basename*\""
 
+# The rule may be there already, written for an earlier add event of the interface that udevd handled
+# before it read the rules again, e.g. when "udevadm trigger" adds the interface again, or when its
+# driver is loaded again. Then write no second rule, which would also give the interface the next free
+# name (Debian bug #765577), but use the name of the rule that is there, of the last one if there are
+# several, which is the one that applies. The rule as written below, up to the name, is turned into a
+# basic regular expression that matches it literally.
+rule_re=$(printf '%s\n' "SUBSYSTEM==\"net\", ACTION==\"add\"$match, NAME=\"" | sed -e 's|[\/.*$^[]|\\&|g')
+name=$(sed -n -e "s/^$rule_re\([^\"]*\)\".*/\1/p" \
+	$RO_RULES_FILE \
+	$([ -e $RULES_FILE ] && echo $RULES_FILE) \
+	2>/dev/null | sed -n '$p')
+if [ "$name" ]; then
+	if [ "$name" != "$INTERFACE" ]; then
+		echo "INTERFACE_NEW=$name"
+	fi
+	unlock_rules_file
+	exit 0
+fi
+
 if [ "$INTERFACE_NAME" ]; then
 	# external tools may request a custom name
 	COMMENT="$COMMENT (custom name provided by external tool)"
