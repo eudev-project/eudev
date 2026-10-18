@@ -769,16 +769,78 @@ static int uevent_trigger_set_uuid_supported(int supported)
         return supported;
 }
 
+/* A version of the kernel, as kernel_version() returns it. */
+#define KERNEL_VERSION_CODE(major, minor, patch) ((int) ((major) << 24 | (minor) << 16 | (patch)))
+
+/* The version of the running kernel, from the release that uname() returns, as KERNEL_VERSION_CODE(), where a
+ * missing patch level counts as 0, or -EINVAL if the release does not start with a version. Distributions often
+ * put another number there, e.g. Debian's "4.19.0-21-amd64" for 4.19.249, so the version can be older than the
+ * code that runs, but not newer; the checks below then take the side of the older kernel. The release does not
+ * change, so it is parsed only once in a process, and the child processes that it starts after that, e.g. the
+ * workers of udevd, inherit the result. */
+static int kernel_version(void)
+{
+        /* 0 as long as it is not parsed */
+        static int version = 0;
+        unsigned major, minor, patch = 0;
+        struct utsname u;
+        int v;
+
+        v = __atomic_load_n(&version, __ATOMIC_RELAXED);
+        if (v != 0)
+                return v;
+
+        if (uname(&u) >= 0 && sscanf(u.release, "%u.%u.%u", &major, &minor, &patch) >= 2 &&
+            major > 0 && major <= 0x7f && minor <= 0xff)
+                v = KERNEL_VERSION_CODE(major, minor, MIN(patch, 0xffffu));
+        else
+                v = -EINVAL;
+        __atomic_store_n(&version, v, __ATOMIC_RELAXED);
+
+        return v;
+}
+
+/* Whether the version of the running kernel is in one of the n ranges, each from its first version up to before
+ * its second one; false if the version cannot be parsed. */
+static bool kernel_version_in(const int (*ranges)[2], size_t n)
+{
+        int v;
+
+        v = kernel_version();
+        if (v < 0)
+                return false;
+
+        for (size_t i = 0; i < n; i++)
+                if (v >= ranges[i][0] && v < ranges[i][1])
+                        return true;
+
+        return false;
+}
+
 /* Whether the running kernel reports Linux 4.13 or newer, which supports UUIDs of synthetic uevents, so that
  * uevent_trigger_with_uuid() needs no probe, like eudev before the probe (b3a70f99f). A kernel that reports an
- * older version may have the support backported, so it is probed. */
+ * older version may have the support backported, so it is probed, as is one whose version cannot be parsed. */
 static bool kernel_version_supports_uuid(void)
 {
-        unsigned major, minor;
-        struct utsname u;
+        return kernel_version() >= KERNEL_VERSION_CODE(4, 13, 0);
+}
 
-        return uname(&u) >= 0 && sscanf(u.release, "%u.%u", &major, &minor) == 2 &&
-               (major > 4 || (major == 4 && minor >= 13));
+/* Whether the running kernel may accept the write of a synthetic uevent that it refused, without reporting an
+ * error, see uevent_trigger_fitting(). Since Linux f36776fafbaa ("kobject: support passing in variables for
+ * synthetic uevents"), 4.13, the uevent attributes ignore the result of kobject_synth_uevent(), as they ignored
+ * that of kobject_action_type() before, until Linux df44b479654f ("kobject: return error code if writing
+ * /sys/.../uevent fails"), 5.0, which the stable releases 4.14.99, 4.19.21 and 4.20.8 got too, but not 4.15 to
+ * 4.18. So it may for a version before 4.14.99, which before 4.13 gets here only with the UUIDs backported, from
+ * 4.15 to before 4.19.21, and from 4.20 to before 4.20.8, and for one that cannot be parsed. */
+static bool kernel_may_refuse_uevent_silently(void)
+{
+        static const int silent[][2] = {
+                { 0,                             KERNEL_VERSION_CODE(4, 14, 99) },
+                { KERNEL_VERSION_CODE(4, 15, 0), KERNEL_VERSION_CODE(4, 19, 21) },
+                { KERNEL_VERSION_CODE(4, 20, 0), KERNEL_VERSION_CODE(4, 20, 8)  },
+        };
+
+        return kernel_version() < 0 || kernel_version_in(silent, ELEMENTSOF(silent));
 }
 
 /* The file in which uevent_trigger_with_uuid() keeps a decided result of its probe for the rest of the boot, on
@@ -1219,6 +1281,27 @@ bool syspath_sends_uevents(const char *syspath)
         return read_one_line_file(strjoina(syspath, "/hidden"), &hidden) < 0 || !streq(hidden, "1");
 }
 
+/* One write of uevent_trigger_fitting(): like uevent_trigger_full(), but with check_sent, -ENODATA when the
+ * write succeeded although /sys/kernel/uevent_seqnum, read before and after it, shows that the kernel sent no
+ * uevent at all, see uevent_seqnum_unchanged(). */
+static int uevent_trigger_fitting_one(const char *syspath, const char *action, const char *uuid, const char *args,
+                                      bool check_sent)
+{
+        uint64_t before;
+        int r;
+
+        before = check_sent ? uevent_seqnum() : UINT64_MAX;
+
+        r = uevent_trigger_full(syspath, action, uuid, args);
+        if (r < 0)
+                return r;
+
+        if (check_sent && uevent_seqnum_unchanged(before, uevent_seqnum()))
+                return -ENODATA;
+
+        return 0;
+}
+
 /* Triggers a synthetic uevent of the device with the syspath with the action and the UUID, followed by the
  * arguments joined by trigger_args_join() unless they are NULL, like uevent_trigger_full(), but when the
  * kernel refuses the uevent with ENOMEM, triggers it again without the arguments, and then without the UUID.
@@ -1226,20 +1309,37 @@ bool syspath_sends_uevents(const char *syspath)
  * The kernel builds every uevent in a buffer of UEVENT_BUFFER_SIZE (2048) bytes for at most UEVENT_NUM_ENVP
  * (64) variables: ACTION=, DEVPATH=, SUBSYSTEM=, SYNTH_UUID= (SYNTH_UUID=0 without a UUID), one
  * SYNTH_ARG_KEY=VALUE for every argument, the variables of the device, as in its uevent file, and SEQNUM=.
- * If they do not fit, it sends no uevent, and the write fails with ENOMEM (older kernels accept the write
- * without an error then). The UUID takes 36 bytes more than SYNTH_UUID=0, and the arguments of
- * device_build_default_trigger_args() with the timestamps about 165 bytes and 5 variables, so a device whose
- * uevent is close to the limit, e.g. an input device with a long PHYS string, could get no uevent at all from
- * a trigger with them, while the kernel's own uevent and a trigger with the plain action still work. Unlike
- * systemd 66563e97b7, which then fails, the uevent is triggered again in the smaller form, as the arguments
- * are informational only, and the UUID is only needed to recognize the uevent; the kernel logs its error for
- * the refused write. The space is not estimated beforehand, which would need to read the uevent file of the
- * device for every trigger, and could still be wrong; the kernel knows it. An input device with a MODALIAS
- * that is too long does not fail on recent kernels (e.g. 6.8.12): the kernel cuts it to the space that is
- * left, so the UUID and the arguments make it shorter, as SYNTH_UUID=0 of a plain trigger already does; its
- * beginning, which e.g. the hwdb matches, stays. Returns 1 if the uevent was triggered with the UUID, 0 if
- * it was triggered without it, and a negative errno on failure. */
-static int uevent_trigger_fitting(const char *syspath, const char *action, const char *uuid, const char *args)
+ * If they do not fit, it sends no uevent, and the write fails with ENOMEM. The UUID takes 36 bytes more than
+ * SYNTH_UUID=0, and the arguments of device_build_default_trigger_args() with the timestamps about 165 bytes
+ * and 5 variables, so a device whose uevent is close to the limit, e.g. an input device with a long PHYS
+ * string, could get no uevent at all from a trigger with them, while the kernel's own uevent and a trigger
+ * with the plain action still work. Unlike systemd 66563e97b7, which then fails, the uevent is triggered again in
+ * the smaller form, as the arguments are informational only, and the UUID is only needed to recognize the
+ * uevent; the kernel logs its error for the refused write. The space is not estimated beforehand, which would
+ * need to read the uevent file of the device for every trigger, and could still be wrong; the kernel knows
+ * it. An input device with a MODALIAS that is too long does not fail on recent kernels (e.g. 6.8.12): the
+ * kernel cuts it to the space that is left, so the UUID and the arguments make it shorter, as SYNTH_UUID=0 of
+ * a plain trigger already does; its beginning, which e.g. the hwdb matches, stays.
+ *
+ * Linux 4.13 to 4.20, before the stable releases 4.14.99, 4.19.21 and 4.20.8, accept such a write without an
+ * error, although they sent no uevent, see kernel_may_refuse_uevent_silently(). With check_sent, which the caller
+ * passes when the kernel supports UUIDs and may refuse a uevent that way (when it is not known whether the kernel
+ * supports UUIDs, the probe of uevent_trigger_with_uuid() deals with a write that sent nothing),
+ * /sys/kernel/uevent_seqnum is read before and after the write with the UUID, and if it did not change, the
+ * kernel sent no uevent at all, and the smaller form is triggered as for ENOMEM, unless the device never sends
+ * uevents, see syspath_sends_uevents(). That costs two reads of the file for a write, and a write or two more
+ * for a device whose uevents the kernel suppresses for the moment, e.g. a disk while add_disk() scans its
+ * partitions, which get no uevent from them either; if the kernel stops suppressing them meanwhile, the device
+ * gets the smaller uevent. If any other uevent was sent between the two reads, e.g. of another device, the
+ * number changed, and a write that the kernel refused that way is not noticed, as before. On the other kernels,
+ * which report the refusal, the file is not read, and a write that sent nothing, e.g. for a device whose uevents
+ * the kernel suppresses, is not repeated: the kernel never reports an error for a uevent that it drops because
+ * the device suppresses its uevents (kobj->uevent_suppress), the filter of its kset rejects it, e.g. a device
+ * without a bus and a class, or it has no subsystem.
+ * Returns 1 if the uevent was triggered with the UUID, 0 if it was triggered without it, and a negative errno
+ * on failure. */
+static int uevent_trigger_fitting(const char *syspath, const char *action, const char *uuid, const char *args,
+                                  bool check_sent)
 {
         _cleanup_free_ char *lesc1 = NULL, *lesc2 = NULL;
         int r;
@@ -1248,21 +1348,33 @@ static int uevent_trigger_fitting(const char *syspath, const char *action, const
         assert(action);
 
         if (uuid && args) {
-                r = uevent_trigger_full(syspath, action, uuid, args);
-                if (r != -ENOMEM)
+                r = uevent_trigger_fitting_one(syspath, action, uuid, args, check_sent);
+                if (r == -ENODATA && !syspath_sends_uevents(syspath))
+                        return 1;
+                if (!IN_SET(r, -ENOMEM, -ENODATA))
                         return r < 0 ? r : 1;
 
-                log_debug_errno(r, "%s: The kernel refused the uevent with the caller arguments, they may not fit into it, triggering '%s' without them: %m",
-                                utf8_escape_for_log(syspath, &lesc1), utf8_escape_for_log(action, &lesc2));
+                if (r == -ENOMEM)
+                        log_debug_errno(r, "%s: The kernel refused the uevent with the caller arguments, they may not fit into it, triggering '%s' without them: %m",
+                                        utf8_escape_for_log(syspath, &lesc1), utf8_escape_for_log(action, &lesc2));
+                else
+                        log_debug("%s: The kernel sent no uevent with the caller arguments, it may have refused it without saying so, as they may not fit into it, or it suppresses the uevents of the device, triggering '%s' without them.",
+                                  utf8_escape_for_log(syspath, &lesc1), utf8_escape_for_log(action, &lesc2));
         }
 
         if (uuid) {
-                r = uevent_trigger_full(syspath, action, uuid, NULL);
-                if (r != -ENOMEM)
+                r = uevent_trigger_fitting_one(syspath, action, uuid, NULL, check_sent);
+                if (r == -ENODATA && !syspath_sends_uevents(syspath))
+                        return 1;
+                if (!IN_SET(r, -ENOMEM, -ENODATA))
                         return r < 0 ? r : 1;
 
-                log_debug_errno(r, "%s: The kernel refused the uevent with the UUID, it may not fit into it, triggering '%s' without it: %m",
-                                utf8_escape_for_log(syspath, &lesc1), utf8_escape_for_log(action, &lesc2));
+                if (r == -ENOMEM)
+                        log_debug_errno(r, "%s: The kernel refused the uevent with the UUID, it may not fit into it, triggering '%s' without it: %m",
+                                        utf8_escape_for_log(syspath, &lesc1), utf8_escape_for_log(action, &lesc2));
+                else
+                        log_debug("%s: The kernel sent no uevent with the UUID, it may have refused it without saying so, as it may not fit into it, or it suppresses the uevents of the device, triggering '%s' without it.",
+                                  utf8_escape_for_log(syspath, &lesc1), utf8_escape_for_log(action, &lesc2));
         }
 
         r = uevent_trigger_full(syspath, action, NULL, NULL);
@@ -1338,7 +1450,8 @@ static int uevent_trigger_with_uuid(struct udev *udev, const char *syspath, cons
                                         UEVENT_UUID_CACHE);
         }
         if (r > 0)
-                return uevent_trigger_fitting(syspath, action, uuid, args);
+                return uevent_trigger_fitting(syspath, action, uuid, args,
+                                              /* check_sent= */ kernel_may_refuse_uevent_silently());
 
         if (r == 0) {
                 r = uevent_trigger(syspath, action, NULL);
@@ -1346,7 +1459,7 @@ static int uevent_trigger_with_uuid(struct udev *udev, const char *syspath, cons
         }
 
         if (!syspath_sends_uevents(syspath))
-                return uevent_trigger_fitting(syspath, action, uuid, args);
+                return uevent_trigger_fitting(syspath, action, uuid, args, /* check_sent= */ false);
 
         /* The socket must be bound before the uevent is triggered. */
         monitor = udev_monitor_new_from_netlink(udev, "kernel");
@@ -1366,7 +1479,7 @@ static int uevent_trigger_with_uuid(struct udev *udev, const char *syspath, cons
         }
 
         before = uevent_seqnum();
-        r = uevent_trigger_fitting(syspath, action, uuid, args);
+        r = uevent_trigger_fitting(syspath, action, uuid, args, /* check_sent= */ false);
         if (r <= 0)
                 /* without the UUID, which the kernel refused, its support cannot be told */
                 return r;
