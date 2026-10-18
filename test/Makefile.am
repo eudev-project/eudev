@@ -84,7 +84,9 @@ test_udev_CPPFLAGS = \
 	$(AM_CPPFLAGS)
 
 test_udev_devlink_SOURCES = \
-	test-udev-devlink.c
+	test-udev-devlink.c \
+	mount-private.c \
+	mount-private.h
 
 test_udev_devlink_LDADD = \
 	$(test_udev_LDADD)

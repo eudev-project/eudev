@@ -22,9 +22,16 @@
  * received from the kernel by udevd, the device does not read its old database entry.
  *
  * Usage: test-udev-devlink ACTION DEVPATH
+ *        test-udev-devlink --private-mount-namespace PROGRAM [ARGUMENT...]
  *
  * If $DL_BARRIER is set, the rules are loaded first, then the event waits until that file exists, so
- * that several processes can be released at the same moment. $DL_DEBUG enables debug logging. */
+ * that several processes can be released at the same moment. $DL_DEBUG enables debug logging.
+ *
+ * With --private-mount-namespace, it runs PROGRAM in a mount namespace of its own whose mounts are
+ * private, like test-udev sets up its namespace, also in a plain chroot, where / is not a mount point:
+ * the namespace of udev-devlink-test.sh run as root, as Linux does not create a user namespace for a
+ * process in a chroot, also not for root, and unshare --propagation fails where / is not a mount
+ * point. */
 
 #include <errno.h>
 #include <stdio.h>
@@ -32,11 +39,27 @@
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
+#include <sched.h>
 #include <sys/signalfd.h>
 #include <sys/stat.h>
 
+#include "mount-private.h"
 #include "udev.h"
 #include "udev-util.h"
+
+static int run_in_private_mount_namespace(char *argv[]) {
+        if (unshare(CLONE_NEWNS) < 0) {
+                fprintf(stderr, "failed to create a mount namespace: %m\n");
+                return EXIT_FAILURE;
+        }
+
+        if (make_mounts_private() < 0)
+                return EXIT_FAILURE;
+
+        execvp(argv[0], argv);
+        fprintf(stderr, "failed to execute %s: %m\n", argv[0]);
+        return EXIT_FAILURE;
+}
 
 int main(int argc, char *argv[]) {
         _cleanup_udev_unref_ struct udev *udev = NULL;
@@ -47,8 +70,13 @@ int main(int argc, char *argv[]) {
         const char *barrier;
         sigset_t mask;
 
+        if (argc >= 3 && streq(argv[1], "--private-mount-namespace"))
+                return run_in_private_mount_namespace(argv + 2);
+
         if (argc != 3) {
-                fprintf(stderr, "usage: %s ACTION DEVPATH\n", program_invocation_short_name);
+                fprintf(stderr, "usage: %s ACTION DEVPATH\n"
+                        "       %s --private-mount-namespace PROGRAM [ARGUMENT...]\n",
+                        program_invocation_short_name, program_invocation_short_name);
                 return EXIT_FAILURE;
         }
 

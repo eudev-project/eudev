@@ -4,15 +4,21 @@
 # Tests the handling of device node symlinks claimed by several devices ("devlink stacks"),
 # with events processed concurrently, as by the workers of udevd.
 #
-# The test runs as an unprivileged user or as root: it re-executes itself in a new user and mount
-# namespace, where tmpfs is mounted on /dev, /sys, /run/udev and the directories with udev rules and
-# configuration. A fake sysfs describes up to 7 character devices of the subsystem "fake", whose
-# device numbers are the ones of host device nodes (null, zero, full, random, urandom, tty, ptmx).
+# The test re-executes itself in a new mount namespace, where tmpfs is mounted on /dev, /sys,
+# /run/udev and the directories with udev rules and configuration. As an unprivileged user, it is
+# the mount namespace of a new user namespace. As root, also root of a user namespace, it is a mount
+# namespace only, whose mounts test-udev-devlink makes private like test-udev does, also in a plain
+# chroot: Linux does not create a user namespace for a process in a chroot, also not for root, e.g.
+# in sbuild; where that is not possible, e.g. without CAP_SYS_ADMIN, the mount namespace of a new
+# user namespace as well. A fake sysfs describes up to 7 character devices of the subsystem "fake",
+# whose device numbers are the ones of host device nodes (null, zero, full, random, urandom, tty,
+# ptmx).
 # mknod() is not permitted in a user namespace, so their device nodes /dev/fakeN are bind mounts of
-# the host device nodes. These bind mounts, and the one on /dev/null, are read-only: the event
-# processors update the timestamps of a device node on every event, which the host's nodes used
-# here, writable for everyone, would otherwise allow, and, as root, they would also apply the
-# default SELinux or SMACK label; the host's nodes must stay as they are.
+# the host device nodes, also as root. These bind mounts, and the one on /dev/null, are read-only:
+# the event processors update the timestamps of a device node on every event, which the host's
+# nodes used here, writable for everyone, would otherwise allow, and, as root, they would also
+# change their owner or mode as asked and apply the default SELinux or SMACK label; the host's
+# nodes must stay as they are.
 # All fake devices claim the symlink /dev/test/a with a priority set by the rules. Each event is
 # processed by test-udev-devlink, several of them at once where concurrency is tested. Some
 # scenarios also check the handling of the device node itself, the parsing of link_priority= and
@@ -39,15 +45,24 @@ if [ -z "${DL_IN_NS:-}" ]; then
                 echo "test-udev-devlink not found, skipping"
                 exit 77
         fi
-        if ! unshare --user --map-root-user --mount true 2>/dev/null; then
-                echo "user and mount namespaces are not available, skipping"
+        # as root, a mount namespace only, which also works in a chroot; else, or as root without the
+        # privileges for it, e.g. without CAP_SYS_ADMIN, a user and mount namespace; the output of the
+        # check tells that the command ran there, unlike e.g. a TEST_UDEV_DEVLINK without the option
+        err=
+        [ "$(id -u)" = 0 ] && err=$("$DRIVER" --private-mount-namespace echo ok 2>&1)
+        if [ "$err" = ok ]; then
+                NS=("$DRIVER" --private-mount-namespace)
+        elif unshare --user --map-root-user --mount true 2>/dev/null; then
+                NS=(unshare --user --map-root-user --mount --propagation private)
+        else
+                echo "user and mount namespaces are not available${err:+, nor a private mount namespace ($err)}, skipping"
                 exit 77
         fi
         UDEVADM=$(realpath "${TEST_UDEVADM:-$(dirname "$DRIVER")/../src/udev/udevadm}" 2>/dev/null)
         # /sys is a tmpfs here, which libudev refuses as sysfs by default
         export DL_IN_NS=1 DRIVER UDEVADM UDEV_DEVICE_VERIFY_SYSFS=0
         [ -n "${DL_OLD_DRIVER:-}" ] && DL_OLD_DRIVER=$(realpath "$DL_OLD_DRIVER") && export DL_OLD_DRIVER
-        exec unshare --user --map-root-user --mount --propagation private "$0" "$@"
+        exec "${NS[@]}" "$0" "$@"
 fi
 
 SCENARIOS="${*:-add_race remove_race remove_all_race prio_change missing_node old_links node_perms remove_owner repair upgrade churn dir_race symlink_values link_priority cleanup_db}"
@@ -555,8 +570,12 @@ scenario_node_perms() {
         echo "== node_perms: devlinks are created also when the device node cannot be handled as asked"
         reset_state
         PRIO=(0 0)
-        # changing the owner of a host device node fails here: EROFS, as it is mounted read-only
-        EXTRA_LINKS='KERNEL=="fake0", OWNER="0", SYMLINK+="t6/perm"'
+        # changing the owner of a host device node fails here: EROFS, as it is mounted read-only; an
+        # owner other than its current one, root as root of a user namespace, which sees the host's root
+        # as nobody, and 1 as real root, so that it is tried in both
+        owner=$(stat -L -c %u "$HOSTDEV/${NODES[0]}")
+        [ "$owner" = 0 ] && owner=1 || owner=0
+        EXTRA_LINKS="KERNEL==\"fake0\", OWNER=\"$owner\", SYMLINK+=\"t6/perm\""
         write_rules
         node_add 0
         run_seq "$DRIVER" add:0

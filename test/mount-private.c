@@ -15,7 +15,7 @@
   along with eudev; If not, see <http://www.gnu.org/licenses/>.
 ***/
 
-/* The private mount namespace of test-udev. */
+/* The private mount namespace of test-udev, and of udev-devlink-test.sh run as root. */
 
 #include <errno.h>
 #include <fcntl.h>
