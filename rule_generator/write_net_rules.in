@@ -74,6 +74,14 @@ if [ -z "$INTERFACE" ]; then
 	exit 1
 fi
 
+# A rule needs the MAC address or the bus id of the interface: with neither, e.g. when only a name is
+# requested with INTERFACE_NAME for an interface whose address is not used, it would match every
+# interface of the type, by dev_id, type and kernel name only, and give all of them that name.
+if [ -z "$MATCHADDR" ] && [ -z "$MATCHID" ]; then
+	log_warning "no MAC address or bus id to match $INTERFACE with, writing no rule"
+	exit 1
+fi
+
 # Prevent concurrent processes from modifying the file at the same time.
 lock_rules_file
 

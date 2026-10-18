@@ -33,6 +33,15 @@ sysreadlink() {
 	readlink -f /sys$DEVPATH/$file 2> /dev/null || true
 }
 
+# Log a warning: on standard error, which udevd logs at the debug level only, and in the kernel log, where
+# udevd logs by default, at the warning level and with the facility of udevd (daemon), when it can be written.
+log_warning() {
+	printf '%s\n' "$*" >&2
+	if [ -w /dev/kmsg ]; then
+		printf '<28>%s[%s]: %s\n' "${0##*/}" "$$" "$*" > /dev/kmsg || true
+	fi
+}
+
 # Return true if a directory is writeable.
 writeable() {
 	if ln -s test-link $1/.is-writeable 2> /dev/null; then
