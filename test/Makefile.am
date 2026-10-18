@@ -64,7 +64,9 @@ test_libudev_CPPFLAGS = \
 	$(AM_CPPFLAGS)
 
 test_udev_SOURCES = \
-	test-udev.c
+	test-udev.c \
+	mount-private.c \
+	mount-private.h
 
 test_udev_LDADD = \
 	$(top_builddir)/src/libudev/libudev-private.la \
