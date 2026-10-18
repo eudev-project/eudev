@@ -20,6 +20,13 @@ NAME=="?*", GOTO="persistent_net_generator_end"
 # device name whitelist
 KERNEL!="eth*|ath*|wlan*[0-9]|msh*|ra*|sta*|ctc*|lcs*|hsi*", GOTO="persistent_net_generator_end"
 
+# record only names that the kernel gave by enumeration (name_assign_type NET_NAME_ENUM), not the ones of
+# interfaces named by userspace (NET_NAME_USER, NET_NAME_RENAMED) or predictably by the kernel
+# (NET_NAME_PREDICTABLE), which do not depend on the order in which the kernel finds the interfaces; the
+# attribute cannot be read on kernels before 3.17, which do not have it, nor for NET_NAME_UNKNOWN, and then
+# the match fails, so that these interfaces are recorded, as before
+ATTR{name_assign_type}!="1", GOTO="persistent_net_generator_end"
+
 # ignore Xen virtual interfaces
 SUBSYSTEMS=="xen", GOTO="persistent_net_generator_end"
 
