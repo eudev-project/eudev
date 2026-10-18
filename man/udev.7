@@ -429,7 +429,8 @@ SYNTH_ARG_TimestampBoottime=
 (with Linux 4\&.13 or newer; note the mixed\-case names), which can be matched here, e\&.g\&.\&
 ENV{SYNTH_ARG_Comm}=="udevadm"\&. Like the other properties that come with the event from the kernel, they are not stored in the udev database\&. See
 \fBudevadm\fR(8)
-for details\&.
+for details\&. An event that does not fit into the buffer of the kernel with them is triggered again without the arguments, and then without the UUID, also on the kernels that do not report that, Linux 4\&.13 to 4\&.20 before the stable releases 4\&.14\&.99, 4\&.19\&.21 and 4\&.20\&.8, as described there for
+\fBudevadm trigger\fR\&.
 .RE
 .PP
 \fITAG\fR
