@@ -29,13 +29,6 @@ ENV{MATCHADDR}="$attr{address}"
 # match interface type
 ENV{MATCHIFTYPE}="$attr{type}"
 
-# ignore KVM virtual interfaces
-ENV{MATCHADDR}=="52:54:00:*", GOTO="persistent_net_generator_end"
-# ignore VMWare virtual interfaces
-ENV{MATCHADDR}=="00:0c:29:*|00:50:56:*", GOTO="persistent_net_generator_end"
-# ignore Hyper-V virtual interfaces
-ENV{MATCHADDR}=="00:15:5d:*", GOTO="persistent_net_generator_end"
-
 # These vendors are known to violate the local MAC address assignment scheme
 # Interlan, DEC (UNIBUS or QBUS), Apollo, Cisco, Racal-Datacom
 ENV{MATCHADDR}=="02:07:01:*", GOTO="globally_administered_whitelist"
@@ -53,8 +46,6 @@ ENV{MATCHADDR}=="02:cf:1f:*", GOTO="globally_administered_whitelist"
 ENV{MATCHADDR}=="02:e0:3b:*", GOTO="globally_administered_whitelist"
 # BTI (Bus-Tech, Inc.) IBM Mainframes
 ENV{MATCHADDR}=="02:e6:d3:*", GOTO="globally_administered_whitelist"
-# Realtek
-ENV{MATCHADDR}=="52:54:00:*", GOTO="globally_administered_whitelist"
 # Novell 2000
 ENV{MATCHADDR}=="52:54:4c:*", GOTO="globally_administered_whitelist"
 # Realtec
@@ -70,6 +61,28 @@ ENV{MATCHADDR}=="?[2367abef]:*", ENV{MATCHADDR}=""
 
 # do not use empty address
 ENV{MATCHADDR}=="00:00:00:00:00:00", ENV{MATCHADDR}=""
+
+# do not use the MAC addresses of virtual machines, whose network interfaces are enumerated in the same
+# order on every boot anyway: a clone of the machine, whose interfaces get new addresses, would find their
+# names taken by the rules for the old addresses, and its interfaces would get the next free names
+# KVM and QEMU (52:54:00, which some old Realtek cards used too, and which cannot be told apart), and old
+# versions of libvirt (54:52:00)
+ENV{MATCHADDR}=="52:54:00:*|54:52:00:*", ENV{MATCHADDR}=""
+# VMware
+ENV{MATCHADDR}=="00:0c:29:*|00:50:56:*|00:05:69:*|00:1c:14:*", ENV{MATCHADDR}=""
+# Hyper-V
+ENV{MATCHADDR}=="00:15:5d:*", ENV{MATCHADDR}=""
+# VirtualBox
+ENV{MATCHADDR}=="08:00:27:*", ENV{MATCHADDR}=""
+# Xen, for the interfaces that the SUBSYSTEMS=="xen" test above does not catch
+ENV{MATCHADDR}=="00:16:3e:*", ENV{MATCHADDR}=""
+# Parallels, Oracle VM, Nutanix AHV, bhyve, Proxmox VE
+ENV{MATCHADDR}=="00:1c:42:*|00:21:f6:*|50:6b:8d:*|58:9c:fc:*|bc:24:11:*", ENV{MATCHADDR}=""
+# Microsoft Azure (Hyper-V)
+ENV{MATCHADDR}=="00:03:ff:*|00:0d:3a:*|00:1d:d8:*|00:12:5a:*|00:17:fa:*|00:22:48:*|00:25:ae:*", ENV{MATCHADDR}=""
+ENV{MATCHADDR}=="00:50:f2:*|28:18:78:*|50:1a:c5:*|60:45:bd:*|7c:1e:52:*|7c:ed:8d:*|dc:b4:c4:*", ENV{MATCHADDR}=""
+# Ravello
+ENV{MATCHADDR}=="2c:c2:60:*", ENV{MATCHADDR}=""
 
 LABEL="globally_administered_whitelist"
 
