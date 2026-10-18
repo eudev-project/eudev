@@ -5,6 +5,7 @@
 # variables used to communicate:
 #   MATCHADDR             MAC address used for the match
 #   MATCHID               bus_id used for the match
+#   MATCHDEVID            dev_id used for the match
 #   MATCHDRV              driver name used for the match
 #   MATCHIFTYPE           interface type match
 #   COMMENT               comment to add to the generated rule
@@ -43,6 +44,9 @@ ENV{MATCHADDR}="$attr{address}"
 # match interface type
 ENV{MATCHIFTYPE}="$attr{type}"
 
+# match interface dev_id
+ATTR{dev_id}=="?*", ENV{MATCHDEVID}="$attr{dev_id}"
+
 # These vendors are known to violate the local MAC address assignment scheme
 # Interlan, DEC (UNIBUS or QBUS), Apollo, Cisco, Racal-Datacom
 ENV{MATCHADDR}=="02:07:01:*", GOTO="globally_administered_whitelist"
@@ -66,9 +70,6 @@ ENV{MATCHADDR}=="52:54:4c:*", GOTO="globally_administered_whitelist"
 ENV{MATCHADDR}=="52:54:ab:*", GOTO="globally_administered_whitelist"
 # Kingston Technologies
 ENV{MATCHADDR}=="e2:0c:0f:*", GOTO="globally_administered_whitelist"
-
-# match interface dev_id
-ATTR{dev_id}=="?*", ENV{MATCHDEVID}="$attr{dev_id}"
 
 # do not use "locally administered" MAC address
 ENV{MATCHADDR}=="?[2367abef]:*", ENV{MATCHADDR}=""
@@ -109,8 +110,9 @@ SUBSYSTEMS=="ieee1394", ENV{COMMENT}="Firewire device $attr{host_id})"
 # ibmveth likes to use "locally administered" MAC addresses
 DRIVERS=="ibmveth", ENV{MATCHADDR}="$attr{address}", ENV{COMMENT}="ibmveth ($id)"
 
-# S/390 uses id matches only, do not use MAC address match
-SUBSYSTEMS=="ccwgroup", ENV{COMMENT}="S/390 $driver device at $id", ENV{MATCHID}="$id", ENV{MATCHDRV}="$driver", ENV{MATCHADDR}=""
+# S/390 uses id matches only, do not use the MAC address or dev_id match
+SUBSYSTEMS=="ccwgroup", ENV{COMMENT}="S/390 $driver device at $id", ENV{MATCHID}="$id", ENV{MATCHDRV}="$driver", ENV{MATCHADDR}="", \
+  ENV{MATCHDEVID}=""
 
 # see if we got enough data to create a rule
 ENV{MATCHADDR}=="", ENV{MATCHID}=="", ENV{INTERFACE_NAME}=="", GOTO="persistent_net_generator_end"
