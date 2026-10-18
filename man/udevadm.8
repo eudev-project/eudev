@@ -442,7 +442,13 @@ option in
 \fBudevd\fR
 (of the worker for the change events of the
 \fBpath_id\fR
-built\-in command) and the time of each event\&. The properties can be matched with
+built\-in command) and the time of each event\&. Like with
+\fBsystemd\-udevd\fR, this includes the events that the child process
+(udev\-synth)
+of
+\fBudevd\fR
+triggers when it reads the partition table of a disk again: they carry the process ID and the name of
+\fBudevd\fR, not its own\&. The properties can be matched with
 \fIENV{}\fR
 in rules, are shown by
 \fBudevadm monitor \-\-property\fR

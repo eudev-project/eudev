@@ -2162,8 +2162,17 @@ static void reread_start(struct reread *reread) {
                 return;
         }
         if (pid == 0) {
-                /* child */
-                (void) prctl(PR_SET_NAME, "(udev-synth)");
+                /* Like the child of systemd, forked with pidref_safe_fork("(udev-synth)", ...), which renames it
+                 * first: "(udev-synth)" in the comm field and the command line, see rename_process(), and, like
+                 * the workers, the names that the log uses pointed at the complete name. Like the child of
+                 * systemd 000f4fa03f, it triggers its 'change' uevents with the caller arguments that udevd built
+                 * when it started, with the PID and the name of udevd. */
+                static char synth_name[] = "(udev-synth)";
+                r = rename_process(synth_name);
+                if (r < 0)
+                        log_debug_errno(r, "Failed to rename process, ignoring: %m");
+                program_invocation_name = program_invocation_short_name = synth_name;
+
                 child_set_death_signal(LOG_ERR);
 
                 /* Like FORK_RESET_SIGNALS of systemd: every signal at its default action, and none blocked,

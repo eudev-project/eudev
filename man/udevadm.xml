@@ -463,7 +463,11 @@
       <citerefentry><refentrytitle>udev</refentrytitle><manvolnum>7</manvolnum></citerefentry>) and
       of the partitions of a disk whose partition table is read again, carry them too, with the
       process ID of <command>udevd</command> (of the worker for the change events of the
-      <command>path_id</command> built-in command) and the time of each event. The properties can be
+      <command>path_id</command> built-in command) and the time of each event. Like with
+      <command>systemd-udevd</command>, this includes the events that the child process
+      <literal>(udev-synth)</literal> of <command>udevd</command> triggers when it reads the
+      partition table of a disk again: they carry the process ID and the name of
+      <command>udevd</command>, not its own. The properties can be
       matched with <varname>ENV{}</varname> in rules, are shown by <command>udevadm monitor
       --property</command> and in the debug log of <command>udevd</command>, and are not stored in
       the udev database. Unlike systemd, eudev does not send <literal>SYNTH_ARG_PIDFDID=</literal>
