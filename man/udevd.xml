@@ -338,9 +338,13 @@
           it is disabled by default; specifying 1 enables it, and also the
           alternative names of network interfaces, which are then only assigned
           with 1. When eudev is built with <option>--enable-rule-generator</option>,
-          <filename>80-net-name-slot.rules</filename>, which renames the
-          interfaces, is not installed: the rule generator replaces it, and the
-          names it gives do not depend on <varname>net.ifnames=</varname> (see
+          the rule generator keeps the names that the kernel gave the interfaces:
+          by default, <filename>80-net-name-slot.rules</filename>, which renames
+          the interfaces, is not installed, as the rule generator replaces it, and
+          this option changes nothing; when eudev is also built with
+          <option>--with-net-ifnames-default=no</option>, specifying 1 enables the
+          renaming, as without the rule generator, except for the interfaces that
+          its rules name already, and the rule generator then records no names (see
           <citerefentry><refentrytitle>udev</refentrytitle><manvolnum>7</manvolnum></citerefentry>).</para>
         </listitem>
       </varlistentry>
@@ -412,7 +416,9 @@
     <varname>net.ifnames=</varname> option used by
     <filename>80-net-name-slot.rules</filename> (and by
     <filename>80-net-altnames.rules</filename> when eudev is built with
-    <option>--with-net-ifnames-default=no</option>), and to
+    <option>--with-net-ifnames-default=no</option>, and by
+    <filename>75-persistent-net-generator.rules</filename> when it is also built
+    with <option>--enable-rule-generator</option>), and to
     <varname>IMPORT{cmdline}</varname> in the rules in general, and it is handled like
     the kernel command line, e.g. options starting with "rd." are ignored outside of an
     initrd:</para>
@@ -421,7 +427,9 @@ UDEV_PROC_CMDLINE="net.ifnames=0" udevadm test /sys/class/net/eth0
 UDEV_PROC_CMDLINE="net.ifnames=1" udevadm test /sys/class/net/eth0</programlisting>
     <para>The last two commands show what the rules do with the interface when
     the renaming is disabled and when it is enabled, independent of the default
-    of <varname>net.ifnames=</varname> that eudev is built with.</para>
+    of <varname>net.ifnames=</varname> that eudev is built with. They do not run
+    <command>write_net_rules</command>, the program of the rule generator, so they
+    do not show a name that it would give.</para>
     <para>For compatibility with systemd, <varname>$SYSTEMD_PROC_CMDLINE</varname>
     is used the same way when <varname>$UDEV_PROC_CMDLINE</varname> is not set.</para>
  </refsect1>

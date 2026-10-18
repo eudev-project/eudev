@@ -285,10 +285,9 @@ for details\&.
 .RS 4
 Network interfaces are renamed to give them predictable names when possible\&. It is enabled by default; specifying 0 disables it\&. When eudev is built with
 \fB\-\-with\-net\-ifnames\-default=no\fR, it is disabled by default; specifying 1 enables it, and also the alternative names of network interfaces, which are then only assigned with 1\&. When eudev is built with
-\fB\-\-enable\-rule\-generator\fR,
-80\-net\-name\-slot\&.rules, which renames the interfaces, is not installed: the rule generator replaces it, and the names it gives do not depend on
-\fInet\&.ifnames=\fR
-(see
+\fB\-\-enable\-rule\-generator\fR, the rule generator keeps the names that the kernel gave the interfaces: by default,
+80\-net\-name\-slot\&.rules, which renames the interfaces, is not installed, as the rule generator replaces it, and this option changes nothing; when eudev is also built with
+\fB\-\-with\-net\-ifnames\-default=no\fR, specifying 1 enables the renaming, as without the rule generator, except for the interfaces that its rules name already, and the rule generator then records no names (see
 \fBudev\fR(7))\&.
 .RE
 .PP
@@ -388,7 +387,10 @@ option used by
 (and by
 80\-net\-altnames\&.rules
 when eudev is built with
-\fB\-\-with\-net\-ifnames\-default=no\fR), and to
+\fB\-\-with\-net\-ifnames\-default=no\fR, and by
+75\-persistent\-net\-generator\&.rules
+when it is also built with
+\fB\-\-enable\-rule\-generator\fR), and to
 \fIIMPORT{cmdline}\fR
 in the rules in general, and it is handled like the kernel command line, e\&.g\&. options starting with "rd\&." are ignored outside of an initrd:
 .sp
@@ -406,7 +408,8 @@ UDEV_PROC_CMDLINE="net\&.ifnames=1" udevadm test /sys/class/net/eth0
 .PP
 The last two commands show what the rules do with the interface when the renaming is disabled and when it is enabled, independent of the default of
 \fInet\&.ifnames=\fR
-that eudev is built with\&.
+that eudev is built with\&. They do not run
+\fBwrite_net_rules\fR, the program of the rule generator, so they do not show a name that it would give\&.
 .PP
 For compatibility with systemd,
 \fI$SYSTEMD_PROC_CMDLINE\fR

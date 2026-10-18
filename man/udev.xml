@@ -508,6 +508,10 @@
             are not allowed in symlink names (see <varname>SYMLINK</varname>) are
             replaced, and renaming the interface to an invalid name fails. No
             characters are replaced with <varname>OPTIONS+="string_escape=none"</varname>.</para>
+            <para>When another interface has the name, renaming the interface fails,
+            and it keeps its name, unless eudev is built with
+            <option>--enable-rule-generator</option>: then <command>udevd</command>
+            waits for the name to become free (see <xref linkend="rule-generator"/>).</para>
           </listitem>
         </varlistentry>
 
@@ -1436,10 +1440,14 @@ SUBSYSTEM=="net", OPTIONS="log_level=debug"</programlisting></para>
       <option>--with-net-ifnames-default=no</option>, interfaces keep the names
       the kernel gave them unless the kernel command line has
       <varname>net.ifnames=1</varname>. When eudev is built with
-      <option>--enable-rule-generator</option>,
-      <filename>80-net-name-slot.rules</filename> is not installed: the rule
-      generator replaces it, and the names it gives do not depend on
-      <varname>net.ifnames=</varname>.</para>
+      <option>--enable-rule-generator</option>, the rule generator keeps the
+      names that the kernel gave the interfaces from one boot to the next (see
+      <xref linkend="rule-generator"/>): by default, it replaces
+      <filename>80-net-name-slot.rules</filename>, which is not installed, and
+      <varname>net.ifnames=</varname> changes nothing; when eudev is also built
+      with <option>--with-net-ifnames-default=no</option>,
+      <filename>80-net-name-slot.rules</filename> is installed, and with
+      <varname>net.ifnames=1</varname> the rule generator does nothing.</para>
 
       <para><filename>80-net-altnames.rules</filename> requests
       <varname>OPTIONS+="net_altnames"</varname>, so that these names, except
@@ -1836,6 +1844,91 @@ SUBSYSTEM=="net", OPTIONS="log_level=debug"</programlisting></para>
         <programlisting># /etc/udev/hwdb.d/50-net-naming-denylist.hwdb
 net:naming:drvirtio_net:*
  ID_NET_NAME_ALLOW_PHYS_PORT_NAME=0</programlisting>
+      </refsect2>
+
+      <refsect2 id="rule-generator"><title>The rule generator</title>
+        <para>When eudev is built with <option>--enable-rule-generator</option>,
+        <filename>75-persistent-net-generator.rules</filename> keeps the names that
+        the kernel gives network interfaces, e.g. <literal>eth0</literal>, from one
+        boot to the next, also when the kernel finds the interfaces in another
+        order: the first time an interface appears, its program
+        <command>write_net_rules</command> writes a rule with the name of the
+        interface to <filename>/etc/udev/rules.d/70-persistent-net.rules</filename>,
+        which gives the interface that name on the next boots. When a rule there
+        gives that name to another interface already, the rule gets the name with
+        the next number after the highest one there, e.g. <literal>eth1</literal>,
+        and the interface is renamed to it at once. The rule matches the MAC
+        address of the interface, its type and its <filename>dev_id</filename>
+        attribute, and for S/390 devices their bus id and driver instead, never only
+        its type and kernel name. Only interfaces that the kernel named by
+        enumeration get a rule, i.e. whose <filename>name_assign_type</filename>
+        attribute is 1 (<constant>NET_NAME_ENUM</constant>) or cannot be read, as on
+        kernels before 3.17, which do not have it, and whose names are
+        <literal>eth*</literal>, <literal>wlan*</literal> or a few other kernel
+        names, and only when they have a driver, unlike e.g. bridges and VLANs, and
+        no name from an earlier rule; not the interfaces of Xen and User-mode Linux,
+        the monitor interfaces of wireless devices, and the ones whose MAC address is
+        locally administered (except the addresses of some vendors that do not
+        follow that scheme), all zeros, or one of a virtual machine, e.g. of KVM,
+        QEMU, VMware, Hyper-V, VirtualBox or Xen. The prefixes listed for Microsoft
+        Azure are registered to Microsoft, not only for Azure, so interfaces of
+        Microsoft hardware with such an address get no rule either; 54:52:00, which
+        is registered to no one, is listed for the guests that old versions of
+        libvirt created with it, which keep their addresses. The rules may be edited, keeping each rule on one line and changing only the value of
+        <varname>NAME</varname>, and when the file is removed, the current names are
+        recorded again. When
+        <filename>/etc/udev/rules.d</filename> cannot be written, e.g. as the root
+        file system is still read-only, the rules are written to
+        <filename>/run/udev/tmp-rules--70-persistent-net.rules</filename> instead,
+        which eudev does not copy: the system has to add that file to
+        <filename>70-persistent-net.rules</filename> later during the boot, e.g.
+        with an init script. <command>write_net_rules</command> logs a warning when
+        it writes no rule: "no MAC address or bus id to match
+        <replaceable>interface</replaceable> with, writing no rule", when neither the
+        address nor a bus id can be used, e.g. for a name requested with
+        <varname>INTERFACE_NAME</varname>, and "Cannot lock
+        <replaceable>file</replaceable>!", when it gives up after waiting 30 seconds
+        for the lock of the rules file; it writes them to its standard error,
+        which <command>udevd</command> logs at the debug level, and, when
+        <filename>/dev/kmsg</filename> can be written, to the kernel log at the
+        warning level, as <literal>write_net_rules[<replaceable>pid</replaceable>]</literal>.</para>
+
+        <para>Network interfaces then also swap their names, e.g. when the kernel
+        finds them in another order than the rules expect, or after the names in
+        the rules were swapped: when an interface is to get a new name, and a rule
+        gives its current name to another interface, <command>udevd</command> first
+        renames it to a temporary name, with a number derived from its interface
+        index instead of its own, e.g.
+        <literal>eth126</literal>, so that the other interface can get the name;
+        when the name that an interface is to get is taken, it renames the
+        interface to
+        <literal>rename_<replaceable>name</replaceable></literal>, or
+        <literal>rename<replaceable>index</replaceable></literal> when that is
+        longer than 15 characters, and waits up to 90 seconds, but not beyond the
+        event timeout (see
+        <citerefentry><refentrytitle>udevd</refentrytitle><manvolnum>8</manvolnum></citerefentry>),
+        for the name to become free, and renames it back to its old name when it
+        does not. It skips that, or stops waiting, as soon as
+        <command>udevd</command> has handled the add event of the interface that
+        has the name: as only add events rename an interface, that one keeps it. An
+        interface that gets no new name, e.g. one of a virtual machine, keeps its
+        name, also when a rule gives that to another interface, e.g. a stale rule
+        of a card that was replaced: the other interface then keeps its own name,
+        and waits only while the add event of the one that has the name is queued
+        or running, or when <command>udevd</command> has not handled it, e.g. as
+        it was not triggered.</para>
+
+        <para>By default, the rule generator replaces
+        <filename>80-net-name-slot.rules</filename>, which is not installed, so
+        <varname>net.ifnames=</varname> on the kernel command line changes nothing.
+        When eudev is also built with <option>--with-net-ifnames-default=no</option>,
+        <filename>80-net-name-slot.rules</filename> is installed, and with
+        <varname>net.ifnames=1</varname> the rule generator records no names: then
+        the interfaces get their predictable names, except the ones that
+        <filename>70-persistent-net.rules</filename> names already, as it comes
+        first. The alternative names are assigned as without the rule generator.
+        <command>udevadm test</command> does not run
+        <command>write_net_rules</command>.</para>
       </refsect2>
   </refsect1>
 

@@ -359,11 +359,12 @@ AC_SUBST([zshcompletiondir], [$with_zshcompletiondir])
 AM_CONDITIONAL([ENABLE_ZSH_COMPLETION], [test "x$with_zshcompletiondir" != xno])
 
 # ------------------------------------------------------------------------------
-# rule-generator - persistent network and optical device rule generator
+# rule-generator - persistent network interface name rule generator
 # ------------------------------------------------------------------------------
 # It consists of rules, a script for them and support in udevd, so it is never enabled with --disable-programs.
+# Its optical device part (write_cd_rules) was removed in 2015.
 AC_ARG_ENABLE([rule-generator],
-	AS_HELP_STRING([--enable-rule-generator], [enable legacy persistent network, cdrom support, not with --disable-programs]),
+	AS_HELP_STRING([--enable-rule-generator], [enable the legacy rule generator of persistent network interface names, not with --disable-programs]),
 	[], [enable_rule_generator=no])
 # every value other than "no" enables it; the define and the automake conditional follow the same result
 AS_IF([test "x$enable_rule_generator" = xno],

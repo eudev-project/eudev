@@ -544,6 +544,12 @@ the section called \(lqNETWORK INTERFACE NAMING\(rq), all other characters are r
 _, and a name that is still not valid is ignored with a warning\&. With the older schemes, only the characters that are not allowed in symlink names (see
 \fISYMLINK\fR) are replaced, and renaming the interface to an invalid name fails\&. No characters are replaced with
 \fIOPTIONS+="string_escape=none"\fR\&.
+.sp
+When another interface has the name, renaming the interface fails, and it keeps its name, unless eudev is built with
+\fB\-\-enable\-rule\-generator\fR: then
+\fBudevd\fR
+waits for the name to become free (see
+the section called \(lqThe rule generator\(rq)\&.
 .RE
 .PP
 \fISYMLINK\fR
@@ -1387,10 +1393,16 @@ renames interfaces unless the kernel command line has
 \fInet\&.ifnames=0\fR\&. When eudev is built with
 \fB\-\-with\-net\-ifnames\-default=no\fR, interfaces keep the names the kernel gave them unless the kernel command line has
 \fInet\&.ifnames=1\fR\&. When eudev is built with
-\fB\-\-enable\-rule\-generator\fR,
+\fB\-\-enable\-rule\-generator\fR, the rule generator keeps the names that the kernel gave the interfaces from one boot to the next (see
+the section called \(lqThe rule generator\(rq): by default, it replaces
+80\-net\-name\-slot\&.rules, which is not installed, and
+\fInet\&.ifnames=\fR
+changes nothing; when eudev is also built with
+\fB\-\-with\-net\-ifnames\-default=no\fR,
 80\-net\-name\-slot\&.rules
-is not installed: the rule generator replaces it, and the names it gives do not depend on
-\fInet\&.ifnames=\fR\&.
+is installed, and with
+\fInet\&.ifnames=1\fR
+the rule generator does nothing\&.
 .PP
 80\-net\-altnames\&.rules
 requests
@@ -1704,6 +1716,69 @@ net:naming:drvirtio_net:*
 .if n \{\
 .RE
 .\}
+.SS "The rule generator"
+When eudev is built with
+\fB\-\-enable\-rule\-generator\fR,
+75\-persistent\-net\-generator\&.rules
+keeps the names that the kernel gives network interfaces, e\&.g\&.\&
+eth0, from one boot to the next, also when the kernel finds the interfaces in another order: the first time an interface appears, its program
+\fBwrite_net_rules\fR
+writes a rule with the name of the interface to
+/etc/udev/rules\&.d/70\-persistent\-net\&.rules, which gives the interface that name on the next boots\&. When a rule there gives that name to another interface already, the rule gets the name with the next number after the highest one there, e\&.g\&.\&
+eth1, and the interface is renamed to it at once\&. The rule matches the MAC address of the interface, its type and its
+dev_id
+attribute, and for S/390 devices their bus id and driver instead, never only its type and kernel name\&. Only interfaces that the kernel named by enumeration get a rule, i\&.e\&. whose
+name_assign_type
+attribute is 1 (\fBNET_NAME_ENUM\fR) or cannot be read, as on kernels before 3\&.17, which do not have it, and whose names are
+eth*,
+wlan*
+or a few other kernel names, and only when they have a driver, unlike e\&.g\&. bridges and VLANs, and no name from an earlier rule; not the interfaces of Xen and User\-mode Linux, the monitor interfaces of wireless devices, and the ones whose MAC address is locally administered (except the addresses of some vendors that do not follow that scheme), all zeros, or one of a virtual machine, e\&.g\&. of KVM, QEMU, VMware, Hyper\-V, VirtualBox or Xen\&. The prefixes listed for Microsoft Azure are registered to Microsoft, not only for Azure, so interfaces of Microsoft hardware with such an address get no rule either; 54:52:00, which is registered to no one, is listed for the guests that old versions of libvirt created with it, which keep their addresses\&. The rules may be edited, keeping each rule on one line and changing only the value of
+\fINAME\fR, and when the file is removed, the current names are recorded again\&. When
+/etc/udev/rules\&.d
+cannot be written, e\&.g\&. as the root file system is still read\-only, the rules are written to
+/run/udev/tmp\-rules\-\-70\-persistent\-net\&.rules
+instead, which eudev does not copy: the system has to add that file to
+70\-persistent\-net\&.rules
+later during the boot, e\&.g\&. with an init script\&.
+\fBwrite_net_rules\fR
+logs a warning when it writes no rule: "no MAC address or bus id to match
+\fIinterface\fR
+with, writing no rule", when neither the address nor a bus id can be used, e\&.g\&. for a name requested with
+\fIINTERFACE_NAME\fR, and "Cannot lock
+\fIfile\fR!", when it gives up after waiting 30 seconds for the lock of the rules file; it writes them to its standard error, which
+\fBudevd\fR
+logs at the debug level, and, when
+/dev/kmsg
+can be written, to the kernel log at the warning level, as
+write_net_rules[\fIpid\fR]\&.
+.PP
+Network interfaces then also swap their names, e\&.g\&. when the kernel finds them in another order than the rules expect, or after the names in the rules were swapped: when an interface is to get a new name, and a rule gives its current name to another interface,
+\fBudevd\fR
+first renames it to a temporary name, with a number derived from its interface index instead of its own, e\&.g\&.\&
+eth126, so that the other interface can get the name; when the name that an interface is to get is taken, it renames the interface to
+rename_\fIname\fR, or
+rename\fIindex\fR
+when that is longer than 15 characters, and waits up to 90 seconds, but not beyond the event timeout (see
+\fBudevd\fR(8)), for the name to become free, and renames it back to its old name when it does not\&. It skips that, or stops waiting, as soon as
+\fBudevd\fR
+has handled the add event of the interface that has the name: as only add events rename an interface, that one keeps it\&. An interface that gets no new name, e\&.g\&. one of a virtual machine, keeps its name, also when a rule gives that to another interface, e\&.g\&. a stale rule of a card that was replaced: the other interface then keeps its own name, and waits only while the add event of the one that has the name is queued or running, or when
+\fBudevd\fR
+has not handled it, e\&.g\&. as it was not triggered\&.
+.PP
+By default, the rule generator replaces
+80\-net\-name\-slot\&.rules, which is not installed, so
+\fInet\&.ifnames=\fR
+on the kernel command line changes nothing\&. When eudev is also built with
+\fB\-\-with\-net\-ifnames\-default=no\fR,
+80\-net\-name\-slot\&.rules
+is installed, and with
+\fInet\&.ifnames=1\fR
+the rule generator records no names: then the interfaces get their predictable names, except the ones that
+70\-persistent\-net\&.rules
+names already, as it comes first\&. The alternative names are assigned as without the rule generator\&.
+\fBudevadm test\fR
+does not run
+\fBwrite_net_rules\fR\&.
 .SH "HARDWARE DATABASE FILES"
 The hwdb files are read from the files located in the system hwdb directory
 /usr/lib/udev/hwdb\&.d, the local administration directory
