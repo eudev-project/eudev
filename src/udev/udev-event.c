@@ -2091,7 +2091,7 @@ int udev_event_execute_rules(struct udev_event *event,
 #ifdef ENABLE_RULE_GENERATOR
                         char tmpname[IFNAMSIZ];
 
-                        if ((event->name == NULL || !streq(event->name, sysname)) &&
+                        if (event->name != NULL && !streq(event->name, sysname) &&
                             udev_rules_assigning_name_to(rules, sysname) > 0) {
                                 netif_tmp_name(dev, tmpname);
                                 if (!streq(tmpname, sysname))
@@ -2107,31 +2107,22 @@ int udev_event_execute_rules(struct udev_event *event,
                         }
                 }
 
-                /* ENABLE_RULE_GENERATOR conditional:
-                 * if this is a net iface, and it is an add event,
-                 * and as long as all of the following are FALSE:
-                 *  - no NAME target and the current name is not being used
-                 *  - there is a NAME target and it is the same as the current name
-                 *  - the rules can successfully be searched for the current name (not really part of the conditional)
-                 * the run the rename.
-                 *
-                 * note - udev_rules_assigning_name_to is run when event->name is NULL to ensure renames happen,
-                 * but also on its own to check if a temp-rename is necessary when event->name exists.
-                 *
-                 * A temp-rename is necessary when:
-                 * - there is no rule renaming the current iface but the current name IS used in some other rule
-                 * - there is a rule renaming the current iface,
-                 *   the current name IS used AND the target name != the current name
-                 */
+                /* With the rule generator, a new network interface that is to get a new name is first renamed
+                 * to a temporary name when a rule gives its current name to an interface (see netif_tmp_name()),
+                 * so that interfaces can swap their names, e.g. when the kernel finds them in another order than
+                 * the rules expect, and then to its new name, waiting for it when it is taken, see
+                 * rename_netif_dev_fromname_toname(). An interface that gets no new name keeps its name, also
+                 * when a rule gives that to another interface, e.g. a stale rule of a card that was replaced:
+                 * renamed to a temporary name, it would keep that; the other interface waits for the name, and
+                 * keeps its own when the name does not become free. */
 
 #ifdef ENABLE_RULE_GENERATOR
                 if (EVENT_MODE_NETIF_DESTRUCTIVE(event) &&
                     udev_device_get_ifindex(dev) > 0 && streq(udev_device_get_action(dev), "add")) {
                         const char *name = netif_new_name(event);
-                        int r = 0;
+                        int r;
 
-                        if ((name == NULL && (r=udev_rules_assigning_name_to(rules,udev_device_get_sysname(dev))) > 0) ||
-                            (name != NULL && !streq(name, udev_device_get_sysname(dev)))) {
+                        if (name != NULL && !streq(name, udev_device_get_sysname(dev))) {
                                 /* the name of the interface, as renamed so far */
                                 char curname[IFNAMSIZ];
                                 char newifname[IFNAMSIZ];
@@ -2140,8 +2131,8 @@ int udev_event_execute_rules(struct udev_event *event,
 
                                 strscpy(curname, sizeof(curname), udev_device_get_sysname(dev));
 
-                                /* r is the number of rules that assign a device with NAME= this sysname */
-                                if (r > 0 || udev_rules_assigning_name_to(rules, curname) > 0) {
+                                /* a rule gives the name of the interface to an interface */
+                                if (udev_rules_assigning_name_to(rules, curname) > 0) {
                                         /* have a conflict, rename to a temp name */
                                         netif_tmp_name(dev, newifname);
 
@@ -2168,7 +2159,7 @@ int udev_event_execute_rules(struct udev_event *event,
 
                                 /* rename it now to its final target if it is not already there, from the name it has
                                  * now, also when it could not be renamed to the temporary name */
-                                if (name != NULL && !streq(name, curname)) {
+                                if (!streq(name, curname)) {
                                         /* When name is taken, wait up to 90 seconds for it to become free, but
                                          * not beyond the event timeout, when the programs of the event are
                                          * killed and soon after the worker. */
