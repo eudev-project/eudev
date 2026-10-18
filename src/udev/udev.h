@@ -108,6 +108,9 @@ struct udev_event {
 };
 
 void udev_event_check_config(struct udev *udev);
+/* with the rule generator, see udev-event.c */
+void udev_event_netif_instance_init(void);
+void udev_event_netif_forget(int ifindex);
 
 static inline bool EVENT_MODE_DESTRUCTIVE(struct udev_event *event) {
         assert(event);

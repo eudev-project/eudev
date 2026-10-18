@@ -1127,6 +1127,14 @@ static int event_queue_insert(struct udev_device *dev) {
         event->ifindex = udev_device_get_ifindex(dev);
         event->state = EVENT_QUEUED;
 
+#ifdef ENABLE_RULE_GENERATOR
+        /* until a worker handled its add event, the interface may still get a new name; nor does a removed one keep
+         * its name, see netif_holder_done() in udev-event.c */
+        if (event->ifindex > 0 && udev_device_get_action(dev) &&
+            STR_IN_SET(udev_device_get_action(dev), "add", "remove"))
+                udev_event_netif_forget(event->ifindex);
+#endif
+
         /* udev_list_node_append() inserts the node before the given one: right after prev, or at the head of
          * the queue when every queued event has a larger SEQNUM. */
         udev_list_node_append(&event->node, prev ? prev->node.next : event_list.next);
@@ -3050,6 +3058,11 @@ int main(int argc, char *argv[]) {
 
         manager_set_default_children_max();
         default_children_max = arg_children_max;
+
+#ifdef ENABLE_RULE_GENERATOR
+        /* after the fork with --daemon, with the PID of the daemon */
+        udev_event_netif_instance_init();
+#endif
 
         udev_list_node_init(&event_list);
 

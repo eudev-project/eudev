@@ -1570,6 +1570,88 @@ static void netif_bring_up(int sk, const char *name) {
         else
                 log_info("Brought network interface %s up again.", utf8_escape_for_log(name, &e));
 }
+
+/* The network interfaces whose add event this udevd has handled, which no rule renames any more: a file named
+ * after the interface index, with the instance of udevd, see udev_event_netif_instance_init(). udevd removes it
+ * when it queues another add event or a remove event of the interface, see udev_event_netif_forget(); the "move"
+ * event that the renaming of an interface causes does not, as only add events rename. */
+#define NETIF_ADDED_DIR UDEV_ROOT_RUN "/udev/net-added"
+
+/* the instance of udevd, empty in udevadm test and test-udev, which write no markers */
+static char netif_instance[64];
+
+/* Called by udevd when it starts, after it forked with --daemon: the markers of another udevd, e.g. of the one of
+ * the initramfs, which handled the add events of the interfaces before this one, do not count. */
+void udev_event_netif_instance_init(void) {
+        snprintf(netif_instance, sizeof(netif_instance), "%i %llu\n", (int) getpid(),
+                 (unsigned long long) now(CLOCK_MONOTONIC));
+}
+
+/* Called by udevd when it queues an add or remove event of a network interface: until a worker handled it, the
+ * interface may still get a new name. */
+void udev_event_netif_forget(int ifindex) {
+        char path[sizeof(NETIF_ADDED_DIR) + DECIMAL_STR_MAX(int) + 1];
+
+        if (ifindex <= 0)
+                return;
+
+        snprintf(path, sizeof(path), NETIF_ADDED_DIR "/%i", ifindex);
+        if (unlink(path) < 0 && errno != ENOENT)
+                log_debug_errno(errno, "Failed to remove %s, ignoring: %m", path);
+}
+
+/* After the add event of a network interface: no rule renames it any more. */
+static void netif_mark_added(int ifindex) {
+        char path[sizeof(NETIF_ADDED_DIR) + DECIMAL_STR_MAX(int) + 1];
+        char tmp[sizeof(path) + STRLEN(".tmp")];
+        _cleanup_close_ int fd = -1;
+        size_t len = strlen(netif_instance);
+
+        if (len == 0 || ifindex <= 0)
+                return;
+
+        if (mkdir(NETIF_ADDED_DIR, 0755) < 0 && errno != EEXIST) {
+                log_debug_errno(errno, "Failed to create " NETIF_ADDED_DIR ", ignoring: %m");
+                return;
+        }
+
+        snprintf(path, sizeof(path), NETIF_ADDED_DIR "/%i", ifindex);
+        snprintf(tmp, sizeof(tmp), "%s.tmp", path);
+        fd = open(tmp, O_WRONLY|O_CREAT|O_TRUNC|O_CLOEXEC|O_NOFOLLOW, 0644);
+        if (fd < 0 || write(fd, netif_instance, len) != (ssize_t) len || rename(tmp, path) < 0) {
+                log_debug_errno(errno, "Failed to write %s, ignoring: %m", path);
+                (void) unlink(tmp);
+        }
+}
+
+/* Returns true when the network interface that has the given name had its add event handled by this udevd: then
+ * no rule renames it any more, and it keeps the name. */
+static bool netif_holder_done(const char *name) {
+        char path[sizeof(NETIF_ADDED_DIR) + DECIMAL_STR_MAX(unsigned) + 1];
+        char buf[sizeof(netif_instance)];
+        _cleanup_close_ int fd = -1;
+        unsigned ifindex;
+        ssize_t n;
+
+        if (netif_instance[0] == '\0')
+                return false;
+
+        ifindex = if_nametoindex(name);
+        if (ifindex == 0)
+                return false;
+
+        snprintf(path, sizeof(path), NETIF_ADDED_DIR "/%u", ifindex);
+        fd = open(path, O_RDONLY|O_CLOEXEC|O_NOFOLLOW);
+        if (fd < 0)
+                return false;
+
+        n = read(fd, buf, sizeof(buf) - 1);
+        if (n <= 0)
+                return false;
+        buf[n] = '\0';
+
+        return streq(buf, netif_instance);
+}
 #endif
 
 /* Renames the network interface oldname to name. If ret_name is not NULL, it is set to the name the interface
@@ -1640,6 +1722,13 @@ static int rename_netif_dev_fromname_toname(struct udev_event *event, const char
         /* keep trying if the destination interface name already exists */
         if (r != -EEXIST || wait_until == 0)
                 goto out;
+
+        /* but not when nothing will free the name: the interface that has it was handled already */
+        if (netif_holder_done(ifr.ifr_newname)) {
+                log_info("Network interface %s keeps its name, as no rule renames it, not waiting for it to rename %s.",
+                         utf8_escape_for_log(ifr.ifr_newname, &e2), utf8_escape_for_log(ifr.ifr_name, &e1));
+                goto out;
+        }
         log_debug("collision on rename of network interface %s to %s , retrying until timeout\n",
                 utf8_escape_for_log(ifr.ifr_name, &e1), ifr.ifr_newname);
 
@@ -1678,6 +1767,13 @@ static int rename_netif_dev_fromname_toname(struct udev_event *event, const char
                 }
                 if (r != -EEXIST)
                         break;
+
+                /* the interface that has the name was handled meanwhile, and kept it */
+                if (netif_holder_done(ifr.ifr_newname)) {
+                        log_info("Network interface %s keeps its name, as no rule renames it, not waiting for it any more to rename %s.",
+                                 utf8_escape_for_log(ifr.ifr_newname, &e2), utf8_escape_for_log(ifr.ifr_name, &e1));
+                        break;
+                }
         }
 
         /* do not leave the interface with the temporary name, rename it back */
@@ -2174,6 +2270,9 @@ int udev_event_execute_rules(struct udev_event *event,
                                 if (!streq(curname, udev_device_get_sysname(dev)))
                                         netif_update_device(dev, curname);
                         }
+
+                        /* the interfaces that wait for the name of this one need not wait any more */
+                        netif_mark_added(udev_device_get_ifindex(dev));
                 }
 #else
                 if (EVENT_MODE_NETIF_DESTRUCTIVE(event) &&
