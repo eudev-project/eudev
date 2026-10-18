@@ -95,10 +95,21 @@ test_udev_devlink_CPPFLAGS = \
 	$(test_udev_CPPFLAGS)
 
 # The tests use a directory or tmpfs as /sys, which libudev refuses by default; rules-test.sh also
-# checks the rules that the build generates, in the build tree.
+# checks the rules that the build generates, in the build tree: the ones of rules/*.rules.in, and
+# generated_rules, which the configuration selects.
 AM_TESTS_ENVIRONMENT = \
 	UDEV_DEVICE_VERIFY_SYSFS=0; export UDEV_DEVICE_VERIFY_SYSFS; \
-	abs_top_builddir='$(abs_top_builddir)'; export abs_top_builddir;
+	abs_top_builddir='$(abs_top_builddir)'; export abs_top_builddir; \
+	generated_rules='$(generated_rules)'; export generated_rules;
+
+# relative to the top of the build tree
+generated_rules =
+if ENABLE_RULE_GENERATOR
+if NET_IFNAMES_DEFAULT_NO
+generated_rules += \
+	rule_generator/net-ifnames-no/75-persistent-net-generator.rules
+endif
+endif
 
 TESTS = \
 	test-collect \

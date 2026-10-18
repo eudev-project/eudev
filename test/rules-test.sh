@@ -5,9 +5,11 @@
 # Author: Martin Pitt <martin.pitt@ubuntu.com>
 
 # The rules of the source tree, in rules/ and rule_generator/, and the ones that the build generates
-# from a .in file in rules/ (64-btrfs.rules), which a VPATH build writes only to the build tree; make
-# check passes that in $abs_top_builddir, else it is taken to be the source tree. A generated rules
-# file that is missing, e.g. as rules/ was not made yet, is an error: it is not left out.
+# from a .in file in rules/ (64-btrfs.rules), and the ones that make check names in $generated_rules,
+# relative to the top of the build tree (the variant of 75-persistent-net-generator.rules for
+# --with-net-ifnames-default=no), which a VPATH build writes only to the build tree; make check passes
+# that in $abs_top_builddir, else it is taken to be the source tree. A generated rules file that is
+# missing, e.g. as rules/ was not made yet, is an error: it is not left out.
 [ -n "$top_srcdir" ] || top_srcdir=`dirname $0`/..
 [ -n "$abs_top_builddir" ] || abs_top_builddir=$top_srcdir
 
@@ -42,6 +44,18 @@ for src in $top_srcdir/rules/*.rules.in; do
         # in the source tree, find has it already
         if [ $vpath = yes ]; then
                 rules="$rules $abs_top_builddir/rules/$f"
+        fi
+done
+for f in $generated_rules; do
+        if [ ! -f "$abs_top_builddir/$f" ]; then
+                echo "$0: $f, which the build generates, is missing in"
+                echo "$abs_top_builddir: make it first (make -C ${f%%/*} ${f#*/} in the build tree)"
+                exit 99
+        fi
+        echo "checking the generated $abs_top_builddir/$f"
+        # in the source tree, find has it already
+        if [ $vpath = yes ]; then
+                rules="$rules $abs_top_builddir/$f"
         fi
 done
 

@@ -383,11 +383,13 @@ AM_CONDITIONAL([ENABLE_RULE_GENERATOR], [test "x$install_rule_generator" = xyes]
 # alternative names regardless of it; with no, they keep the names the kernel gave them, and get the
 # predictable names and the alternative names only with net.ifnames=1. The variant of
 # 80-net-name-slot.rules and 80-net-altnames.rules that is installed (rules/net-ifnames-no/ for no) follows it;
-# the man pages udev(7), udevd(8) and udev.conf(5) describe both.
+# with --enable-rule-generator, 80-net-name-slot.rules is not installed for yes, and for no a variant of
+# 75-persistent-net-generator.rules is, which records no names with net.ifnames=1. The man pages udev(7),
+# udevd(8) and udev.conf(5) describe both.
 # ------------------------------------------------------------------------------
 AC_ARG_WITH([net-ifnames-default],
 	AS_HELP_STRING([--with-net-ifnames-default=yes|no],
-		[without net.ifnames= on the kernel command line, rename network interfaces to their predictable names and assign the alternative names, or keep the kernel names @<:@default: yes@:>@]),
+		[without net.ifnames= on the kernel command line, rename network interfaces to their predictable names and assign the alternative names (yes), or keep the kernel names (no); with --enable-rule-generator, its rules replace the renaming for yes, and for no a variant of them that records no names with net.ifnames=1 is installed @<:@default: yes@:>@]),
 	[], [with_net_ifnames_default=yes])
 AS_CASE([$with_net_ifnames_default],
 	[yes|no], [],

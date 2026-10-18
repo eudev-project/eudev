@@ -25,6 +25,8 @@ rule_generator/rule_generator.functions
 rule_generator/rule_generator.functions.tmp
 rule_generator/write_net_rules
 rule_generator/write_net_rules.tmp
+# the variant of 75-persistent-net-generator.rules for --with-net-ifnames-default=no
+rule_generator/net-ifnames-no/
 
 rules/64-btrfs.rules
 rules/64-btrfs.rules.tmp

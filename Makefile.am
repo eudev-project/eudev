@@ -5,7 +5,17 @@ SUBDIRS = \
 
 if ENABLE_PROGRAMS
 SUBDIRS += \
-	rules \
+	rules
+endif
+
+# before test, as rules-test.sh checks the rules files that it generates
+if ENABLE_RULE_GENERATOR
+SUBDIRS += \
+	rule_generator
+endif
+
+if ENABLE_PROGRAMS
+SUBDIRS += \
 	test
 endif
 
@@ -17,11 +27,6 @@ endif
 if ENABLE_HWDB
 SUBDIRS += \
 	hwdb.d
-endif
-
-if ENABLE_RULE_GENERATOR
-SUBDIRS += \
-	rule_generator
 endif
 
 # the targets that regenerate and check the hwdb files, see hwdb.d/README
