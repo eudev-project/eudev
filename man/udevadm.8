@@ -696,7 +696,9 @@ finds out with the first event whether the kernel passes the UUID on (see above)
 with
 \fB\-\-include\-parents\fR, and hidden block devices, whose
 hidden
-attribute is 1, e\&.g\&. the path devices of native NVMe multipath (nvme0c0n1), are not waited for, as the kernel sends no events for them\&.
+attribute is 1, e\&.g\&. the path devices of native NVMe multipath (nvme0c0n1), are not waited for, as the kernel sends no events for them; hidden block devices only on the kernels that suppress their events for good, since Linux 5\&.12 (commit 9ec491447b90), and the stable releases 5\&.11\&.11, 5\&.10\&.27, 5\&.4\&.109 and 4\&.19\&.184\&. From Linux 4\&.15 to those, the kernel sends the events of a hidden block device that are triggered, although it sent no
+add
+event for it, so they are triggered and waited for like those of other devices\&.
 .sp
 Neither is a device for which the kernel sends no event when it is triggered, e\&.g\&. a disk whose partition table the kernel is still reading after the disk appeared, as the kernel suppresses its events until then (the
 add
@@ -729,7 +731,8 @@ waits for those too\&.
 Print the randomized UUIDs that the synthetic device events are triggered with to standard output, one line for each event\&. These UUIDs are included in the uevent environment block (in the
 SYNTH_UUID=
 property) and may be used to track delivery of the generated events\&. This requires Linux 4\&.13 or newer: with older kernels, the events are triggered without UUIDs, with a warning, and no UUIDs are printed, see
-\fB\-\-settle\fR\&. No UUID is printed, with a warning, for an event that was triggered without one before it was known whether the kernel supports them\&. No UUID is printed for a device without a subsystem or a hidden block device, which is triggered without one, as the kernel sends no event for it, for a device for which the kernel sent no event when it was triggered (see
+\fB\-\-settle\fR\&. No UUID is printed, with a warning, for an event that was triggered without one before it was known whether the kernel supports them\&. No UUID is printed for a device without a subsystem or a hidden block device whose events the kernel suppresses (see
+\fB\-\-settle\fR), which is triggered without one, as the kernel sends no event for it, for a device for which the kernel sent no event when it was triggered (see
 \fB\-\-settle\fR), and for a device whose event would not fit into the buffer of the kernel with the UUID, or that the kernel refused with it, which is triggered without one, with a warning\&.
 .RE
 .PP

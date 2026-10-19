@@ -1064,7 +1064,8 @@ uint64_t uevent_seqnum(void)
 
 /* Whether the sequence numbers of uevent_seqnum() read before and after a write to an uevent attribute show that
  * the kernel sent no uevent for it, e.g. as it suppresses the uevents of a disk while add_disk() scans its
- * partitions, or of a hidden block device. False when the number could not be read before. */
+ * partitions, or of a hidden block device, see syspath_sends_uevents(). False when the number could not be read
+ * before. */
 bool uevent_seqnum_unchanged(uint64_t before, uint64_t after)
 {
         return before != UINT64_MAX && before == after;
@@ -1257,13 +1258,31 @@ static int uevent_probe_wait(struct udev_monitor *monitor, struct uevent_probe *
         }
 }
 
+/* Whether the running kernel keeps the uevents of a hidden block device suppressed for good: since Linux
+ * 9ec491447b90 ("block: Suppress uevent for hidden device when removed"), 5.12, which the stable releases
+ * 5.11.11, 5.10.27, 5.4.109 and 4.19.184 got too. Before, since Linux 8ddcd653257c ("block: introduce
+ * GENHD_FL_HIDDEN"), 4.15, register_disk() lifted the suppression of a hidden disk without sending "add", so a
+ * synthetic uevent of it is sent. A release that cannot be parsed counts as one that sends them: when it does not,
+ * uevent_seqnum() shows that a trigger sent nothing. */
+static bool kernel_suppresses_hidden_disks(void)
+{
+        static const int suppressed[][2] = {
+                { KERNEL_VERSION_CODE(4, 19, 184), KERNEL_VERSION_CODE(4, 20, 0) },
+                { KERNEL_VERSION_CODE(5, 4, 109),  KERNEL_VERSION_CODE(5, 5, 0)  },
+                { KERNEL_VERSION_CODE(5, 10, 27),  KERNEL_VERSION_CODE(5, 11, 0) },
+                { KERNEL_VERSION_CODE(5, 11, 11),  KERNEL_VERSION_CODE_MAX       },
+        };
+
+        return kernel_version_in(suppressed, ELEMENTSOF(suppressed));
+}
+
 /* Whether the kernel sends a uevent when one is triggered with the uevent attribute of the kobject with the
  * syspath: not for a device without a subsystem, i.e. without a bus or class (dev_uevent_filter()), and not for a
- * hidden block device, whose "hidden" attribute is 1, e.g. a path device of native NVMe multipath (nvme0c0n1):
- * the kernel suppresses its uevents for good, the write succeeds, but there is no uevent (and there was no "add"
- * either, so udevd does not know the device). Kernels without the attribute cannot tell. Only devices are
- * checked, as the other kobjects with an uevent attribute, e.g. buses, drivers and modules, have no subsystem
- * link, but send uevents. */
+ * hidden block device, whose "hidden" attribute is 1, e.g. a path device of native NVMe multipath (nvme0c0n1), on
+ * a kernel that keeps its uevents suppressed for good, see kernel_suppresses_hidden_disks(): the write succeeds,
+ * but there is no uevent (and there was no "add" either, so udevd does not know the device). Kernels without the
+ * attribute cannot tell. Only devices are checked, as the other kobjects with an uevent attribute, e.g. buses,
+ * drivers and modules, have no subsystem link, but send uevents. */
 bool syspath_sends_uevents(const char *syspath)
 {
         _cleanup_free_ char *subsystem = NULL, *hidden = NULL;
@@ -1279,7 +1298,8 @@ bool syspath_sends_uevents(const char *syspath)
         if (!streq(eudev_basename(subsystem), "block"))
                 return true;
 
-        return read_one_line_file(strjoina(syspath, "/hidden"), &hidden) < 0 || !streq(hidden, "1");
+        return read_one_line_file(strjoina(syspath, "/hidden"), &hidden) < 0 || !streq(hidden, "1") ||
+               !kernel_suppresses_hidden_disks();
 }
 
 /* The size of the buffer in which the kernel builds a uevent, UEVENT_BUFFER_SIZE of the kernel. */
@@ -1845,10 +1865,10 @@ static int uevent_trigger_fitting(const char *syspath, const char *action, const
  * anyway; but when nothing could be decided, it may get none, when the kernel sent none, or both, when the kernel
  * sent the first one, which the socket lost or which did not arrive in time. When the uevents of the kernel cannot
  * be watched, or the kernel refused the uevent with the UUID, the uevent is triggered without the UUID, and the
- * next call tries again. A device that never sends uevents, without a subsystem or a hidden block device, see
- * syspath_sends_uevents(), cannot tell, and is triggered with the UUID, without waiting; the next call tries
- * again. Returns 1 if the uevent was triggered with the UUID, 0 if it was triggered without it, and a negative
- * errno on failure. */
+ * next call tries again. A device that never sends uevents, without a subsystem or a hidden block device whose
+ * uevents the kernel suppresses, see syspath_sends_uevents(), cannot tell, and is triggered with the UUID, without
+ * waiting; the next call tries again. Returns 1 if the uevent was triggered with the UUID, 0 if it was triggered
+ * without it, and a negative errno on failure. */
 static int uevent_trigger_with_uuid(struct udev *udev, const char *syspath, const char *action,
                                     const char *uuid, const char *args)
 {
