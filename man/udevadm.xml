@@ -548,7 +548,8 @@
       stable release, e.g. <literal>4.19.0-21-amd64</literal>, which counts as 4.19.0. If another event
       was sent between the two reads, e.g. of another device, the number changed, and an event that such
       a kernel refused is not noticed: the device gets no event from this trigger, and
-      <option>--settle</option> waits for it. The other kernels report it, so these reads and the
+      <option>--settle</option> waits for it until it gives up, see there. The other kernels report
+      it, so these reads and the
       repeated writes are left out there. No kernel reports an error for an event that it drops because
       it suppresses the events of the device, e.g. of a disk while it reads its partition table.</para>
       <variablelist>
@@ -790,11 +791,31 @@
             number of the last event the kernel sent, before and after it
             triggers the event of a device, and if the number did not
             change, the kernel sent nothing. If it changed, e.g. as other
-            devices sent events meanwhile, the event is waited for. There is
-            no timeout: an event that does not come keeps
-            <command>udevadm</command> waiting, also when
-            <command>udevd</command> does not run, see
-            <option>--wait-daemon</option>.</para>
+            devices sent events meanwhile, the event is waited for, but
+            not for ever: when none of the remaining events arrived for as
+            long as <command>udevd</command> may take to process an event
+            and pass it on, after the last of the triggered events that
+            arrived, or after the devices were triggered,
+            <command>udevadm</command> stops waiting, with a warning that
+            names each device, and the UUID of its event, and exits with
+            status 1. That is up to 3 minutes while a process holds a lock
+            on the block device, then the event timeout, then 10 seconds before the timeout
+            signal, and 5 seconds, or 90 seconds for a signal that dumps
+            core, before SIGKILL, and 30 seconds more: by default 8 minutes
+            and 10 seconds. The event timeout is taken from
+            <varname>udev.event_timeout=</varname> on the kernel command
+            line, or <varname>event_timeout=</varname> in
+            <citerefentry><refentrytitle>udev.conf</refentrytitle><manvolnum>5</manvolnum></citerefentry>,
+            or is 180 seconds; <command>udevadm</command> cannot know the
+            one of <command>udevd --event-timeout</command>. An event that
+            did not arrive by then never will, e.g. as the kernel did not
+            send it, although the sequence number changed, as another event
+            was sent at the same time, or as the kernel ran out of room for
+            the event after it took the number. When
+            <command>udevd</command> does not run (see
+            <option>--wait-daemon</option>), no event arrives, so
+            <command>udevadm</command> stops waiting after that time
+            too.</para>
             <para>Only the events that <command>udevadm trigger</command>
             triggered itself are waited for, not the events that rules
             trigger in response to them, e.g. the <literal>change</literal>

@@ -16,6 +16,7 @@
  */
 
 #include <ctype.h>
+#include <limits.h>
 #include <stdlib.h>
 #include <stddef.h>
 #include <string.h>
@@ -32,6 +33,7 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 
+#include "hashmap.h"
 #include "pager.h"
 #include "set.h"
 #include "udev.h"
@@ -367,7 +369,90 @@ static int build_list(struct udev *udev, struct udev_enumerate *udev_enumerate,
         return 0;
 }
 
-static int exec_list(struct udev *udev, char **list, const char *action, Set *settle_set) {
+/* How long --settle waits for the events of the triggered devices after the last of them arrived, or after the
+ * devices were triggered, see settle_timeout_usec() and adm_trigger(). udevd passes every event that it received on,
+ * also when the device was locked for too long, or the worker that processed it failed or was killed
+ * (event_broadcast_on_error() in udevd.c); until then, it keeps an event whose device is locked for up to 3 minutes
+ * (EVENT_REQUEUE_TIMEOUT_USEC), and kills a worker that processes an event for longer than the event timeout, after
+ * an extra time of 10 seconds with the timeout signal, and 5 seconds later, or 90 seconds for a signal that dumps
+ * core, with SIGKILL (manager_check_worker_timeouts()). So the event of a device arrives within the 3 minutes, the
+ * event timeout, 10 and 90 seconds after udevd started to process it; when none of the remaining events arrived for
+ * that long, and 30 seconds more, they never will, e.g. as the kernel sent none, although the sequence number
+ * changed, as another uevent was sent at the same time, or as the kernel ran out of room after it took the number,
+ * see uevent_trigger_fitting(). */
+#define SETTLE_LOCKED_USEC (3 * USEC_PER_MINUTE)
+#define SETTLE_KILL_USEC ((10 + 90 + 30) * USEC_PER_SEC)
+#define SETTLE_EVENT_TIMEOUT_DEFAULT_USEC (180 * USEC_PER_SEC)
+
+static usec_t cmdline_event_timeout_usec;
+
+static int parse_proc_cmdline_item(const char *key, const char *value) {
+        /* like udevd: parse_proc_cmdline() passes the parameters starting with "rd." only in an initrd */
+        if (startswith(key, "rd."))
+                key += strlen("rd.");
+
+        if (value && proc_cmdline_key_streq(key, "udev.event_timeout"))
+                (void) parse_sec(value, &cmdline_event_timeout_usec);
+
+        return 0;
+}
+
+/* The time after which --settle stops waiting, see SETTLE_LOCKED_USEC, with the event timeout of udevd as far as
+ * udevadm can know it: udev.event_timeout= on the kernel command line, which takes precedence in udevd, or
+ * event_timeout= in udev.conf, or the default of 180 seconds; not the one of udevd --event-timeout. By default, it
+ * is 8 minutes and 10 seconds. */
+static usec_t settle_timeout_usec(struct udev *udev) {
+        usec_t t;
+
+        cmdline_event_timeout_usec = 0;
+        (void) parse_proc_cmdline(parse_proc_cmdline_item);
+
+        t = cmdline_event_timeout_usec ?: udev_get_event_timeout_usec(udev) ?: SETTLE_EVENT_TIMEOUT_DEFAULT_USEC;
+        return usec_add(usec_add(SETTLE_LOCKED_USEC, t), SETTLE_KILL_USEC);
+}
+
+/* Adds an event to wait for to settle_set, by its UUID, or by the syspath of its device, with the syspath as the
+ * value, which the warning of settle_give_up() names. */
+static int settle_put(Hashmap *settle_set, const char *key, const char *syspath) {
+        _cleanup_free_ char *k = NULL, *v = NULL;
+        int r;
+
+        k = strdup(key);
+        v = strdup(syspath);
+        if (!k || !v)
+                return -ENOMEM;
+
+        r = hashmap_put(settle_set, k, v);
+        if (r == -EEXIST)
+                return 0;
+        if (r < 0)
+                return r;
+
+        k = v = NULL;
+        return 1;
+}
+
+/* Warns about the events that are still in settle_set when --settle stops waiting for them after timeout, see
+ * SETTLE_LOCKED_USEC. */
+static void settle_give_up(Hashmap *settle_set, usec_t timeout) {
+        _cleanup_free_ char *lesc1 = NULL;
+        char buf[FORMAT_TIMESPAN_MAX];
+        const char *key, *syspath;
+        Iterator i;
+
+        format_timespan(buf, sizeof(buf), timeout, USEC_PER_SEC);
+
+        HASHMAP_FOREACH_KEY(syspath, key, settle_set, i) {
+                if (streq(key, syspath))
+                        log_warning("%s: No event of the device arrived within %s after the last of the triggered events, not waiting for it any longer.",
+                                    utf8_escape_for_log(syspath, &lesc1), buf);
+                else
+                        log_warning("%s: The event with UUID %s did not arrive within %s after the last of the triggered events, not waiting for it any longer.",
+                                    utf8_escape_for_log(syspath, &lesc1), key, buf);
+        }
+}
+
+static int exec_list(struct udev *udev, char **list, const char *action, Hashmap *settle_set) {
         _cleanup_free_ char *lesc1 = NULL, *lesc2 = NULL;
         _cleanup_strv_free_ char **args = NULL;
         char **entry;
@@ -515,7 +600,7 @@ static int exec_list(struct udev *udev, char **list, const char *action, Set *se
 
                 /* Wait for the UUID if the kernel supports it, as the device may be renamed while the
                  * event is processed. Otherwise, wait for an event for the device. */
-                if (settle_set && set_put_strdup(settle_set, with_uuid ? id : syspath) < 0)
+                if (settle_set && settle_put(settle_set, with_uuid ? id : syspath, syspath) < 0)
                         return log_oom();
         }
 
@@ -523,21 +608,21 @@ static int exec_list(struct udev *udev, char **list, const char *action, Set *se
 }
 
 /* Returns true if the event is one of the triggered ones, and removes it from the set. */
-static bool settle_device(Set *settle_set, struct udev_device *dev) {
-        _cleanup_free_ char *saved = NULL;
+static bool settle_device(Hashmap *settle_set, struct udev_device *dev) {
+        _cleanup_free_ char *saved = NULL, *saved_key = NULL;
         char id[UUID_STRING_MAX] = "";
         const char *syspath;
 
         syspath = udev_device_get_syspath(dev);
 
         if (device_get_trigger_uuid(dev, id) >= 0) {
-                saved = set_remove(settle_set, id);
+                saved = hashmap_remove2(settle_set, id, (void **) &saved_key);
                 if (!saved) {
                         log_debug("Got uevent not matching expected UUID, ignoring.");
                         return false;
                 }
         } else {
-                saved = set_remove(settle_set, syspath);
+                saved = hashmap_remove2(settle_set, syspath, (void **) &saved_key);
                 if (!saved) {
                         const char *old_sysname;
 
@@ -555,7 +640,7 @@ static bool settle_device(Set *settle_set, struct udev_device *dev) {
                                         return false;
                                 }
 
-                                saved = set_remove(settle_set, old_syspath);
+                                saved = hashmap_remove2(settle_set, old_syspath, (void **) &saved_key);
                         }
                 }
                 if (!saved) {
@@ -807,9 +892,9 @@ static int adm_trigger(struct udev *udev, int argc, char *argv[]) {
         _cleanup_close_ int fd_ep = -1;
         int fd_udev = -1;
         struct epoll_event ep_udev;
-        usec_t ping_timeout_usec = 5 * USEC_PER_SEC;
+        usec_t ping_timeout_usec = 5 * USEC_PER_SEC, last, settle_timeout = 0;
         bool ping = false;
-        _cleanup_set_free_free_ Set *settle_set = NULL;
+        _cleanup_hashmap_free_free_free_ Hashmap *settle_set = NULL;
         _cleanup_strv_free_ char **list = NULL, **prioritized_subsystems = NULL, **parents = NULL;
         _cleanup_strv_free_ char **parent_match = NULL, **name_match = NULL;
         _cleanup_(trigger_matches_done) TriggerMatches matches = {};
@@ -1024,7 +1109,7 @@ static int adm_trigger(struct udev *udev, int argc, char *argv[]) {
                         return 5;
                 }
 
-                settle_set = set_new(&string_hash_ops);
+                settle_set = hashmap_new(&string_hash_ops);
                 if (settle_set == NULL) {
                         log_oom();
                         return 1;
@@ -1055,12 +1140,26 @@ static int adm_trigger(struct udev *udev, int argc, char *argv[]) {
         if (r < 0)
                 return 1;
 
-        while (!set_isempty(settle_set)) {
+        /* Unlike systemd, which waits forever for an event that does not come, stop waiting when none of the
+         * remaining events arrived for the time of settle_timeout_usec(), and fail then. */
+        if (!hashmap_isempty(settle_set))
+                settle_timeout = settle_timeout_usec(udev);
+        last = now(CLOCK_MONOTONIC);
+        while (!hashmap_isempty(settle_set)) {
                 int fdcount;
                 struct epoll_event ev[4];
+                usec_t n, deadline;
                 int i;
 
-                fdcount = epoll_wait(fd_ep, ev, ELEMENTSOF(ev), -1);
+                n = now(CLOCK_MONOTONIC);
+                deadline = usec_add(last, settle_timeout);
+                if (n >= deadline) {
+                        settle_give_up(settle_set, settle_timeout);
+                        return 1;
+                }
+
+                fdcount = epoll_wait(fd_ep, ev, ELEMENTSOF(ev),
+                                     (int) MIN(DIV_ROUND_UP(deadline - n, USEC_PER_MSEC), (usec_t) INT_MAX));
                 if (fdcount < 0) {
                         if (errno != EINTR)
                                 log_error_errno(errno, "error receiving uevent message: %m");
@@ -1075,7 +1174,8 @@ static int adm_trigger(struct udev *udev, int argc, char *argv[]) {
                                 if (device == NULL)
                                         continue;
 
-                                (void) settle_device(settle_set, device);
+                                if (settle_device(settle_set, device))
+                                        last = now(CLOCK_MONOTONIC);
                         }
                 }
         }

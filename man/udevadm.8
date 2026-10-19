@@ -521,7 +521,7 @@ attribute cannot be read or parsed\&. On these series, but for a power supply th
 triggers itself\&. The version is taken from the release of the kernel, which on some distributions does not tell the stable release, e\&.g\&.\&
 4\&.19\&.0\-21\-amd64, which counts as 4\&.19\&.0\&. If another event was sent between the two reads, e\&.g\&. of another device, the number changed, and an event that such a kernel refused is not noticed: the device gets no event from this trigger, and
 \fB\-\-settle\fR
-waits for it\&. The other kernels report it, so these reads and the repeated writes are left out there\&. No kernel reports an error for an event that it drops because it suppresses the events of the device, e\&.g\&. of a disk while it reads its partition table\&.
+waits for it until it gives up, see there\&. The other kernels report it, so these reads and the repeated writes are left out there\&. No kernel reports an error for an event that it drops because it suppresses the events of the device, e\&.g\&. of a disk while it reads its partition table\&.
 .PP
 \fB\-v\fR, \fB\-\-verbose\fR
 .RS 4
@@ -705,12 +705,24 @@ add
 event of the disk follows, without the UUID):
 \fBudevadm\fR
 reads
-/sys/kernel/uevent_seqnum, the sequence number of the last event the kernel sent, before and after it triggers the event of a device, and if the number did not change, the kernel sent nothing\&. If it changed, e\&.g\&. as other devices sent events meanwhile, the event is waited for\&. There is no timeout: an event that does not come keeps
-\fBudevadm\fR
-waiting, also when
+/sys/kernel/uevent_seqnum, the sequence number of the last event the kernel sent, before and after it triggers the event of a device, and if the number did not change, the kernel sent nothing\&. If it changed, e\&.g\&. as other devices sent events meanwhile, the event is waited for, but not for ever: when none of the remaining events arrived for as long as
 \fBudevd\fR
-does not run, see
-\fB\-\-wait\-daemon\fR\&.
+may take to process an event and pass it on, after the last of the triggered events that arrived, or after the devices were triggered,
+\fBudevadm\fR
+stops waiting, with a warning that names each device, and the UUID of its event, and exits with status 1\&. That is up to 3 minutes while a process holds a lock on the block device, then the event timeout, then 10 seconds before the timeout signal, and 5 seconds, or 90 seconds for a signal that dumps core, before SIGKILL, and 30 seconds more: by default 8 minutes and 10 seconds\&. The event timeout is taken from
+\fIudev\&.event_timeout=\fR
+on the kernel command line, or
+\fIevent_timeout=\fR
+in
+\fBudev.conf\fR(5), or is 180 seconds;
+\fBudevadm\fR
+cannot know the one of
+\fBudevd \-\-event\-timeout\fR\&. An event that did not arrive by then never will, e\&.g\&. as the kernel did not send it, although the sequence number changed, as another event was sent at the same time, or as the kernel ran out of room for the event after it took the number\&. When
+\fBudevd\fR
+does not run (see
+\fB\-\-wait\-daemon\fR), no event arrives, so
+\fBudevadm\fR
+stops waiting after that time too\&.
 .sp
 Only the events that
 \fBudevadm trigger\fR
