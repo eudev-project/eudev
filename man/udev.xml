@@ -388,8 +388,14 @@
             <literal>ENV{SYNTH_ARG_Comm}=="udevadm"</literal>. Like the other properties that come with
             the event from the kernel, they are not stored in the udev database. See
             <citerefentry><refentrytitle>udevadm</refentrytitle><manvolnum>8</manvolnum></citerefentry>
-            for details. An event that does not fit into the buffer of the kernel with them is triggered
-            again without the arguments, and then without the UUID, also on the kernels that do not
+            for details. The arguments, and then the UUID, are left out of an event that would not fit
+            into the buffer of the kernel with them, as counted from the <filename>uevent</filename> file
+            of the device, or for a power supply before Linux 5.8 from its attribute files; the files of
+            power supplies and of remote control receivers are not read, and on the kernel series 4.19,
+            5.4, 5.10, 5.15, 6.1, 6.6 and 6.9 to 6.14, whose <filename>uevent</filename> files may wait
+            for a driver, none is read, and only a power supply is counted. An event that does not fit
+            nevertheless is triggered again
+            without the arguments, and then without the UUID, also on the kernels that do not
             report that, Linux 4.13 to 4.20 before the stable releases 4.14.99, 4.19.21 and 4.20.8, as
             described there for <command>udevadm trigger</command>.</para>
           </listitem>

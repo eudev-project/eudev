@@ -141,9 +141,12 @@ static int prioritize_subsystems(struct udev *udev, char **list, char **prioriti
                         return r;
                 }
 
+                /* The subsystem from its link, without reading the uevent file of the device, from which
+                 * udev_device_get_subsystem() takes only the order of the properties: reading it can take long,
+                 * see uevent_trigger_fitting(). */
                 dev = udev_device_new_from_syspath(udev, list[i]);
                 if (dev)
-                        subsystem = udev_device_get_subsystem(dev);
+                        subsystem = udev_device_get_subsystem_without_uevent(dev);
                 /* Keep the array NULL terminated for strv_free(), use "" for no subsystem. */
                 subsystems[i] = strdup(subsystem ?: "");
                 if (!subsystems[i]) {
@@ -485,16 +488,17 @@ static int exec_list(struct udev *udev, char **list, const char *action, Set *se
 
                 if (!with_uuid && arg_uuid) {
                         if (uevent_trigger_uuid_supported() != 0)
-                                /* e.g. the kernel refused the uevent with the UUID, as it did not fit; or a
-                                 * kernel that does not report that, Linux 4.13 to 4.20 before 4.14.99, 4.19.21
-                                 * and 4.20.8, sent no uevent for the write with the UUID although it reported
-                                 * no error, as it refused it without saying so, or as it suppressed
-                                 * the uevents of the device then, e.g. of a disk while add_disk() scanned its
-                                 * partitions, see uevent_trigger_fitting(): then the uevent without the UUID
-                                 * was sent, or, while the kernel still suppressed it, another uevent was sent
-                                 * meanwhile, so that the check above did not notice that none was. Or the
-                                 * uevents of the probe did not tell whether the kernel supports UUIDs, e.g. as
-                                 * the socket lost them. */
+                                /* e.g. the uevent would not fit into the buffer of the kernel with the UUID, as
+                                 * counted before the write, or the kernel refused it with the UUID, as it did
+                                 * not fit; or a kernel that does not report that, Linux 4.13 to 4.20 before
+                                 * 4.14.99, 4.19.21 and 4.20.8, sent no uevent for the write with the UUID
+                                 * although it reported no error, as it refused it without saying so, or as it
+                                 * suppressed the uevents of the device then, e.g. of a disk while add_disk()
+                                 * scanned its partitions, see uevent_trigger_fitting(): then the uevent without
+                                 * the UUID was sent, or, while the kernel still suppressed it, another uevent
+                                 * was sent meanwhile, so that the check above did not notice that none was. Or
+                                 * the uevents of the probe did not tell whether the kernel supports UUIDs, e.g.
+                                 * as the socket lost them. */
                                 log_warning("%s: Could not trigger the uevent with a UUID, triggered it without one.",
                                             utf8_escape_for_log(eudev_basename(syspath), &lesc1));
                         else if (!warned_uuid) {

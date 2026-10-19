@@ -771,6 +771,7 @@ static int uevent_trigger_set_uuid_supported(int supported)
 
 /* A version of the kernel, as kernel_version() returns it. */
 #define KERNEL_VERSION_CODE(major, minor, patch) ((int) ((major) << 24 | (minor) << 16 | (patch)))
+#define KERNEL_VERSION_CODE_MAX KERNEL_VERSION_CODE(0x7fu, 0xffu, 0xffffu)
 
 /* The version of the running kernel, from the release that uname() returns, as KERNEL_VERSION_CODE(), where a
  * missing patch level counts as 0, or -EINVAL if the release does not start with a version. Distributions often
@@ -1281,6 +1282,333 @@ bool syspath_sends_uevents(const char *syspath)
         return read_one_line_file(strjoina(syspath, "/hidden"), &hidden) < 0 || !streq(hidden, "1");
 }
 
+/* The size of the buffer in which the kernel builds a uevent, UEVENT_BUFFER_SIZE of the kernel. */
+#define KERNEL_UEVENT_BUFFER_SIZE 2048U
+
+/* The number of variables that fit into a uevent, UEVENT_NUM_ENVP of the kernel: 32, and 64 since Linux
+ * 655078f5f528 ("kobject: increase allowed number of uevent variables"), 5.8, which no stable series got; 32 for a
+ * release that cannot be parsed. */
+static size_t kernel_uevent_num_envp(void)
+{
+        return kernel_version() >= KERNEL_VERSION_CODE(5, 8, 0) ? 64 : 32;
+}
+
+/* Whether the input subsystem of the running kernel cuts keys out of the MODALIAS= of an input device that does
+ * not fit into the buffer of a uevent, so that the rest of it fits, marked with "+,", instead of failing with
+ * ENOMEM, without a warning, which makes the kernel refuse the uevent: since Linux 0774d19038c4 ("Input: try
+ * trimming too long modalias strings"), 6.10, which the stable releases 4.19.317, 5.4.279, 5.10.221, 5.15.162,
+ * 6.1.95, 6.6.33, 6.8.12 and 6.9.3 got too. Since then, MODALIAS= also leaves UEVENT_ENV_EXTRA_LEN, 96 bytes, free
+ * behind it, for SEQNUM= and the variables of a uevent helper; before, a MODALIAS= that fits, but leaves too little
+ * room for SEQNUM=, makes add_uevent_var() fail for SEQNUM=, with a warning, and the kernel refuse the uevent. A
+ * release that cannot be parsed counts as one that does not cut it. */
+static bool kernel_trims_input_modalias(void)
+{
+        static const int trims[][2] = {
+                { KERNEL_VERSION_CODE(4, 19, 317), KERNEL_VERSION_CODE(4, 20, 0) },
+                { KERNEL_VERSION_CODE(5, 4, 279),  KERNEL_VERSION_CODE(5, 5, 0)  },
+                { KERNEL_VERSION_CODE(5, 10, 221), KERNEL_VERSION_CODE(5, 11, 0) },
+                { KERNEL_VERSION_CODE(5, 15, 162), KERNEL_VERSION_CODE(5, 16, 0) },
+                { KERNEL_VERSION_CODE(6, 1, 95),   KERNEL_VERSION_CODE(6, 2, 0)  },
+                { KERNEL_VERSION_CODE(6, 6, 33),   KERNEL_VERSION_CODE(6, 7, 0)  },
+                { KERNEL_VERSION_CODE(6, 8, 12),   KERNEL_VERSION_CODE(6, 9, 0)  },
+                { KERNEL_VERSION_CODE(6, 9, 3),    KERNEL_VERSION_CODE_MAX       },
+        };
+
+        return kernel_version_in(trims, ELEMENTSOF(trims));
+}
+
+/* The room that UEVENT_ENV_EXTRA_LEN of the kernel keeps free behind the MODALIAS= of an input device, see
+ * input_modalias_trimmed(). */
+#define KERNEL_INPUT_UEVENT_ENV_EXTRA_LEN 96U
+
+/* Whether the kernel cuts keys out of the MODALIAS= of the input device whose uevent file has the contents of the
+ * size, rather than refusing a uevent in which it does not fit, and the number of bytes that it can cut, in
+ * ret_cuttable. MODALIAS= is "input:b<bus>v<vendor>p<product>e<version>-e<bits>k<bits>r<bits>a<bits>...", each bit
+ * as a hexadecimal number in upper case and a comma, and the last variable of input_dev_uevent() in
+ * drivers/input/input.c. A kernel that trims it, see kernel_trims_input_modalias(), adds it only when it is shorter
+ * than what is left of the buffer less UEVENT_ENV_EXTRA_LEN (96) bytes, which cover SEQNUM= and the variables of a
+ * uevent helper that come after it, and otherwise cuts keys off the end of the part from "k" up to "r", down to
+ * "k+,", when the rest fits then (input_print_modalias_parts()); so it can cut all of that part but three bytes.
+ * Keys that already end with "+," show that the kernel cuts them, whatever version it reports, e.g. a
+ * distribution's kernel with a stable release that is newer than its version. Other kernels cut nothing, and keep
+ * nothing free. */
+static bool input_modalias_trimmed(const char *contents, size_t size, size_t *ret_cuttable)
+{
+        const char *p, *end = NULL, *dash, *k = NULL, *r = NULL;
+
+        assert(contents);
+        assert(ret_cuttable);
+
+        *ret_cuttable = 0;
+
+        for (p = contents; p < contents + size; p = end + 1) {
+                end = memchr(p, '\n', contents + size - p);
+                if (!end)
+                        end = contents + size;
+                if ((size_t) (end - p) > STRLEN("MODALIAS=input:") && startswith(p, "MODALIAS=input:"))
+                        break;
+        }
+        if (p >= contents + size)
+                return false;
+
+        dash = memchr(p, '-', end - p);
+        if (dash)
+                k = memchr(dash, 'k', end - dash);
+        if (k)
+                r = memchr(k, 'r', end - k);
+
+        if (!kernel_trims_input_modalias() && !(r && r - k > 3 && r[-2] == '+' && r[-1] == ','))
+                return false;
+
+        if (r && r - k > 3)
+                *ret_cuttable = r - k - 3;
+        return true;
+}
+
+/* Whether reading the uevent file of a device of the subsystem can take long, as the uevent() function of the
+ * kernel for it asks the hardware, or waits for a lock that is held while the driver does: the one of the class of
+ * a power supply, power_supply_uevent() in drivers/power/supply/power_supply_sysfs.c, gets the value of each of its
+ * properties from the driver, e.g. from a battery over I2C, SMBus or ACPI, or with HID reports, and the one of the
+ * device type of a remote control receiver, rc_dev_uevent() in drivers/media/rc/rc-main.c, takes the lock of the
+ * device, which lirc_transmit() holds while the driver sends an infrared signal (tx_ir()), and rc_open() while it
+ * opens the device. The uevent() functions of the other subsystems use what the kernel knows already, or locks that
+ * are seldom held for long. */
+static bool subsystem_uevent_may_be_slow(const char *subsystem)
+{
+        return STR_IN_SET(subsystem, "power_supply", "rc");
+}
+
+/* Whether uevent_show() in drivers/base/core.c, which fills the uevent file of a device, takes the lock of the
+ * device (device_lock()) in some release of the series of the running kernel, so that a read of the file waits while
+ * the lock is held, e.g. for as long as a driver probes the device, which can take minutes, or while it is unbound:
+ * since Linux c0a40097f0bc ("drivers: core: synchronize really_probe() and dev_uevent()"), 6.10, until Linux
+ * 15fffc6a5624 ("driver core: Fix uevent_show() vs driver detach race"), 6.11, again since its revert, Linux
+ * 9a71892cbcdb, 6.12, until the revert of the first one, Linux dc1771f71854, 6.15, and in releases of the stable
+ * series 4.19, 5.4, 5.10, 5.15, 6.1, 6.6, 6.9 and 6.11, which got them. Not 6.7 and 6.8, whose last releases,
+ * 6.7.12 (2024-04-03) and 6.8.12 (2024-05-30), came before c0a40097f0bc was merged, in 6.10-rc4 (2024-06-16), and
+ * backported, from 6.9.6, 6.6.35 and 6.1.95 (2024-06-21) on. The release that uname() returns does not tell the
+ * stable release on some distributions, e.g. Debian's "6.1.0-NN-amd64" for 6.1.NNN, so the whole series counts, by
+ * its major and minor version only. A release that cannot be parsed does not count. */
+static bool kernel_uevent_show_may_lock_device(void)
+{
+        static const int locked[][2] = {
+                { KERNEL_VERSION_CODE(4, 19, 0), KERNEL_VERSION_CODE(4, 20, 0) },
+                { KERNEL_VERSION_CODE(5, 4, 0),  KERNEL_VERSION_CODE(5, 5, 0)  },
+                { KERNEL_VERSION_CODE(5, 10, 0), KERNEL_VERSION_CODE(5, 11, 0) },
+                { KERNEL_VERSION_CODE(5, 15, 0), KERNEL_VERSION_CODE(5, 16, 0) },
+                { KERNEL_VERSION_CODE(6, 1, 0),  KERNEL_VERSION_CODE(6, 2, 0)  },
+                { KERNEL_VERSION_CODE(6, 6, 0),  KERNEL_VERSION_CODE(6, 7, 0)  },
+                { KERNEL_VERSION_CODE(6, 9, 0),  KERNEL_VERSION_CODE(6, 15, 0) },
+        };
+
+        return kernel_version_in(locked, ELEMENTSOF(locked));
+}
+
+/* The number of variables that power_supply_uevent() of a kernel before Linux 5.8 adds at most for the power supply
+ * with the syspath, without reading its uevent file: POWER_SUPPLY_NAME=, and POWER_SUPPLY_<PROPERTY>= for each
+ * property of the driver whose value it gets. Each property of the driver has a readable attribute file of its
+ * name in the directory of the device, and "type" is always there (power_supply_attr_is_visible()), as are the
+ * attributes that the driver adds itself; so one variable per readable file but "uevent", and one, are at least
+ * as many as it adds. dev_uevent() adds nothing else for a power supply there: it has no device number, its
+ * device type has no name, it has no driver, and the power supply core keeps its devicetree node in psy->of_node,
+ * not in the device. From Linux 5.8, it adds POWER_SUPPLY_TYPE= on top, and later kernels more, but those take up
+ * to 64 variables. This bounds the number of the variables only, not their bytes, which cannot be told without the
+ * values: a power supply with long string properties, e.g. its model name, manufacturer and serial number, can still
+ * overflow the buffer with the UUID and the arguments, which makes the kernel log a warning and refuse the uevent
+ * with ENOMEM, as power_supply_uevent() is the last uevent() function for it, and the uevent is then triggered again
+ * in the smaller form, see uevent_trigger_fitting(). */
+static int power_supply_uevent_vars_max(const char *syspath, size_t *ret)
+{
+        _cleanup_closedir_ DIR *d = NULL;
+        size_t n = 1;
+
+        assert(syspath);
+        assert(ret);
+
+        d = opendir(syspath);
+        if (!d)
+                return negative_errno();
+
+        for (;;) {
+                struct dirent *de;
+                struct stat st;
+
+                errno = 0;
+                de = readdir(d);
+                if (!de) {
+                        if (errno > 0)
+                                return negative_errno();
+                        break;
+                }
+
+                if (de->d_name[0] == '.' || streq(de->d_name, "uevent") || !IN_SET(de->d_type, DT_REG, DT_UNKNOWN))
+                        continue;
+                /* the attributes of sysfs show their values only when they are read */
+                if (fstatat(dirfd(d), de->d_name, &st, AT_SYMLINK_NOFOLLOW) < 0)
+                        continue;
+                if (S_ISREG(st.st_mode) && (st.st_mode & 0444) != 0)
+                        n++;
+        }
+
+        *ret = n;
+        return 0;
+}
+
+/* What uevent_room_of_device() tells about the room that a synthetic uevent of a device takes in the buffer of the
+ * kernel without the variables of the caller. */
+struct uevent_room {
+        /* the number of its variables, and of their bytes, each with its NUL, with all keys of the MODALIAS= of an
+         * input device */
+        size_t vars, bytes;
+        /* the bytes that the kernel can cut out of the keys of the MODALIAS= of an input device, see
+         * input_modalias_trimmed() */
+        size_t cuttable;
+        /* whether they are counted as the kernel counts them, for an input device on a kernel that cuts keys out
+         * of its MODALIAS=, rather than with room to spare */
+        bool exact;
+        /* whether only the variables are counted, at most, for a power supply before Linux 5.8, see
+         * power_supply_uevent_vars_max() */
+        bool vars_only;
+};
+
+/* The room in the buffer of the kernel that a synthetic uevent of the device with the syspath and the action takes
+ * without the variables of the caller, SYNTH_UUID= and SYNTH_ARG_*, see uevent_trigger_fitting(). The variables of
+ * the device are those of its uevent file, which the kernel fills with the same uevent() function of the kset of
+ * the device as the uevent, on an empty buffer (uevent_show() in drivers/base/core.c). Around them,
+ * kobject_uevent_env() in lib/kobject_uevent.c adds ACTION=, DEVPATH= and SUBSYSTEM= before, and SEQNUM= after
+ * them, and, when a uevent helper is set in /sys/kernel/uevent_helper, HOME=, PATH= and the subsystem as the
+ * argument of the helper, after it sent the uevent. For an input device on a kernel that cuts keys out of its
+ * MODALIAS=, see input_modalias_trimmed(), they are counted as the kernel counts them: MODALIAS= fits when the
+ * variables up to it leave more than the 96 bytes free that cover the rest, and the keys that the kernel can cut
+ * are told apart, which only the UUID may cost, see uevent_trigger_fitting(). Otherwise SEQNUM= is counted with the
+ * largest number, and a variable and 96 bytes are kept to spare, for variables of the device that change until the
+ * write, e.g. DRIVER=. The uevent file of a power supply or a remote control receiver is not read, see
+ * subsystem_uevent_may_be_slow(); for a power supply before Linux 5.8, which allows only 32 variables, they are
+ * counted at most, see power_supply_uevent_vars_max(), and not their bytes. On the kernel series in which the read
+ * of a uevent file may wait for the lock of the device, no uevent file is read, and only that bound of a power
+ * supply is counted, see kernel_uevent_show_may_lock_device() and uevent_trigger_fitting(). Returns 0, or a
+ * negative errno if the room cannot be told, e.g. -EACCES for the uevent files of buses, drivers and modules, which
+ * cannot be read, -ENOENT for a kobject without one, e.g. /sys/bus/<bus>/drivers, -ENODATA for an empty one, e.g.
+ * of an LED, which has no variables, or of a device whose uevent() fails, and -EOPNOTSUPP for a device whose uevent
+ * file is not read, e.g. a power supply from Linux 5.8 and a remote control receiver, whose uevents are small, and
+ * any other device on those kernel series. */
+static int uevent_room_of_device(const char *syspath, const char *action, struct uevent_room *ret)
+{
+        _cleanup_free_ char *contents = NULL, *subsystem = NULL, *helper = NULL;
+        struct uevent_room room = {};
+        const char *devpath, *name;
+        bool with_helper;
+        size_t size;
+        int r, k;
+
+        assert(syspath);
+        assert(action);
+        assert(ret);
+
+        devpath = startswith(syspath, "/sys");
+        if (!devpath || devpath[0] != '/')
+                return -EINVAL;
+
+        /* the subsystem first, for power supplies; buses, drivers and modules have none */
+        r = readlink_malloc(strjoina(syspath, "/subsystem"), &subsystem);
+        if (r >= 0 && subsystem_uevent_may_be_slow(eudev_basename(subsystem))) {
+                size_t n;
+
+                if (!streq(eudev_basename(subsystem), "power_supply") || kernel_uevent_num_envp() > 32)
+                        return -EOPNOTSUPP;
+
+                k = power_supply_uevent_vars_max(syspath, &n);
+                if (k < 0)
+                        return k;
+
+                with_helper = read_one_line_file("/sys/kernel/uevent_helper", &helper) >= 0 && !isempty(helper);
+
+                /* ACTION=, DEVPATH=, SUBSYSTEM=, its own, SEQNUM= and those of a helper */
+                *ret = (struct uevent_room) {
+                        .vars = 3 + n + 1 + (with_helper ? 2 : 0),
+                        .vars_only = true,
+                };
+                return 0;
+        }
+
+        /* On the kernel series in which a read of the uevent file may wait for the lock of the device, the file is
+         * not read, and only the bound of a power supply above is counted, which reads none. */
+        if (kernel_uevent_show_may_lock_device())
+                return -EOPNOTSUPP;
+
+        with_helper = read_one_line_file("/sys/kernel/uevent_helper", &helper) >= 0 && !isempty(helper);
+
+        k = read_full_file(strjoina(syspath, "/uevent"), &contents, &size);
+        if (k < 0)
+                return k;
+        if (size == 0)
+                return -ENODATA;
+
+        if (r < 0)
+                return r;
+        name = eudev_basename(subsystem);
+
+        /* a variable per line, with its NUL in place of the newline */
+        for (size_t i = 0; i < size; i++)
+                if (contents[i] == '\n')
+                        room.vars++;
+        room.bytes = size;
+        if (contents[size - 1] != '\n') {
+                room.vars++;
+                room.bytes++;
+        }
+
+        if (streq(name, "input"))
+                room.exact = input_modalias_trimmed(contents, size, &room.cuttable);
+
+        /* ACTION=, DEVPATH=, SUBSYSTEM= and SEQNUM= */
+        room.vars += 4;
+        room.bytes += STRLEN("ACTION=") + strlen(action) + 1 +
+                      STRLEN("DEVPATH=") + strlen(devpath) + 1 +
+                      STRLEN("SUBSYSTEM=") + strlen(name) + 1;
+        if (with_helper)
+                room.vars += 2;
+
+        if (room.exact)
+                /* the value of MODALIAS= has to be shorter than the room left less UEVENT_ENV_EXTRA_LEN, so the
+                 * variables up to it can take all of the buffer but that and a byte; SEQNUM= and the variables of a
+                 * helper, at most 28 + 7 + 35 + 6 bytes, fit into it */
+                room.bytes += KERNEL_INPUT_UEVENT_ENV_EXTRA_LEN + 1;
+        else {
+                room.bytes += STRLEN("SEQNUM=18446744073709551615") + 1;
+                if (with_helper)
+                        room.bytes += STRLEN("HOME=/") + 1 + STRLEN("PATH=/sbin:/bin:/usr/sbin:/usr/bin") + 1 +
+                                      strlen(name) + 1;
+                room.vars++;
+                room.bytes += 96;
+        }
+
+        *ret = room;
+        return 0;
+}
+
+/* The room that the arguments joined by trigger_args_join() take in a uevent, as SYNTH_ARG_KEY=VALUE each. */
+static void trigger_args_room(const char *args, size_t *ret_vars, size_t *ret_bytes)
+{
+        size_t vars = 0, bytes = 0;
+
+        assert(args);
+
+        for (const char *p = args; *p; ) {
+                size_t n = strcspn(p, " ");
+
+                if (n > 0) {
+                        vars++;
+                        bytes += STRLEN("SYNTH_ARG_") + n + 1;
+                }
+                p += n;
+                p += strspn(p, " ");
+        }
+
+        *ret_vars = vars;
+        *ret_bytes = bytes;
+}
+
 /* One write of uevent_trigger_fitting(): like uevent_trigger_full(), but with check_sent, -ENODATA when the
  * write succeeded although /sys/kernel/uevent_seqnum, read before and after it, shows that the kernel sent no
  * uevent at all, see uevent_seqnum_unchanged(). */
@@ -1303,23 +1631,58 @@ static int uevent_trigger_fitting_one(const char *syspath, const char *action, c
 }
 
 /* Triggers a synthetic uevent of the device with the syspath with the action and the UUID, followed by the
- * arguments joined by trigger_args_join() unless they are NULL, like uevent_trigger_full(), but when the
- * kernel refuses the uevent with ENOMEM, triggers it again without the arguments, and then without the UUID.
+ * arguments joined by trigger_args_join() unless they are NULL, like uevent_trigger_full(), but leaves the
+ * arguments, and then the UUID, out when the uevent would not fit into the buffer of the kernel with them, and
+ * when the kernel refuses the uevent with ENOMEM, triggers it again without the arguments, and then without the
+ * UUID.
  *
- * The kernel builds every uevent in a buffer of UEVENT_BUFFER_SIZE (2048) bytes for at most UEVENT_NUM_ENVP
- * (64) variables: ACTION=, DEVPATH=, SUBSYSTEM=, SYNTH_UUID= (SYNTH_UUID=0 without a UUID), one
- * SYNTH_ARG_KEY=VALUE for every argument, the variables of the device, as in its uevent file, and SEQNUM=.
- * If they do not fit, it sends no uevent, and the write fails with ENOMEM. The UUID takes 36 bytes more than
- * SYNTH_UUID=0, and the arguments of device_build_default_trigger_args() with the timestamps about 165 bytes
- * and 5 variables, so a device whose uevent is close to the limit, e.g. an input device with a long PHYS
- * string, could get no uevent at all from a trigger with them, while the kernel's own uevent and a trigger
- * with the plain action still work. Unlike systemd 66563e97b7, which then fails, the uevent is triggered again in
- * the smaller form, as the arguments are informational only, and the UUID is only needed to recognize the
- * uevent; the kernel logs its error for the refused write. The space is not estimated beforehand, which would
- * need to read the uevent file of the device for every trigger, and could still be wrong; the kernel knows
- * it. An input device with a MODALIAS that is too long does not fail on recent kernels (e.g. 6.8.12): the
- * kernel cuts it to the space that is left, so the UUID and the arguments make it shorter, as SYNTH_UUID=0 of
- * a plain trigger already does; its beginning, which e.g. the hwdb matches, stays.
+ * The kernel builds every uevent in a buffer of KERNEL_UEVENT_BUFFER_SIZE (2048) bytes for at most UEVENT_NUM_ENVP
+ * variables, 32, and 64 since Linux 5.8, see kernel_uevent_num_envp(): ACTION=, DEVPATH=, SUBSYSTEM=, SYNTH_UUID=
+ * (SYNTH_UUID=0 without a UUID), one SYNTH_ARG_KEY=VALUE for every argument, the variables of the device, as in
+ * its uevent file, and SEQNUM=, in this order (kobject_uevent_env() in lib/kobject_uevent.c), so the variables of
+ * the caller come before those of the device. What happens when they do not fit depends on where the room runs
+ * out: add_uevent_var() logs a warning with a backtrace for every variable that does not fit (and panics with
+ * panic_on_warn), and dev_uevent() in drivers/base/core.c ignores its failures for MAJOR=, MINOR=, DEVNAME=,
+ * DEVMODE=, DEVUID=, DEVGID=, DEVTYPE=, DRIVER= and the OF_* variables, and those of the uevent() functions of the
+ * bus and the class of the device when a later one succeeds: then the kernel sends the uevent without those
+ * variables of the device, and the write succeeds. When the last of those functions fails, or SEQNUM= does not
+ * fit, it sends no uevent, and the write fails with ENOMEM, unless the kernel does not report it, see below; the
+ * sequence number is taken before SEQNUM= is added, so it changes then although no uevent was sent. The input
+ * subsystem prints the values of its bitmaps, e.g. KEY=, and of MODALIAS= into the buffer itself, behind their
+ * names, and fails with ENOMEM, without a warning, when they do not fit; as input_dev_uevent() is the last uevent()
+ * function of an input device, the kernel then refuses the uevent as a whole, and no variable is lost
+ * (input_add_uevent_bm_var() and input_add_uevent_modalias_var() in drivers/input/input.c, the same in 4.19.316,
+ * 5.10.220, 6.1.94 and 6.9.2). Since Linux 6.10, and in some stable releases, it cuts keys out of a MODALIAS= that
+ * does not fit instead, marked with "+,", see kernel_trims_input_modalias(). The UUID takes 36 bytes more than
+ * SYNTH_UUID=0, and the arguments of device_build_default_trigger_args() with the timestamps about 165 bytes and 5
+ * variables, so a device whose variables come close to the limit, e.g. an input device with a long PHYS string or
+ * many keys, could lose some of them, or get no uevent at all, from a trigger with them, while the kernel's own
+ * uevent and a trigger with the plain action still work. So the room that the uevent of the device takes is read
+ * from its uevent file first, see uevent_room_of_device(), and the arguments, and then the UUID, are only written
+ * when they fit, as the arguments are informational only, and the UUID is only needed to recognize the uevent. On
+ * the kernels that cut keys out of the MODALIAS= of an input device, the UUID may cost it keys at its end, which the
+ * kernel marks, as the callers wait for the uevent with the UUID, but no other variables; the arguments are only
+ * written when they fit with all its keys. For a power supply before Linux 5.8, only an upper bound of its variables
+ * is counted, see power_supply_uevent_vars_max(). When the room cannot be told, e.g. for a power supply since Linux
+ * 5.8 or a remote control receiver, see subsystem_uevent_may_be_slow(), they are written, with a debug message only
+ * when that is not expected, and when the kernel refuses the uevent with ENOMEM, unlike systemd 66563e97b7, which
+ * then fails, it is triggered again in the smaller form; when a uevent helper is set, and the variables that the
+ * kernel adds for it after it sent the uevent do not fit, the kernel reports ENOMEM too, and the device gets the
+ * uevent a second time from that.
+ *
+ * On the kernel series in which some release takes the lock of the device to fill its uevent file, see
+ * kernel_uevent_show_may_lock_device(), no uevent file is read, and only the variables of a power supply before
+ * Linux 5.8 are counted, from its attribute files: a read would wait there for as long as a driver probes or
+ * releases the device, which can take minutes, in every trigger, and in the main process of udevd, which triggers
+ * the change uevents of watched devices (synthesize_change_one()) and re-reads partition tables when it cannot fork,
+ * or cannot allocate the struct reread of the re-read, so that it would handle no uevents meanwhile; it looks up a
+ * watched device without reading its uevent file too, see udev_watch_lookup(). The write itself does not take the
+ * lock (uevent_store() calls kobject_synth_uevent() without it). There, the arguments and the UUID are written as
+ * before, but for a power supply that may not fit with them, and the retries below handle what does not fit, with
+ * the messages of the kernel: a large input device makes the kernel refuse the uevent with the arguments, and maybe
+ * with the UUID, without a warning, also on the releases whose input subsystem cuts MODALIAS=, where the arguments
+ * may also cost it keys at the end of its MODALIAS=; another device whose variables come close to the limit may lose
+ * some of them, with a warning.
  *
  * Linux 4.13 to 4.20, before the stable releases 4.14.99, 4.19.21 and 4.20.8, accept such a write without an
  * error, although they sent no uevent, see kernel_may_refuse_uevent_silently(). With check_sent, which the caller
@@ -1346,6 +1709,82 @@ static int uevent_trigger_fitting(const char *syspath, const char *action, const
 
         assert(syspath);
         assert(action);
+
+        if (uuid) {
+                struct uevent_room room;
+
+                r = uevent_room_of_device(syspath, action, &room);
+                if (r < 0) {
+                        /* no message for an empty uevent file, the uevent files of buses, drivers and modules, a
+                         * kobject without one, and the devices whose uevent files are not read, see
+                         * uevent_room_of_device() */
+                        if (!IN_SET(r, -ENODATA, -EACCES, -ENOENT, -EOPNOTSUPP))
+                                log_debug_errno(r, "%s: Failed to read the variables of the device, not checking whether the uevent fits into the buffer of the kernel with the UUID and the caller arguments: %m",
+                                                utf8_escape_for_log(syspath, &lesc1));
+                } else if (room.vars_only) {
+                        size_t max_vars = kernel_uevent_num_envp();
+
+                        room.vars++;
+
+                        if (args) {
+                                size_t avars, abytes;
+
+                                trigger_args_room(args, &avars, &abytes);
+                                if (room.vars + avars > max_vars) {
+                                        log_debug("%s: The uevent of the power supply could have more variables than fit into the buffer of the kernel with the caller arguments (up to %zu of %zu), triggering '%s' without them.",
+                                                  utf8_escape_for_log(syspath, &lesc1), room.vars + avars, max_vars,
+                                                  utf8_escape_for_log(action, &lesc2));
+                                        args = NULL;
+                                }
+                        }
+
+                        if (room.vars > max_vars) {
+                                log_debug("%s: The uevent of the power supply could have more variables than fit into the buffer of the kernel with the UUID (up to %zu of %zu), triggering '%s' without it.",
+                                          utf8_escape_for_log(syspath, &lesc1), room.vars, max_vars,
+                                          utf8_escape_for_log(action, &lesc2));
+                                uuid = NULL;
+                                args = NULL;
+                        }
+                } else {
+                        size_t max_vars = kernel_uevent_num_envp();
+                        const char *how_args, *how_uuid;
+
+                        how_args = how_uuid = "with room to spare";
+                        if (room.exact && room.cuttable > 0) {
+                                how_args = "as the kernel counts them, with all keys of MODALIAS=";
+                                how_uuid = "as the kernel counts them, without the keys it can cut out of MODALIAS=";
+                        } else if (room.exact)
+                                how_args = how_uuid = "as the kernel counts them";
+
+                        room.vars++;
+                        room.bytes += STRLEN("SYNTH_UUID=") + strlen(uuid) + 1;
+
+                        /* the arguments only when they fit with all keys of MODALIAS= */
+                        if (args) {
+                                size_t avars, abytes;
+
+                                trigger_args_room(args, &avars, &abytes);
+                                if (room.vars + avars > max_vars ||
+                                    room.bytes + abytes > KERNEL_UEVENT_BUFFER_SIZE) {
+                                        log_debug("%s: The uevent would not fit into the buffer of the kernel with the caller arguments (%zu of %zu variables, %zu of %u bytes, %s), triggering '%s' without them.",
+                                                  utf8_escape_for_log(syspath, &lesc1), room.vars + avars, max_vars,
+                                                  room.bytes + abytes, KERNEL_UEVENT_BUFFER_SIZE, how_args,
+                                                  utf8_escape_for_log(action, &lesc2));
+                                        args = NULL;
+                                }
+                        }
+
+                        /* the UUID also when the kernel has to cut keys out of MODALIAS= for it */
+                        if (room.vars > max_vars || room.bytes - room.cuttable > KERNEL_UEVENT_BUFFER_SIZE) {
+                                log_debug("%s: The uevent would not fit into the buffer of the kernel with the UUID (%zu of %zu variables, %zu of %u bytes, %s), triggering '%s' without it.",
+                                          utf8_escape_for_log(syspath, &lesc1), room.vars, max_vars,
+                                          room.bytes - room.cuttable, KERNEL_UEVENT_BUFFER_SIZE, how_uuid,
+                                          utf8_escape_for_log(action, &lesc2));
+                                uuid = NULL;
+                                args = NULL;
+                        }
+                }
+        }
 
         if (uuid && args) {
                 r = uevent_trigger_fitting_one(syspath, action, uuid, args, check_sent);
@@ -1553,7 +1992,8 @@ static int uevent_trigger_with_uuid(struct udev *udev, const char *syspath, cons
  * unless args is NULL, see uevent_trigger_with_uuid(). The kernel passes the arguments on as
  * SYNTH_ARG_KEY=VALUE. Returns 1 if the uevent was triggered with the UUID, which is then stored in ret_uuid
  * unless it is NULL, with or without the arguments, 0 if it was triggered without the UUID and the
- * arguments, as the kernel does not support them, or refused the uevent with them, and ret_uuid is set to
+ * arguments, as the kernel does not support them, or the uevent would not fit with them, or the kernel refused
+ * it with them, and ret_uuid is set to
  * the empty string, and a negative errno on failure, e.g. -EINVAL if the arguments are not KEY VALUE pairs of
  * alphanumerical words. */
 int uevent_trigger_with_args(struct udev *udev, const char *syspath, const char *action, char * const *args,

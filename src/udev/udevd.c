@@ -2277,9 +2277,13 @@ static bool block_device_is_disk_without_uevent(struct udev_device *dev) {
 static int synthesize_change(struct udev_device *dev, usec_t close_usec) {
         _cleanup_free_ char *lesc1 = NULL;
 
-        /* Without reading the uevent file of the device, see udev_watch_lookup(). Only the re-read of the
-         * partition table of a disk reads it, for the device node of the disk, which it opens: in the child, or
-         * in this process when it re-reads it synchronously below. */
+        /* Without reading the uevent file of the device, see udev_watch_lookup(). Only these read it: the re-read
+         * of the partition table of a disk, for the device node of the disk, which it opens, in the child, or in
+         * this process when it re-reads it synchronously below, and for the change uevents that it triggers, of
+         * the disk, of the resized partitions, and of the partitions after a busy lock or a failure; and
+         * synthesize_change_one() for any other device. These triggers read the uevent files to tell whether a
+         * change uevent fits with the UUID and the caller arguments, on the kernels not known to take the lock of
+         * the device to fill its uevent file, see uevent_room_of_device(). */
         if (streq_ptr("block", udev_device_get_subsystem_without_uevent(dev)) &&
             block_device_is_disk_without_uevent(dev) &&
             !startswith(udev_device_get_sysname(dev), "dm-")) {

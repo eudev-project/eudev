@@ -475,7 +475,47 @@ runs and a restarted
 \fBudevd\fR
 use it instead of finding out again, until the next boot; a file of another boot or kernel, or one that cannot be parsed, is ignored and replaced, and temporary files that a process killed while storing the result left behind are removed\&. When
 /run/udev
-does not exist or cannot be written, every process finds out on its own\&. The kernel builds every event in a buffer of 2048 bytes for at most 64 properties; when it refuses an event because the properties no longer fit, the event is triggered again without them, and then also without the UUID\&. Linux 4\&.13 to 4\&.20 do not report that they refused an event: the write succeeds although no event was sent, until Linux 5\&.0 (commit df44b479654f), which the stable releases 4\&.14\&.99, 4\&.19\&.21 and 4\&.20\&.8 got too\&. So on kernels that report such a version, or one before 4\&.13, which may have the UUIDs backported, or a release that does not start with a version,
+does not exist or cannot be written, every process finds out on its own\&. The kernel builds every event in a buffer of 2048 bytes for at most 32 properties, 64 since Linux 5\&.8 (commit 655078f5f528):
+ACTION,
+DEVPATH
+and
+SUBSYSTEM, then
+SYNTH_UUID
+and the arguments, then the properties of the device, as its
+uevent
+file shows them, and
+SEQNUM\&. When they do not fit, depending on where the room ran out, the kernel sends the event without some properties of the device, with a warning with a backtrace, and reports no error, or refuses the event, with such a warning, or without one for an input device whose bitmaps, e\&.g\&.\&
+KEY, or
+MODALIAS
+do not fit\&. So before an event is triggered with the UUID, the
+uevent
+file of the device is read, and the arguments, and then also the UUID, are left out when the event would not fit with them, with some room to spare\&. Since Linux 6\&.10 (commit 0774d19038c4), which the stable releases 4\&.19\&.317, 5\&.4\&.279, 5\&.10\&.221, 5\&.15\&.162, 6\&.1\&.95, 6\&.6\&.33, 6\&.8\&.12 and 6\&.9\&.3 got too, the kernel cuts keys off the end of the
+MODALIAS
+of an input device that does not fit, puts
++,
+after the remaining ones, and keeps 96 bytes free behind it for the properties that come after it; a
+MODALIAS
+whose keys already end that way shows such a kernel, whatever version it reports\&. There the event of an input device is counted as the kernel counts it, and only the UUID, which is needed to recognize the event, may cost it some of these keys; the arguments are only written when the event fits with all of them\&. The file of a power supply is not read, as the kernel asks the hardware for its properties then: before Linux 5\&.8, which allows only 32 properties, the arguments, and then the UUID, are only written when they fit with as many properties as the kernel can add for it, its name and one for each readable attribute file of the power supply; from 5\&.8 on, its event is small\&. Nor is the file of a remote control receiver (subsystem
+rc) read, as the kernel may have to wait then until its driver has sent an infrared signal; its event is small\&. On the kernel series 4\&.19, 5\&.4, 5\&.10, 5\&.15, 6\&.1, 6\&.6 and 6\&.9 to 6\&.14, no
+uevent
+file is read, and only the bound of a power supply is counted, as some of their releases take the lock of the device to fill its
+uevent
+file (added by Linux commits c0a40097f0bc and 9a71892cbcdb, and taken out by 15fffc6a5624 and dc1771f71854), so that a read waits for as long as a driver probes the device, which can take minutes; the whole series counts, as the release does not tell the stable release on some distributions, e\&.g\&.\&
+6\&.1\&.0\-NN\-amd64\&. There, an event that does not fit with the arguments and the UUID loses properties of the device, with a warning of the kernel, or is refused, e\&.g\&. the one of a large input device, without a warning; on the releases that cut the
+MODALIAS
+of an input device, the arguments may cost it keys\&. The devices are matched without reading their
+uevent
+files, also there, but for
+\fB\-\-property\-match\fR,
+\fB\-\-initialized\-match\fR
+and
+\fB\-\-initialized\-nomatch\fR, which read them, and the lookup of a network interface by its index, with
+\fB\-\-tag\-match\fR
+or a device ID such as
+n1, which reads its file when its
+ifindex
+attribute cannot be read or parsed\&. On these series, but for a power supply that may not fit with them, and when the file is not read otherwise, or cannot be read, the arguments and the UUID are written, and when the kernel refuses an event because the properties no longer fit, the event is triggered again without them, and then also without the UUID\&. With a uevent helper set in
+/sys/kernel/uevent_helper, the kernel adds properties for it after it sent the event, which the check counts; when they do not fit nevertheless, the kernel reports the error although it sent the event, and the device gets the event a second time from the one triggered again\&. Linux 4\&.13 to 4\&.20 do not report that they refused an event: the write succeeds although no event was sent, until Linux 5\&.0 (commit df44b479654f), which the stable releases 4\&.14\&.99, 4\&.19\&.21 and 4\&.20\&.8 got too\&. So on kernels that report such a version, or one before 4\&.13, which may have the UUIDs backported, or a release that does not start with a version,
 /sys/kernel/uevent_seqnum, the sequence number of the last event the kernel sent, is also read before and after each write with the UUID, and if it did not change, the kernel sent no event, and the event is triggered again in the same way; this also applies to the events that
 \fBudevd\fR
 triggers itself\&. The version is taken from the release of the kernel, which on some distributions does not tell the stable release, e\&.g\&.\&
@@ -575,7 +615,9 @@ or
 .PP
 \fB\-p\fR, \fB\-\-property\-match=\fR\fB\fIPROPERTY\fR\fR\fB=\fR\fB\fIVALUE\fR\fR
 .RS 4
-Trigger events for devices with a matching property value\&. This option can be specified multiple times and supports shell style pattern matching\&.
+Trigger events for devices with a matching property value\&. This option can be specified multiple times and supports shell style pattern matching\&. The properties are read from the
+uevent
+file of each device, which waits on some kernels while a driver probes the device, see above\&.
 .RE
 .PP
 \fB\-g\fR, \fB\-\-tag\-match=\fR\fB\fITAG\fR\fR
@@ -620,6 +662,10 @@ is specified, trigger events for devices that are not initialized by
 yet, and skip devices that are already initialized\&.
 .sp
 Typically, it is essential that applications which intend to use such a match, make sure a suitable udev rule is installed that sets at least one property on devices that shall be matched\&. See also Initialized Devices section below for more details\&.
+.sp
+To tell whether a device is initialized, its
+uevent
+file is read, which waits on some kernels while a driver probes the device, see above\&.
 .sp
 WARNING:
 \fB\-\-initialized\-nomatch\fR
@@ -684,7 +730,7 @@ Print the randomized UUIDs that the synthetic device events are triggered with t
 SYNTH_UUID=
 property) and may be used to track delivery of the generated events\&. This requires Linux 4\&.13 or newer: with older kernels, the events are triggered without UUIDs, with a warning, and no UUIDs are printed, see
 \fB\-\-settle\fR\&. No UUID is printed, with a warning, for an event that was triggered without one before it was known whether the kernel supports them\&. No UUID is printed for a device without a subsystem or a hidden block device, which is triggered without one, as the kernel sends no event for it, for a device for which the kernel sent no event when it was triggered (see
-\fB\-\-settle\fR), and for a device whose event the kernel refused with the UUID, as it did not fit, which is triggered without one, with a warning\&.
+\fB\-\-settle\fR), and for a device whose event would not fit into the buffer of the kernel with the UUID, or that the kernel refused with it, which is triggered without one, with a warning\&.
 .RE
 .PP
 \fB\-\-wait\-daemon[=\fR\fB\fISECONDS\fR\fR\fB]\fR
