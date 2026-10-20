@@ -1169,9 +1169,18 @@ static void overflow_barrier_reached(void) {
         overflow_links = strv_free(overflow_links);
 }
 
+/* The device of the watch handle, for the main process of udevd, which handles it without reading its uevent file:
+ * on some kernels, a read of a uevent file waits while a driver probes or releases the device, which can take
+ * minutes, and udevd would handle no events meanwhile, see udev_device_new_from_devnum(). The lookup by the device
+ * number checks it without the file, and the subsystem is taken from its link here, so that
+ * udev_device_get_subsystem() does not read the file for it either; the property SUBSYSTEM comes first then,
+ * which does not matter for this device. Only the re-read of the partition table of a disk, see
+ * synthesize_change(), and, while events wait for a locked disk, manager_requeue_locked_events_by_device() for a
+ * block device, which needs the device node of its disk, read uevent files. */
 struct udev_device *udev_watch_lookup(struct udev *udev, int wd) {
         char name[REMOVED_NAME_MAX];
         char device[UTIL_NAME_SIZE];
+        struct udev_device *dev;
         int r;
 
         if (inotify_fd < 0 || watch_dirfd < 0 || wd < 0)
@@ -1187,5 +1196,8 @@ struct udev_device *udev_watch_lookup(struct udev *udev, int wd) {
         if (r < 0 || device[0] == '\0')
                 return NULL;
 
-        return udev_device_new_from_device_id(udev, device);
+        dev = udev_device_new_from_device_id(udev, device);
+        if (dev)
+                (void) udev_device_get_subsystem_without_uevent(dev);
+        return dev;
 }

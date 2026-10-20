@@ -2053,9 +2053,10 @@ static int synthesize_change_one(struct udev_device *dev) {
         uint64_t seqnum;
         int r;
 
-        log_debug("device %s closed, synthesising 'change' on %s",
-                  utf8_escape_for_log(udev_device_get_devnode(dev), &lesc1),
-                  utf8_escape_for_log(udev_device_get_syspath(dev), &lesc2));
+        /* Like systemd a446e8ff2c, with the sysname of the device, not its device node, which only its uevent
+         * file tells, see udev_watch_lookup(). */
+        log_device_debug(dev, "device is closed, synthesising 'change' on %s",
+                         utf8_escape_for_log(udev_device_get_syspath(dev), &lesc2));
 
         /* Synthetic uevents with a UUID, which the kernel passes on as SYNTH_UUID=, and the caller arguments
          * need Linux 4.13 or newer. This finds out whether the kernel supports them, and triggers the uevent
@@ -2259,11 +2260,28 @@ static void rereads_start(void) {
         }
 }
 
+/* Whether the block device is a whole disk, as DEVTYPE=disk tells, but without reading its uevent file, see
+ * udev_watch_lookup(): DEVTYPE= of a block device is the name of its device type, "disk" or "partition", and the
+ * kernel gives each partition the attribute "partition", with its number, and a disk none (part_attrs, in
+ * block/partitions/core.c of Linux 6.12, the same since 2.6.32 at least). A device that is gone, whose attribute
+ * "dev" is gone too, is no disk, as when its uevent file cannot be read. */
+static bool block_device_is_disk_without_uevent(struct udev_device *dev) {
+        const char *syspath = udev_device_get_syspath(dev);
+
+        if (access(strjoina(syspath, "/partition"), F_OK) >= 0)
+                return false;
+
+        return access(strjoina(syspath, "/dev"), F_OK) >= 0;
+}
+
 static int synthesize_change(struct udev_device *dev, usec_t close_usec) {
         _cleanup_free_ char *lesc1 = NULL;
 
-        if (streq_ptr("block", udev_device_get_subsystem(dev)) &&
-            streq_ptr("disk", udev_device_get_devtype(dev)) &&
+        /* Without reading the uevent file of the device, see udev_watch_lookup(). Only the re-read of the
+         * partition table of a disk reads it, for the device node of the disk, which it opens: in the child, or
+         * in this process when it re-reads it synchronously below. */
+        if (streq_ptr("block", udev_device_get_subsystem_without_uevent(dev)) &&
+            block_device_is_disk_without_uevent(dev) &&
             !startswith(udev_device_get_sysname(dev), "dm-")) {
                 struct udev_list_node *loop;
                 struct reread *reread;
@@ -2315,8 +2333,6 @@ static int synthesize_change(struct udev_device *dev, usec_t close_usec) {
 }
 
 static int handle_inotify(struct udev *udev) {
-        _cleanup_free_ char *lesc1 = NULL;
-
         union inotify_event_buffer buffer;
         struct inotify_event *e;
         usec_t read_usec;
@@ -2348,8 +2364,9 @@ static int handle_inotify(struct udev *udev) {
                 if (e->mask & IN_CLOSE_WRITE) {
                         dev = udev_watch_lookup(udev, e->wd);
                         if (dev) {
-                                log_debug("inotify event: %x for %s",
-                                          e->mask, utf8_escape_for_log(udev_device_get_devnode(dev), &lesc1));
+                                /* with the sysname of the device, not its device node, which only its uevent
+                                 * file tells, see udev_watch_lookup() */
+                                log_device_debug(dev, "inotify event: %x for watch handle %i", e->mask, e->wd);
                                 manager_requeue_locked_events_by_device(dev);
                                 synthesize_change(dev, read_usec);
                                 udev_device_unref(dev);

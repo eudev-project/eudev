@@ -67,14 +67,18 @@ static void uevents_sent_add_partition(struct uevents_sent *sent, int nr) {
 }
 #endif
 
-/* eudev: the number of a partition device, from the PARTN property of its uevent file, or else, e.g. when the
- * kernel does not add the property, from its "partition" attribute. */
+/* eudev: the number of a partition device, from its attribute "partition", which the kernel gives every partition,
+ * and no disk, with the number that PARTN= of its uevent file has, which old kernels do not add; or else, e.g. in a
+ * directory used as sysfs for tests, from that property. The attribute first, so that the uevent file is not read:
+ * on some kernels, a read of it waits while a driver probes or releases the device, see udev_watch_lookup(), and
+ * udevd re-reads the partition table in its main process when it cannot fork, or cannot allocate the struct reread
+ * of the re-read. */
 static int partition_get_number(struct udev_device *partition, unsigned *ret) {
         const char *s;
 
-        s = udev_device_get_property_value(partition, "PARTN");
-        if (!s && streq_ptr(udev_device_get_devtype(partition), "partition"))
-                s = udev_device_get_sysattr_value(partition, "partition");
+        s = udev_device_get_sysattr_value(partition, "partition");
+        if (!s)
+                s = udev_device_get_property_value(partition, "PARTN");
         if (!s)
                 return -ENOENT;
 
@@ -427,7 +431,6 @@ static int remove_partitions(struct udev_device *d, int fd, struct udev_enumerat
 
         udev_list_entry_foreach(item, udev_enumerate_get_list_entry(e)) {
                 _cleanup_udev_device_unref_ struct udev_device *partition = NULL;
-                const char *devname, *s;
                 unsigned nr;
 
                 partition = udev_device_new_from_syspath(udev_device_get_udev(d), udev_list_entry_get_name(item));
@@ -437,14 +440,12 @@ static int remove_partitions(struct udev_device *d, int fd, struct udev_enumerat
                         continue;
                 }
 
-                devname = udev_device_get_devnode(partition);
-                if (!devname)
-                        return log_device_debug_errno(partition, ENOENT, "Failed to get name of partition: %m");
-
-                s = udev_device_get_property_value(partition, "PARTN");
-                r = s ? safe_atou(s, &nr) : -ENOENT;
+                /* eudev: the number of the partition from its attribute, see partition_get_number(), and its
+                 * device node, which only its uevent file tells, only for the message when it cannot be removed,
+                 * rather than the property PARTN and the device node first, like systemd */
+                r = partition_get_number(partition, &nr);
                 if (r < 0)
-                        return log_device_debug_errno(partition, r, "Failed to read partition number property: %m");
+                        return log_device_debug_errno(partition, r, "Failed to read partition number: %m");
                 if (set_contains(partnos, UINT_TO_PTR(nr))) {
                         log_device_debug(partition, "Found kernel partition device %u in partition table, leaving around.", nr);
                         continue;
@@ -456,7 +457,9 @@ static int remove_partitions(struct udev_device *d, int fd, struct udev_enumerat
                 if (r < 0) /* NB: when logging we use the parent device below, after all the partition device ceased existing by now, most likely */
                         RET_GATHER(ret, log_device_debug_errno(d, r,
                                                                "Failed to remove kernel partition device '%s' that vanished from partition table: %m",
-                                                               utf8_escape_for_log(devname, &lesc1)));
+                                                               utf8_escape_for_log(
+                                                                       strna(udev_device_get_devnode(partition)),
+                                                                       &lesc1)));
                 else  {
                         log_device_debug(d, "Removed partition %u from kernel.", nr);
                         *changed = true;

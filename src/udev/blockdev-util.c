@@ -254,7 +254,12 @@ int partition_enumerator_new(struct udev_device *dev, struct udev_enumerate **re
         if (r < 0)
                 return r;
 
-        r = udev_enumerate_add_match_property(e, "DEVTYPE", "partition");
+        /* eudev: by the attribute "partition", which the kernel gives every partition and no disk, rather than the
+         * property DEVTYPE=partition, like systemd, so that the enumerator reads no uevent file: on some kernels,
+         * a read of one waits while a driver probes or releases the device, and udevd re-reads the partition table
+         * of a disk in its main process when it cannot fork, or cannot allocate the struct reread of the re-read,
+         * see partition_get_number() in reread-partition-table.c. */
+        r = udev_enumerate_add_match_sysattr(e, "partition", NULL);
         if (r < 0)
                 return r;
 
