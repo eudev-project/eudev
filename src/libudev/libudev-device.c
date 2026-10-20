@@ -284,33 +284,37 @@ static int udev_device_set_subsystem(struct udev_device *udev_device, const char
         return 0;
 }
 
+/* The subsystem of the device, from its "subsystem" link, or the implicit one of a module, a driver or a
+ * subsystem, in buf, of the size, or a constant string; NULL if it has none. Nothing is stored in the device,
+ * so that its properties keep their order, see udev_device_get_subsystem(). */
+static const char *device_find_subsystem(struct udev_device *udev_device, char *buf, size_t size)
+{
+        /* read "subsystem" link */
+        if (util_get_sys_core_link_value(udev_device->udev, "subsystem", udev_device->syspath, buf, size) > 0)
+                return buf;
+        /* implicit names */
+        if (startswith(udev_device->devpath, "/module/"))
+                return "module";
+        if (strstr(udev_device->devpath, "/drivers/") != NULL ||
+            endswith(udev_device->devpath, "/drivers"))
+                return "drivers";
+        if (startswith(udev_device->devpath, "/subsystem/") ||
+            startswith(udev_device->devpath, "/class/") ||
+            startswith(udev_device->devpath, "/bus/"))
+                return "subsystem";
+        return NULL;
+}
+
 static const char *device_read_subsystem(struct udev_device *udev_device)
 {
-        char subsystem[UTIL_NAME_SIZE];
+        char buf[UTIL_NAME_SIZE];
+        const char *subsystem;
 
         if (!udev_device->subsystem_set) {
                 udev_device->subsystem_set = true;
-                /* read "subsystem" link */
-                if (util_get_sys_core_link_value(udev_device->udev, "subsystem", udev_device->syspath, subsystem, sizeof(subsystem)) > 0) {
+                subsystem = device_find_subsystem(udev_device, buf, sizeof(buf));
+                if (subsystem)
                         udev_device_set_subsystem(udev_device, subsystem);
-                        return udev_device->subsystem;
-                }
-                /* implicit names */
-                if (startswith(udev_device->devpath, "/module/")) {
-                        udev_device_set_subsystem(udev_device, "module");
-                        return udev_device->subsystem;
-                }
-                if (strstr(udev_device->devpath, "/drivers/") != NULL ||
-                    endswith(udev_device->devpath, "/drivers")) {
-                        udev_device_set_subsystem(udev_device, "drivers");
-                        return udev_device->subsystem;
-                }
-                if (startswith(udev_device->devpath, "/subsystem/") ||
-                    startswith(udev_device->devpath, "/class/") ||
-                    startswith(udev_device->devpath, "/bus/")) {
-                        udev_device_set_subsystem(udev_device, "subsystem");
-                        return udev_device->subsystem;
-                }
         }
         return udev_device->subsystem;
 }
@@ -740,6 +744,68 @@ static int parse_devnum(const char *major_str, const char *minor_str, dev_t *ret
 
         *ret = makedev(maj, min);
         return 0;
+}
+
+/* Reads the attribute of the device with the name, without the trailing newlines, into a new string, like
+ * udev_device_get_sysattr_value() but without its cache, for the lookups of devices below, which check the
+ * device that they found by the attributes "dev" and "ifindex" rather than by its uevent file, which is read only
+ * when "ifindex" cannot be read or parsed, see udev_device_new_from_device_id(). */
+static int device_read_attribute(struct udev_device *udev_device, const char *name, char **ret)
+{
+        _cleanup_free_ char *path = NULL, *buf = NULL;
+        size_t len;
+        int r;
+
+        path = strjoin(udev_device->syspath, "/", name, NULL);
+        if (!path)
+                return -ENOMEM;
+
+        r = read_virtual_file(path, SIZE_MAX, &buf, NULL);
+        if (r < 0)
+                return r;
+
+        len = strlen(buf);
+        while (len > 0 && strchr(NEWLINE, buf[len - 1]))
+                buf[--len] = '\0';
+
+        *ret = TAKE_PTR(buf);
+        return 0;
+}
+
+/* The device number of the device from its attribute "dev", "MAJOR:MINOR", which the kernel creates for every
+ * device with a device number, with the number of MAJOR= and MINOR= of its uevent file (dev_show() and
+ * dev_uevent() in drivers/base/core.c), parsed like those; 0 when it has none, or it cannot be read or parsed. */
+static dev_t device_read_devnum_attribute(struct udev_device *udev_device)
+{
+        _cleanup_free_ char *s = NULL;
+        char *minor;
+        dev_t devnum;
+
+        if (device_read_attribute(udev_device, "dev", &s) < 0)
+                return 0;
+
+        minor = strchr(s, ':');
+        if (!minor)
+                return 0;
+        *(minor++) = '\0';
+
+        if (parse_devnum(s, minor, &devnum) < 0)
+                return 0;
+        return devnum;
+}
+
+/* The index of the network interface from its attribute "ifindex", the same as IFINDEX= of its uevent file
+ * (ifindex_show() and netdev_uevent() in net/core/net-sysfs.c), parsed like that; an error when it cannot be
+ * read or parsed, e.g. EINVAL while the interface is being unregistered, when the kernel no longer shows it. */
+static int device_read_ifindex_attribute(struct udev_device *udev_device, int *ret)
+{
+        _cleanup_free_ char *s = NULL;
+        int r;
+
+        r = device_read_attribute(udev_device, "ifindex", &s);
+        if (r < 0)
+                return r;
+        return parse_ifindex(s, ret);
 }
 
 /* DEVPATH=: like device_set_syspath() of systemd, the path below /sys is simplified, and must not
@@ -1451,7 +1517,10 @@ struct udev_device *udev_device_new_from_resolved_syspath(struct udev *udev, con
  * Like in systemd, a device number with the major number 0 fails with
  * ENODEV, and the device that is found must have the device number and
  * the type, a block device being one of the "block" subsystem, otherwise
- * the call fails with ENXIO.
+ * the call fails with ENXIO. Unlike in systemd, the number is checked by
+ * the "dev" attribute of the device, and the type by its subsystem link,
+ * without reading its uevent file, which is read only when a property
+ * is needed.
  *
  * The initial refcount is 1, and needs to be decremented to
  * release the resources of the udev device.
@@ -1461,6 +1530,7 @@ struct udev_device *udev_device_new_from_resolved_syspath(struct udev *udev, con
 _public_ struct udev_device *udev_device_new_from_devnum(struct udev *udev, char type, dev_t devnum)
 {
         char path[STRLEN("/sys/dev/block/") + DECIMAL_STR_MAX(unsigned) * 2 + 2];
+        char subsystem[UTIL_NAME_SIZE];
         struct udev_device *dev;
         const char *type_str;
 
@@ -1485,9 +1555,15 @@ _public_ struct udev_device *udev_device_new_from_devnum(struct udev *udev, char
         if (!dev)
                 return NULL;
 
-        /* the device must have the number, and the type */
-        if (udev_device_get_devnum(dev) != devnum ||
-            streq_ptr(udev_device_get_subsystem(dev), "block") != (type == 'b')) {
+        /* The device must have the number, and the type. Unlike systemd, which reads its uevent file for them,
+         * the number is taken from its attribute "dev", whose show() function takes no lock, and the subsystem
+         * from its link, without storing it: since Linux c0a40097f0bc ("drivers: core: synchronize
+         * really_probe() and dev_uevent()"), until its revert, Linux dc1771f71854, and in the stable releases
+         * that got it, uevent_show() takes the lock of the device, so that a read of the uevent file waits while
+         * a driver probes or releases the device, which can take minutes; udevd looks up a watched device this
+         * way. The uevent file is read later, when a property is needed, so the properties keep their order. */
+        if (device_read_devnum_attribute(dev) != devnum ||
+            streq_ptr(device_find_subsystem(dev, subsystem, sizeof(subsystem)), "block") != (type == 'b')) {
                 udev_device_unref(dev);
                 errno = ENXIO;
                 return NULL;
@@ -1544,7 +1620,11 @@ int parse_devnum_id(const char *s, dev_t *ret)
  * Like in systemd, an ID that is not valid fails with EINVAL, or ERANGE for a device
  * number that is too large, and the ID of a device that does not exist with ENODEV.
  * When the network interface of the index was renamed or replaced in the meantime, the
- * call fails with ENXIO.
+ * call fails with ENXIO. Unlike in systemd, the device is checked without reading its
+ * uevent file: by its "dev" attribute, see udev_device_new_from_devnum(), its "ifindex"
+ * attribute, or its subsystem link, see udev_device_new_from_subsystem_sysname(); the
+ * uevent file of a network interface is read only when its "ifindex" attribute cannot
+ * be read or parsed, to check the index by IFINDEX= like systemd.
  *
  * The initial refcount is 1, and needs to be decremented to
  * release the resources of the udev device.
@@ -1581,7 +1661,7 @@ _public_ struct udev_device *udev_device_new_from_device_id(struct udev *udev, c
                 int sk;
                 struct ifreq ifr;
                 struct udev_device *dev;
-                int ifindex;
+                int ifindex, dev_ifindex;
 
                 /* like parse_ifindex() of systemd's socket-util */
                 r = safe_atoi(id + 1, &ifindex);
@@ -1606,7 +1686,11 @@ _public_ struct udev_device *udev_device_new_from_device_id(struct udev *udev, c
                 close(sk);
 
                 /* like sd_device_new_from_ifindex() of systemd: the device of the interface name, which
-                 * must still have the index, otherwise the interface was renamed in the meantime */
+                 * must still have the index, otherwise the interface was renamed in the meantime; unlike
+                 * there, the index is taken from its attribute "ifindex", without reading its uevent file,
+                 * like the device number in udev_device_new_from_devnum(). Only when the attribute cannot
+                 * be read or parsed, e.g. while the interface is being unregistered, the index is taken
+                 * from IFINDEX= of the uevent file, like systemd does. */
                 path = strjoin("/sys/class/net/", ifr.ifr_name, NULL);
                 if (!path) {
                         errno = ENOMEM;
@@ -1615,7 +1699,9 @@ _public_ struct udev_device *udev_device_new_from_device_id(struct udev *udev, c
                 dev = udev_device_new_from_syspath(udev, path);
                 if (dev == NULL)
                         return NULL;
-                if (udev_device_get_ifindex(dev) == ifindex)
+                if (device_read_ifindex_attribute(dev, &dev_ifindex) < 0)
+                        dev_ifindex = udev_device_get_ifindex(dev);
+                if (dev_ifindex == ifindex)
                         return dev;
 
                 udev_device_unref(dev);
@@ -1700,6 +1786,8 @@ static int device_new_from_path_join(struct udev *udev, struct udev_device **dev
         _cleanup_free_ char *lesc1 = NULL, *lesc2 = NULL, *lesc3 = NULL, *lesc4 = NULL;
         _cleanup_free_ char *p = NULL, *new_driver_subsystem = NULL;
         struct udev_device *new_device;
+        const char *found_subsystem;
+        char buf[UTIL_NAME_SIZE];
         int r;
 
         assert(device);
@@ -1713,11 +1801,16 @@ static int device_new_from_path_join(struct udev *udev, struct udev_device **dev
         if (!new_device)
                 return errno == ENODEV ? 0 : -errno;
 
+        /* Unlike systemd, the subsystem is taken without reading the uevent file of the device, like the type in
+         * udev_device_new_from_devnum(), and not stored, so that the properties keep their order; the subsystem
+         * of the driver only for a driver, as it is none for the other devices. */
         r = 0;
-        if (!streq_ptr(udev_device_get_subsystem(new_device), subsystem))
+        found_subsystem = device_find_subsystem(new_device, buf, sizeof(buf));
+        if (!streq_ptr(found_subsystem, subsystem))
                 goto finish;
 
-        (void) device_get_driver_subsystem(new_device, &new_driver_subsystem);
+        if (streq_ptr(found_subsystem, "drivers"))
+                (void) device_get_driver_subsystem(new_device, &new_driver_subsystem);
         if (!streq_ptr(driver_subsystem, new_driver_subsystem))
                 goto finish;
 
@@ -1758,7 +1851,10 @@ finish:
  * "devicetree" / "base", and the device that is found must have the
  * requested subsystem and name. A device that does not exist fails with
  * ENODEV; when two different devices are found, e.g. one below /sys/bus
- * and one below /sys/class, the call fails with ETOOMANYREFS.
+ * and one below /sys/class, the call fails with ETOOMANYREFS. Unlike in
+ * systemd, the subsystem is checked by the subsystem link of the device,
+ * without reading its uevent file, which is read only when a property is
+ * needed.
  *
  * The initial refcount is 1, and needs to be decremented to
  * release the resources of the udev device.
