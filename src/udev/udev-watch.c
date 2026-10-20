@@ -1174,9 +1174,12 @@ static void overflow_barrier_reached(void) {
  * minutes, and udevd would handle no events meanwhile, see udev_device_new_from_devnum(). The lookup by the device
  * number checks it without the file, and the subsystem is taken from its link here, so that
  * udev_device_get_subsystem() does not read the file for it either; the property SUBSYSTEM comes first then,
- * which does not matter for this device. Only the re-read of the partition table of a disk, see
- * synthesize_change(), and, while events wait for a locked disk, manager_requeue_locked_events_by_device() for a
- * block device, which needs the device node of its disk, read uevent files. */
+ * which does not matter for this device. In the main process, only these read uevent files: the re-read of the
+ * partition table of a disk, when udevd re-reads it itself rather than in a child, see synthesize_change(); while
+ * events wait for a locked disk, manager_requeue_locked_events_by_device() for a block device, which needs the
+ * device node of its disk; when udevd creates the watch directory again while it runs, see udev_watch_check_dir(),
+ * watch_dir_recover_one() for the ID of each watched device, and for its device node in the debug messages; and at
+ * startup, udev_watch_restore() for the device node and the ID of each device whose watch it restores. */
 struct udev_device *udev_watch_lookup(struct udev *udev, int wd) {
         char name[REMOVED_NAME_MAX];
         char device[UTIL_NAME_SIZE];

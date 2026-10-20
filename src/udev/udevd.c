@@ -2142,7 +2142,7 @@ static void reread_start(struct reread *reread) {
 
                 if (p == MAP_FAILED)
                         log_debug_errno(errno, "Failed to map memory to share with the process re-reading the partition table of %s, ignoring: %m",
-                                        utf8_escape_for_log(udev_device_get_devnode(dev), &lesc1));
+                                        utf8_escape_for_log(udev_device_get_sysname(dev), &lesc1));
                 else
                         reread->end_usec = p;
         }
@@ -2298,11 +2298,11 @@ static int synthesize_change(struct udev_device *dev, usec_t close_usec) {
 
                         if (reread->pid > 0) {
                                 log_debug("process ["PID_FMT"] is re-reading the partition table of %s, re-reading it once more when it exits, unless it read it after this close",
-                                          reread->pid, utf8_escape_for_log(udev_device_get_devnode(dev), &lesc1));
+                                          reread->pid, utf8_escape_for_log(udev_device_get_sysname(dev), &lesc1));
                                 reread->close_usec = MAX(reread->close_usec, close_usec);
                         } else
                                 log_debug("re-reading the partition table of %s is pending already",
-                                          utf8_escape_for_log(udev_device_get_devnode(dev), &lesc1));
+                                          utf8_escape_for_log(udev_device_get_sysname(dev), &lesc1));
                         return 0;
                 }
 
@@ -2322,7 +2322,7 @@ static int synthesize_change(struct udev_device *dev, usec_t close_usec) {
 
                 if (reread_disk_busy(reread))
                         log_debug("events of %s or of its partitions are being processed, re-reading its partition table after them",
-                                  utf8_escape_for_log(udev_device_get_devnode(dev), &lesc1));
+                                  utf8_escape_for_log(udev_device_get_sysname(dev), &lesc1));
                 else
                         reread_start(reread);
 
@@ -2405,7 +2405,7 @@ static void handle_signal(struct udev *udev __attribute__((unused)), int signo) 
                         reread = reread_find_by_pid(pid);
                         if (reread) {
                                 _cleanup_free_ char *lesc1 = NULL;
-                                const char *devnode = udev_device_get_devnode(reread->dev);
+                                const char *sysname = udev_device_get_sysname(reread->dev);
                                 usec_t end_usec = reread->end_usec ? *reread->end_usec : 0;
                                 bool again;
 
@@ -2422,12 +2422,12 @@ static void handle_signal(struct udev *udev __attribute__((unused)), int signo) 
                                 log_debug("process ["PID_FMT"] re-reading the partition table exited", pid);
                                 if (again) {
                                         log_debug("%s was closed after writing while the partition table was re-read, re-reading it once more",
-                                                  utf8_escape_for_log(devnode, &lesc1));
+                                                  utf8_escape_for_log(sysname, &lesc1));
                                         reread->pid = 0;
                                 } else {
                                         if (reread->close_usec > 0)
                                                 log_debug("%s was closed after writing before the partition table was read, not re-reading it again",
-                                                          utf8_escape_for_log(devnode, &lesc1));
+                                                          utf8_escape_for_log(sysname, &lesc1));
                                         reread_free(reread);
                                 }
 
