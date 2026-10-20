@@ -947,6 +947,19 @@ _public_ int udev_enumerate_add_syspath(struct udev_enumerate *udev_enumerate, c
         return 0;
 }
 
+/* The subsystem of a device that a scan of the devices below a parent or of the tagged devices found, to match
+ * it: like test_matches(), from the subsystem link, where udev_device_get_subsystem() takes it from as well, but
+ * without reading the uevent file of the device first, unless properties are matched, which need the file: then
+ * it is read first, as before, so that the properties come in the same order. Reading a uevent file can take
+ * long: e.g. the kernel asks the hardware for the properties of a power supply then, and on some kernels the read
+ * waits while a driver probes the device, see udev_device_new_from_devnum(). */
+static const char *device_get_subsystem_for_match(struct udev_enumerate *udev_enumerate, struct udev_device *dev)
+{
+        if (udev_list_get_entry(&udev_enumerate->properties_match_list))
+                return udev_device_get_subsystem(dev);
+        return udev_device_get_subsystem_without_uevent(dev);
+}
+
 static int scan_devices_tags(struct udev_enumerate *udev_enumerate)
 {
         struct udev_list_entry *list_entry;
@@ -973,7 +986,7 @@ static int scan_devices_tags(struct udev_enumerate *udev_enumerate)
                         if (dev == NULL)
                                 continue;
 
-                        if (!match_subsystem(udev_enumerate, udev_device_get_subsystem(dev)))
+                        if (!match_subsystem(udev_enumerate, device_get_subsystem_for_match(udev_enumerate, dev)))
                                 goto nomatch;
                         if (!match_sysname(udev_enumerate, udev_device_get_sysname(dev)))
                                 goto nomatch;
@@ -1004,7 +1017,7 @@ static int parent_add_child(struct udev_enumerate *enumerate, const char *path)
         if (dev == NULL)
                 return -ENODEV;
 
-        if (!match_subsystem(enumerate, udev_device_get_subsystem(dev)))
+        if (!match_subsystem(enumerate, device_get_subsystem_for_match(enumerate, dev)))
                 goto nomatch;
         if (!match_sysname(enumerate, udev_device_get_sysname(dev)))
                 goto nomatch;
