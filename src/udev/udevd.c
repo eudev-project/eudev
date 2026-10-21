@@ -179,6 +179,8 @@ static usec_t idle_timeout_usec;
 static usec_t last_usec;
 static struct udev_list properties_list;
 static bool udev_exit;
+/* whether udevd created /run/udev/queue, see event_queue_update() */
+static bool queue_file_created;
 static char udevd_ready_string[] = "udevd ready\n";
 
 enum event_state {
@@ -1523,6 +1525,11 @@ static void worker_returned(int fd_worker) {
         }
 }
 
+/* Creates /run/udev/queue once when the queue becomes non-empty, and removes it when the queue is empty, like
+ * manager_create_queue_file() and manager_unlink_queue_file() of systemd a446e8ff2c, so that it is not touched
+ * again on every iteration of the main loop; nothing uses its time stamps, only whether it exists, see
+ * udev_queue_get_queue_is_empty() and udev_queue_get_fd(). Like systemd, a file that something else removed is
+ * created again only when the queue became empty and non-empty again. */
 static void event_queue_update(void) {
         int r;
 
@@ -1530,13 +1537,20 @@ static void event_queue_update(void) {
          * them, which trigger events, and until udevd received the change events it triggered itself */
         if (!udev_list_node_is_empty(&event_list) || !udev_list_node_is_empty(&reread_list) ||
             !ordered_hashmap_isempty(synthesized_events)) {
+                if (queue_file_created)
+                        return;
+
                 r = touch("/run/udev/queue");
                 if (r < 0)
                         log_warning_errno(r, "could not touch /run/udev/queue: %m");
+                else
+                        queue_file_created = true;
         } else {
                 r = unlink("/run/udev/queue");
                 if (r < 0 && errno != ENOENT)
                         log_warning("could not unlink /run/udev/queue: %m");
+                else
+                        queue_file_created = false;
         }
 }
 
