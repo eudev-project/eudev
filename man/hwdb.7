@@ -103,6 +103,13 @@ are ignored\&.
 .PP
 In case multiple records match a given lookup string, the key\-value pairs from all records are combined\&. If a key is specified multiple times, the value from the record with the highest priority is used (each key can have only a single value)\&. The priority is higher when the record is in a file that sorts later lexicographically, and in case of records in the same file, later records have higher priority\&.
 .PP
+This order needs the binary database in format 2, see
+\fIhwdb_format\fR
+in
+\fBudev.conf\fR(5)\&. The default format 1 does not store the file and the line of a record, so when several records set the same key for a device, format 1 does not guarantee that the value from the record with the highest priority is used, e\&.g\&. that a later record wins; it is undefined which of the values is used\&. Set
+\fIhwdb_format=2\fR
+to get the order above\&.
+.PP
 The content of all hwdb files is read by
 \fBudevadm hwdb \-\-update\fR
 (see
@@ -185,8 +192,11 @@ evdev:atkbd:*
 .\}
 .PP
 If the hwdb consists of those two files, a keyboard with the lookup string
-evdev:atkbd:dmi:bvnAcer:bdXXXXX:bd08/05/2010:svnAcer:pnX123
-will match all three records, and end up with the following properties:
+evdev:atkbd:dmi:bvnAcer:bvr:bdXXXXX:bd08/05/2010:svnAcer:pnX123:
+will match all three records, and end up with the following properties, with the binary database in format 2 (with the default format 1,
+\fIKEYBOARD_KEY_a2\fR
+may be
+wlan, see above):
 .sp
 .if n \{\
 .RS 4

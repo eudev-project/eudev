@@ -78,6 +78,15 @@
       lexicographically, and in case of records in the same file, later records have
       higher priority.</para>
 
+      <para>This order needs the binary database in format 2, see
+      <varname>hwdb_format</varname> in
+      <citerefentry><refentrytitle>udev.conf</refentrytitle><manvolnum>5</manvolnum></citerefentry>.
+      The default format 1 does not store the file and the line of a record, so when
+      several records set the same key for a device, format 1 does not guarantee that
+      the value from the record with the highest priority is used, e.g. that a later
+      record wins; it is undefined which of the values is used. Set
+      <varname>hwdb_format=2</varname> to get the order above.</para>
+
       <para>The content of all hwdb files is read by <command>udevadm hwdb --update</command>
       (see <citerefentry><refentrytitle>udevadm</refentrytitle><manvolnum>8</manvolnum></citerefentry>)
       or by <citerefentry><refentrytitle>systemd-hwdb</refentrytitle><manvolnum>8</manvolnum></citerefentry>
@@ -154,8 +163,11 @@ evdev:atkbd:*
  PROPERTY_WITH_SPACES=some string</programlisting>
 
       <para>If the hwdb consists of those two files, a keyboard with the lookup string
-      <literal>evdev:atkbd:dmi:bvnAcer:bdXXXXX:bd08/05/2010:svnAcer:pnX123</literal>
-      will match all three records, and end up with the following properties:</para>
+      <literal>evdev:atkbd:dmi:bvnAcer:bvr:bdXXXXX:bd08/05/2010:svnAcer:pnX123:</literal>
+      will match all three records, and end up with the following properties, with the
+      binary database in format 2 (with the default format 1,
+      <varname>KEYBOARD_KEY_a2</varname> may be <literal>wlan</literal>, see
+      above):</para>
 
       <programlisting>KEYBOARD_KEY_a1=help
 KEYBOARD_KEY_a2=reserved
