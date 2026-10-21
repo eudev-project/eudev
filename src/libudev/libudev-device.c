@@ -3723,8 +3723,9 @@ struct udev_device *udev_device_new_from_nulstr(struct udev *udev, char *nulstr,
         /* The message brought the properties of the uevent file, as they were at the event. The file now
          * describes the device as it is, maybe a new device with the same devpath, and reading it, e.g. in
          * udev_device_get_devtype() of an event without DEVTYPE, would replace the values of the event and
-         * free the strings that the caller may still use. Like in systemd before v258, whose devices of an
-         * event are sealed, and do not read the file. */
+         * free the strings that the caller may still use. Like in systemd before v258, and again since
+         * f58a2efc55 (v262.1), whose devices of an event are sealed, and do not read the file (in between,
+         * device_verify() read it before they were sealed). */
         device->uevent_loaded = true;
 
         return device;

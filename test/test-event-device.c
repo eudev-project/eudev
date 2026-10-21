@@ -4,7 +4,8 @@
  * monitor, with udev_device_new_from_nulstr(), and from the environment of a program started by a rule, with
  * the public udev_device_new_from_environment(). They must keep the values of the event: the uevent file of
  * the device in sysfs describes the device as it is now, maybe a new device with the same devpath, so it is
- * not read for them, like in systemd before v258 (its devices of an event are sealed).
+ * not read for them, like in systemd before v258, and again since f58a2efc55 (v262.1), whose devices of an
+ * event are sealed.
  *
  * udev_device_get_devtype() of an event without DEVTYPE read the uevent file, which replaced DEVTYPE, DEVNAME,
  * MAJOR/MINOR and any other key of the file with the current values, and freed the strings that callers
