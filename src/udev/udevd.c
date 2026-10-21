@@ -171,7 +171,8 @@ static OrderedHashmap *synthesized_events;
 /* the caller arguments of the uevents udevd triggers, see device_build_default_trigger_args() */
 static char **device_trigger_args;
 /* when udevd gives up waiting for the workers on exit, 30 seconds after the exit started, and when it kills the
- * idle workers, 3 seconds after the event queue became empty, or 0, see main() */
+ * idle workers, 3 seconds after the event queue became empty and no child re-read a partition table any more, or
+ * 0, see main() */
 static usec_t exit_timeout_usec;
 static usec_t idle_timeout_usec;
 /* when the rules were loaded or reloaded, or udevd last checked whether they changed, see manager_reload() */
@@ -3203,9 +3204,20 @@ int main(int argc, char *argv[]) {
                         /* we are idle */
                         timeout = -1;
                         idle_timeout_usec = 0;
+                } else if (udev_list_node_is_empty(&event_list) && !udev_list_node_is_empty(&reread_list)) {
+                        /* Keep the idle workers while a child re-reads the partition table of a disk, which
+                         * triggers uevents soon, like systemd a0d2576705 (v262.1), which does not start the timer
+                         * that kills them while a "(udev-synth)" child runs. Unlike systemd, whose timer, once
+                         * started, still kills them while a child runs, unless an event started meanwhile, they
+                         * are kept for as long as a child runs, and the 3 seconds below count from when the last
+                         * child exited (pending re-reads wait for events of their disks, see struct reread). */
+                        timeout = -1;
+                        idle_timeout_usec = 0;
                 } else if (udev_list_node_is_empty(&event_list)) {
                         /* Kill the idle workers 3 seconds after the last event finished, counted from then, and
-                         * not again from every wakeup, e.g. on a control message, like the timer of systemd. */
+                         * not again from every wakeup, e.g. on a control message, like the kill_workers_event
+                         * timer of systemd a0d2576705 (v262.1), and, like it, not while a uevent is pending, see
+                         * below. */
                         now_usec = now(CLOCK_MONOTONIC);
                         if (idle_timeout_usec == 0)
                                 idle_timeout_usec = usec_add(now_usec, 3 * USEC_PER_SEC);
@@ -3258,16 +3270,6 @@ int main(int argc, char *argv[]) {
                         break;
                 }
 
-                if (!udev_exit && idle_timeout_usec > 0 && now(CLOCK_MONOTONIC) >= idle_timeout_usec) {
-                        idle_timeout_usec = 0;
-
-                        /* kill idle workers */
-                        if (udev_list_node_is_empty(&event_list)) {
-                                log_debug("cleanup idle workers");
-                                worker_kill(false);
-                        }
-                }
-
                 is_worker = is_signal = is_inotify = is_netlink = is_ctrl = false;
                 for (i = 0; i < fdcount; i++) {
                         if (ev[i].data.fd == fd_worker && ev[i].events & EPOLLIN)
@@ -3280,6 +3282,21 @@ int main(int argc, char *argv[]) {
                                 is_inotify = true;
                         else if (ev[i].data.fd == fd_ctrl && ev[i].events & EPOLLIN)
                                 is_ctrl = true;
+                }
+
+                /* The idle workers are not killed while a uevent is pending, which is queued below, so that
+                 * one of them processes it, like systemd a0d2576705 (v262.1), which does not start its timer
+                 * then (a timer that it started before still fires); when the uevent is not queued, they are
+                 * killed in the next iteration. */
+                if (!udev_exit && idle_timeout_usec > 0 && now(CLOCK_MONOTONIC) >= idle_timeout_usec &&
+                    !is_netlink) {
+                        idle_timeout_usec = 0;
+
+                        /* kill idle workers */
+                        if (udev_list_node_is_empty(&event_list)) {
+                                log_debug("cleanup idle workers");
+                                worker_kill(false);
+                        }
                 }
 
                 /* create the watch directory again when it was removed or replaced, before the inotify events
