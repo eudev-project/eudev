@@ -822,9 +822,9 @@ static void worker_spawn(struct event *event) {
                                  * IMPORT{}, or the database cannot be written, RUN is not run and the
                                  * inotify watch is not restored, but the (partially processed) event is
                                  * still sent to the listeners. The symlink ID -> wd of the watch, which
-                                 * udev_watch_suspend() kept, is removed, like systemd's main process
-                                 * removes the symlinks with the watch; udevd removes the symlink wd -> ID
-                                 * when it handles IN_IGNORED. */
+                                 * udev_watch_suspend() kept, is removed, like systemd a446e8ff2c's main
+                                 * process removes the symlinks with the watch; udevd removes the symlink
+                                 * wd -> ID when it handles IN_IGNORED. */
                                 log_device_warning_errno(dev, r, "Failed to process device, ignoring: %m");
                                 udev_watch_end(udev, dev);
                         } else {
