@@ -164,6 +164,13 @@ keyboard-keys.txt: Makefile $(top_srcdir)/src/include/uapi/linux/input-event-cod
 keyboard-keys-from-name.gperf: keyboard-keys.txt Makefile
 	$(AM_V_GEN)$(AWK) 'BEGIN{ print "struct key { const char* name; unsigned short id; };"; print "%null-strings"; print "%%";} /^KEY_/{ print tolower(substr($$1 ,5)) ", " $$1 } { print tolower($$1) ", " $$1 }' keyboard-keys.txt > $@
 
+# The silent-rules variable of the gperf rule, like the AM_V_* ones of automake: "GPERF" and the target
+# by default and with V=0, the command line with V=1.
+AM_V_GPERF = $(AM_V_GPERF_@AM_V@)
+AM_V_GPERF_ = $(AM_V_GPERF_@AM_DEFAULT_V@)
+AM_V_GPERF_0 = @echo "  GPERF   " $@;
+AM_V_GPERF_1 =
+
 # Like systemd since b11ba559a6, with more search iterations: the default search leaves most slots of the
 # hash table empty, and every empty slot takes up space in the binaries (--multiple-iterations needs gperf 3.0).
 keyboard-keys-from-name.h: keyboard-keys-from-name.gperf Makefile
