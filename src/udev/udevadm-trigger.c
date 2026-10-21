@@ -547,8 +547,16 @@ static int exec_list(struct udev *udev, char **list, const char *action, Hashmap
                         continue;
                 }
 
-                log_debug("%s: Triggered device with action '%s'.",
-                          utf8_escape_for_log(eudev_basename(syspath), &lesc1), action);
+                /* Like systemd 2b0c8c9b48, with the UUID. Unlike systemd, which always prints one, without it
+                 * when the uevent was triggered without one, see above and uevent_trigger_with_args(). */
+                if (with_uuid)
+                        log_debug("%s: Triggered '%s': ACTION=%s, UUID=%s",
+                                  utf8_escape_for_log(eudev_basename(syspath), &lesc1),
+                                  utf8_escape_for_log(syspath, &lesc2), action, id);
+                else
+                        log_debug("%s: Triggered '%s': ACTION=%s",
+                                  utf8_escape_for_log(eudev_basename(syspath), &lesc1),
+                                  utf8_escape_for_log(syspath, &lesc2), action);
 
                 if (!sends) {
                         if (settle_set)
