@@ -18,7 +18,8 @@
 #pragma once
 
 /* A small streaming JSON writer. Values are written to a FILE as they are added, in the formats
- * of systemd's sd_json_variant_dump(), so that 'udevadm ... --json=' prints the same as systemd.
+ * of systemd's sd_json_variant_dump(), so that 'udevadm ... --json=' prints the same as systemd
+ * a446e8ff2c.
  *
  *     JsonWriter w;
  *
