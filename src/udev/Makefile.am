@@ -164,8 +164,10 @@ keyboard-keys.txt: Makefile $(top_srcdir)/src/include/uapi/linux/input-event-cod
 keyboard-keys-from-name.gperf: keyboard-keys.txt Makefile
 	$(AM_V_GEN)$(AWK) 'BEGIN{ print "struct key { const char* name; unsigned short id; };"; print "%null-strings"; print "%%";} /^KEY_/{ print tolower(substr($$1 ,5)) ", " $$1 } { print tolower($$1) ", " $$1 }' keyboard-keys.txt > $@
 
+# Like systemd since b11ba559a6, with more search iterations: the default search leaves most slots of the
+# hash table empty, and every empty slot takes up space in the binaries (--multiple-iterations needs gperf 3.0).
 keyboard-keys-from-name.h: keyboard-keys-from-name.gperf Makefile
-	$(AM_V_GPERF)$(GPERF) -L ANSI-C -t -N keyboard_lookup_key -H hash_key_name -p -C < keyboard-keys-from-name.gperf > $@
+	$(AM_V_GPERF)$(GPERF) --multiple-iterations=10 -L ANSI-C -t -N keyboard_lookup_key -H hash_key_name -p -C < keyboard-keys-from-name.gperf > $@
 
 
 BUILT_SOURCES = \
