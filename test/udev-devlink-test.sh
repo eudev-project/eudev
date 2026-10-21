@@ -65,7 +65,7 @@ if [ -z "${DL_IN_NS:-}" ]; then
         exec "${NS[@]}" "$0" "$@"
 fi
 
-SCENARIOS="${*:-add_race remove_race remove_all_race prio_change missing_node old_links node_perms remove_owner repair upgrade churn dir_race symlink_values link_priority cleanup_db}"
+SCENARIOS="${*:-add_race remove_race remove_all_race prio_change missing_node old_links node_perms remove_owner remove_resolve repair upgrade churn dir_race symlink_values link_priority cleanup_db}"
 ITER=${DL_ITER:-10}
 ROUNDS=${DL_ROUNDS:-20}
 
@@ -605,14 +605,80 @@ scenario_remove_owner() {
         node_del 1
         run_debug remove:1
         check "the owner fake1 removed" ../fake2
-        # a devlink changed by the user to point outside of /dev is updated
+        # a devlink changed by the user to point outside of /dev is updated; its target must exist, as the
+        # symlinks in it are resolved
         node_add 0
         run_seq "$DRIVER" add:0
-        ln -sfn /etc/hostname /dev/test/a
+        : > "$W/outside"
+        ln -sfn "$W/outside" /dev/test/a
         node_del 0
         run_debug remove:0
         check "fake0 removed while the devlink points outside of /dev" ../fake2
         check_log "the devlink pointing outside of /dev is updated" "which is outside of '/dev/'"
+}
+
+# the devices fake0 (0), fake1 (10, the owner of /dev/test/a) and fake2 (5), and an empty /dev/t7
+remove_resolve_setup() {
+        reset_state
+        PRIO=(0 10 5)
+        write_rules
+        node_add 0; node_add 1; node_add 2
+        run_seq "$DRIVER" add:0 add:1 add:2
+        mkdir -p /dev/t7
+}
+
+scenario_remove_resolve() {
+        echo "== remove_resolve: on removal, the symlinks in the target of the devlink are resolved"
+        remove_resolve_setup
+        ln -sfn ../fake1 /dev/t7/n
+        ln -sfn ../t7/n /dev/test/a
+        node_del 0
+        run_debug remove:0
+        check "fake0 removed while the devlink points to the owner fake1 through the relative ../t7/n" ../t7/n
+        check_log_missing "the devlink of another device is kept" "Symbolic link '/dev/test/a' points to"
+        check_log_missing "the target of the devlink is resolved" "Failed to chase and stat"
+        remove_resolve_setup
+        ln -sfn ../fake0 /dev/t7/n
+        ln -sfn ./../t7/n /dev/test/a
+        # the device node of fake0 is still there
+        run_debug remove:0
+        check "fake0 removed while the devlink points to it through ./../t7/n" ../fake1
+        check_log_missing "the devlink of the removed device is searched again" "Symbolic link '/dev/test/a' points to"
+        remove_resolve_setup
+        ln -sfn /dev/t7/n /dev/test/a
+        ln -sfn ../../etc/../dev/fake2 /dev/t7/n
+        node_del 0
+        run_debug remove:0
+        check "fake0 removed while the devlink points to fake2 through the absolute /dev/t7/n" /dev/t7/n
+        check_log_missing "the devlink of another device is kept" "Symbolic link '/dev/test/a' points to"
+        remove_resolve_setup
+        ln -sfn l2 /dev/t7/l1
+        ln -sfn l1 /dev/t7/l2
+        ln -sfn ../t7/l1 /dev/test/a
+        node_del 0
+        run_debug remove:0
+        check "fake0 removed while the devlink points to a loop of symlinks" ../fake1
+        check_log "the target of the devlink cannot be resolved" "Failed to chase and stat '/dev/test/a', ignoring"
+        remove_resolve_setup
+        ln -sfn ../fake1/x /dev/test/a
+        node_del 0
+        run_debug remove:0
+        check "fake0 removed while the devlink points below a device node" ../fake1
+        check_log "the target of the devlink cannot be resolved" "Failed to chase and stat '/dev/test/a', ignoring"
+        remove_resolve_setup
+        ln -sfn ../t7/missing /dev/test/a
+        node_del 0
+        run_debug remove:0
+        check "fake0 removed while the devlink points to nothing" ../fake1
+        check_log_missing "a missing target is not logged" "Failed to chase and stat"
+        remove_resolve_setup
+        : > "$W/outside"
+        ln -sfn "$W/outside" /dev/t7/n
+        ln -sfn ../t7/n /dev/test/a
+        node_del 0
+        run_debug remove:0
+        check "fake0 removed while the devlink points outside of /dev through ../t7/n" ../fake1
+        check_log "the resolved target is logged" "points to '$W/outside' which is outside of '/dev/'"
 }
 
 scenario_repair() {

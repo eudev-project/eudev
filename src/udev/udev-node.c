@@ -574,73 +574,6 @@ static int node_get_current(struct udev *udev, const char *slink, int dirfd, cha
         return 0;
 }
 
-/* Returns the absolute path that the target of the symlink slink refers to, resolved lexically: a
- * relative target is taken relative to the directory of the symlink, and "." and ".." components are
- * resolved without following symlinks. udev creates devlinks with relative targets, e.g. "../sda". */
-static int devlink_resolve_target(const char *slink, const char *target, char **ret) {
-        _cleanup_free_ char *joined = NULL, *result = NULL;
-        const char *p;
-        size_t n = 0;
-
-        assert(slink);
-        assert(target);
-        assert(ret);
-
-        if (path_is_absolute(target))
-                joined = strdup(target);
-        else {
-                _cleanup_free_ char *dir = NULL;
-                const char *e = strrchr(slink, '/');
-
-                if (!e)
-                        return -EINVAL;
-
-                dir = strndup(slink, e - slink);
-                if (!dir)
-                        return -ENOMEM;
-
-                joined = strjoin(dir, "/", target, NULL);
-        }
-        if (!joined)
-                return -ENOMEM;
-
-        result = new(char, strlen(joined) + 2);
-        if (!result)
-                return -ENOMEM;
-
-        for (p = joined; *p; ) {
-                size_t l;
-
-                p += strspn(p, "/");
-                l = strcspn(p, "/");
-                if (l == 0)
-                        break;
-
-                if (l == 1 && p[0] == '.')
-                        ;
-                else if (l == 2 && p[0] == '.' && p[1] == '.') {
-                        /* drop the last component, if any */
-                        while (n > 0 && result[n - 1] != '/')
-                                n--;
-                        if (n > 0)
-                                n--;
-                } else {
-                        result[n++] = '/';
-                        memcpy(result + n, p, l);
-                        n += l;
-                }
-
-                p += l;
-        }
-
-        if (n == 0)
-                result[n++] = '/';
-        result[n] = '\0';
-
-        *ret = TAKE_PTR(result);
-        return 0;
-}
-
 static int link_update(struct udev_device *dev, const char *slink, bool add) {
         _cleanup_free_ char *lesc1 = NULL, *lesc2 = NULL;
 
@@ -689,7 +622,8 @@ static int link_update(struct udev_device *dev, const char *slink, bool add) {
                 return link_search_and_update(dev, slink, dirfd, add);
 
         if (!add) {
-                _cleanup_free_ char *target = NULL, *resolved = NULL;
+                _cleanup_free_ char *target = NULL;
+                struct stat st;
 
                 /* Especially on 'remove' event, the device ID obtained by node_get_current() may not be
                  * reliable, as the device node and/or device number may be reused. Hence, let's read the
@@ -697,15 +631,19 @@ static int link_update(struct udev_device *dev, const char *slink, bool add) {
                  * it points to another device node, then it is already owned by another device, hence we
                  * should not touch it and keep it as is. */
 
-                r = readlink_malloc(slink, &target);
+                /* Like chase_and_stat() in systemd 03a65741d7 (v262.1): the absolute path of what the devlink
+                 * points to, with all symlinks, "." and ".." resolved, as udev creates devlinks with relative
+                 * targets, e.g. "../sda", and its type, without following it if it became a symlink since. */
+                r = chase(slink, /* root= */ NULL, /* flags= */ 0, &target);
+                if (r >= 0 && lstat(target, &st) < 0)
+                        r = -errno;
                 if (r < 0) {
                         if (r != -ENOENT)
-                                log_debug_errno(r, "Failed to read symbolic link '%s', ignoring: %m",
+                                log_debug_errno(r, "Failed to chase and stat '%s', ignoring: %m",
                                                 utf8_escape_for_log(slink, &lesc1));
 
-                        /* The devlink does not exist. Let's find the most suitable owner, and create the
-                         * devlink. This is typically not necessary and does nothing, but for safety in the
-                         * case that the devlink is removed manually. */
+                        /* The devlink or its target device does not exist. Let's find the most suitable
+                         * owner, and create or update the devlink. */
                         return link_search_and_update(dev, slink, dirfd, add);
                 }
 
@@ -714,31 +652,15 @@ static int link_update(struct udev_device *dev, const char *slink, bool add) {
                 if (!node)
                         return log_debug_errno(ENOENT, "Failed to get device node: %m");
 
-                /* udev creates devlinks with relative targets, compare the path they refer to. */
-                r = devlink_resolve_target(slink, target, &resolved);
-                if (r < 0)
-                        return log_debug_errno(r, "Failed to resolve the target '%s' of '%s': %m",
-                                               utf8_escape_for_log(target, &lesc1), utf8_escape_for_log(slink, &lesc2));
-
-                if (streq(node, resolved)) /* owned by us, needs to update. */
+                if (streq(node, target)) /* owned by us, needs to update. */
                         return link_search_and_update(dev, slink, dirfd, add);
 
                 /* The devlink does not point to our device node. For extra safety, let's validate the
                  * current devlink, in case that the devlink is manually modified by user. */
 
-                if (!path_startswith(resolved, "/dev/")) {
+                if (!path_startswith(target, "/dev/")) {
                         log_debug("Symbolic link '%s' points to '%s' which is outside of '/dev/', updating it.",
                                   utf8_escape_for_log(slink, &lesc1), utf8_escape_for_log(target, &lesc2));
-                        return link_search_and_update(dev, slink, dirfd, add);
-                }
-
-                struct stat st;
-                if (lstat(resolved, &st) < 0) {
-                        if (errno != ENOENT)
-                                log_debug_errno(errno, "Failed to stat '%s', ignoring: %m",
-                                                utf8_escape_for_log(resolved, &lesc1));
-
-                        /* The current target device is also already removed? Let's update. */
                         return link_search_and_update(dev, slink, dirfd, add);
                 }
 
