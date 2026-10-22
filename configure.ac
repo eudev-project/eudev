@@ -1,5 +1,5 @@
 AC_PREREQ([2.68])
-AC_INIT([eudev],[3.2.15],[https://github.com/eudev-project/eudev/issues])
+AC_INIT([eudev],[3.3.0],[https://github.com/eudev-project/eudev/issues])
 AC_SUBST(UDEV_VERSION, 262)
 AC_CONFIG_SRCDIR([src/udev/udevd.c])
 AC_CONFIG_AUX_DIR([build-aux])
