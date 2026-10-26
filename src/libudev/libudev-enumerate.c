@@ -279,6 +279,24 @@ static size_t devices_delay_later(struct udev *udev __attribute__((unused)), con
         return 0;
 }
 
+/* The failure of udev_enumerate_get_list_entry() when out of memory: frees the second entries it
+ * added after the max entries of the array for the delayed devices, those from first on (the ones
+ * before first are freed already), sets the array back to the max entries, and frees the list
+ * built so far. devices_uptodate stays false, so that the next call builds the list again.
+ * Returns NULL with errno set to ENOMEM. */
+static struct udev_list_entry *devices_list_oom(struct udev_enumerate *udev_enumerate, unsigned int max,
+                                                unsigned int first)
+{
+        unsigned int i;
+
+        for (i = first; i < udev_enumerate->devices_cur; i++)
+                free(udev_enumerate->devices[i].syspath);
+        udev_enumerate->devices_cur = max;
+        udev_list_cleanup(&udev_enumerate->devices_list);
+        errno = ENOMEM;
+        return NULL;
+}
+
 /**
  * udev_enumerate_get_list_entry:
  * @udev_enumerate: context
@@ -314,7 +332,8 @@ _public_ struct udev_list_entry *udev_enumerate_get_list_entry(struct udev_enume
 
                         /* skip to be delayed devices, and add them to the end of the list */
                         if (devices_delay_end(udev_enumerate->udev, entry->syspath)) {
-                                syspath_add(udev_enumerate, entry->syspath);
+                                if (syspath_add(udev_enumerate, entry->syspath) < 0)
+                                        return devices_list_oom(udev_enumerate, max, max);
                                 /* need to update prev here for the case realloc() gives a different address */
                                 prev = &udev_enumerate->devices[i];
                                 continue;
@@ -335,23 +354,28 @@ _public_ struct udev_list_entry *udev_enumerate_get_list_entry(struct udev_enume
                         if ((move_later >= 0) &&
                              !strneq(entry->syspath, udev_enumerate->devices[move_later].syspath, move_later_prefix)) {
 
-                                udev_list_entry_add(&udev_enumerate->devices_list,
-                                                    udev_enumerate->devices[move_later].syspath, NULL);
+                                if (udev_list_entry_add(&udev_enumerate->devices_list,
+                                                        udev_enumerate->devices[move_later].syspath, NULL) == NULL)
+                                        return devices_list_oom(udev_enumerate, max, max);
                                 move_later = -1;
                         }
 
-                        udev_list_entry_add(&udev_enumerate->devices_list, entry->syspath, NULL);
+                        if (udev_list_entry_add(&udev_enumerate->devices_list, entry->syspath, NULL) == NULL)
+                                return devices_list_oom(udev_enumerate, max, max);
                 }
 
-                if (move_later >= 0)
-                        udev_list_entry_add(&udev_enumerate->devices_list,
-                                            udev_enumerate->devices[move_later].syspath, NULL);
+                if (move_later >= 0 &&
+                    udev_list_entry_add(&udev_enumerate->devices_list,
+                                        udev_enumerate->devices[move_later].syspath, NULL) == NULL)
+                        return devices_list_oom(udev_enumerate, max, max);
 
                 /* add and cleanup delayed devices from end of list */
                 for (i = max; i < udev_enumerate->devices_cur; i++) {
                         struct syspath *entry = &udev_enumerate->devices[i];
 
-                        udev_list_entry_add(&udev_enumerate->devices_list, entry->syspath, NULL);
+                        /* the entries before i are freed already */
+                        if (udev_list_entry_add(&udev_enumerate->devices_list, entry->syspath, NULL) == NULL)
+                                return devices_list_oom(udev_enumerate, max, i);
                         free(entry->syspath);
                 }
                 udev_enumerate->devices_cur = max;
