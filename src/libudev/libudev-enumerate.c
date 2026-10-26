@@ -334,6 +334,7 @@ _public_ struct udev_list_entry *udev_enumerate_get_list_entry(struct udev_enume
                         if (devices_delay_end(udev_enumerate->udev, entry->syspath)) {
                                 if (syspath_add(udev_enumerate, entry->syspath) < 0)
                                         return devices_list_oom(udev_enumerate, max, max);
+                                assert(udev_enumerate->devices);
                                 /* need to update prev here for the case realloc() gives a different address */
                                 prev = &udev_enumerate->devices[i];
                                 continue;
