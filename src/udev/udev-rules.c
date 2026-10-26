@@ -2275,6 +2275,7 @@ static int add_rule(struct udev_rules *rules, char *line,
                                 log_rule_invalid_op("ATTRS");
                                 goto invalid;
                         }
+                        assert(attr);
                         if (startswith(attr, "device/"))
                                 log_rule_warning("'device' link may not be available in future kernels.");
                         if (strstr(attr, "../"))
@@ -2355,6 +2356,7 @@ static int add_rule(struct udev_rules *rules, char *line,
                                 log_rule_invalid_prefix("IMPORT");
                                 goto invalid;
                         }
+                        assert(attr);
                         if (streq(attr, "program")) {
                                 /* find known built-in command */
                                 if (value[0] != '/') {
