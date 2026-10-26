@@ -234,6 +234,7 @@ int main(void) {
         dir = strjoina(isempty(tmp) ? "/tmp" : tmp, "/test-scsi_id.XXXXXX");
         if (!mkdtemp(dir)) {
                 fprintf(stderr, "cannot create a directory: %m\n");
+                dir = NULL;
                 return EXIT_FAILURE;
         }
 
@@ -353,6 +354,7 @@ int main(void) {
         (void) unlink(strjoina(dir, "/stdout"));
         (void) unlink(strjoina(dir, "/stderr"));
         (void) rmdir(dir);
+        dir = NULL;
 
         return r ? EXIT_FAILURE : EXIT_SUCCESS;
 }
