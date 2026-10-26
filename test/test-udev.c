@@ -259,6 +259,10 @@ int main(int argc, char *argv[]) {
         }
 
         rules = udev_rules_new(udev, 1);
+        if (rules == NULL) {
+                err = log_error_errno(errno_or_else(ENOMEM), "Failed to read udev rules: %m");
+                goto out;
+        }
 
         strscpyl(syspath, sizeof(syspath), "/sys", devpath, NULL);
         dev = udev_device_new_from_synthetic_event(udev, syspath, action);
