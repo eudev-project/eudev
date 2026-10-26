@@ -246,12 +246,17 @@ int main(int argc, char *argv[]) {
         }
 
         /* test/sys is a directory, which libudev refuses as sysfs by default */
-        if (setenv("UDEV_DEVICE_VERIFY_SYSFS", "0", 1) < 0)
+        if (setenv("UDEV_DEVICE_VERIFY_SYSFS", "0", 1) < 0) {
+                log_error_errno(errno, "Failed to set $UDEV_DEVICE_VERIFY_SYSFS: %m");
                 return EXIT_FAILURE;
+        }
 
+        /* fails only when out of memory */
         udev = udev_new();
-        if (udev == NULL)
+        if (udev == NULL) {
+                log_oom();
                 return EXIT_FAILURE;
+        }
 
         /* NAME= of a network interface and net_id select the naming scheme, which udevd logs at info
          * level once when it starts; not in the output of the tests. Warnings about unknown schemes are
@@ -259,7 +264,12 @@ int main(int argc, char *argv[]) {
         naming_scheme_set_log_level(LOG_DEBUG);
 
         log_debug("version %s", VERSION);
-        mac_selinux_init("/dev");
+
+        /* like systemd on the failure of mac_init(); mac_selinux_init() logs why, and fails only when
+         * SELinux is enforcing */
+        err = mac_selinux_init("/dev");
+        if (err < 0)
+                goto out;
 
         action = argv[1];
         devpath = argv[2];
