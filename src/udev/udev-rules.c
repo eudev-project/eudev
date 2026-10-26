@@ -3841,7 +3841,11 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
                                                                 count, escaped_result ?: result);
                                         }
                                 }
+                                /* running out of memory stops the processing of the event, as for the
+                                 * other keys, instead of matching RESULT and substituting %c with nothing */
                                 event->program_result = strdup(result);
+                                if (!event->program_result)
+                                        return log_oom();
                                 if (!log_event_result(event, rules, rule, cur, cur->key.op != OP_NOMATCH))
                                         goto nomatch;
                         }
