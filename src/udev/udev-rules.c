@@ -3033,7 +3033,9 @@ struct udev_rules *udev_rules_new_full(struct udev *udev, int resolve_names, cha
 
         memzero(&end_token, sizeof(struct token));
         end_token.type = TK_END;
-        add_token(rules, &end_token);
+        /* without it, udev_rules_apply_to_event() and the others would read past the last token */
+        if (add_token(rules, &end_token) != 0)
+                return udev_rules_fail(rules, ENOMEM);
         log_debug("rules contain %zu bytes tokens (%u * %zu bytes), %zu bytes strings",
                   rules->token_max * sizeof(struct token), rules->token_max, sizeof(struct token), rules->strbuf->len);
 
