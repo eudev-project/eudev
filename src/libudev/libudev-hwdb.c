@@ -79,6 +79,7 @@ static const char *linebuf_get(struct linebuf *buf) {
 }
 
 static bool linebuf_add(struct linebuf *buf, const char *s, size_t len) {
+        assert(buf->len < sizeof(buf->bytes));
         if (buf->len + len >= sizeof(buf->bytes))
                 return false;
         memcpy(buf->bytes + buf->len, s, len);
