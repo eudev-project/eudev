@@ -105,8 +105,9 @@ static int test_checkout_error(const char *name, int fd, int expected) {
         r = checkout(fd);
         kickall();
         if (r != expected) {
-                fprintf(stderr, "%s: checkout() returned %i (%s), expected %i (%s)\n",
-                        name, r, r < 0 ? strerror(-r) : "-", expected, strerror(-expected));
+                /* two calls, as the second strerror() may overwrite the string of the first one */
+                fprintf(stderr, "%s: checkout() returned %i (%s), ", name, r, r < 0 ? strerror(-r) : "-");
+                fprintf(stderr, "expected %i (%s)\n", expected, strerror(-expected));
                 return -1;
         }
 
