@@ -321,6 +321,7 @@ static void watch_dir_drain(const char *path, Set **ids, bool remove) {
         for (pass = 1;; pass++) {
                 _cleanup_closedir_ DIR *dir = NULL;
                 struct dirent *ent;
+                int dfd;
 
                 dir = opendir(path);
                 if (!dir) {
@@ -328,6 +329,8 @@ static void watch_dir_drain(const char *path, Set **ids, bool remove) {
                                 log_error_errno(errno, "Failed to open %s, old watches will not be restored: %m", path);
                         return;
                 }
+                dfd = dirfd(dir);
+                assert(dfd >= 0);
 
                 for (ent = readdir(dir); ent != NULL; ent = readdir(dir)) {
                         char device[UTIL_PATH_SIZE] = "";
@@ -338,7 +341,7 @@ static void watch_dir_drain(const char *path, Set **ids, bool remove) {
 
                         if (ids && !endswith(ent->d_name, REMOVED_SUFFIX)) {
                                 if (safe_atoi(ent->d_name, &wd) >= 0) {
-                                        if (read_link(dirfd(dir), ent->d_name, device, sizeof(device)) < 0)
+                                        if (read_link(dfd, ent->d_name, device, sizeof(device)) < 0)
                                                 device[0] = '\0';
                                 } else if (strlen(ent->d_name) < sizeof(device))
                                         strcpy(device, ent->d_name);
@@ -348,7 +351,7 @@ static void watch_dir_drain(const char *path, Set **ids, bool remove) {
                                         log_oom();
                         }
 
-                        (void) unlinkat(dirfd(dir), ent->d_name, 0);
+                        (void) unlinkat(dfd, ent->d_name, 0);
                 }
 
                 if (!remove || rmdir(path) >= 0 || errno == ENOENT)
@@ -526,12 +529,15 @@ static void watch_dir_recover_scan(struct udev *udev, int wdirfd, int fd, dev_t 
                                    const struct watch_inode *w, size_t n) {
         _cleanup_closedir_ DIR *d = NULL;
         struct dirent *ent;
+        int dfd;
 
         d = fdopendir(fd);
         if (!d) {
                 safe_close(fd);
                 return;
         }
+        dfd = dirfd(d);
+        assert(dfd >= 0);
 
         for (ent = readdir(d); ent != NULL; ent = readdir(d)) {
                 struct stat st;
@@ -540,7 +546,7 @@ static void watch_dir_recover_scan(struct udev *udev, int wdirfd, int fd, dev_t 
                 if (streq(ent->d_name, ".") || streq(ent->d_name, ".."))
                         continue;
 
-                if (fstatat(dirfd(d), ent->d_name, &st, AT_SYMLINK_NOFOLLOW) < 0)
+                if (fstatat(dfd, ent->d_name, &st, AT_SYMLINK_NOFOLLOW) < 0)
                         continue;
 
                 if (S_ISDIR(st.st_mode)) {
@@ -549,7 +555,7 @@ static void watch_dir_recover_scan(struct udev *udev, int wdirfd, int fd, dev_t 
                         if (depth >= 8 || st.st_dev != fs)
                                 continue;
 
-                        sub = openat(dirfd(d), ent->d_name, O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW);
+                        sub = openat(dfd, ent->d_name, O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW);
                         if (sub >= 0)
                                 watch_dir_recover_scan(udev, wdirfd, sub, fs, depth + 1, w, n);
                         continue;
@@ -1068,7 +1074,7 @@ void udev_watch_overflow(void) {
         _cleanup_set_free_ Set *handles = NULL;
         _cleanup_closedir_ DIR *dir = NULL;
         struct dirent *ent;
-        int b, r;
+        int b, r, dfd;
 
         if (inotify_fd < 0 || watch_dirfd < 0)
                 return;
@@ -1085,6 +1091,8 @@ void udev_watch_overflow(void) {
                 log_debug_errno(errno, "Failed to open " WATCH_DIR ", ignoring: %m");
                 return;
         }
+        dfd = dirfd(dir);
+        assert(dfd >= 0);
 
         for (ent = readdir(dir); ent != NULL; ent = readdir(dir)) {
                 char wd_str[DECIMAL_STR_MAX(int)];
@@ -1100,7 +1108,7 @@ void udev_watch_overflow(void) {
                 if (safe_atoi(wd_str, &wd) < 0 || wd < 0)
                         continue;
 
-                if (read_link(dirfd(dir), ent->d_name, device, sizeof(device)) < 0)
+                if (read_link(dfd, ent->d_name, device, sizeof(device)) < 0)
                         continue;
 
                 if (handles) {
@@ -1112,7 +1120,7 @@ void udev_watch_overflow(void) {
                          * handle once more succeeds, its IN_IGNORED is maybe still to come. */
                         if (inotify_rm_watch(inotify_fd, wd) >= 0 || errno != EINVAL)
                                 continue;
-                } else if (watch_handle_is_current(dirfd(dir), device, wd))
+                } else if (watch_handle_is_current(dfd, device, wd))
                         continue;
 
                 if (strv_extend(&overflow_links, ent->d_name) < 0 || strv_extend(&overflow_links, device) < 0) {

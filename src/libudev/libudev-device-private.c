@@ -929,10 +929,13 @@ static void uevent_uuid_cache_remove_leftovers(void)
         _cleanup_free_ char *lesc1 = NULL;
         _cleanup_closedir_ DIR *d = NULL;
         struct dirent *de;
+        int dfd;
 
         d = opendir(UEVENT_UUID_CACHE_DIR);
         if (!d)
                 return;
+        dfd = dirfd(d);
+        assert(dfd >= 0);
 
         while ((de = readdir(d))) {
                 const char *suffix = startswith(de->d_name, ".#" UEVENT_UUID_CACHE_NAME);
@@ -940,7 +943,7 @@ static void uevent_uuid_cache_remove_leftovers(void)
                 if (!suffix || strlen(suffix) != 6)
                         continue;
 
-                if (unlinkat(dirfd(d), de->d_name, 0) < 0)
+                if (unlinkat(dfd, de->d_name, 0) < 0)
                         log_debug_errno(errno, "Failed to remove leftover temporary file %s/%s, ignoring: %m",
                                         UEVENT_UUID_CACHE_DIR, utf8_escape_for_log(de->d_name, &lesc1));
                 else
@@ -1441,6 +1444,7 @@ static int power_supply_uevent_vars_max(const char *syspath, size_t *ret)
 {
         _cleanup_closedir_ DIR *d = NULL;
         size_t n = 1;
+        int dfd;
 
         assert(syspath);
         assert(ret);
@@ -1448,6 +1452,8 @@ static int power_supply_uevent_vars_max(const char *syspath, size_t *ret)
         d = opendir(syspath);
         if (!d)
                 return negative_errno();
+        dfd = dirfd(d);
+        assert(dfd >= 0);
 
         for (;;) {
                 struct dirent *de;
@@ -1464,7 +1470,7 @@ static int power_supply_uevent_vars_max(const char *syspath, size_t *ret)
                 if (de->d_name[0] == '.' || streq(de->d_name, "uevent") || !IN_SET(de->d_type, DT_REG, DT_UNKNOWN))
                         continue;
                 /* the attributes of sysfs show their values only when they are read */
-                if (fstatat(dirfd(d), de->d_name, &st, AT_SYMLINK_NOFOLLOW) < 0)
+                if (fstatat(dfd, de->d_name, &st, AT_SYMLINK_NOFOLLOW) < 0)
                         continue;
                 if (S_ISREG(st.st_mode) && (st.st_mode & 0444) != 0)
                         n++;

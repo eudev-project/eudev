@@ -426,7 +426,7 @@ static int stack_directory_migrate_old(int fd, const char *old_name) {
         _cleanup_closedir_ DIR *dir = NULL;
         _cleanup_free_ char *old_path = NULL;
         struct dirent *de;
-        int n = 0;
+        int n = 0, dfd;
 
         assert(fd >= 0);
 
@@ -440,6 +440,8 @@ static int stack_directory_migrate_old(int fd, const char *old_name) {
         dir = xopendirat(AT_FDCWD, old_path, O_NOFOLLOW);
         if (!dir)
                 return errno == ENOENT ? 0 : -errno;
+        dfd = dirfd(dir);
+        assert(dfd >= 0);
 
         for (de = readdir(dir); de; de = readdir(dir)) {
                 struct stat st;
@@ -450,14 +452,14 @@ static int stack_directory_migrate_old(int fd, const char *old_name) {
                 n++;
 
                 if (fstatat(fd, de->d_name, &st, AT_SYMLINK_NOFOLLOW) >= 0) {
-                        if (unlinkat(dirfd(dir), de->d_name, 0) < 0 && errno != ENOENT)
+                        if (unlinkat(dfd, de->d_name, 0) < 0 && errno != ENOENT)
                                 log_debug_errno(errno, "Failed to remove '%s/%s', ignoring: %m",
                                                 utf8_escape_for_log(old_path, &lesc1),
                                                 utf8_escape_for_log(de->d_name, &lesc2));
                         continue;
                 }
 
-                if (renameat(dirfd(dir), de->d_name, fd, de->d_name) < 0) {
+                if (renameat(dfd, de->d_name, fd, de->d_name) < 0) {
                         if (errno != ENOENT)
                                 log_debug_errno(errno, "Failed to move '%s/%s', ignoring: %m",
                                                 utf8_escape_for_log(old_path, &lesc1),

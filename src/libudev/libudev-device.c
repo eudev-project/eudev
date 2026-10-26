@@ -2861,7 +2861,7 @@ static int sysattr_list_read_dir(struct udev_device *udev_device, const char *su
         _cleanup_closedir_ DIR *dir = NULL;
         _cleanup_free_ char *path = NULL;
         struct dirent *dent;
-        int num = 0;
+        int num = 0, dfd;
 
         if (subdir) {
                 path = strjoin(udev_device->syspath, "/", subdir, NULL);
@@ -2875,9 +2875,11 @@ static int sysattr_list_read_dir(struct udev_device *udev_device, const char *su
                         return 0; /* maybe a child device, which is removed already */
                 return -errno;
         }
+        dfd = dirfd(dir);
+        assert(dfd >= 0);
 
         if (subdir) {
-                if (faccessat(dirfd(dir), "uevent", F_OK, 0) >= 0)
+                if (faccessat(dfd, "uevent", F_OK, 0) >= 0)
                         return 0; /* a child device, skipping */
                 if (errno != ENOENT) {
                         log_debug_errno(errno, "failed to access %s/uevent, ignoring sub-directory %s: %m",
@@ -2909,7 +2911,7 @@ static int sysattr_list_read_dir(struct udev_device *udev_device, const char *su
                         continue;
                 }
 
-                if (fstatat(dirfd(dir), dent->d_name, &statbuf, AT_SYMLINK_NOFOLLOW) < 0)
+                if (fstatat(dfd, dent->d_name, &statbuf, AT_SYMLINK_NOFOLLOW) < 0)
                         continue;
 
                 /* also attributes that are write-only, like "remove" */

@@ -1531,6 +1531,7 @@ static int attr_subst_subdir(char attr[static UTIL_PATH_SIZE]) {
         struct dirent *de;
         size_t len, size;
         bool truncated;
+        int dfd;
 
         tail = strstr(attr, "/*/");
         if (!tail)
@@ -1547,6 +1548,8 @@ static int attr_subst_subdir(char attr[static UTIL_PATH_SIZE]) {
         dir = opendir(buf);
         if (!dir)
                 return -errno;
+        dfd = dirfd(dir);
+        assert(dfd >= 0);
 
         for (de = readdir(dir); de; de = readdir(dir)) {
                 if (de->d_name[0] == '.')
@@ -1556,7 +1559,7 @@ static int attr_subst_subdir(char attr[static UTIL_PATH_SIZE]) {
                 if (truncated)
                         continue;
 
-                if (faccessat(dirfd(dir), p, F_OK, 0) < 0)
+                if (faccessat(dfd, p, F_OK, 0) < 0)
                         continue;
 
                 strcpy(attr, buf);
