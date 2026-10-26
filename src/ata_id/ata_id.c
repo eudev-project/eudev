@@ -455,6 +455,7 @@ int main(int argc, char *argv[])
         r = parse_argv(argc, argv);
         if (r <= 0)
                 return r < 0 ? 1 : 0;
+        assert(arg_device);
 
         fd = open(arg_device, O_RDONLY|O_NONBLOCK|O_CLOEXEC|O_NOCTTY);
         if (fd < 0) {

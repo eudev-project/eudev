@@ -80,6 +80,7 @@ int main(int argc, char** argv) {
         r = parse_argv(argc, argv);
         if (r <= 0)
                 return r < 0 ? EXIT_FAILURE : 0;
+        assert(arg_device);
 
         mtd_fd = open(arg_device, O_RDONLY|O_CLOEXEC|O_NOCTTY);
         if (mtd_fd < 0) {

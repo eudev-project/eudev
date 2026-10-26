@@ -758,6 +758,7 @@ static int open_drive(Context *c) {
         /* eudev: try up to 20 times, as before systemd 3d346b8106, which incremented cnt twice per
          * attempt and so gave up after 11 */
         for (int cnt = 1;; cnt++) {
+                assert(arg_node);
                 fd = open(arg_node, O_RDONLY|O_NONBLOCK|O_CLOEXEC|O_NOCTTY);
                 if (fd >= 0)
                         break;
