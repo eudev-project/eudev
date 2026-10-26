@@ -248,13 +248,13 @@ int main(int argc, char *argv[]) {
 
         action = argv[1];
         if (action == NULL) {
-                log_error("action missing");
+                err = log_error_errno(SYNTHETIC_ERRNO(EINVAL), "action missing");
                 goto out;
         }
 
         devpath = argv[2];
         if (devpath == NULL) {
-                log_error("devpath missing");
+                err = log_error_errno(SYNTHETIC_ERRNO(EINVAL), "devpath missing");
                 goto out;
         }
 
@@ -267,7 +267,7 @@ int main(int argc, char *argv[]) {
         strscpyl(syspath, sizeof(syspath), "/sys", devpath, NULL);
         dev = udev_device_new_from_synthetic_event(udev, syspath, action);
         if (dev == NULL) {
-                log_debug("unknown device '%s'", devpath);
+                err = log_debug_errno(errno_or_else(ENODEV), "Failed to open device '%s': %m", devpath);
                 goto out;
         }
 
@@ -285,7 +285,7 @@ int main(int argc, char *argv[]) {
         sigprocmask(SIG_SETMASK, &mask, NULL);
         event->fd_signal = signalfd(-1, &mask, SFD_NONBLOCK|SFD_CLOEXEC);
         if (event->fd_signal < 0) {
-                fprintf(stderr, "error creating signalfd\n");
+                err = log_error_errno(errno, "Failed to create signalfd: %m");
                 goto out;
         }
 
