@@ -461,12 +461,12 @@ int btrfs_get_block_device_fd(int fd, dev_t *ret) {
         assert(ret);
 
         if (fstatfs(fd, &sfs) < 0)
-                return -errno;
+                return negative_errno();
         if (!F_TYPE_EQUAL(sfs.f_type, BTRFS_SUPER_MAGIC))
                 return -ENOTTY;
 
         if (ioctl(fd, BTRFS_IOC_FS_INFO, &fsi) < 0)
-                return -errno;
+                return negative_errno();
 
         /* We won't do this for btrfs RAID */
         if (fsi.num_devices != 1) {
@@ -484,7 +484,7 @@ int btrfs_get_block_device_fd(int fd, dev_t *ret) {
                         if (errno == ENODEV)
                                 continue;
 
-                        return -errno;
+                        return negative_errno();
                 }
 
                 /* For the root fs — when no initrd is involved — btrfs returns /dev/root on any kernels from
@@ -497,7 +497,7 @@ int btrfs_get_block_device_fd(int fd, dev_t *ret) {
                         return -EUCLEAN;
 
                 if (stat((char*) di.path, &st) < 0)
-                        return -errno;
+                        return negative_errno();
 
                 if (!S_ISBLK(st.st_mode))
                         return -ENOTBLK;
@@ -526,7 +526,7 @@ static int get_block_device_fd(int fd, dev_t *ret) {
          * the device mapper block device. */
 
         if (fstat(fd, &st))
-                return -errno;
+                return negative_errno();
 
         if (major(st.st_dev) != 0) {
                 *ret = st.st_dev;

@@ -434,7 +434,7 @@ static int conf_files_list_impl(const char *suffix, const char *root, ConfFilesF
                 if (r >= 0) {
                         dir = opendir(resolved_dirpath);
                         if (!dir)
-                                r = -errno;
+                                r = negative_errno();
                 }
                 if (r == -ENOMEM)
                         goto finish;
