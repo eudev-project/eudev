@@ -93,6 +93,7 @@ int read_virtual_file(const char *filename, size_t max_size, char **ret_contents
                         n_retries = 0;
                 }
 
+                assert(size < SIZE_MAX);
                 buf = malloc(size + 1);
                 if (!buf)
                         return -ENOMEM;
