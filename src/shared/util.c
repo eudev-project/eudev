@@ -2782,6 +2782,9 @@ static int update_argv(const char name[], size_t l) {
         static char *mm = NULL;
         int r;
 
+        assert(name);
+        assert(l < SIZE_MAX);
+
         if (can_do == 0)
                 return 0;
         can_do = false; /* set to true only if the whole process works */
