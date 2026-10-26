@@ -221,14 +221,29 @@ int main(int argc, char *argv[]) {
         stdio_open_missing();
         save_argc_argv(argc, argv);
 
+        /* "test-udev --check-namespace" or "test-udev ACTION DEVPATH"; like systemd, the number of arguments
+         * is checked before the mount namespace is set up */
+        if (!IN_SET(argc, 2, 3)) {
+                log_error_errno(SYNTHETIC_ERRNO(EINVAL),
+                                "This program needs one or two arguments, %d given", argc - 1);
+                return EXIT_FAILURE;
+        }
+
         err = fake_filesystems();
         if (err < 0)
                 return EXIT_FAILURE;
 
         /* "test-udev --check-namespace" only tells whether the mount namespace with the fake file systems can
-         * be set up, see udev-test.pl; the reason why not is printed above */
-        if (argv[1] && streq(argv[1], "--check-namespace"))
+         * be set up, see udev-test.pl; the reason why not is printed above. Like systemd, which calls it
+         * "check", any other single argument is refused only after that. */
+        if (argc == 2) {
+                if (!streq(argv[1], "--check-namespace")) {
+                        log_error_errno(SYNTHETIC_ERRNO(EINVAL), "Unknown argument: %s", argv[1]);
+                        return EXIT_FAILURE;
+                }
+
                 return EXIT_SUCCESS;
+        }
 
         /* test/sys is a directory, which libudev refuses as sysfs by default */
         if (setenv("UDEV_DEVICE_VERIFY_SYSFS", "0", 1) < 0)
@@ -247,16 +262,7 @@ int main(int argc, char *argv[]) {
         mac_selinux_init("/dev");
 
         action = argv[1];
-        if (action == NULL) {
-                err = log_error_errno(SYNTHETIC_ERRNO(EINVAL), "action missing");
-                goto out;
-        }
-
         devpath = argv[2];
-        if (devpath == NULL) {
-                err = log_error_errno(SYNTHETIC_ERRNO(EINVAL), "devpath missing");
-                goto out;
-        }
 
         rules = udev_rules_new(udev, 1);
         if (rules == NULL) {
