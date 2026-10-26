@@ -503,6 +503,7 @@ int conf_files_list_strv(char ***ret, const char *suffix, const char *root, Conf
         if (r < 0)
                 return r;
 
+        assert(n < SIZE_MAX);
         l = new0(char*, n + 1);
         if (!l) {
                 conf_file_free_array(files, n);
