@@ -125,13 +125,14 @@ noreturn void log_assert_failed_unreachable(
 
 
 /* Logging with level; the messages at error level or above always reach log_internal(), which calls
- * the hook of log_set_error_hook() for them */
+ * the hook of log_set_error_hook() for them. Like log_internal(), the result is -abs(error), spelled
+ * out here, so that it is known at the call site (e.g. to static analyzers), like for log_oom(). */
 #define log_full_errno(level, error, ...)                                         \
         ({                                                                        \
                 int _l = (level), _e = (error);                                   \
-                (log_get_max_level() >= LOG_PRI(_l) || LOG_PRI(_l) <= LOG_ERR)    \
-                ? log_internal(_l, _e, PROJECT_FILE, __LINE__, __func__, __VA_ARGS__) \
-                : -abs(_e); \
+                if (log_get_max_level() >= LOG_PRI(_l) || LOG_PRI(_l) <= LOG_ERR) \
+                        (void) log_internal(_l, _e, PROJECT_FILE, __LINE__, __func__, __VA_ARGS__); \
+                _e < 0 ? _e : -_e;                                                \
         })
 
 #define log_full(level, ...) log_full_errno(level, 0, __VA_ARGS__)
