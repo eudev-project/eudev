@@ -3569,6 +3569,8 @@ int udev_rules_apply_to_event(struct udev_rules *rules,
         /* loop through token list, match, run actions or forward to next rule */
         cur = &rules->tokens[0];
         for (;;) {
+                /* the first token sets rule, see its declaration; the clang analyzer cannot know that */
+                assert(rule || IN_SET(cur->type, TK_RULE, TK_END));
                 dump_token(rules, cur);
                 switch (cur->type) {
                 case TK_RULE:
@@ -4757,6 +4759,8 @@ int udev_rules_assigning_name_to(struct udev_rules *rules, const char *match_nam
         /* loop through token list, match, run actions or forward to next rule */
         cur = &rules->tokens[0];
         for (;;) {
+                /* the first token sets rule, see its declaration; the clang analyzer cannot know that */
+                assert(rule || IN_SET(cur->type, TK_RULE, TK_END));
                 dump_token(rules, cur);
                 switch (cur->type) {
                 case TK_RULE:
