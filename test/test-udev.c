@@ -314,12 +314,24 @@ int main(int argc, char *argv[]) {
                 else
                         mode |= S_IFCHR;
 
+                /* like systemd, fail when the node cannot be created or removed; unlike systemd, accept a
+                 * node that exists already: devtmpfs keeps it while the device stays, so another add finds
+                 * it, e.g. after the "keep" tests of udev-test.pl, which skip the remove */
                 if (!streq(action, "remove")) {
-                        mkdir_parents_label(udev_device_get_devnode(dev), 0755);
-                        mknod(udev_device_get_devnode(dev), mode, udev_device_get_devnum(dev));
+                        (void) mkdir_parents_label(udev_device_get_devnode(dev), 0755);
+                        if (mknod(udev_device_get_devnode(dev), mode, udev_device_get_devnum(dev)) < 0 &&
+                            errno != EEXIST) {
+                                err = log_error_errno(errno, "mknod() failed for '%s': %m",
+                                                      udev_device_get_devnode(dev));
+                                goto out;
+                        }
                 } else {
-                        unlink(udev_device_get_devnode(dev));
-                        rmdir_parents(udev_device_get_devnode(dev), "/");
+                        if (unlink(udev_device_get_devnode(dev)) < 0) {
+                                err = log_error_errno(errno, "unlink('%s') failed: %m",
+                                                      udev_device_get_devnode(dev));
+                                goto out;
+                        }
+                        (void) rmdir_parents(udev_device_get_devnode(dev), "/");
                 }
         }
 
