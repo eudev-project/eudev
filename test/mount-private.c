@@ -106,7 +106,7 @@ static int mount_root_onto_itself(void) {
                 return r;
         }
 
-        if (chroot("/..") < 0 || chdir(cwd) < 0) {
+        if (chroot("/..") < 0 || chdir("/") < 0 || chdir(cwd) < 0) {
                 r = -errno;
                 fprintf(stderr, "failed to change the root to / bind mounted onto itself: %m\n");
                 return r;
