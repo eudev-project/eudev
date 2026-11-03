@@ -1,4 +1,4 @@
-# eudev 3.3.0 (2026-10-23)
+# eudev 3.3.0 (2026-11-03)
 
 This release completes the sync with systemd-udev at systemd a446e8ff2c (v262+) that 3.2.15 started.
 3.2.15 brought the hardware database, the rules, the builtins and the helper programs to that level;
@@ -1601,16 +1601,22 @@ The exported symbols are unchanged; these functions behave differently, as in sy
 - Device node symlinks: races between parallel events that could leave a link on a lower-priority
   device, links kept to vanished nodes, an old database `..` link that made udevd remove a path outside
   `/dev`, and empty or failing stack entries for long link names.
-- Rules: a crash with more than 64 keys, a crash on out of memory while loading rules, a 1-byte stack
-  overflow when plain text filled a substitution buffer, an over-read in `ATTR` matches of long values
-  ending in whitespace, wrapped line numbers above 65535.
+- Rules: a crash with more than 64 keys, a crash on out of memory while loading rules, reading past
+  the end of the rules when out of memory while storing their end (now loading the rules fails:
+  udevd does not start, or keeps its rules on a reload, and `udevadm test` fails), the output of
+  `PROGRAM` taken as empty when it could not be stored for lack of memory (now the event stops, as
+  when the value of another key cannot be stored), a 1-byte stack overflow when plain text filled a
+  substitution buffer, an over-read in `ATTR` matches of long values ending in whitespace, wrapped
+  line numbers above 65535.
 - libudev: move events stored `DEVPATH`, `TAGS`, `IFINDEX` and similar in the database; a stale
   `DEVLINKS` stayed after all links were removed; the database reader parsed the tail of an overlong
   line as a new line and could drop the last character; a FIFO named `uevent` or read as an attribute
   blocked the caller; when `hwdb.bin` could not be mapped, `udev_hwdb_new()` called `munmap()` on
   `MAP_FAILED`; devices received from a monitor or built from the environment read the live `uevent`
   file and replaced the values of their event (see "libudev"); two threads that created their first
-  udev context at the same time could race on the hash key of libudev's tables.
+  udev context at the same time could race on the hash key of libudev's tables; out of memory,
+  `udev_enumerate_get_list_entry()` silently left devices out of the list and kept it that way (now
+  it returns NULL with errno set to ENOMEM, and the next call builds the list again).
 - udevd: a 0 sent as the maximum number of workers stopped event processing; a NULL dereference when a
   worker failed during exit; programs started late in an event were killed before the event timeout;
   very long timeouts broke reading program output; hanging workers were never killed while uevents or
@@ -1654,4 +1660,7 @@ The exported symbols are unchanged; these functions behave differently, as in sy
   uses the name of the existing rule), mangled backslashes in names and comments under dash, took a
   name as used when another one matched it as a regular expression (e.g. `x.0` by `xa0`), and without
   udevd's run directory waited 30 s and failed with "Cannot lock …!".
+- SELinux builds: when the labels could not be loaded while SELinux was enforcing, the error
+  could get lost, so udevd, `systemd-hwdb` and `udevadm hwdb` went on without the labels instead of
+  failing.
 - The rules syntax check of `make check` never actually ran.
