@@ -1724,7 +1724,7 @@ EOF
                 option          => "clean",
                 rules           => <<EOF
 KERNEL=="sda", ENV{.PRIV}="secret"
-KERNEL=="sda", PROGRAM=="/usr/bin/printenv .PRIV", RESULT=="secret", ENV{P1}="1"
+KERNEL=="sda", PROGRAM=="/bin/printenv .PRIV", RESULT=="secret", ENV{P1}="1"
 ACTION=="add", KERNEL=="sda", ENV{P1}=="1", RUN+="/bin/sh -c 'grep -qx E:P1=1 /run/udev/data/b8:0 && ! grep -q PRIV /run/udev/data/b8:0 && ln -s sda /dev/found'"
 EOF
         },
