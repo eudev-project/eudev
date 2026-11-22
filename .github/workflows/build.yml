@@ -37,6 +37,7 @@ jobs:
         if: ${{ startsWith(matrix.distro, 'alpine:') }}
         run: >-
           apk --no-cache add \
+            bash \
             build-base \
             gperf \
             glib-dev \
