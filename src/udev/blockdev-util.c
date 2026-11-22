@@ -5,6 +5,7 @@
 #include <fcntl.h>
 #include <limits.h>
 #include <linux/blkpg.h>
+#include <linux/fs.h>
 #include <stdio.h>
 #include <string.h>
 #include <sys/ioctl.h>
