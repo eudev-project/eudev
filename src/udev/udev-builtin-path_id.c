@@ -29,6 +29,12 @@
 #include <errno.h>
 #include <dirent.h>
 #include <getopt.h>
+
+/* older kernel headers (e.g. 3.8) use USB_MAXCHILDREN in <linux/usb/ch11.h>
+ * without defining it; newer headers define it there with this same value */
+#ifndef USB_MAXCHILDREN
+#define USB_MAXCHILDREN 31
+#endif
 #include <linux/usb/ch11.h>
 
 /* hub protocol values of the USB specification, for older kernel headers */
